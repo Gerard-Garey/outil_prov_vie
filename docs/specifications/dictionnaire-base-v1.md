@@ -1,6 +1,6 @@
 # Dictionnaire de la base brute fictive — v1 (décès, arrêt de travail, garanties liées)
 
-> *Rédigé par l'agent actuary-approfondi (IA) le 7 novembre 2026 (issue #16, branche `claude/socle-donnees`). Révisé le 7 novembre 2026 par l'agent actuary (IA) sur les décisions du mainteneur du même jour relatives à l'avis P13 (filiation avec le dictionnaire double effet de `docu_actu`). Statut : **proposé**, soumis au visa global du mainteneur (E2.2, M17). Aucun code des modules `donnees` et `simulation` n'est écrit avant ce visa. Points visés le 7 novembre 2026 : recommandations de P1 à P4, P7, P11, P12, P15 et P16 ; P14 sous sa forme reformulée (§ 3, T6) ; P13 soldé par l'annexe A. Visa global : — (date à porter).*
+> *Rédigé par l'agent actuary-approfondi (IA) le 7 novembre 2026 (issue #16, branche `claude/socle-donnees`). Révisé le 7 novembre 2026 par l'agent actuary (IA) sur les décisions du mainteneur du même jour relatives à l'avis P13 (filiation avec le dictionnaire double effet de `docu_actu`). Statut : **visé** par le mainteneur le 7 novembre 2026 (E2.2, M17). Points visés le 7 novembre 2026 : recommandations de P1 à P4, P7, P11, P12, P15 et P16 ; P14 sous sa forme reformulée (§ 3, T6) ; P13 soldé par l'annexe A. Visa global : 7 novembre 2026.*
 
 Version du dictionnaire : `1.0`. C'est la valeur attendue dans `extraction.version_dictionnaire`.
 
@@ -187,7 +187,7 @@ Chaque contrôle et chaque défaut a un traitement unique, pris parmi quatre (E2
 - `catastrophes` 1–n `victimes` ; `dossiers` 1–n `evaluations_gestion` ;
 - `affiliations` 1–n `designations` ; `affiliations` 1–n `ayants_droit_sante` n–1 `assures` par `id_assure_membre`.
 
-### 2.2 Écarts à la liste d'E2.1 (1 à 5 visés le 7 novembre 2026 ; 6 et 7 au visa global)
+### 2.2 Écarts à la liste d'E2.1 (visés le 7 novembre 2026 : 1 à 5, puis 6 et 7 au visa global)
 
 1. **`extraction` est une table nouvelle.** La base porte elle-même sa date d'extraction, contre laquelle se contrôlent la date d'arrêté du plan et l'absence d'information postérieure.
 2. **« Garanties souscrites et leurs paramètres » devient `garanties_souscrites` + `parametres`.** Les paramètres numériques passent en format long : paliers par âge de la rente d'éducation, taux par catégorie d'invalidité. Ce format s'étend aux jalons suivants sans ajouter de colonne, et garde le typage parce que toutes les valeurs y sont `numeric`.
@@ -202,7 +202,7 @@ Chaque contrôle et chaque défaut a un traitement unique, pris parmi quatre (E2
    - la modalité de sexe `H` du double effet devient `M` ;
    - les montants et les taux en pour cent du double effet deviennent des fractions (§ 1.5).
 
-Les écarts 1 à 5 sont visés par le mainteneur le 7 novembre 2026 (§ 11, P1) ; E2.1, l'ADR 0008 (point 1) et l'entrée « Évaluation de gestion » de `CONTEXT.md` sont à mettre en accord. Les écarts 6 et 7 relèvent du visa global.
+Les écarts 1 à 5 sont visés par le mainteneur le 7 novembre 2026 (§ 11, P1) ; E2.1, l'ADR 0008 (point 1) et l'entrée « Évaluation de gestion » de `CONTEXT.md` sont à mettre en accord. Les écarts 6 et 7 sont visés avec le dictionnaire (visa global du 7 novembre 2026).
 
 ### 2.3 Couverture des données exigées par E2.1
 
