@@ -12,7 +12,7 @@
 # --- Constantes ------------------------------------------------------------------
 
 VERSION_FICHE <- 1L                              # ADR 0007, point 3
-VERSION_DICTIONNAIRE_ATTENDUE <- "1.2"           # ADR 0010, point 23 ; M97
+VERSION_DICTIONNAIRE_ATTENDUE <- "1.3"           # ADR 0010, point 23 ; M97, M103
 REPRESENTATION_CANONIQUE <- "provie-resultat-1"  # ADR 0010, point 22
 VERSION_LISTE <- 1L                              # format du serialiseur (ADR 0010, point 18)
 

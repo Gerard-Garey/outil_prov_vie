@@ -23,7 +23,7 @@ motif_de <- function(expr) {
 
 section("outils : constantes")
 verifier_egal("VERSION_FICHE", outils$VERSION_FICHE, 1L)
-verifier_egal("VERSION_DICTIONNAIRE_ATTENDUE", outils$VERSION_DICTIONNAIRE_ATTENDUE, "1.2")
+verifier_egal("VERSION_DICTIONNAIRE_ATTENDUE", outils$VERSION_DICTIONNAIRE_ATTENDUE, "1.3")
 verifier_egal("REPRESENTATION_CANONIQUE", outils$REPRESENTATION_CANONIQUE, "provie-resultat-1")
 verifier_egal("VERSION_LISTE", outils$VERSION_LISTE, 1L)
 verifier("MOTIFS_REFUS : dix-sept motifs distincts en minuscules et soulignés",
