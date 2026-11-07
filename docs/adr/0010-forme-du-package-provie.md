@@ -175,3 +175,16 @@ Issues : #17 (ADR de forme et socle), #18 (module `donnees`, et par cet ADR `dic
 - **Point 23, domaine de commit** : les fichiers de `inst/extdata/dictionnaire/` (six CSV et `dictionnaire.txt`) se commitent en **`moteur:`** (M100) : ils sont lus par le module `dictionnaire` comme une partie du package, et non comme un jeu de données. Le domaine `donnees:` reste celui des jeux versionnés (point 20) et des tables embarquées avec leur provenance.
 
 **Effet sur les résultats** : aucun (aucun code). Issues : #17, #18, #16.
+
+## Annotation du 7 novembre 2026 — version 1.2 du dictionnaire et décisions de forme de T1
+
+*Rédigée par `architect` le 7 novembre 2026 (branche `claude/socle-donnees`, PR #21), sur décisions du mainteneur du même jour (M101 à M103 de `docs/feuille-de-route.md`, § 4) et sur le compte rendu de la tâche T1 de #17 (commits `00807a9`, `3f47e9c`, `d4f8652`, puis `8c609e8`). Le texte ci-dessus et l'annotation précédente ne sont pas réécrits.*
+
+- **Point 23, version attendue** : le dictionnaire de la base passe en **version `1.2`** (commit `f6b30ea` ; P18 soldé, texte seul, aucune table, colonne ni défaut changé ; M103). `VERSION_DICTIONNAIRE_ATTENDUE` vaut donc **`"1.2"`** ; `dictionnaire.txt` et `extraction.version_dictionnaire` des jeux de #19 portent `1.2`. Une base de version `1.0` ou `1.1` est refusée (`extraction_invalide`). Le commit `3f47e9c` a posé `"1.1"` ; le passage à `"1.2"` est fait par le commit `8c609e8` (`moteur:`, test de la constante compris).
+- **Trois décisions de forme prises par la session principale pendant T1** et portées au mainteneur ; aucune ne change un résultat :
+  1. **Chaînes d'encodage inconnu hors locale UTF-8 : refus.** Une chaîne non ASCII sans marque d'encodage, lue sous une locale qui n'est pas UTF-8, est refusée (`liste_invalide`) au lieu d'être convertie : R ne sait pas en dire l'encodage, et une conversion écrirait d'autres octets (même principe que la couche de lecture, `CLAUDE.md`, « Architecture » : refuser sans convertir ; point 18). **À confirmer par le mainteneur.**
+  2. **`lire_liste()` stricte** : tout texte qui n'est pas exactement l'écriture canonique de la liste qu'il décrit est refusé ; `ecrire_liste(lire_liste(o))` rend donc toujours `o` (point 18). **À confirmer par le mainteneur.**
+  3. **`suppressWarnings()` autour de la restauration de `RNGkind` dans `avec_graine()`** : retenu en T1 à titre provisoire ; **à trancher en T2**, avec le contrôle de la frontière et les témoins négatifs.
+- **Plateforme des mesures de T1** : R 4.3.3 installé dans le conteneur de la session cloud depuis le dépôt Ubuntu 24.04. Ce n'est **pas** la plateforme de référence (point 27 : conteneur `rocker/r-ver:4.3.3` épinglé par digest, relevé en T3) ; les mesures de T1 valent constat sur cette plateforme, pas référence.
+
+**Effet sur les résultats** : aucun (aucune provision calculée dans B1). Issues : #17, #16, #18, #19.

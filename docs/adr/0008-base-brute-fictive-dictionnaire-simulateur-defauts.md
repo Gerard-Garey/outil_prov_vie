@@ -122,3 +122,13 @@ Le principe du point 5 est inchangé : liste fermée, intensité paramétrée, t
 - **Point 5, liste des défauts** : le dictionnaire, amendé le 7 novembre 2026 (commit `eb82c24`, décision T1 sur #14, M86), ajoute **D03h**, taux du tarif manquant, traité par hypothèse par défaut de 0 % (jugement d'expert, déclaré et signalé). Le principe du point 5 est inchangé.
 
 **Effet sur les résultats** : aucun (aucun code). Issues : #17, #18, #19, #14.
+
+## Annotation du 7 novembre 2026 — toute modification du dictionnaire fait une nouvelle version (P18, version 1.2)
+
+*Rédigée par `architect` le 7 novembre 2026 (branche `claude/socle-donnees`, PR #21), sur décision du mainteneur du même jour (M103 de `docs/feuille-de-route.md`, § 4). Le texte ci-dessus n'est pas réécrit.*
+
+- **Règle précisée** : **toute modification du dictionnaire de la base, même de texte seul, fait une nouvelle version visée** (version portée dans l'en-tête, l'historique des versions, `VERSION_DICTIONNAIRE_ATTENDUE` et `dictionnaire.txt`). La règle « toute modification passe par une nouvelle version visée » de la première annotation ne distinguait pas le texte de la structure ; le mainteneur l'a appliquée à un changement de texte seul. Motif : le numéro de version est la seule marque qu'un jeu, une fiche de calcul ou une revue externe puisse citer pour dire quel texte il a suivi ; une version qui couvre deux textes différents casserait cette traçabilité.
+- **Version `1.2`** (commit `f6b30ea`) : le point ouvert **P18** (conditions d'emploi des données du contrat frais de santé couplé) est soldé par la lecture de `regulatory` du 7 novembre 2026 : quatre conditions cumulatives (même responsable du traitement ; finalité compatible ; aucune donnée de santé ; minimisation, pseudonymisation et information), que l'organisme d'assurance apprécie avec son délégué à la protection des données, l'outil ne les vérifiant pas. Décisions du mainteneur : **lecture A** — le lien, le sexe, la date de naissance et les dates de couverture ne sont pas des données de santé (M101) ; **obligation légale de constituer les provisions citée à l'appui de la compatibilité de finalité**, et non comme condition distincte, écart de formulation assumé avec M132 (1) de `docu_actu` (M102). Aucune table, colonne ni défaut ne change. Le dernier tiret des « Restent ouverts » de la première annotation (P18) est soldé.
+- **Hors P18** : le cadre des données de sinistres d'arrêt de travail (données concernant la santé, art. 9 du règlement (UE) 2016/679) relève de l'issue **#23**, hors du périmètre de B1.
+
+**Effet sur les résultats** : aucun (texte seul ; aucune provision calculée dans B1). Issues : #16, #23, #17.
