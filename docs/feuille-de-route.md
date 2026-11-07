@@ -23,7 +23,7 @@ Tenue par `architect`, après chaque série de PR fusionnées. Chaque mise à jo
 
 ### 1.2 Branche de données : `claude/socle-donnees` (ouverte)
 
-- **Branche** : `claude/socle-donnees`, partie de `main` à `ec15218` — PR à ouvrir en brouillon (un `Closes` par ligne, par issue du périmètre).
+- **Branche** : `claude/socle-donnees`, partie de `main` à `ec15218` — PR #21 (brouillon, un `Closes` par ligne, par issue du périmètre).
 - **Périmètre** (fermé, M66 ; issues créées le 7 novembre 2026 sur accord du mainteneur) ; agents et circuits repris de la ligne B1 du § 2 :
   - [ ] #16 — Dictionnaire de la base brute fictive (v1) — `actuary-approfondi`, visa du mainteneur.
   - [ ] #17 — Socle du package `provie`, batteries, job CI « Tests (R 4.3.3) » et ADR de forme — `architect-approfondi` sur Fable pour l'ADR de forme (`docs/agents/routage.md`, § 4.1.3), puis `coder`, circuit 3, `audit`. Rattachées par le mainteneur : #7 (compilation de la charte LaTeX en CI), #8 (contrôle du préambule recopié), #12 (scripts de contrôle).
