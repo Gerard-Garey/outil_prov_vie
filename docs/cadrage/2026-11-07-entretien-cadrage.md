@@ -86,6 +86,33 @@ Mettre en place un outil de calcul des provisions comptables, Solvabilité II et
 - Libellés de tri créés (`bash .github/creer_labels.sh`) ; issues #1 à #5 créées ; rapport de recherche versé (commit `fdc4b0e`) ; PR #6 ouverte en brouillon.
 - Réglages de sécurité appliqués par `gh` (Q11) : commit de fusion seul, wiki coupé, secret scanning et push protection, alertes et correctifs Dependabot, Actions limitées à celles de GitHub, jeton en lecture seule, ruleset « Protection main » actif (contrôle requis « Contrôles du dépôt »).
 
-## Glossaire
+## Entretien du glossaire (second entretien, même jour)
 
-Second entretien (`/grill-with-docs`, skill `domain-modeling`), issue #2 : entrées ajoutées à la section « Domaine » de `CONTEXT.md`.
+Second entretien (`/grill-with-docs`, skill `domain-modeling`), issue #2, en deux tours ; résultat : la section « Domaine » de `CONTEXT.md` (treize sous-sections) et trois entrées de la section « Organisation du travail ». Les numéros G1 à G22 se citent comme les Q.
+
+| N° | Question | Décision |
+|---|---|---|
+| G1 | Source du vocabulaire | Le terme du texte qui fait foi prévaut (Code des assurances, règlement ANC 2015-11, version française de la directive 2009/138/CE et du règlement délégué 2015/35) ; sigle anglais à la première occurrence ; entrées de `docu_actu` et d'`outil_tables` reprises mot pour mot quand elles s'appliquent ; IFRS 17 : une entrée « hors périmètre ». Recommandation suivie. |
+| G2 | « Provision » selon le référentiel | « Provision » seul désigne les comptes sociaux ; Solvabilité II a ses mots (provisions techniques prudentielles, meilleure estimation, marge de risque). Recommandation suivie. |
+| G3 | Personnes | Organisme d'assurance, contrat, adhérent, souscripteur, assuré (jamais « affilié »), affiliation, bénéficiaire, conjoint survivant, enfant à charge ; « tête » réservé au sens d'`outil_tables`. Recommandation suivie. |
+| G4 | Garantie, famille, périmètre | Garantie, garanties liées, famille de garanties (terme d'organisation), périmètre d'un calcul. Recommandation suivie. |
+| G5 | Sinistre, état, dossier, prestation, engagement | Un arrêt de travail est un seul sinistre dont les états sont des événements datés ; le décès est un sinistre distinct ; dossier = unité de gestion ; prestation = paiement ; engagement = ce qui reste dû à l'arrêté. Précise Q17 : « une ligne par sinistre, les états en événements ». Recommandation suivie. |
+| G6 | Dates | Survenance, déclaration, instruction, règlement, saisie, extraction, arrêté (jamais « inventaire », « évaluation », « valorisation » hors citation), vue à une date. Recommandation suivie. |
+| G7 | Postes et familles de calcul | Poste ; quatre familles nommées engagement, triangle, risque en cours, projection ; échéancier, valeur actuelle probable, loi, loi de maintien et table de maintien, loi de passage, table de mortalité, modèle multi-états, transition. Recommandation suivie. |
+| G8 | Triangles | Entrées de `docu_actu` reprises (triangle de liquidation, charge, charge ultime, cadence, facteur de développement, boni ou mali, tardifs = IBNR, IBNER) plus « triangle reconstitué ». Recommandation suivie. |
+| G9 | Hypothèses | Hypothèse, hypothèse par défaut, jugement d'expert, convention, point prudent, taux technique et plafond réglementaire, courbe des taux sans risque, décisions de gestion futures, comportement des preneurs, revalorisation, frais. Recommandation suivie. |
+| G10 | Plan, fiche, méthode | Plan de calcul (jamais « plan de construction », « paramétrage », « pipeline », « scénario »), fiche de calcul, option, sensibilité, méthode (recommandée, alternative, écartée), recensement des méthodes, modèle de référence, cinq statuts épistémiques. Recommandation suivie. |
+| G11 | Données | **Simulateur** pour la base brute fictive, **générateur de scénarios** pour les scénarios économiques ; base brute fictive, dictionnaire, loi vraie, jeu propre, défaut de données et son traitement, jeu versionné, empreinte, extraction. Recommandation suivie. |
+| G12 | Validation | Réalisé / attendu, constat de simulation, témoin, contre-vérification et recoupement, rejeu, rapport figé. Recommandation suivie. |
+| G13 | Épargne et actif | Termes structurants définis dès maintenant, en entrées courtes, complétées par `actuary` avec le dictionnaire de l'actif. Recommandation suivie. |
+| G14 | Cadre et textes | Entrées de `docu_actu` reprises (référentiel, textes qui font foi, référence de place, interprétation, limites du contrat, ligne d'activité, groupe de risques homogènes, fonction actuarielle, ACPR, ANC, EIOPA) ; BCAC avec la note sur les lois de l'ANC. Recommandation suivie. |
+| G15 | « Maintien » seul | Écarté : « loi de maintien » ou « maintien en incapacité / en invalidité » d'un côté, « maintien de la garantie décès » en entier de l'autre. Recommandation suivie. |
+| G16 | Axe de développement | **Décision contre la recommandation** (« ancienneté ») : « année de développement », terme usuel ; « ancienneté » réservé à l'ancienneté dans un état (lois de maintien). |
+| G17 | Provision du passage attendu en invalidité | **Décision contre la recommandation** (terme de l'ANC « provisions dites pour rentes en attente », jugé confus) : « provision d'invalidité en attente », le nom de l'ANC n'étant employé qu'en citation ; exception à G1 consignée dans l'entrée. |
+| G18 | Sigles | Terme en entier à la première occurrence puis sigle admis (PSAP, PPNA, PREC, PRC, PPB, PRE, PAF, PGG, BE, SCR, TME), tableaux et noms de code compris ; « PM » et « PE » jamais employés. Recommandation suivie. |
+| G19 | Un sinistre, plusieurs dossiers | Dossier = unité de gestion par sinistre et par garantie déclenchée, reliés par l'identifiant du sinistre. Recommandation suivie. |
+| G20 | « Exposition » et « risque en cours » | « Exposition » réservé aux tables d'expérience ; entrée « risque en cours » (assurés couverts à l'arrêté dont un sinistre futur relève encore du contrat). Recommandation suivie. |
+| G21 | « Épargne acquise » et « encours » | « Encours » admis pour un total seulement. Recommandation suivie. |
+| G22 | Organisation du travail | Trois entrées ajoutées : entretien de cadrage, décision du mainteneur (M), recensement des méthodes. Recommandation suivie. |
+
+Glossaire validé par le mainteneur le 7 novembre 2026.
