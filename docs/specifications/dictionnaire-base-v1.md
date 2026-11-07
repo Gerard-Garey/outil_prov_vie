@@ -1,6 +1,8 @@
 # Dictionnaire de la base brute fictive — v1 (décès, arrêt de travail, garanties liées)
 
 > *Rédigé par l'agent actuary-approfondi (IA) le 7 novembre 2026 (issue #16, branche `claude/socle-donnees`). Révisé le 7 novembre 2026 par l'agent actuary (IA) sur les décisions du mainteneur du même jour relatives à l'avis P13 (filiation avec le dictionnaire double effet de `docu_actu`). Statut : **visé** par le mainteneur le 7 novembre 2026 (E2.2, M17). Points visés le 7 novembre 2026 : recommandations de P1 à P4, P7, P11, P12, P15 et P16 ; P14 sous sa forme reformulée (§ 3, T6) ; P13 soldé par l'annexe A. Visa global : 7 novembre 2026.*
+>
+> *Amendé le 7 novembre 2026 (décision T1 du mainteneur, #14).*
 
 Version du dictionnaire : `1.0`. C'est la valeur attendue dans `extraction.version_dictionnaire`.
 
@@ -29,7 +31,7 @@ La base ne porte **aucune provision inscrite** (Q5 ; ADR 0008, point 8). Elle ne
 - Exigences : E1.5, E2.1 à E2.6, E2.14, E2.20, E4.4, E4.9.
 - ADR 0005 et 0008 ; `CONTEXT.md`.
 - Entretien de cadrage : Q5, Q6, Q17, Q18, Q22, Q30, A4, G5, G19.
-- Décisions du mainteneur : M17, M33, M63, M68, M69, M71 ; décisions du 7 novembre 2026 sur l'avis P13 (intégration des corrections B1, B2, M1 à M10, m1 à m9 ; option (a) pour les désignations et les ayants droit santé).
+- Décisions du mainteneur : M17, M33, M63, M68, M69, M71 ; décisions du 7 novembre 2026 sur l'avis P13 (intégration des corrections B1, B2, M1 à M10, m1 à m9 ; option (a) pour les désignations et les ayants droit santé) ; décision T1 du mainteneur du 7 novembre 2026 sur #14 (taux du tarif des garanties collectives liées, rattachements, indicateur A132-1).
 - Issue #14.
 - Dictionnaire consolidé de la base brute fictive du guide double effet de `docu_actu` (`docs/specifications/dictionnaire-base-double-effet.md`, visé par son mainteneur le 1er novembre 2026, M135), source de la filiation (M17).
 
@@ -225,7 +227,7 @@ Les écarts 1 à 5 sont visés par le mainteneur le 7 novembre 2026 (§ 11, P1) 
 | Catégorie d'invalidité | `evenements.categorie_invalidite` |
 | Prestations de la sécurité sociale ou règle de complément | `evenements.montant_securite_sociale`, `garanties_souscrites.regle_complement` |
 | Âge de fin de service des rentes | `parametres.age_fin_service`, et `fin_service` programmable (motif `retraite`) |
-| Taux du tarif par contrat (M63) | `garanties_souscrites.taux_technique_tarif` |
+| Taux du tarif par contrat (M63 ; étendu aux garanties collectives liées par la décision T1, #14) | `garanties_souscrites.taux_technique_tarif` |
 | Portabilité (E1.5) | `affiliations.type_affiliation = "portabilite"` |
 | Gestion déléguée (mode de gestion des sinistres) | `contrats.gestionnaire`, `contrats.date_debut_gestion`, `sinistres.gestionnaire` |
 | Information de famille des assurés vivants | `assures` (`situation_familiale`, `nombre_enfants_charge`, `date_situation_familiale`), `affiliations` (`designation`, `date_designation`, `sante_organisme`, `structure_cotisation_sante`), `adherents.sante_couplee`, T19, T20 |
@@ -299,7 +301,7 @@ Une ligne par contrat, garantie, collège et version de paramètres ; les versio
 | `periodicite_prestation` | character | `annuelle`, `semestrielle`, `trimestrielle`, `mensuelle` ; requis pour `incapacite`, `invalidite`, `rente_conjoint`, `rente_education` | C | E | — |
 | `terme_prestation` | character | `echu`, `a_echoir` ; mêmes garanties | C | E | — |
 | `periodicite_cotisation` | character | `unique`, `annuelle`, `semestrielle`, `trimestrielle`, `mensuelle` | O | E | — |
-| `taux_technique_tarif` | numeric | Taux du tarif, en fraction ; bornes de contrôle [−0,05 ; 0,10] (jugement d'expert) ; requis si un poste de la garantie est une provision mathématique vie (garantie `deces` des contrats individuels en v1 ; rattachement : #14) | C | E | — |
+| `taux_technique_tarif` | numeric | Taux du tarif, en fraction ; bornes de contrôle [−0,05 ; 0,10] (jugement d'expert) ; requis pour la garantie `deces` d'un contrat individuel, pour la garantie `deces` d'un contrat collectif qui porte le maintien de la garantie décès (portée du maintien : P9), et pour `rente_conjoint`, `rente_education` et `double_effet` (décision T1 du mainteneur, #14) ; manquant là où il est requis : défaut D03h | C | E | D03h |
 | `table_tarif` | character | Identifiant de la table du tarif ; informatif, lu par le signalement seulement | F | E | — |
 | `conjoint_vise` | character | `marie`, `marie_pacs`, `marie_pacs_concubin` : qualités de conjoint couvertes par la clause ; requis pour `double_effet` et `rente_conjoint` | C | E | — |
 | `versement_double_effet` | character | `global`, `par_enfant` ; requis pour `double_effet` | C | E | — |
@@ -308,7 +310,7 @@ Une ligne par contrat, garantie, collège et version de paramètres ; les versio
 | `maintien_double_effet` | logical | La garantie décès maintenue (maintien et portabilité) comprend le double effet ; requis pour `double_effet` | C | E | — |
 | `clause_type_beneficiaire` | character | `conjoint_enfants_heritiers`, `autre` : clause appliquée à défaut de désignation ; requis pour `deces` | C | E | — |
 
-Le moteur contrôle que le taux retenu pour la provision mathématique vie ne dépasse pas `taux_technique_tarif` et le signale sans refuser (E2.9, M62, M63).
+Le moteur contrôle que le taux retenu pour la provision mathématique vie ne dépasse pas `taux_technique_tarif` et le signale sans refuser (E2.9, M62, M63). L'indicateur A132-1 est produit dès la v1 (M63 rouvert, décision T1, #14).
 
 ### T5. `parametres`
 
@@ -663,24 +665,24 @@ La vue à l'arrêté A (A ≤ `date_extraction`) retient :
 
 ## 8. Table de couverture (postes de la v1 → tables et colonnes lues)
 
-La famille de calcul et le rattachement de chaque poste sont ceux d'E2.14 et E2.15. Le rattachement aux provisions est établi par #14.
+La famille de calcul et le rattachement de chaque poste sont ceux d'E2.14 et E2.15. Le rattachement aux provisions est établi par #14 ; les rattachements tranchés par la décision T1 du mainteneur (7 novembre 2026) sont rappelés entre parenthèses, à titre de renvoi : la règle de calcul n'est pas l'objet du dictionnaire.
 
 | Poste (E2.14) | Tables et colonnes lues |
 |---|---|
-| Capital décès : sinistres déclarés non réglés | `sinistres` (nature, survenance, déclaration, instruction) ; `dossiers` (`deces`) ; `evenements` (`fixation_capital`, `cloture_dossier`, `reouverture_dossier`) ; `prestations` (`capital`) ; `beneficiaires`. Si le capital n'est pas fixé : `parametres` (`taux_capital`, majorations, `capital_forfaitaire`), `affiliations.salaire_reference`, `assures.situation_familiale`, `assures.nombre_enfants_charge`, `famille` |
+| Capital décès : sinistres déclarés non réglés (PSAP vie, décision T1, #14) | `sinistres` (nature, survenance, déclaration, instruction) ; `dossiers` (`deces`) ; `evenements` (`fixation_capital`, `cloture_dossier`, `reouverture_dossier`) ; `prestations` (`capital`) ; `beneficiaires`. Si le capital n'est pas fixé : `parametres` (`taux_capital`, majorations, `capital_forfaitaire`), `affiliations.salaire_reference`, `assures.situation_familiale`, `assures.nombre_enfants_charge`, `famille` |
 | Capital décès : tardifs | `sinistres` (survenance, déclaration, `date_saisie`, `gestionnaire` pour la segmentation), `contrats` (`gestionnaire`, `date_debut_gestion`), `dossiers`, `prestations` (`date_reglement`, `montant`) ; a priori de Bornhuetter-Ferguson par décès attendus : `affiliations` (dates, type), `assures` (`date_naissance`, `sexe`), `contrats` |
 | Capitaux non réclamés | `dossiers`, `evenements` (`fixation_capital`, `cloture_dossier` motif `depot_cdc`), `beneficiaires` (`non_identifie`), `prestations.dont_revalorisation`, `sinistres` (`date_declaration`, `canal_declaration`) |
 | Provision mathématique de la temporaire décès | `contrats` (individuel, `date_effet`, `date_terme`, `date_fin`), `garanties_souscrites` (`taux_technique_tarif`, `periodicite_cotisation`), `parametres` (`capital_forfaitaire`, `prime_periodique`, `age_fin_garantie`), `assures` (`date_naissance`, `sexe`), `cotisations` |
-| Maintien de la garantie décès | `sinistres` (`arret_travail`) et `evenements` (états), `contrats` (`date_fin`, `motif_fin`, `date_saisie_fin`), `parametres` (`deces` : `taux_capital`, majorations, `age_fin_garantie`), `affiliations.salaire_reference`, `assures` |
-| Rentes de conjoint et d'éducation en service | `rentes`, `evenements` (`ouverture_service`, `modification_montant`, `suspension`, `reprise_service`, `fin_service`), `famille` (ligne valable : `date_naissance`, `sexe`, `situation`, `date_deces`), `garanties_souscrites` (`type_rente_conjoint`, `periodicite_prestation`, `terme_prestation`, `conjoint_vise`, `non_remariage`, `prolongation_handicap`), `parametres` (`age_terme`, `age_limite`, `age_limite_etudes`, paliers), `prestations` (`fin_periode` : payé jusqu'au) |
+| Maintien de la garantie décès (provision mathématique vie, avec une option `rattachement` du plan, décision T1, #14 ; portée : P9) | `sinistres` (`arret_travail`) et `evenements` (états), `contrats` (`date_fin`, `motif_fin`, `date_saisie_fin`), `garanties_souscrites.taux_technique_tarif`, `parametres` (`deces` : `taux_capital`, majorations, `age_fin_garantie`), `affiliations.salaire_reference`, `assures` |
+| Rentes de conjoint et d'éducation en service (lecture vie, décision T1, #14) | `rentes`, `evenements` (`ouverture_service`, `modification_montant`, `suspension`, `reprise_service`, `fin_service`), `famille` (ligne valable : `date_naissance`, `sexe`, `situation`, `date_deces`), `garanties_souscrites` (`type_rente_conjoint`, `periodicite_prestation`, `terme_prestation`, `conjoint_vise`, `non_remariage`, `prolongation_handicap`, `taux_technique_tarif`), `parametres` (`age_terme`, `age_limite`, `age_limite_etudes`, paliers), `prestations` (`fin_periode` : payé jusqu'au) |
 | Rentes à constituer | `rentes` sans `ouverture_service`, `dossiers`, `sinistres`, `famille`, `beneficiaires`, `parametres.taux_rente`, `affiliations.salaire_reference` |
 | Tardifs des rentes | Comme les tardifs du capital décès, sur les dossiers de rente ; coût moyen tiré de la famille « engagement » |
-| Double effet (engagements en cours, dossiers potentiels, premiers décès tardifs, capitaux dus, événement catastrophe) | `sinistres` (`deces`, `date_instruction`, `gestionnaire`), `dossiers` (`double_effet`), `evenements` (`second_deces`, `fixation_capital`, `mise_a_jour` et `demande_mise_a_jour` pour la dernière information, `source_information`, `cloture_dossier`), `famille` (ligne valable au sinistre et à A : `lien`, `sexe`, `date_naissance`, `situation`, `date_deces`, `id_assure_membre`), `garanties_souscrites` (`conjoint_vise`, `versement_double_effet`, `non_remariage`, `prolongation_handicap`, `maintien_double_effet`), `parametres` (`double_effet` : `taux_capital`, `age_limite`, `age_limite_etudes`, `duree_garantie_mois`, `age_limite_conjoint`, `taux_revalorisation` ; `deces` : capital contractuel), `affiliations.salaire_reference`, `prestations` (`capital`), `catastrophes`, `victimes` (`date_deces`) ; limites du contrat : `contrats`, `affiliations` |
+| Double effet (engagements en cours, dossiers potentiels, premiers décès tardifs, capitaux dus, événement catastrophe) | `sinistres` (`deces`, `date_instruction`, `gestionnaire`), `dossiers` (`double_effet`), `evenements` (`second_deces`, `fixation_capital`, `mise_a_jour` et `demande_mise_a_jour` pour la dernière information, `source_information`, `cloture_dossier`), `famille` (ligne valable au sinistre et à A : `lien`, `sexe`, `date_naissance`, `situation`, `date_deces`, `id_assure_membre`), `garanties_souscrites` (`conjoint_vise`, `versement_double_effet`, `non_remariage`, `prolongation_handicap`, `maintien_double_effet`, `taux_technique_tarif`), `parametres` (`double_effet` : `taux_capital`, `age_limite`, `age_limite_etudes`, `duree_garantie_mois`, `age_limite_conjoint`, `taux_revalorisation` ; `deces` : capital contractuel), `affiliations.salaire_reference`, `prestations` (`capital`), `catastrophes`, `victimes` (`date_deces`) ; limites du contrat : `contrats`, `affiliations` |
 | Approche par tête (si le recensement la retient ; probabilité d'ouverture propre au décédé, sinistres futurs) | `assures` (`situation_familiale`, `nombre_enfants_charge`, `date_situation_familiale`), `affiliations` (`designation`, `date_designation`, `sante_organisme`, `structure_cotisation_sante`), `adherents.sante_couplee`, `designations`, `ayants_droit_sante` (facultatives : variante sans elles) ; calibrage sur `famille` des sinistres instruits |
 | Incapacité : indemnités journalières en cours | `sinistres`, `evenements` (`entree_incapacite`, `rechute`, `sortie`, `ouverture_service`, `modification_montant`, `fin_service`), `dossiers` (`incapacite`), `parametres` (`franchise_jours`, `duree_max_jours`, `age_fin_service`, `taux_indemnite`), `garanties_souscrites` (`type_franchise`, `regle_complement`), `assures.date_naissance`, `prestations.fin_periode` |
 | Provision d'invalidité en attente | Comme la ligne précédente, plus `parametres` (`invalidite` : `taux_rente` par catégorie, `age_fin_service`) et `affiliations.salaire_reference` |
 | Incapacité : tardifs (passage futur compris) | `sinistres` (`arret_travail`), `dossiers`, `prestations` ; coût moyen tiré de la famille « engagement » |
-| Invalidité : rentes en cours | `evenements` (`entree_invalidite`, `passage_invalidite`, `changement_categorie`, `ouverture_service`, `modification_montant`, `fin_service`, `sortie`), `rentes`, `parametres.age_fin_service`, `assures` |
+| Invalidité : rentes en cours (PSAP, décision T1, #14) | `evenements` (`entree_invalidite`, `passage_invalidite`, `changement_categorie`, `ouverture_service`, `modification_montant`, `fin_service`, `sortie`), `rentes`, `parametres.age_fin_service`, `assures` |
 | Invalidité : rentes à constituer des invalidités reconnues | `evenements` (`passage_invalidite` ou `entree_invalidite` sans `ouverture_service` sur la rente), `parametres.taux_rente`, `affiliations.salaire_reference` |
 | Chargement de gestion de la PSAP | Aucune donnée propre (frais : hypothèse du plan) ; assiette = postes de la PSAP |
 | Risque en cours dans les limites du contrat | `contrats` (`mois_echeance`, `jour_echeance`, `preavis_mois`, `tacite_reconduction`, `date_fin`), `affiliations` (en cours, portabilité comprise), `assures`, `garanties_souscrites`, `parametres` (`taux_cotisation`, `cotisation_forfaitaire`), `cotisations` |
@@ -712,6 +714,7 @@ La famille de calcul et le rattachement de chaque poste sont ceux d'E2.14 et E2.
 | **D03e** | Catégorie d'invalidité manquante | `evenements.categorie_invalidite` (types qui l'exigent) | exacte | **H** : catégorie par défaut | `manquant_categorie_invalidite` |
 | **D03f** | Période couverte manquante | `prestations` (indemnités journalières, arrérages), `cotisations` | exacte | **H** : règle déclarée (prestation : période de la périodicité contractuelle qui finit à `date_reglement` ; cotisation : période de la périodicité qui commence au premier jour du mois du mouvement), ou **X** par famille | `manquant_periode_couverte` |
 | **D03g** *(ajout)* | Date de saisie manquante | `evenements`, `prestations`, `sinistres`, `affiliations`, `famille`, `beneficiaires`, `rentes`, `contrats.date_saisie_fin` | exacte | **S** si l'arrêté égale l'extraction (tout est visible) ; pour un arrêté antérieur, **H** (date de visibilité = date d'effet + délai déclaré) ou **X** | `manquant_date_saisie` |
+| **D03h** *(ajout)* | Taux du tarif manquant | `garanties_souscrites.taux_technique_tarif` là où il est requis (§ 3, T4) | exacte | **H** : taux du tarif retenu égal à 0 % (jugement d'expert, décision T1 du mainteneur, #14 : prudent en comptes sociaux ; motif, alternative écartée et effet chiffré dans la fiche de calcul) ; déclaré et signalé, avec la liste des garanties souscrites concernées | `manquant_taux_tarif` |
 | **D04a** | Prestation sans sinistre | `prestations.id_dossier` manquant ou absent de `dossiers`, ou dossier sans sinistre | exacte | **X** par famille ; enjeu = montants | `prestation_orpheline` |
 | **D04b** *(extension)* | Autre ligne orpheline | `evenements`, `beneficiaires`, `rentes`, `cotisations`, `victimes`, `designations`, `ayants_droit_sante` : **X** ; `dossiers`, `sinistres`, `affiliations`, `famille`, `garanties_souscrites`, `parametres`, `contrats` : **R** ; (`id_contrat`, `college`) sans garantie souscrite : **R** | exacte | selon la table | `orpheline` (tables tirées : `evenements`, `rentes`, `cotisations`) |
 | **D05** | Sinistre clos sans prestation ni motif | `sortie` ou `cloture_dossier` au `motif` manquant, sans prestation sur aucun dossier du sinistre | exacte | **H** : motif retenu déclaré (`sans_suite`) et règle de décompte déclarée (compté ou non dans le triangle des nombres) ; **S** | `clos_sans_motif` : motif effacé d'une clôture sans suite vraie |
@@ -727,6 +730,7 @@ La famille de calcul et le rattachement de chaque poste sont ceux d'E2.14 et E2.
 
 **Écarts à la liste d'E2.4 (à viser) :**
 - D03g ajoute la date de saisie manquante aux manquants : elle conditionne la vue à une date.
+- D03h ajoute le taux du tarif manquant (décision T1 du mainteneur, #14).
 - D04 étend « prestation sans sinistre » à toute ligne orpheline.
 - D11 et D12 sont nouveaux ; D13 et D14 viennent du dictionnaire double effet de `docu_actu` (annexe A).
 - D02a, D03a, D06, D07 et D09 sont étendus aux cas du double effet (annexe A).
@@ -774,8 +778,8 @@ Un test de concordance compare ces fichiers aux tableaux du présent texte, que 
 | P6 | Rentes d'accident du travail et de maladie professionnelle (taux d'incapacité permanente) | Hors v1 ; catégories `cat1` à `cat3` seulement | Mainteneur |
 | P7 | Colonne inconnue du dictionnaire | **Visé le 7 novembre 2026** : refus (contrat strict) plutôt qu'une colonne ignorée avec signalement | — |
 | P8 | Capitaux non réclamés : champ (décès non connus de l'organisme), délai et effet du dépôt à la Caisse des dépôts et consignations, taux de revalorisation légale | Le dictionnaire fournit `canal_declaration`, `depot_cdc` et `dont_revalorisation`, sans règle | `regulatory` (#14, point 5 ; #13) |
-| P9 | Portée du maintien de la garantie décès (tous les arrêts, ou après résiliation seulement) | Les deux lectures se calculent sur ce dictionnaire | `regulatory` (#14, point 4) |
-| P10 | Non-cumul de la PPNA et de la PREC avec la provision mathématique vie | Le dictionnaire fournit `code_garantie` et `nature_contrat` ; la règle relève de #14 | `regulatory`, `actuary` (#14, point 7) |
+| P9 | Portée du maintien de la garantie décès (tous les arrêts, ou après résiliation seulement) | Les deux lectures se calculent sur ce dictionnaire. Le rattachement du maintien est tranché (provision mathématique vie, option `rattachement` du plan, décision T1, #14) ; sa portée reste ouverte | `regulatory` (#14, point 4) |
+| P10 | Non-cumul de la PPNA et de la PREC avec la provision mathématique vie | **Soldé** par la décision T1 du mainteneur du 7 novembre 2026 (#14) ; le dictionnaire fournit `code_garantie` et `nature_contrat`, la règle relève de la documentation des règles comptables | — |
 | P11 | Contrat individuel : souscripteur = assuré en v1 | **Visé le 7 novembre 2026** ; un souscripteur distinct, hors v1 | — |
 | P12 | Bornes de contrôle (`taux_technique_tarif` dans [−0,05 ; 0,10], dates ≥ 1901-01-01) | **Visé le 7 novembre 2026** comme jugement d'expert ; les bornes d'âge restent déclarées dans le plan | — |
 | P13 | Filiation avec les douze tables du dictionnaire double effet de `docu_actu` (M17) | **Soldé** par l'annexe A (avis d'`actuary` et décisions du mainteneur du 7 novembre 2026) | — |
