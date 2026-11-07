@@ -4,8 +4,7 @@ name: CI
 # .github/ruleset-main.json ; M90 et M91) :
 #   - « Contrôles du dépôt » : réglages Claude Code, fiches d'agents, fichiers sensibles ;
 #   - « Tests (R 4.3.3) » : les trois batteries de CLAUDE.md dans le conteneur
-#     rocker/r-ver:4.3.3, à épingler par digest (étape transitoire, voir le job ;
-#     plateforme de référence, ADR 0010, point 27 ;
+#     rocker/r-ver:4.3.3 épinglé par digest (plateforme de référence, ADR 0010, point 27 ;
 #     CONTEXT.md, « Plateforme de référence »), sans package CRAN ;
 #   - « Documents LaTeX » : pdfLaTeX (trois passes) sur la charte et la documentation de
 #     fond, puis le contrôle du préambule (issue #7).
@@ -65,13 +64,12 @@ jobs:
     name: Tests (R 4.3.3)
     runs-on: ubuntu-24.04
     timeout-minutes: 15
-    # Plateforme de référence (ADR 0010, point 27) : l'image doit être épinglée par le
-    # digest de son index multi-architecture (rocker/r-ver:4.3.3@sha256:…).
-    # ÉTAPE TRANSITOIRE : digest à relever dans le journal « Initialize containers » du
-    # premier passage, puis épingler avant la sortie du brouillon (ADR 0010, point 27) et
-    # consigner dans CONTEXT.md. Le digest n'a pas pu être relevé à la rédaction du job
-    # (registre Docker Hub inaccessible depuis la session de rédaction).
-    container: rocker/r-ver:4.3.3
+    # Plateforme de référence (ADR 0010, point 27) : image épinglée par digest. Digest
+    # relevé le 7 novembre 2026 dans le journal « Initialize containers » du premier
+    # passage (run 42415820075, job « Tests (R 4.3.3) », ligne « Digest: » de
+    # `docker pull rocker/r-ver:4.3.3`) ; plateforme imprimée : R 4.3.3, Ubuntu 22.04.5,
+    # OpenBLAS 0.3.20, LAPACK 3.10.0. Consigné dans CONTEXT.md, « Plateforme de référence ».
+    container: rocker/r-ver:4.3.3@sha256:732d15020af326da9e919c07f70ca32bf5d3e409220af32e0a4b6d0a89437309
     steps:
       # git peut manquer dans l'image : l'action télécharge alors l'archive par l'API.
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
