@@ -188,3 +188,21 @@ Issues : #17 (ADR de forme et socle), #18 (module `donnees`, et par cet ADR `dic
 - **Plateforme des mesures de T1** : R 4.3.3 installé dans le conteneur de la session cloud depuis le dépôt Ubuntu 24.04. Ce n'est **pas** la plateforme de référence (point 27 : conteneur `rocker/r-ver:4.3.3` épinglé par digest, relevé en T3) ; les mesures de T1 valent constat sur cette plateforme, pas référence.
 
 **Effet sur les résultats** : aucun (aucune provision calculée dans B1). Issues : #17, #16, #18, #19.
+
+## Annotation du 7 novembre 2026 — décisions de forme de T1 confirmées ; lecture du graphe des modules
+
+*Rédigée par `architect` le 7 novembre 2026 (branche `claude/socle-donnees`, PR #21, tête `bcc1c84`), sur le handoff de la PR #21 (commentaire `6712855457`) et les décisions du mainteneur du même jour (M105, M106, M108, M112 à M114 de `docs/feuille-de-route.md`, § 4). Le texte ci-dessus et les annotations précédentes ne sont pas réécrits.*
+
+**Décisions de forme de T1** (annotation précédente, « Trois décisions de forme prises par la session principale pendant T1 ») :
+
+1. Refus des chaînes non ASCII d'encodage inconnu hors locale UTF-8 : **confirmé** (M105). La couche de lecture (`lecture`, #18) marque donc les CSV en UTF-8 (`encoding = "UTF-8"`, point 2).
+2. `lire_liste()` stricte, `ecrire_liste(lire_liste(o)) == o` : **confirmé** (M106). L'issue #25 (durée de relecture) conserve cette propriété.
+3. `suppressWarnings()` de `avec_graine()` : **gardé, mais ciblé sur le seul rétablissement d'un échantillonneur « Rounding »** (M108) ; la modification du code se fait en T2.
+4. **Code ASCII dans `R/`**, caractères non ASCII écrits en `\uXXXX` (M112), règle retenue en T1 après mesure des locales `C` et `C.UTF-8`.
+
+**Lecture du graphe des modules** (écarts relevés par `docwriter` pendant T4 ; décisions du mainteneur du 7 novembre 2026, sur la proposition d'`architect`) ; elles fixent ce que contrôle `tests/controles/graphe_modules.R` (T2) :
+
+- **(a) Point 3 et tableau du point 1 (M113).** Le point 3 dit « une famille n'appelle jamais une autre famille », alors que le tableau du point 1 autorise `risque_en_cours` → `engagement` et `projection` → `engagement` (arêtes reprises de l'ADR 0006, point 2 : « `engagement` et amont »). **Décision** : le tableau du point 1 est le graphe normatif, celui que le script contrôle ; la phrase du point 3 ne vise que la **combinaison de deux familles pour former un poste**, qui est toujours une étape de l'orchestration, jamais un appel d'une famille à l'autre ; les deux arêtes vers `engagement` sont des emplois de la valeur actuelle probable comme service (limites du contrat, flux projetés) ; `triangle` → `engagement` reste le témoin interdit. *Option écartée* : faire prévaloir la phrase du point 3 et retirer les deux arêtes ; elle contredirait l'ADR 0006 accepté et obligerait `risque_en_cours` (B6) et `projection` (v2) à recevoir de l'orchestration des résultats d'`engagement` qu'ils ne peuvent pas toujours prévoir.
+- **(b) Ligne `rapport` du point 1 (M114).** « Tous les modules ci-dessus sauf `lecture` et `simulation` » (`simulation` étant au-dessous de `rapport` dans le tableau, la mention est redondante ou signale la lecture « tous les autres modules »). **Décision** : `rapport` peut appeler **onze modules** — `outils`, `dictionnaire`, `donnees`, `tables`, `garanties`, `engagement`, `triangle`, `risque_en_cours`, `regles_comptables`, `projection`, `plan` — et ni `lecture`, ni `simulation`, ni l'orchestration `calculer_provisions`, qui appelle `rapport` (l'arête inverse ferait un cycle) ; les deux lectures du texte donnent cet ensemble une fois le cycle exclu. Le graphe ne dit pas qu'un appel est un calcul : que le rapport ne recalcule rien (E4.3 ; ADR 0006, « rapport figé (octets HTML, sans calcul) ») reste vérifié par `audit`, pas par le script. Une liste plus étroite (sans les familles) reste possible en B2, quand `rapport` reçoit son contenu ; elle ferait l'objet d'une nouvelle annotation.
+
+**Effet sur les résultats** : aucun (aucune provision calculée dans B1). Issues : #17, #18, #25.
