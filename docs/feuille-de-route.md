@@ -42,7 +42,7 @@ Après la PRC : v2 épargne (actif facultatif, postes comptables de l'épargne, 
 
 ## 3. Issues hors plan
 
-Aucune : les cinq issues ouvertes (#1 à #5, *vérifié* par `gh issue list`) sont au périmètre de `claude/cadrage` (§ 1.1).
+Huit issues transverses créées le 7 novembre 2026 (M72), hors du périmètre de `claude/cadrage` et rattachées aux branches du § 2 : #7 (compilation de la charte LaTeX en CI) et #8 (contrôle du préambule recopié) → B1 (2) ; #9 (licence du recueil ANC) → B5 (2) ; #10 (licences des fichiers EIOPA et des séries Webstat) → B2 (2) pour la série TME, B7 (1) pour les courbes ; #11 (jalon de la PRC) → `claude/prc` ; #12 (scripts de contrôle) → B1 (2) ; #13 (textes restant à établir par `regulatory`) et #14 (rattachement des postes de la v1 aux provisions et règle de taux par poste) → avant B2, consultations `regulatory` et `actuary` à conduire pendant B1. Les cinq issues #1 à #5 sont au périmètre de `claude/cadrage` (§ 1.1).
 
 ## 4. Décisions du mainteneur
 
