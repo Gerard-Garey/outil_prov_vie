@@ -6,8 +6,9 @@
 > - *`1.0` : visée par le mainteneur le 7 novembre 2026 (visa global, #16) ;*
 > - *`1.1` : visée par le mainteneur le 7 novembre 2026 ; amendement T1 (M86, #14 : `taux_technique_tarif` requis pour les garanties collectives liées, défaut D03h) et corrections d'attribution (rattachements des postes : interprétations 1 à 4 de #14, M81 à M84 ; indicateur A132-1 : M85 ; P10 soldé par la lecture de `regulatory`, point 7 de #14) ;*
 > - *`1.2` : visée par le mainteneur le 7 novembre 2026 ; P18 soldé par la lecture de `regulatory` du 7 novembre 2026 (conditions d'emploi des données du contrat frais de santé couplé, § 3, T20, et § 11), sans changement de table, de colonne ni de défaut.*
+> - *`1.3` : visée par le mainteneur le 7 novembre 2026 ; correction d'une incohérence relevée par `actuary-approfondi` au recensement de #20 : le domaine de `extraction.version_dictionnaire` (§ 3, T1) restait à `1.1` ; il vaut désormais la version de l'en-tête. Texte seul, sans changement de table, de colonne ni de défaut (M103).*
 
-Version du dictionnaire : `1.2`. C'est la valeur attendue dans `extraction.version_dictionnaire`.
+Version du dictionnaire : `1.3`. C'est la valeur attendue dans `extraction.version_dictionnaire`.
 
 ## 0. Objet, portée, statut
 
@@ -249,7 +250,7 @@ Une ligne exactement ; tout autre nombre de lignes est un refus (R).
 | `date_extraction` | Date | Date d'extraction ; ≥ toute date de saisie de la base | O | — | — |
 | `debut_historique` | Date | < `date_extraction` | O | — | — |
 | `type_organisme` | character | `societe_assurance`, `mutuelle`, `institution_prevoyance` | O | — | — |
-| `version_dictionnaire` | character | `1.1` (version d'un autre dictionnaire : refus) | O | — | — |
+| `version_dictionnaire` | character | `1.3` (version d'un autre dictionnaire : refus) | O | — | — |
 | `devise` | character | `EUR` | O | — | — |
 
 ### T2. `adherents`
