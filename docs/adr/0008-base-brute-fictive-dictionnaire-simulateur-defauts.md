@@ -111,3 +111,14 @@ Le principe du point 5 est inchangé : liste fermée, intensité paramétrée, t
 - P18.
 
 **Effet sur les résultats** : aucun, puisqu'aucun code n'existe. Le dictionnaire est un contrat partagé (`docs/agents/routage.md`, § 4.2) : toute modification passe par une nouvelle version visée. Issues : #16 ; #14 et #13 pour les points renvoyés.
+
+## Annotation du 7 novembre 2026 — forme lisible par machine et forme des jeux (ADR 0010)
+
+*Rédigée par `architect` le 7 novembre 2026 (branche `claude/socle-donnees`, PR #21) après l'acceptation de l'ADR 0010 par le mainteneur (décisions M87 à M96 de `docs/feuille-de-route.md`, § 4). Le texte ci-dessus n'est pas réécrit ; en cas d'écart, l'ADR 0010 fait foi pour les points qui suivent.*
+
+- **Point 2, forme lisible par machine** : la mention `[proposé]` est levée. Six fichiers CSV sous `inst/extdata/dictionnaire/` (`tables.csv`, `colonnes.csv`, `types_evenements.csv`, `parametres.csv`, `defauts.csv`, `filiation.csv`) et `dictionnaire.txt` (version, date de visa, empreinte de chaque CSV) transcrivent le texte visé, qui reste la spécification ; `tests/controles/concordance_dictionnaire.R` compare chaque CSV au tableau correspondant du texte (ADR 0010, point 23). Ces fichiers sont lus par le module **`dictionnaire`**, et non par `donnees` comme le disait le point 2 (ADR 0010, point 1 ; M88). Le premier tiret des « Restent ouverts » de l'annotation précédente est soldé.
+- **Point 3** : le simulateur appelle `dictionnaire`, jamais `donnees` ; la règle « sans appeler les contrôles du module `donnees` » est désormais contrôlée par le script du graphe (ADR 0010, point 1).
+- **Points 4 et 6, forme des jeux** : un jeu simulé est un objet `jeu_simule` (`base`, `loi_vraie`, `verite` avec le **registre des défauts**, `manifeste`) ; un jeu versionné est un dossier `inst/extdata/jeux/<jalon>-<volumetrie>-<nn>/` (`base/`, `loi_vraie.txt`, `verite/`, `manifeste.txt`, `empreintes.md5`), écrit par `ecrire_jeu()` du module `lecture`, le simulateur n'écrivant aucun fichier (ADR 0010, points 19 et 20). La loi vraie est sérialisée sans évaluation (`lire_liste()`), et non par `dput()`. Le **jeu propre n'est pas versionné** : il se reconstitue de la base et des valeurs propres du registre, et se régénère à la graine (M94).
+- **Point 5, liste des défauts** : le dictionnaire, amendé le 7 novembre 2026 (commit `eb82c24`, décision T1 sur #14, M86), ajoute **D03h**, taux du tarif manquant, traité par hypothèse par défaut de 0 % (jugement d'expert, déclaré et signalé). Le principe du point 5 est inchangé.
+
+**Effet sur les résultats** : aucun (aucun code). Issues : #17, #18, #19, #14.

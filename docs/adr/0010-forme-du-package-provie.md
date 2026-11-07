@@ -1,5 +1,5 @@
 ---
-status: proposed
+status: accepted
 date: 2026-11-07
 ---
 
@@ -138,3 +138,31 @@ Proposée au mainteneur le 7 novembre 2026 (statut `proposed` ; l'acceptation va
 - **Vocabulaire** : voir les reports à `CONTEXT.md` ci-dessus.
 
 Issues : #17 (ADR de forme et socle), #18 (module `donnees`, et par cet ADR `dictionnaire` et `lecture`), #19 (module `simulation` et jeux), #7 (job « Documents LaTeX »), #8 (`preambule_latex.R`), #12 (scripts de contrôle), #16 (dictionnaire visé, § 10), #14 (rattachement des postes, hors de l'ADR).
+
+## Annotation du 7 novembre 2026 — acceptation
+
+*Rédigée par `architect` le 7 novembre 2026 (branche `claude/socle-donnees`, PR #21). Le texte ci-dessus, proposé au commit `1a84d18`, n'est pas réécrit : la mention « Proposée au mainteneur… (statut `proposed`) » du début de « Décision » se lit à la date de la proposition.*
+
+**Accepté par le mainteneur le 7 novembre 2026**, ses dix questions tranchées telles que recommandées (décisions M87 à M96 de `docs/feuille-de-route.md`, § 4) :
+
+| N° | Question | Décision | Point de l'ADR |
+|---|---|---|---|
+| 1 | Signature du point d'entrée | `calculer_provisions(donnees, plan, tables = list(), provenance = NULL)`, quatre arguments ; **réouverture de l'ADR 0006, point 4** (annotation du même jour dans l'ADR 0006) | 5 |
+| 2 | Graphe des modules | module `dictionnaire` détaché de `donnees` ; `simulation` n'appelle pas `donnees` | 1 ; « Contexte », tension 2 |
+| 3 | Forme du catalogue des configurations de garanties | CSV sous `inst/extdata/garanties/`, dispatch statique par `switch()` | 16 |
+| 4 | Plateforme du job « Tests (R 4.3.3) » | conteneur `rocker/r-ver:4.3.3` épinglé par digest | 27 |
+| 5 | Contrôles requis du ruleset de `main` | deux : « Tests (R 4.3.3) » et « Documents LaTeX » | 27 |
+| 6 | Moment du squelette LaTeX | squelette préparatoire par `docwriter` juste après le socle, au titre de l'exception « commit `docs:` préparatoire qui protège la suite » de la règle 9 | « Options écartées », dernier tiret ; « Conséquences » |
+| 7 | Sérialiseur des listes nommées | réécrit en B1 ; inventaire des fonctions identiques de `tablexp` différé à une session locale du mainteneur | 18 |
+| 8 | Jeu propre | non versionné ; il se reconstitue du registre des défauts et de la graine | 19 |
+| 9 | Version du package | `0.1.0` à B1, plus 0.1 par branche de code fusionnée | 24 |
+| 10 | Rattachement des modules nouveaux | `dictionnaire` et `lecture` rattachés à #18 (`lire_jeu()` et `ecrire_jeu()` restent écrites avec #19, colonne « Branche » du point 1) | 1 |
+
+**Ce que les décisions du même jour sur #14 (M81 à M86) apportent à cet ADR**, sans en changer la forme :
+
+- « Ce que l'ADR ne règle pas », premier tiret : la correspondance poste → provision et poste → règle de taux est **tranchée pour les interprétations 1 à 4** (capitaux décès déclarés non réglés en PSAP vie ; maintien de la garantie décès en provision mathématique vie ; rentes d'invalidité en service en PSAP, chargement de gestion de 143-11 ; rentes de conjoint et d'éducation et double effet en lecture vie). Elle sera transcrite dans `postes.csv` (point 16) par `actuary` avec chaque recensement. Le reste de #14 (portée du maintien, revalorisation légale, garanties plancher) demeure ouvert.
+- Point 17 : l'**option `rattachement`** du maintien de la garantie décès (`provision_mathematique_vie` ou `psap_arret_travail`, sans valeur par défaut, M82) est un paramètre de la section `postes` du plan ; le schéma de la section est fixé en B2, le paramètre avec la spécification du maintien par `actuary` (B5).
+- Point 6, champ `indicateurs` : la liste ouverte des règles accueille l'**indicateur A132-1 dès la v1** pour les rentes vie (M85) ; son code est fixé avec le module `tables` (B2).
+- Point 9 : le défaut **D03h** (taux du tarif manquant, hypothèse par défaut de 0 %, M86) est une ligne ordinaire de `hypotheses_defaut` ; aucune forme nouvelle.
+
+**Effet sur les résultats** : aucun (aucun code). Issues : #17, #18, #14.
