@@ -23,7 +23,7 @@ On te dit laquelle on attend ; à défaut, **revue légère** (règle 10 de `CLA
 
 ## Points de contrôle
 
-**À ADAPTER** : un point par exigence d'interface de `docs/exigences.md` (disposition, onglets, saisie, restitution). Toujours :
+Un point par exigence d'interface de `docs/exigences.md` § 5 : disposition (zone principale, panneau de paramètres à droite, bouton unique « Relancer les calculs », E5.1), onglets prévus (E5.2), aucune édition des données en ligne (E5.3), plan édité, exporté et importé (E5.4), messages d'erreur qui disent ce qui manque sans rien corriger (E5.5). Toujours :
 
 - **Aucun calcul hors du module de calcul** : repère toute statistique, tout seuil métier codé en dur ou toute transformation quantitative dans les fichiers d'interface.
 - **Saisie** : contrôle des entrées avec message explicite ; aucune donnée modifiée silencieusement.

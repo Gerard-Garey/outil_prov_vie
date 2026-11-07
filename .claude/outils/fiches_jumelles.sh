@@ -21,7 +21,7 @@ set -euo pipefail
 
 # A ADAPTER : roles dedoubles (un expert duplique s'ajoute ici), effort et
 # plafond de tours des fiches de jugement.
-ROLES="architect expert coder"
+ROLES="architect actuary regulatory coder"
 EFFORT_APPROFONDI="high"
 TOURS_APPROFONDI="80"
 
