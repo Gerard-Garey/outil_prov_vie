@@ -336,6 +336,40 @@ verifier_egal("genre d'un appelant différent restauré", RNGkind()[1L], "Wichma
 verifier("état d'un appelant différent restauré", identical(.Random.seed, etat_avant))
 RNGkind("Mersenne-Twister", "Inversion", "Rejection")
 
+# Appelant sous l'echantillonneur "Rounding" : le retablir emet un avertissement de R, seul
+# etouffe (decision du mainteneur du 7 novembre 2026). Installer "Rounding" exige
+# suppressWarnings() sous warn = 2.
+suppressWarnings(RNGkind("Mersenne-Twister", "Inversion", "Rounding"))
+set.seed(5)
+etat_avant <- .Random.seed
+genres_avant <- RNGkind()
+verifier("restauration depuis Rounding : aucune erreur sous warn = 2",
+         is.numeric(avec_graine(99L, runif(3))))
+verifier_egal("restauration depuis Rounding : genres exacts", RNGkind(), genres_avant)
+verifier("restauration depuis Rounding : .Random.seed exact", identical(.Random.seed, etat_avant))
+verifier("restauration depuis Rounding en erreur : aucune erreur de restauration, etat exact",
+         {
+           r <- tryCatch(avec_graine(99L, stop("boum")), error = function(e) conditionMessage(e))
+           identical(r, "boum") && identical(RNGkind(), genres_avant) && identical(.Random.seed, etat_avant)
+         })
+RNGkind("Mersenne-Twister", "Inversion", "Rejection")
+
+# Appelant sous un autre genre qui avertit au retablissement ("Buggy Kinderman-Ramage") : seul
+# "Rounding" est etouffe (decision du mainteneur du 7 novembre 2026), donc l'avertissement
+# REMONTE (erreur sous warn = 2) ; .Random.seed de l'appelant est neanmoins retabli.
+suppressWarnings(RNGkind(normal.kind = "Buggy Kinderman-Ramage"))
+set.seed(5)
+etat_avant <- .Random.seed
+genres_avant <- RNGkind()
+message_restauration <- tryCatch({ avec_graine(99L, runif(2)); "aucune erreur" },
+                                 error = function(e) conditionMessage(e))
+verifier("restauration depuis un genre autre que Rounding : l'avertissement remonte (erreur sous warn = 2)",
+         grepl("Kinderman-Ramage", message_restauration, fixed = TRUE))
+verifier("restauration en echec : .Random.seed de l'appelant tout de meme retabli",
+         identical(.Random.seed, etat_avant))
+verifier_egal("restauration en echec : genres de l'appelant retablis", RNGkind(), genres_avant)
+suppressWarnings(RNGkind("Mersenne-Twister", "Inversion", "Rejection"))
+
 rm(".Random.seed", envir = globalenv())
 invisible(avec_graine(99L, runif(3)))
 verifier("sans graine préalable : aucune graine laissée", !exists(".Random.seed", envir = globalenv()))

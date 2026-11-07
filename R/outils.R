@@ -84,15 +84,23 @@ avec_graine <- function(graine, expr) {
   ancienne_graine <- if (avait_graine) global[[".Random.seed"]] else NULL
   anciens_genres <- RNGkind()
   on.exit({
-    # Le rétablissement d'un échantillonneur « Rounding » émet un avertissement de R, qui
-    # n'a pas à sortir d'une restauration : suppressWarnings() est un choix de T1, question
-    # ouverte à trancher en T2.
-    suppressWarnings(RNGkind(anciens_genres[1L], anciens_genres[2L], anciens_genres[3L]))
-    if (avait_graine) {
-      assign(".Random.seed", ancienne_graine, envir = global)
-    } else if (exists(".Random.seed", envir = global, inherits = FALSE)) {
-      rm(list = ".Random.seed", envir = global)
-    }
+    # Le rétablissement d'un échantillonneur « Rounding » (celui de l'appelant) émet un
+    # avertissement de R, qui n'a pas à sortir d'une restauration : lui seul est étouffé
+    # (décision du mainteneur du 7 novembre 2026) ; tout autre avertissement remonte, donc
+    # échoue sous warn = 2. Même alors, .Random.seed de l'appelant est rétabli (finally).
+    tryCatch({
+      if (identical(anciens_genres[3L], "Rounding")) {
+        suppressWarnings(RNGkind(anciens_genres[1L], anciens_genres[2L], anciens_genres[3L]))
+      } else {
+        RNGkind(anciens_genres[1L], anciens_genres[2L], anciens_genres[3L])
+      }
+    }, finally = {
+      if (avait_graine) {
+        assign(".Random.seed", ancienne_graine, envir = global)
+      } else if (exists(".Random.seed", envir = global, inherits = FALSE)) {
+        rm(list = ".Random.seed", envir = global)
+      }
+    })
   }, add = TRUE)
   RNGkind("Mersenne-Twister", "Inversion", "Rejection")
   set.seed(as.integer(graine))
