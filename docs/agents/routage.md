@@ -2,7 +2,7 @@
 
 Politique appliquée par la session principale quand elle consulte `architect`, `actuary` ou `regulatory`. Décision : ADR 0001. Les agents de réalisation et de vérification (`coder`, `docwriter`, `audit`, `app-review`) suivent une règle plus simple, au § 10 (ADR 0002).
 
-**Point de départ, pas politique figée.** Les valeurs ci-dessous sont celles du modèle de dépôt, adaptées à `outil_prov_vie` le 7 novembre 2026 (cadrage, ADR 0004 à 0009 : contrats partagés du § 4.2, seuil « macro » du § 4.3, signaux du point d'étape au § 3) ; elles se réévaluent à mesure que le projet évolue (§ 8), au point d'étape d'`architect` qui suit chaque série de PR fusionnées, et toute modification passe par un commit `claude:` motivé.
+**Point de départ, pas politique figée.** Les valeurs ci-dessous sont celles du modèle de dépôt, adaptées à `outil_prov_vie` le 7 novembre 2026 (cadrage, ADR 0004 à 0009 : contrats partagés du § 4.2, seuil « macro » du § 4.3, signaux du point d'étape au § 3) ; elles se réévaluent à mesure que le projet évolue (§ 8), au point d'étape d'`architect` qui suit chaque série de PR fusionnées, et toute modification passe par un commit `docs:` motivé.
 
 ## 1. Principes
 
@@ -51,7 +51,7 @@ Mission absente de la matrice (par exemple révision globale, relecture d'une PR
 ### 4.1 Fable sans demander au mainteneur (liste fermée)
 
 1. **Échec documenté d'Opus `high`** : après la consultation en jugement (et, s'il y a lieu, la relance ciblée), la preuve attendue manque encore **et** le blocage est de raisonnement — ni une information manquante, ni une exploration interrompue (§ 5.1).
-2. **Désaccord entre agents** : expert contre `audit`, deux experts entre eux, ou un avis rendu par un agent qui contredit un ADR accepté alors que la question ne porte pas sur cet ADR (une issue ou une consultation qui propose de le modifier est une issue sensible, § 4.2 : Opus `high` d'abord, ADR 0001, décision 3). Fable **instruit** le désaccord, par une consultation neuve de la fiche `-approfondi` du rôle dont relève la question (le fond à `expert`, la forme du code et les ADR à `architect`), avec le dossier (§ 5.4) ; la décision reste au mainteneur quand `CLAUDE.md` la lui réserve.
+2. **Désaccord entre agents** : `actuary` ou `regulatory` contre `audit`, les deux experts entre eux, ou un avis rendu par un agent qui contredit un ADR accepté alors que la question ne porte pas sur cet ADR (une issue ou une consultation qui propose de le modifier est une issue sensible, § 4.2 : Opus `high` d'abord, ADR 0001, décision 3). Fable **instruit** le désaccord, par une consultation neuve de la fiche `-approfondi` du rôle dont relève la question (le fond à `expert`, la forme du code et les ADR à `architect`), avec le dossier (§ 5.4) ; la décision reste au mainteneur quand `CLAUDE.md` la lui réserve.
 3. **Rédaction d'un ADR d'architecture** (routage initial, § 3).
 
 Tout autre usage de Fable est **proposé** au mainteneur (un message, réponse oui / non), qui peut aussi le demander d'office.
@@ -67,7 +67,7 @@ Le nombre d'issues d'un lot n'est qu'un complément : un gros lot fait passer en
 ### 4.3 Seuil « macro » du point d'étape (Fable proposé au mainteneur)
 
 Un nouvel ADR d'architecture, ou le remplacement d'un ADR, est proposé ; **ou**, selon leur importance, au-dessus des seuils suivants (adaptés le 7 novembre 2026) :
-- **une famille de calcul touchée** (ADR 0005 : module `engagement`, `triangle`, `risque_en_cours`, `projection`, ou la catégorie « règle comptable » si elle est visée) dans sa fonction commune à plusieurs garanties, ou le graphe d'appels des modules modifié (ADR 0006, point 3) ;
+- **une famille de calcul touchée** (ADR 0005 : module `engagement`, `triangle`, `risque_en_cours`, `projection`, ou le module `regles_comptables` de la catégorie « règle comptable ») dans sa fonction commune à plusieurs garanties, ou le graphe d'appels des modules modifié (ADR 0006, point 3) ;
 - **un poste dont la provision totale change** (par garantie et par référentiel, A3), hors régénération déjà visée ;
 - au moins deux branches suivantes redécoupées ou réordonnées (§ 2 de `docs/feuille-de-route.md`) ;
 - un jalon dont le contenu change (E1.5 : v1 prévoyance, v2 épargne, v3 retraite, PRC).
@@ -76,7 +76,7 @@ Sous le seuil : jugement, sans question au mainteneur.
 
 ### 4.4 Ni Fable ni effort : obtenir une information ou une preuve
 
-- **Deux lectures d'une source** : vérifier d'abord qu'il ne s'agit pas d'un problème de documentation (version erronée, texte inaccessible, extraction défectueuse) ; si oui, obtenir la bonne source. Si les deux lectures subsistent, l'expert les décrit et le mainteneur tranche (`CLAUDE.md`) : Fable n'est pas requis.
+- **Deux lectures d'une source** : vérifier d'abord qu'il ne s'agit pas d'un problème de documentation (version erronée, texte inaccessible, extraction défectueuse) ; si oui, obtenir la bonne source. Si les deux lectures subsistent, `regulatory` les décrit, `actuary` éclaire l'interprétation et le mainteneur tranche (`CLAUDE.md`) : Fable n'est pas requis.
 - **Issue insuffisamment décrite** : question au mainteneur (libellé `needs-info`), pas d'escalade.
 - **Source non retrouvée** par l'agent : décision du mainteneur, même si l'agent se dit sûr.
 - **Question qu'aucun test ni aucune source ne tranche** : d'abord chercher la mesure ou la source ; si le blocage est de raisonnement, Fable est **proposé**.
@@ -143,7 +143,7 @@ Chaque consultation se termine par un bloc « Retour » (fiches `architect`, `ac
 
 ## 8. Calibration et retour arrière
 
-- **Calibration** : après les dix premières consultations `architect`, `actuary` et `regulatory` d'un projet, puis à chaque point d'étape d'`architect`, relire le bilan du journal et les lignes d'escalade des PR : part des relances ciblées (fiches trop légères ?), escalades vers Fable et leur apport réel, contexte au dernier appel (lectures trop larges ?). Ajuster les seuils et efforts par un commit `claude:` motivé ; une réorientation durable s'annote dans l'ADR 0001.
+- **Calibration** : après les dix premières consultations `architect`, `actuary` et `regulatory` d'un projet, puis à chaque point d'étape d'`architect`, relire le bilan du journal et les lignes d'escalade des PR : part des relances ciblées (fiches trop légères ?), escalades vers Fable et leur apport réel, contexte au dernier appel (lectures trop larges ?). Ajuster les seuils et efforts par un commit `docs:` motivé ; une réorientation durable s'annote dans l'ADR 0001.
 - **Retour au comportement antérieur** (Fable pour tout), sur décision du mainteneur : de préférence, annuler le commit de fusion de la PR qui a introduit la politique (`git revert -m 1 <sha>`), puis rétablir l'ADR 0001 (que l'annulation supprime) avec une annotation datée « Politique abandonnée le … » (ou `superseded by NNNN` si un nouvel ADR consigne le retour) ; dans un projet créé depuis le modèle, qui n'a pas ce commit, ou à défaut, à la main : remettre `model: fable` dans `architect.md`, `actuary.md` et `regulatory.md`, retirer `effort` et `maxTurns`, retirer `architect`, `actuary` et `regulatory` de `ROLES` dans `.claude/outils/fiches_jumelles.sh`, supprimer leurs fiches `-approfondi`, retirer de `CLAUDE.md` le paragraphe « Routage du modèle et de l'effort », et annoter l'ADR 0001.
 
 ## 9. Adapter la politique à un projet

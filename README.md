@@ -4,7 +4,7 @@ Outil de **validation actuarielle** qui recalcule, à une date d'arrêté décla
 
 Issu du dépôt modèle `Gerard-Garey/Modele_vibe_code` (organisation Claude Code : sous-agents, circuits, règles Git, traçabilité). Règles : `CLAUDE.md` ; cahier des charges : `docs/exigences.md` ; vocabulaire : `CONTEXT.md` ; décisions : `docs/cadrage/`, `docs/adr/` et `docs/feuille-de-route.md` (§ 4).
 
-**État** : cadrage fait (entretiens du 7 novembre 2026) ; aucun code encore. La première branche de code porte sur le dictionnaire de la base, le simulateur et le capital décès.
+**État** : cadrage fait (entretiens du 7 novembre 2026) ; aucun code encore. Les deux premières branches de code portent sur les données (dictionnaire de la base, simulateur) puis sur le capital décès (M66).
 
 ## Contenu
 

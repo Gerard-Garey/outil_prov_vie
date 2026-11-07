@@ -18,6 +18,6 @@ Closes #
 - [ ] Invariants de `CLAUDE.md`, « Architecture », respectés
 - [ ] Circuit d'agents suivi (`CLAUDE.md`, « Sous-agents ») ; vérificateurs concernés conformes
 - [ ] Revue finale complète (règle 10) faite sur l'état final, corrections postérieures revues
-- [ ] Documentation mise à jour (passage unique de `docwriter`, un commit `docs:` par issue) et validée par `actuary`
+- [ ] Documentation mise à jour (passage unique de `docwriter`, un commit `docs:` par issue) et validée par `actuary` (et `regulatory` pour les textes)
 - [ ] Changement d'un résultat final ou d'un verdict : visé par le mainteneur
 - [ ] Aucun secret ni donnée confidentielle (le dépôt peut être public)

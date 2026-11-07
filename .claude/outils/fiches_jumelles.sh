@@ -19,7 +19,7 @@
 ###############################################################################
 set -euo pipefail
 
-# A ADAPTER : roles dedoubles (un expert duplique s'ajoute ici), effort et
+# Roles dedoubles (architect, actuary, regulatory ; coder pour sa variante Opus), effort et
 # plafond de tours des fiches de jugement.
 ROLES="architect actuary regulatory coder"
 EFFORT_APPROFONDI="high"
@@ -28,7 +28,7 @@ TOURS_APPROFONDI="80"
 # Parametres de la fiche -approfondi d'un role : modele (vide = celui de la
 # fiche de base), effort, plafond de tours (vide = celui de la fiche de base,
 # ou aucun si elle n'en a pas) et debut de la description. Par defaut, ceux
-# des fiches de jugement d'architect et d'expert (ADR 0001) ;
+# des fiches de jugement d'architect, d'actuary et de regulatory (ADR 0001) ;
 # coder-approfondi : Opus, effort medium (high a l'appel, sur accord du
 # mainteneur), sans plafond de tours propre (ADR 0002).
 parametres() {

@@ -42,7 +42,6 @@ Le défaut le plus coûteux n'est pas l'erreur isolée : c'est le passage **rest
 4. **tous les décomptes** déplacés, y compris ceux écrits en toutes lettres dans la prose ;
 5. les sections de synthèse et de conclusion ;
 6. les encadrés de portée (ce que l'outil fait et ne fait pas).
-
 7. les tableaux de fonctions et les catalogues lus par la batterie de concordance (`docs/latex/CONVENTIONS.md`) ;
 8. la partie « cadre par référentiel et par garantie » quand un poste, une provision ou un texte cité change ;
 9. les fiches de méthode des postes touchés et le recensement des méthodes qu'elles citent.

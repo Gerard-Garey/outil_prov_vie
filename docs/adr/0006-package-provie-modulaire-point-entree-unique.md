@@ -70,3 +70,5 @@ Issues : #4 (ADR de cadrage).
 ## Annotation du 7 novembre 2026 — validation finale d'`actuary`
 
 Depuis la décision M61 (catégorie « règle comptable »), la PPNA et la PREC relèvent du seul module `regles_comptables` : la ligne `risque_en_cours` du tableau du point 2 se lit « famille « risque en cours » : limites du contrat, PRC (hors v1) », sans PPNA ni PREC (une méthode, une implémentation : point 3 de l'ADR 0005). La ligne `regles_comptables` comprend aussi, en v2, la provision pour frais d'acquisition reportés (ADR 0005, annotation visée, point (b) ; E2.10). Constat d'`actuary` à la revue finale de la PR #6 ; aucun effet sur les résultats.
+
+Au point 4, l'argument facultatif `provenance = NULL` ajouté à la signature à deux arguments est le troisième argument, non le « quatrième » (constat de forme de la même revue).

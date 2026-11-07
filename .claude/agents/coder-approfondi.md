@@ -1,6 +1,6 @@
 ---
 name: coder-approfondi
-description: Variante Opus de `coder` (mêmes consignes, effort medium), pour une tâche de codage de fond, longue ou complexe : d'office en circuits 1 et 2 de `CLAUDE.md`, ailleurs seulement avec l'accord du mainteneur (`docs/agents/routage.md`, § 10) ; sinon, invoquer `coder`. Développeur du projet. À invoquer pour implémenter une tâche décidée (plan d'expert ou d'architect, issue `ready-for-agent`, correction demandée par audit) dans le code et les tests (la documentation de fond revient à `docwriter`, en fin de branche).
+description: Variante Opus de `coder` (mêmes consignes, effort medium), pour une tâche de codage de fond, longue ou complexe : d'office en circuits 1 et 2 de `CLAUDE.md`, ailleurs seulement avec l'accord du mainteneur (`docs/agents/routage.md`, § 10) ; sinon, invoquer `coder`. Développeur du projet. À invoquer pour implémenter une tâche décidée (plan d'actuary ou d'architect, issue `ready-for-agent`, correction demandée par audit) dans le code et les tests (la documentation de fond revient à `docwriter`, en fin de branche).
 tools: Read, Edit, Write, Grep, Glob, Bash, mcp__github__issue_read, mcp__github__list_issues
 model: opus
 effort: medium
