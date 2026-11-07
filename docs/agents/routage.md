@@ -2,7 +2,7 @@
 
 Politique appliquée par la session principale quand elle consulte `architect`, `actuary` ou `regulatory`. Décision : ADR 0001. Les agents de réalisation et de vérification (`coder`, `docwriter`, `audit`, `app-review`) suivent une règle plus simple, au § 10 (ADR 0002).
 
-**Point de départ, pas politique figée.** Les valeurs ci-dessous sont celles du modèle de dépôt. Chaque projet créé à partir du modèle les adapte à son domaine, à son architecture et à ses risques (passages **À ADAPTER**, § 9), puis les réévalue à mesure qu'il évolue (§ 8).
+**Point de départ, pas politique figée.** Les valeurs ci-dessous sont celles du modèle de dépôt, adaptées à `outil_prov_vie` le 7 novembre 2026 (cadrage, ADR 0004 à 0009 : contrats partagés du § 4.2, seuil « macro » du § 4.3, signaux du point d'étape au § 3) ; elles se réévaluent à mesure que le projet évolue (§ 8), au point d'étape d'`architect` qui suit chaque série de PR fusionnées, et toute modification passe par un commit `claude:` motivé.
 
 ## 1. Principes
 
@@ -22,7 +22,7 @@ Le paramètre `model` d'un appel `Agent` l'emporte sur le `model` de la fiche. L
 | `architect-approfondi`, `actuary-approfondi`, `regulatory-approfondi` | `opus` | `high` | 80 | jugement (§ 3) |
 | `architect-approfondi`, `actuary-approfondi`, `regulatory-approfondi` appelées avec `model: "fable"` | Fable (fiche : `opus`, l'appel l'emporte) | `high` | 80 | cas du § 4.1, ou accord du mainteneur |
 
-- Les fiches `-approfondi` sont **générées** par `bash .claude/outils/fiches_jumelles.sh` à partir de la fiche de base : seul le frontmatter diffère (nom, description, effort, `maxTurns` et, pour `coder`, le modèle). Ne jamais les modifier à la main ; la CI vérifie la concordance (`--verifier`). La liste des rôles dédoublés est la variable `ROLES` du script (**À ADAPTER** : un expert dupliqué y est ajouté) ; elle comprend aussi `coder`, dont la fiche `-approfondi` a ses propres paramètres (fonction `parametres` du script, § 10).
+- Les fiches `-approfondi` sont **générées** par `bash .claude/outils/fiches_jumelles.sh` à partir de la fiche de base : seul le frontmatter diffère (nom, description, effort, `maxTurns` et, pour `coder`, le modèle). Ne jamais les modifier à la main ; la CI vérifie la concordance (`--verifier`). La liste des rôles dédoublés est la variable `ROLES` du script (`architect actuary regulatory coder` depuis l'adaptation du 7 novembre 2026, Q10 : `actuary` et `regulatory` remplacent `expert`) ; elle comprend aussi `coder`, dont la fiche `-approfondi` a ses propres paramètres (fonction `parametres` du script, § 10).
 - Fable en `xhigh` ou `max` : jamais sans accord explicite du mainteneur (il faudrait alors une troisième fiche, à créer sur décision). Fable en `medium` (fiche de base appelée avec `model: "fable"`) : sur indication explicite du mainteneur seulement.
 - Les modèles sont désignés par **alias** (`opus`, `fable`), qui suivent les nouvelles versions ; le journal (§ 7) note la version effectivement servie.
 - Une fiche modifiée se vérifie de préférence dans une **session neuve** : le constat 3 de `docs/agents/issue-tracker.md` (pas de rechargement en cours de session) est contredit avec Claude Code 2.1.302, où le rechargement a été constaté (ADR 0002).
@@ -34,7 +34,7 @@ Le paramètre `model` d'un appel `Agent` l'emporte sur le `model` de la fiche. L
 | Rôle | Mission | Signaux observables | Départ | Preuves attendues | Suite | Arrêt |
 |---|---|---|---|---|---|---|
 | architect | Rattacher les nouvelles issues au point d'étape (lot) | aucun critère du § 4.2 | routine | tableau de couverture : chaque issue du lot → tâche → branche prévue, ou hors plan / doublon, avec la raison | un critère du § 4.2 → ligne « issue sensible » | toutes les issues du lot couvertes |
-| architect | Point d'étape après fusion | lot ≥ 8 issues, ou plusieurs branches touchées (**À ADAPTER**) | routine ; jugement si l'un des signaux | SHA cités, dépendances ajoutées / retirées explicites, décisions M-n | seuil « macro » (§ 4.3) atteint → Fable **proposé** au mainteneur | feuille de route à jour |
+| architect | Point d'étape après fusion | lot ≥ 8 issues, ou plusieurs branches touchées, ou une issue du lot qui touche un contrat partagé du § 4.2 ou une famille de calcul (ADR 0005) | routine ; jugement si l'un des signaux | SHA cités, dépendances ajoutées / retirées explicites, décisions M-n | seuil « macro » (§ 4.3) atteint → Fable **proposé** au mainteneur | feuille de route à jour |
 | architect | Plan de la branche suivante | — | jugement | trois à cinq issues, ordre des commits, agent et circuit par tâche, critères d'acceptation | § 4.1 | plan complet |
 | architect | Issue sensible : ADR, invariant de `CLAUDE.md` ou contrat partagé touché | § 4.2 | jugement | ADR et invariants cités, effet sur les contrats, branches touchées | § 4.1 ; sinon Fable **proposé** | avis rendu, ou décision du mainteneur |
 | architect | Rédaction d'un ADR **d'architecture** (couches, invariants, contrats) | — | **Fable** (routage initial) | contexte, options écartées, conséquences | décision du mainteneur | ADR proposé |
@@ -59,17 +59,18 @@ Tout autre usage de Fable est **proposé** au mainteneur (un message, réponse o
 ### 4.2 Issue sensible (revue plus forte, même pour une seule issue)
 
 - un ADR accepté ou un invariant de `CLAUDE.md`, « Architecture », est contredit ou modifié ;
-- un **contrat partagé** change : interface entre modules ou couches, format de données ou d'état, catalogue ou table utilisés par plusieurs branches (**À ADAPTER** : liste des contrats du projet) ;
+- un **contrat partagé** change : interface entre modules ou couches, format de données ou d'état, catalogue ou table utilisés par plusieurs branches. Contrats du projet (ADR 0006, « Conséquences ») : le **dictionnaire de la base** (ADR 0008) ; le **format du plan de calcul et de la fiche de calcul** (ADR 0007) ; les **formats de tables admis** et la représentation interne commune (ADR 0009) ; l'**interface du point d'entrée `calculer_provisions()`** et la forme de l'objet retourné (ADR 0006) ; le **catalogue des configurations de garanties** (ADR 0005) ; le **format des scénarios économiques** (v2, ADR 0005, point 8) ; le **format des jeux simulés et de la loi vraie** (ADR 0008) ; le **critère de non-régression** (ADR des références, première branche qui en produit) ;
 - un résultat final ou un verdict change (Fable sur décision du mainteneur seulement).
 
 Le nombre d'issues d'un lot n'est qu'un complément : un gros lot fait passer en jugement, il ne déclenche jamais Fable à lui seul ; une issue unique à fort impact est sensible quel que soit le lot.
 
 ### 4.3 Seuil « macro » du point d'étape (Fable proposé au mainteneur)
 
-Un nouvel ADR d'architecture, ou le remplacement d'un ADR, est proposé ; **ou**, selon leur importance, au-dessus des seuils suivants (**À ADAPTER**) :
-- au moins deux couches ou modules dont les dépendances changent ;
-- au moins deux branches suivantes redécoupées ou réordonnées ;
-- un jalon dont le contenu change.
+Un nouvel ADR d'architecture, ou le remplacement d'un ADR, est proposé ; **ou**, selon leur importance, au-dessus des seuils suivants (adaptés le 7 novembre 2026) :
+- **une famille de calcul touchée** (ADR 0005 : module `engagement`, `triangle`, `risque_en_cours`, `projection`, ou la catégorie « règle comptable » si elle est visée) dans sa fonction commune à plusieurs garanties, ou le graphe d'appels des modules modifié (ADR 0006, point 3) ;
+- **un poste dont la provision totale change** (par garantie et par référentiel, A3), hors régénération déjà visée ;
+- au moins deux branches suivantes redécoupées ou réordonnées (§ 2 de `docs/feuille-de-route.md`) ;
+- un jalon dont le contenu change (E1.5 : v1 prévoyance, v2 épargne, v3 retraite, PRC).
 
 Sous le seuil : jugement, sans question au mainteneur.
 
