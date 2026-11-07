@@ -43,18 +43,19 @@ export const meta = {
 //  supprimee par le workflow : son chemin est rendu dans copie_temporaire.
 // ---------------------------------------------------------------------------
 
-// A ADAPTER : batteries de verification, identiques a CLAUDE.md, « Commandes »
+// batteries de verification, identiques a CLAUDE.md, « Commandes »
 // (commande complete, lancee depuis la racine du depot)
 const BATTERIES = [
-  // 'Rscript tests/test_unitaires.R',
-  // 'pytest -q',
+  'Rscript tests/test_unitaires.R',
+  'Rscript tests/test_reproductibilite.R',
+  'Rscript tests/concordance_doc_moteur.R --strict',
 ]
 
-// A ADAPTER : repertoires que ni coder ni audit ne doivent toucher dans un
+// repertoires que ni coder ni audit ne doivent toucher dans un
 // workflow (references de non-regression, documentation de fond : regle 9)
 const ZONES_PROTEGEES = [
-  // 'tests/reference/',
-  // 'docs/doc/',
+  'tests/reference/',
+  'docs/latex/',
 ]
 
 // Consigne commune a tous les agents du workflow (principe 2)

@@ -1,8 +1,8 @@
 # Routage du modèle et de l'effort des agents
 
-Politique appliquée par la session principale quand elle consulte `architect` ou `expert` (et toute fiche d'expert dupliquée). Décision : ADR 0001. Les agents de réalisation et de vérification (`coder`, `docwriter`, `audit`, `app-review`) suivent une règle plus simple, au § 10 (ADR 0002).
+Politique appliquée par la session principale quand elle consulte `architect`, `actuary` ou `regulatory`. Décision : ADR 0001. Les agents de réalisation et de vérification (`coder`, `docwriter`, `audit`, `app-review`) suivent une règle plus simple, au § 10 (ADR 0002).
 
-**Point de départ, pas politique figée.** Les valeurs ci-dessous sont celles du modèle de dépôt. Chaque projet créé à partir du modèle les adapte à son domaine, à son architecture et à ses risques (passages **À ADAPTER**, § 9), puis les réévalue à mesure qu'il évolue (§ 8).
+**Point de départ, pas politique figée.** Les valeurs ci-dessous sont celles du modèle de dépôt, adaptées à `outil_prov_vie` le 7 novembre 2026 (cadrage, ADR 0004 à 0009 : contrats partagés du § 4.2, seuil « macro » du § 4.3, signaux du point d'étape au § 3) ; elles se réévaluent à mesure que le projet évolue (§ 8), au point d'étape d'`architect` qui suit chaque série de PR fusionnées, et toute modification passe par un commit `docs:` motivé.
 
 ## 1. Principes
 
@@ -18,11 +18,11 @@ Le paramètre `model` d'un appel `Agent` l'emporte sur le `model` de la fiche. L
 
 | Fiche | Modèle servi | Effort | `maxTurns` | Usage |
 |---|---|---|---|---|
-| `architect`, `expert` | `opus` | `medium` | 40 | routine (§ 3) |
-| `architect-approfondi`, `expert-approfondi` | `opus` | `high` | 80 | jugement (§ 3) |
-| `architect-approfondi`, `expert-approfondi` appelées avec `model: "fable"` | Fable (fiche : `opus`, l'appel l'emporte) | `high` | 80 | cas du § 4.1, ou accord du mainteneur |
+| `architect`, `actuary`, `regulatory` | `opus` | `medium` | 40 | routine (§ 3) |
+| `architect-approfondi`, `actuary-approfondi`, `regulatory-approfondi` | `opus` | `high` | 80 | jugement (§ 3) |
+| `architect-approfondi`, `actuary-approfondi`, `regulatory-approfondi` appelées avec `model: "fable"` | Fable (fiche : `opus`, l'appel l'emporte) | `high` | 80 | cas du § 4.1, ou accord du mainteneur |
 
-- Les fiches `-approfondi` sont **générées** par `bash .claude/outils/fiches_jumelles.sh` à partir de la fiche de base : seul le frontmatter diffère (nom, description, effort, `maxTurns` et, pour `coder`, le modèle). Ne jamais les modifier à la main ; la CI vérifie la concordance (`--verifier`). La liste des rôles dédoublés est la variable `ROLES` du script (**À ADAPTER** : un expert dupliqué y est ajouté) ; elle comprend aussi `coder`, dont la fiche `-approfondi` a ses propres paramètres (fonction `parametres` du script, § 10).
+- Les fiches `-approfondi` sont **générées** par `bash .claude/outils/fiches_jumelles.sh` à partir de la fiche de base : seul le frontmatter diffère (nom, description, effort, `maxTurns` et, pour `coder`, le modèle). Ne jamais les modifier à la main ; la CI vérifie la concordance (`--verifier`). La liste des rôles dédoublés est la variable `ROLES` du script (`architect actuary regulatory coder` depuis l'adaptation du 7 novembre 2026, Q10 : `actuary` et `regulatory` remplacent `expert`) ; elle comprend aussi `coder`, dont la fiche `-approfondi` a ses propres paramètres (fonction `parametres` du script, § 10).
 - Fable en `xhigh` ou `max` : jamais sans accord explicite du mainteneur (il faudrait alors une troisième fiche, à créer sur décision). Fable en `medium` (fiche de base appelée avec `model: "fable"`) : sur indication explicite du mainteneur seulement.
 - Les modèles sont désignés par **alias** (`opus`, `fable`), qui suivent les nouvelles versions ; le journal (§ 7) note la version effectivement servie.
 - Une fiche modifiée se vérifie de préférence dans une **session neuve** : le constat 3 de `docs/agents/issue-tracker.md` (pas de rechargement en cours de session) est contredit avec Claude Code 2.1.302, où le rechargement a été constaté (ADR 0002).
@@ -34,14 +34,14 @@ Le paramètre `model` d'un appel `Agent` l'emporte sur le `model` de la fiche. L
 | Rôle | Mission | Signaux observables | Départ | Preuves attendues | Suite | Arrêt |
 |---|---|---|---|---|---|---|
 | architect | Rattacher les nouvelles issues au point d'étape (lot) | aucun critère du § 4.2 | routine | tableau de couverture : chaque issue du lot → tâche → branche prévue, ou hors plan / doublon, avec la raison | un critère du § 4.2 → ligne « issue sensible » | toutes les issues du lot couvertes |
-| architect | Point d'étape après fusion | lot ≥ 8 issues, ou plusieurs branches touchées (**À ADAPTER**) | routine ; jugement si l'un des signaux | SHA cités, dépendances ajoutées / retirées explicites, décisions M-n | seuil « macro » (§ 4.3) atteint → Fable **proposé** au mainteneur | feuille de route à jour |
+| architect | Point d'étape après fusion | lot ≥ 8 issues, ou plusieurs branches touchées, ou une issue du lot qui touche un contrat partagé du § 4.2 ou une famille de calcul (ADR 0005) | routine ; jugement si l'un des signaux | SHA cités, dépendances ajoutées / retirées explicites, décisions M-n | seuil « macro » (§ 4.3) atteint → Fable **proposé** au mainteneur | feuille de route à jour |
 | architect | Plan de la branche suivante | — | jugement | trois à cinq issues, ordre des commits, agent et circuit par tâche, critères d'acceptation | § 4.1 | plan complet |
 | architect | Issue sensible : ADR, invariant de `CLAUDE.md` ou contrat partagé touché | § 4.2 | jugement | ADR et invariants cités, effet sur les contrats, branches touchées | § 4.1 ; sinon Fable **proposé** | avis rendu, ou décision du mainteneur |
 | architect | Rédaction d'un ADR **d'architecture** (couches, invariants, contrats) | — | **Fable** (routage initial) | contexte, options écartées, conséquences | décision du mainteneur | ADR proposé |
 | architect | Rédaction d'un ADR d'organisation (Git, processus, outillage) | — | jugement | idem | idem | idem |
-| expert | Validation après audit, sans changement de résultat | — | routine | diff, rapport d'audit, verdict référencé | relance ciblée si une preuve manque | verdict |
-| expert | Validation avec tableau avant / après (hors résultat final ou verdict) ; conformité à une source ; spécification ou plan | — | jugement | citation précise (texte, article, paragraphe) ou mesure exécutée ; chaque conclusion marquée vérifiée / hypothèse / non vérifiée | § 4.1 ; deux lectures → § 4.4 | verdict, matrice ou plan complet |
-| expert | Nouvelle approche, méthode nouvelle | au moins deux options sans preuve qui départage | jugement | options, apport de chacune, références retrouvées | **arbitrage du mainteneur** ; Fable seulement à sa demande ou par § 4.1 | options décrites |
+| actuary, regulatory | Validation après audit, sans changement de résultat | — | routine | diff, rapport d'audit, verdict référencé | relance ciblée si une preuve manque | verdict |
+| actuary, regulatory | Validation avec tableau avant / après (hors résultat final ou verdict) ; conformité à une source ; spécification ou plan | — | jugement | citation précise (texte, article, paragraphe) ou mesure exécutée ; chaque conclusion marquée vérifiée / hypothèse / non vérifiée | § 4.1 ; deux lectures → § 4.4 | verdict, matrice ou plan complet |
+| actuary, regulatory | Nouvelle approche, méthode nouvelle | au moins deux options sans preuve qui départage | jugement | options, apport de chacune, références retrouvées | **arbitrage du mainteneur** ; Fable seulement à sa demande ou par § 4.1 | options décrites |
 | tous | Changement d'un résultat final ou d'un verdict | tableau avant / après | jugement | tableau avant / après, lignes expliquées | Fable **seulement sur décision du mainteneur** | visa du mainteneur |
 
 Mission absente de la matrice (par exemple révision globale, relecture d'une PR, revue de fond avant livraison) : jugement par défaut ; la session principale propose de l'ajouter à la matrice au point d'étape suivant.
@@ -51,7 +51,7 @@ Mission absente de la matrice (par exemple révision globale, relecture d'une PR
 ### 4.1 Fable sans demander au mainteneur (liste fermée)
 
 1. **Échec documenté d'Opus `high`** : après la consultation en jugement (et, s'il y a lieu, la relance ciblée), la preuve attendue manque encore **et** le blocage est de raisonnement — ni une information manquante, ni une exploration interrompue (§ 5.1).
-2. **Désaccord entre agents** : expert contre `audit`, deux experts entre eux, ou un avis rendu par un agent qui contredit un ADR accepté alors que la question ne porte pas sur cet ADR (une issue ou une consultation qui propose de le modifier est une issue sensible, § 4.2 : Opus `high` d'abord, ADR 0001, décision 3). Fable **instruit** le désaccord, par une consultation neuve de la fiche `-approfondi` du rôle dont relève la question (le fond à `expert`, la forme du code et les ADR à `architect`), avec le dossier (§ 5.4) ; la décision reste au mainteneur quand `CLAUDE.md` la lui réserve.
+2. **Désaccord entre agents** : `actuary` ou `regulatory` contre `audit`, les deux experts entre eux, ou un avis rendu par un agent qui contredit un ADR accepté alors que la question ne porte pas sur cet ADR (une issue ou une consultation qui propose de le modifier est une issue sensible, § 4.2 : Opus `high` d'abord, ADR 0001, décision 3). Fable **instruit** le désaccord, par une consultation neuve de la fiche `-approfondi` du rôle dont relève la question (le fond à `expert`, la forme du code et les ADR à `architect`), avec le dossier (§ 5.4) ; la décision reste au mainteneur quand `CLAUDE.md` la lui réserve.
 3. **Rédaction d'un ADR d'architecture** (routage initial, § 3).
 
 Tout autre usage de Fable est **proposé** au mainteneur (un message, réponse oui / non), qui peut aussi le demander d'office.
@@ -59,23 +59,24 @@ Tout autre usage de Fable est **proposé** au mainteneur (un message, réponse o
 ### 4.2 Issue sensible (revue plus forte, même pour une seule issue)
 
 - un ADR accepté ou un invariant de `CLAUDE.md`, « Architecture », est contredit ou modifié ;
-- un **contrat partagé** change : interface entre modules ou couches, format de données ou d'état, catalogue ou table utilisés par plusieurs branches (**À ADAPTER** : liste des contrats du projet) ;
+- un **contrat partagé** change : interface entre modules ou couches, format de données ou d'état, catalogue ou table utilisés par plusieurs branches. Contrats du projet (ADR 0006, « Conséquences ») : le **dictionnaire de la base** (ADR 0008) ; le **format du plan de calcul et de la fiche de calcul** (ADR 0007) ; les **formats de tables admis** et la représentation interne commune (ADR 0009) ; l'**interface du point d'entrée `calculer_provisions()`** et la forme de l'objet retourné (ADR 0006) ; le **catalogue des configurations de garanties** (ADR 0005) ; le **format des scénarios économiques** (v2, ADR 0005, point 8) ; le **format des jeux simulés et de la loi vraie** (ADR 0008) ; le **critère de non-régression** (ADR des références, première branche qui en produit) ;
 - un résultat final ou un verdict change (Fable sur décision du mainteneur seulement).
 
 Le nombre d'issues d'un lot n'est qu'un complément : un gros lot fait passer en jugement, il ne déclenche jamais Fable à lui seul ; une issue unique à fort impact est sensible quel que soit le lot.
 
 ### 4.3 Seuil « macro » du point d'étape (Fable proposé au mainteneur)
 
-Un nouvel ADR d'architecture, ou le remplacement d'un ADR, est proposé ; **ou**, selon leur importance, au-dessus des seuils suivants (**À ADAPTER**) :
-- au moins deux couches ou modules dont les dépendances changent ;
-- au moins deux branches suivantes redécoupées ou réordonnées ;
-- un jalon dont le contenu change.
+Un nouvel ADR d'architecture, ou le remplacement d'un ADR, est proposé ; **ou**, selon leur importance, au-dessus des seuils suivants (adaptés le 7 novembre 2026) :
+- **une famille de calcul touchée** (ADR 0005 : module `engagement`, `triangle`, `risque_en_cours`, `projection`, ou le module `regles_comptables` de la catégorie « règle comptable ») dans sa fonction commune à plusieurs garanties, ou le graphe d'appels des modules modifié (ADR 0006, point 3) ;
+- **un poste dont la provision totale change** (par garantie et par référentiel, A3), hors régénération déjà visée ;
+- au moins deux branches suivantes redécoupées ou réordonnées (§ 2 de `docs/feuille-de-route.md`) ;
+- un jalon dont le contenu change (E1.5 : v1 prévoyance, v2 épargne, v3 retraite, PRC).
 
 Sous le seuil : jugement, sans question au mainteneur.
 
 ### 4.4 Ni Fable ni effort : obtenir une information ou une preuve
 
-- **Deux lectures d'une source** : vérifier d'abord qu'il ne s'agit pas d'un problème de documentation (version erronée, texte inaccessible, extraction défectueuse) ; si oui, obtenir la bonne source. Si les deux lectures subsistent, l'expert les décrit et le mainteneur tranche (`CLAUDE.md`) : Fable n'est pas requis.
+- **Deux lectures d'une source** : vérifier d'abord qu'il ne s'agit pas d'un problème de documentation (version erronée, texte inaccessible, extraction défectueuse) ; si oui, obtenir la bonne source. Si les deux lectures subsistent, `regulatory` les décrit, `actuary` éclaire l'interprétation et le mainteneur tranche (`CLAUDE.md`) : Fable n'est pas requis.
 - **Issue insuffisamment décrite** : question au mainteneur (libellé `needs-info`), pas d'escalade.
 - **Source non retrouvée** par l'agent : décision du mainteneur, même si l'agent se dit sûr.
 - **Question qu'aucun test ni aucune source ne tranche** : d'abord chercher la mesure ou la source ; si le blocage est de raisonnement, Fable est **proposé**.
@@ -131,7 +132,7 @@ Un signal auto-déclaré (difficulté ressentie, note de confiance) complète l'
 
 ## 6. Retour structuré des agents
 
-Chaque consultation se termine par un bloc « Retour » (fiches `architect` et `expert`, section « Retour ») : statut (`complet`, `partiel`, `revue requise`), résultat, preuves (chaque conclusion vérifiée / hypothèse / non vérifiée), informations manquantes, décisions non résolues, critères déclenchés (§ 4), prochaine action recommandée. `architect` y ajoute le tableau de couverture du lot et les dépendances modifiées. `complet` exige toutes les preuves prévues au § 3 ; sinon la session principale requalifie en `partiel` (§ 5.1).
+Chaque consultation se termine par un bloc « Retour » (fiches `architect`, `actuary` et `regulatory`, section « Retour ») : statut (`complet`, `partiel`, `revue requise`), résultat, preuves (chaque conclusion vérifiée / hypothèse / non vérifiée), informations manquantes, décisions non résolues, critères déclenchés (§ 4), prochaine action recommandée. `architect` y ajoute le tableau de couverture du lot et les dépendances modifiées. `complet` exige toutes les preuves prévues au § 3 ; sinon la session principale requalifie en `partiel` (§ 5.1).
 
 ## 7. Traçabilité
 
@@ -142,8 +143,8 @@ Chaque consultation se termine par un bloc « Retour » (fiches `architect` et `
 
 ## 8. Calibration et retour arrière
 
-- **Calibration** : après les dix premières consultations `architect` et `expert` d'un projet, puis à chaque point d'étape d'`architect`, relire le bilan du journal et les lignes d'escalade des PR : part des relances ciblées (fiches trop légères ?), escalades vers Fable et leur apport réel, contexte au dernier appel (lectures trop larges ?). Ajuster les seuils et efforts par un commit `claude:` motivé ; une réorientation durable s'annote dans l'ADR 0001.
-- **Retour au comportement antérieur** (Fable pour tout), sur décision du mainteneur : de préférence, annuler le commit de fusion de la PR qui a introduit la politique (`git revert -m 1 <sha>`), puis rétablir l'ADR 0001 (que l'annulation supprime) avec une annotation datée « Politique abandonnée le … » (ou `superseded by NNNN` si un nouvel ADR consigne le retour) ; dans un projet créé depuis le modèle, qui n'a pas ce commit, ou à défaut, à la main : remettre `model: fable` dans `architect.md` et `expert.md`, retirer `effort` et `maxTurns`, retirer `architect` et `expert` de `ROLES` dans `.claude/outils/fiches_jumelles.sh`, supprimer leurs fiches `-approfondi`, retirer de `CLAUDE.md` le paragraphe « Routage du modèle et de l'effort », et annoter l'ADR 0001.
+- **Calibration** : après les dix premières consultations `architect`, `actuary` et `regulatory` d'un projet, puis à chaque point d'étape d'`architect`, relire le bilan du journal et les lignes d'escalade des PR : part des relances ciblées (fiches trop légères ?), escalades vers Fable et leur apport réel, contexte au dernier appel (lectures trop larges ?). Ajuster les seuils et efforts par un commit `docs:` motivé ; une réorientation durable s'annote dans l'ADR 0001.
+- **Retour au comportement antérieur** (Fable pour tout), sur décision du mainteneur : de préférence, annuler le commit de fusion de la PR qui a introduit la politique (`git revert -m 1 <sha>`), puis rétablir l'ADR 0001 (que l'annulation supprime) avec une annotation datée « Politique abandonnée le … » (ou `superseded by NNNN` si un nouvel ADR consigne le retour) ; dans un projet créé depuis le modèle, qui n'a pas ce commit, ou à défaut, à la main : remettre `model: fable` dans `architect.md`, `actuary.md` et `regulatory.md`, retirer `effort` et `maxTurns`, retirer `architect`, `actuary` et `regulatory` de `ROLES` dans `.claude/outils/fiches_jumelles.sh`, supprimer leurs fiches `-approfondi`, retirer de `CLAUDE.md` le paragraphe « Routage du modèle et de l'effort », et annoter l'ADR 0001.
 
 ## 9. Adapter la politique à un projet
 
@@ -152,7 +153,7 @@ Emplacements réellement lus :
 | Emplacement | Ce qu'on y adapte |
 |---|---|
 | `docs/agents/routage.md` (ce fichier) | matrice (§ 3), seuils et contrats partagés (§ 4.2, § 4.3), plafonds (§ 5.2) |
-| frontmatter de `architect.md` et `expert.md` | effort et `maxTurns` de routine ; le script reprend leur modèle, leurs outils et leur corps dans les fiches `-approfondi` |
+| frontmatter de `architect.md`, `actuary.md` et `regulatory.md` | effort et `maxTurns` de routine ; le script reprend leur modèle, leurs outils et leur corps dans les fiches `-approfondi` |
 | `.claude/outils/fiches_jumelles.sh`, variables `ROLES`, `EFFORT_APPROFONDI`, `TOURS_APPROFONDI`, fonction `parametres` | rôles dédoublés (experts supplémentaires), effort et plafond de jugement ; paramètres propres à un rôle (`coder-approfondi`, § 10) |
 | frontmatter de `coder.md`, `audit.md`, `docwriter.md`, `app-review.md` | modèle et effort des agents de réalisation et de vérification (§ 10) |
 | `CLAUDE.md`, « Sous-agents » | renvoi à ce fichier ; règles qui priment (§ 5.5, rang 1) ; liste du § 4.1, plafonds du § 5.2 et règles du § 10, recopiés : à tenir identiques |

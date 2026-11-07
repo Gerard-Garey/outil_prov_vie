@@ -1,8 +1,8 @@
 name: CI
 
 # Contrôles requis par le ruleset de main (README, « Sécurité du dépôt »).
-# À ADAPTER : ajouter les jobs de tests du projet, et leur nom aux contrôles
-# requis du ruleset.
+# Le job « Tests (R 4.3.3) » (batteries de CLAUDE.md) est ajouté par la première
+# branche de code, et son nom aux contrôles requis du ruleset (cadrage, A2).
 
 on:
   pull_request:
