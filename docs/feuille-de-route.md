@@ -2,6 +2,8 @@
 
 Tenue par `architect`, après chaque série de PR fusionnées. Chaque mise à jour est datée et cite le SHA de `main` et de la branche de travail.
 
+**Mise à jour du 7 novembre 2026 (dictionnaire visé)** (`architect` ; `main` à `ac0adba`, commit de fusion de la PR #22, branche `claude/socle-donnees` à `df4ceaa`, *vérifié* par `git rev-parse origin/main` et `git log` ; issue #15 fermée par la PR #22, *vérifié* sur GitHub) : #16 cochée (§ 1.2), correctif rapide #15 fusionné puis `main` fusionnée dans la branche (§ 1.2, § 3), décisions M73 à M80 (§ 4), annotation de l'ADR 0008 et mise en accord de `CONTEXT.md` avec le dictionnaire visé.
+
 **Mise à jour du 7 novembre 2026 (ouverture de B1)** (`architect` ; `main` à `ec15218`, commit de fusion de la PR #6, branche `claude/socle-donnees` partie de `ec15218`, *vérifié* par `git log --oneline -1 origin/main` ; issues #1 à #5 fermées, issues #16 à #20 créées sur accord du mainteneur, constats de la session principale) : `claude/cadrage` fusionnée (§ 1.1), fiche de la branche de données ouverte (§ 1.2), numéros des issues de B1 (§ 2), rattachement de #7, #8 et #12 à B1 et correctif rapide de #15 (§ 3).
 
 **Mise à jour du 7 novembre 2026** (`architect-approfondi` sur Fable, consultation 1/3 de la branche `claude/cadrage` ; `main` à `36e45b7` (commit initial), branche à `01b22ed` lors de la consultation, `060fca9` à la revue finale, *vérifié* par `git rev-parse HEAD origin/main` ; aucun code dans le dépôt) : fiche de la branche de cadrage (§ 1), branches de code **proposées** (§ 2, issues à créer sur accord du mainteneur), décisions M1 à M60 des entretiens de cadrage et du glossaire, puis M61 à M72 après la revue finale (§ 4), consultation Fable du jour (§ 5).
@@ -25,7 +27,7 @@ Tenue par `architect`, après chaque série de PR fusionnées. Chaque mise à jo
 
 - **Branche** : `claude/socle-donnees`, partie de `main` à `ec15218` — PR #21 (brouillon, un `Closes` par ligne, par issue du périmètre).
 - **Périmètre** (fermé, M66 ; issues créées le 7 novembre 2026 sur accord du mainteneur) ; agents et circuits repris de la ligne B1 du § 2 :
-  - [ ] #16 — Dictionnaire de la base brute fictive (v1) — `actuary-approfondi`, visa du mainteneur.
+  - [x] #16 — Dictionnaire de la base brute fictive (v1) — `actuary-approfondi`, visa du mainteneur — commits `ec7162c` (rédaction), `73c3364` (filiation avec le double effet de `docu_actu`, avis P13 d'`actuary`), `df4ceaa` (visa global du mainteneur, 7 novembre 2026, M73 à M77) ; `docs/specifications/dictionnaire-base-v1.md`, version `1.0`. Suites : annotation de l'ADR 0008 et `CONTEXT.md` (`architect`) ; E2.1 et E2.4 de `docs/exigences.md` à mettre en accord (texte proposé par `architect`, appliqué par la session principale) ; point ouvert P18 (données de santé) confié à `regulatory`.
   - [ ] #17 — Socle du package `provie`, batteries, job CI « Tests (R 4.3.3) » et ADR de forme — `architect-approfondi` sur Fable pour l'ADR de forme (`docs/agents/routage.md`, § 4.1.3), puis `coder`, circuit 3, `audit`. Rattachées par le mainteneur : #7 (compilation de la charte LaTeX en CI), #8 (contrôle du préambule recopié), #12 (scripts de contrôle).
   - [ ] #18 — Module `donnees` — `coder-approfondi`, circuit 1 (spécification = dictionnaire de #16), `audit`.
   - [ ] #19 — Module `simulation` et premiers jeux versionnés — `coder-approfondi`, circuit 1 (spécification = dictionnaire de #16), `audit`.
@@ -33,8 +35,8 @@ Tenue par `architect`, après chaque série de PR fusionnées. Chaque mise à jo
   - En fin de branche : squelette de `docs/latex/doc_outil_prov_vie.tex` et `docs/latex/CONVENTIONS.md` par `docwriter` (règle 9), concordance verte.
 - **Dépendances internes** : visa du dictionnaire (#16) avant tout code de #18 et #19 ; ADR de forme (#17) accepté avant le code du package (socle de #17, puis #18 et #19) ; #20 n'attend que le dictionnaire pour ses données requises et peut courir en parallèle du code.
 - **Ordre des commits** : aucune provision n'est calculée dans B1 (le point d'entrée `calculer_provisions()` vient en B2) ; les jeux versionnés de #19 sont des données (domaine `donnees:`, loi vraie et graine consignées).
-- **Hors périmètre, pendant B1** : consultations `regulatory` et `actuary` sur #13 et #14 (§ 3) ; #15 en correctif rapide à part (§ 3).
-- **Consultations Fable** : 0/3 ; l'ADR de forme (#17) est prévu sur Fable.
+- **Hors périmètre, pendant B1** : consultations `regulatory` et `actuary` sur #13 et #14 (§ 3) ; sur #14, lecture de `regulatory` publiée et consultation d'`actuary-approfondi` sur les interprétations 1 à 4 en cours (M78) ; #15 en correctif rapide à part (§ 3), **fusionné** : PR #22, commit de fusion `ac0adba` sur `main`, puis `main` fusionnée dans `claude/socle-donnees` par `73fe667` (résultats : aucun).
+- **Consultations Fable** : 1/3 — ADR de forme (#17) par `architect-approfondi` sur Fable, accord du mainteneur du 7 novembre 2026 (M80), en cours.
 
 ## 2. Branches suivantes
 
@@ -61,7 +63,7 @@ Après la PRC : v2 épargne (actif facultatif, postes comptables de l'épargne, 
 
 Huit issues transverses créées le 7 novembre 2026 (M72), hors du périmètre de `claude/cadrage` et rattachées aux branches du § 2 : #7 (compilation de la charte LaTeX en CI) et #8 (contrôle du préambule recopié) → B1 (2) ; #9 (licence du recueil ANC) → B5 (2) ; #10 (licences des fichiers EIOPA et des séries Webstat) → B2 (2) pour la série TME, B7 (1) pour les courbes ; #11 (jalon de la PRC) → `claude/prc` ; #12 (scripts de contrôle) → B1 (2) ; #13 (textes restant à établir par `regulatory`) et #14 (rattachement des postes de la v1 aux provisions et règle de taux par poste) → avant B2, consultations `regulatory` et `actuary` à conduire pendant B1. Les cinq issues #1 à #5 sont au périmètre de `claude/cadrage` (§ 1.1), fermées à sa fusion.
 
-Mise à jour du 7 novembre 2026 (ouverture de B1) : #7, #8 et #12 sont au **périmètre de B1**, rattachées à #17 par le mainteneur (§ 1.2). **#15** (renommer `expert` en `actuary` et `regulatory` dans `.claude/workflows/circuit-technique.js`, résultats : aucun) suit, sur décision du mainteneur, un **correctif rapide** hors de B1 : branche temporaire partie de `main`, PR directe vers `main`, puis fusion de `main` dans `claude/socle-donnees`.
+Mise à jour du 7 novembre 2026 (ouverture de B1) : #7, #8 et #12 sont au **périmètre de B1**, rattachées à #17 par le mainteneur (§ 1.2). **#15** (renommer `expert` en `actuary` et `regulatory` dans `.claude/workflows/circuit-technique.js`, résultats : aucun) suit, sur décision du mainteneur, un **correctif rapide** hors de B1 : branche temporaire partie de `main`, PR directe vers `main`, puis fusion de `main` dans `claude/socle-donnees`. **Fait le 7 novembre 2026** : PR #22 fusionnée (`ac0adba`), #15 fermée, `main` fusionnée dans la branche (`73fe667`).
 
 ## 4. Décisions du mainteneur
 
@@ -146,6 +148,19 @@ Décisions prises le 7 novembre 2026 après les relectures d'`actuary` et de `re
 | M70 | 07/11/2026 | **Provision vraie** d'un jeu simulé : espérance conditionnelle sous la loi vraie (tests de biais) ; flux simulés après l'arrêté pour la couverture ; puissance restituée ; jeux sous loi vraie différente du plan pour l'erreur de modèle (recommandation suivie) | E2.23, E4.9 ; `CONTEXT.md`, « Provision vraie », « Constat de simulation », « Loi vraie » ; ADR 0008 |
 | M71 | 07/11/2026 | **Hypothèses par défaut** des données dégradées déclarées dans le plan (valeurs proposées par la documentation), appliquées et comptées par motif (recommandation suivie) | E2.20 ; `CONTEXT.md`, « Hypothèse par défaut » ; ADR 0007, point 1 |
 | M72 | 07/11/2026 | **Visa** des ADR 0004 à 0009, de la présente feuille de route, de `docs/agents/routage.md` adapté et du diff du cahier des charges et du glossaire issu des relectures (corrections ultérieures par issue) ; **création des huit issues** proposées par `architect`, `actuary` et `regulatory` | ADR 0004 à 0009 ; issues #7 à #14 |
+
+Décisions prises le 7 novembre 2026 pendant B1 (`claude/socle-donnees`, PR #21), sur le dictionnaire de la base (#16) et sur l'organisation de la branche. Les corrections « B1, B2, M1 à M10, m1 à m9 » de l'avis P13 d'`actuary` sont numérotées dans cet avis ; elles sont distinctes des décisions M du présent tableau et des branches B du § 2.
+
+| N° | Date | Décision | Où elle est consignée |
+|---|---|---|---|
+| M73 | 07/11/2026 | **Dictionnaire de la base, points ouverts** : recommandations visées pour P1 (écarts 1 à 5 à la liste des tables d'E2.1 : `extraction`, `garanties_souscrites` + `parametres`, `famille` + `beneficiaires`, `rentes` reconstituées des événements, évaluation de gestion en table facultative datée), P2 (dates de saisie des affiliations, prestations, bénéficiaires et rentes), P3 (montants de service dans le journal des événements), P4 (une assiette par affiliation en v1), P7 (colonne inconnue refusée), P11 (souscripteur = assuré en v1), P12 (bornes de contrôle, jugement d'expert), P15 (pas de défaut « premier état manquant » en v1), P16 (exclusion déclarée par famille de calcul) (recommandations suivies) | dictionnaire, § 2.2 et § 11 ; ADR 0008, annotation du 07/11/2026 ; E2.1 (texte proposé) ; `CONTEXT.md`, « Évaluation de gestion », « Rente en service », « Souscripteur » |
+| M74 | 07/11/2026 | **P13, filiation avec le dictionnaire double effet de `docu_actu`** (M17) : avis d'`actuary`, verdict « à compléter » ; toutes ses corrections intégrées (B1 clause double effet, B2 famille rattachée au sinistre et historisée, M1 à M10, m1 à m9, annexe A) ; P13 soldé ; défauts D13 et D14 ajoutés (recommandation suivie) | dictionnaire, annexe A, § 2.2 (point 7), § 9 ; commit `73c3364` ; ADR 0008, annotation |
+| M75 | 07/11/2026 | **Correction M10 de l'avis P13, option (a)** : tables facultatives `designations` (T19) et `ayants_droit_sante` (T20), lues par la seule approche par tête ; point ouvert **P18** (conditions d'usage des données de santé) confié à `regulatory`, puis au mainteneur | dictionnaire, § 2.2 (point 6), T19, T20, § 11 ; ADR 0008, annotation ; `CONTEXT.md`, « Information de famille » |
+| M76 | 07/11/2026 | **Correction M2 de l'avis P13 acceptée** : P14 reformulé ; l'information de famille des assurés (`situation_familiale`, `nombre_enfants_charge`) est la dernière valeur déclarée, **datée** par `date_situation_familiale`, **facultative** ; son absence est un phénomène du portefeuille, le défaut D03d seulement pour un poste qui la requiert | dictionnaire, T6, § 9 (D03d), § 11 (P14) ; ADR 0008, annotation ; E2.4 (texte proposé) ; `CONTEXT.md`, « Information de famille » |
+| M77 | 07/11/2026 | **Visa global du dictionnaire de la base v1** (version `1.0`), écarts 6 et 7 du § 2.2 et liste amendée des défauts (D01a à D14) compris ; #16 soldée | commit `df4ceaa` ; dictionnaire, en-tête ; § 1.2 ; ADR 0008, annotation |
+| M78 | 07/11/2026 | **#14** (rattachement des postes et règle de taux) : publication de la lecture de `regulatory` sur l'issue ; consultation d'`actuary-approfondi` sur les interprétations 1 à 4, en cours | issue #14 ; § 1.2 |
+| M79 | 07/11/2026 | **Accès en lecture au dépôt `docu_actu`** accordé à la session (filiation P13, M17) | § 1.2 (#16) ; dictionnaire, annexe A |
+| M80 | 07/11/2026 | **ADR de forme de B1 (#17) sur Fable** : `architect-approfondi`, consultation Fable 1/3 de la branche (`docs/agents/routage.md`, § 4.1.3) | § 1.2 ; PR #21 |
 
 ## 5. Escalades, relances et arrêts hors branche
 
