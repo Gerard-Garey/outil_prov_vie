@@ -166,3 +166,12 @@ Issues : #17 (ADR de forme et socle), #18 (module `donnees`, et par cet ADR `dic
 - Point 9 : le défaut **D03h** (taux du tarif manquant, hypothèse par défaut de 0 %, M86) est une ligne ordinaire de `hypotheses_defaut` ; aucune forme nouvelle.
 
 **Effet sur les résultats** : aucun (aucun code). Issues : #17, #18, #14.
+
+## Annotation du 7 novembre 2026 — version du dictionnaire et domaine de commit
+
+*Rédigée par `architect` le 7 novembre 2026 (branche `claude/socle-donnees`, PR #21), sur décisions du mainteneur du même jour (M97 et M100 de `docs/feuille-de-route.md`, § 4). Le texte ci-dessus n'est pas réécrit.*
+
+- **Point 23, version attendue** : le dictionnaire de la base, amendé le 7 novembre 2026 (décision T1 sur #14, commit `eb82c24`), passe en **version `1.1`** (M97). `VERSION_DICTIONNAIRE_ATTENDUE` (module `outils`) vaut donc **`"1.1"`**, et non `"1.0"` ; `dictionnaire.txt` et `extraction.version_dictionnaire` des jeux de #19 portent `1.1`. Une base de version `1.0` est refusée (`extraction_invalide`).
+- **Point 23, domaine de commit** : les fichiers de `inst/extdata/dictionnaire/` (six CSV et `dictionnaire.txt`) se commitent en **`moteur:`** (M100) : ils sont lus par le module `dictionnaire` comme une partie du package, et non comme un jeu de données. Le domaine `donnees:` reste celui des jeux versionnés (point 20) et des tables embarquées avec leur provenance.
+
+**Effet sur les résultats** : aucun (aucun code). Issues : #17, #18, #16.
