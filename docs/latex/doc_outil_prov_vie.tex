@@ -1,0 +1,1375 @@
+\documentclass[a4paper,11pt]{article}
+
+% =============================================================================
+%  Charte graphique des documents LaTeX du projet (gabarit commenté).
+%  Le préambule fixe la mise en forme ; le corps montre chaque élément une fois
+%  et se remplace par le contenu du document. Un document reprend le préambule
+%  sans modification, hors des passages bornés par les deux lignes
+%  « % >>> À ADAPTER : <objet> » et « % <<< À ADAPTER » (comparaison par
+%  script : à créer, ADR 0003 annoté le 7 novembre 2026). Le bloc « Macros du dépôt »,
+%  en fin de préambule, porte \src et les rubriques de la fiche modèle.
+%  Version sans : babel-french, caption, csquotes, dsfont, enumitem, float,
+%  mathrsfs, mdframed, newtxtext, pdflscape, tikz/pgf, titlesec, tocloft.
+%  Moteur : pdfLaTeX. Compatible avec les distributions anciennes
+%  (MiKTeX 2.9, TeX Live 2012 et suivantes) : aucun crochet du noyau récent.
+% =============================================================================
+
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+% \headheight est laissé à 12 pt : fancyhdr le signale et l'agrandit lui-même
+% (avertissement « \headheight is too small »), exactement comme dans le
+% document source ; le fixer ici décalerait l'en-tête ou le texte de 1,6 pt.
+\usepackage[left=2.5cm, right=2.5cm, top=2.5cm, bottom=2.5cm]{geometry}
+\usepackage{setspace}
+\usepackage{graphicx}
+\usepackage{etoolbox}
+\usepackage{keyval}
+\usepackage{fancyhdr}
+\usepackage{amsmath,amssymb,amsfonts}
+\usepackage{url}
+\usepackage[table]{xcolor}  % [table] : \rowcolors sur les anciennes versions
+\usepackage{array}
+\usepackage{booktabs}
+\usepackage{colortbl}
+\usepackage{longtable}
+\usepackage{lscape}   % remplace pdflscape (rotation à l'écran : voir plus bas)
+\usepackage{framed}   % remplace mdframed (encadré sécable)
+\usepackage{atbegshi}  % crochets de sortie de page (remplace \AddToHook)
+\usepackage[unicode]{hyperref}
+
+% ------------------------------------------------------------- polices -------
+% newtxtext composait le texte en TeX Gyre Termes X et le code en txtt ; les
+% mathématiques restaient en Computer Modern. On retrouve la même chose sans
+% newtxtext : TeX Gyre Termes (tgtermes) pour le texte, repli sur le Times de
+% PSNFSS (ptm) s'il est absent ; txtt (txfonts) pour \ttfamily.
+\IfFileExists{tgtermes.sty}
+  {\usepackage{tgtermes}}
+  {\renewcommand{\rmdefault}{ptm}}
+\IfFileExists{t1txtt.fd}{\renewcommand{\ttdefault}{txtt}}{}
+
+% ---------------------------------------------------------------- charte ----
+% Bleu financier pour la structure, vert pour l'accent et les sorties, deux
+% gris de tableau.
+\definecolor{maincolor}{RGB}{0,70,140}
+\definecolor{greenline}{RGB}{0,180,80}
+\definecolor{tableheader}{RGB}{200,220,250}
+\definecolor{tablerow}{RGB}{245,245,245}
+\definecolor{financeblue}{RGB}{0,70,140}
+
+% >>> À ADAPTER : métadonnées du document (page de garde, pied de page, PDF)
+% Dans un guide, \datedoc est une date figée (jamais \today) et \statutdoc
+% vaut Projet ou Final ; \datedroit est la date de référence du droit.
+\newcommand{\annee}{2026}
+\newcommand{\datedoc}{7 novembre 2026}
+\newcommand{\versiondoc}{0.1}
+\newcommand{\statutdoc}{Projet}
+\newcommand{\titredoc}{Documentation du package provie}
+\newcommand{\auteurdoc}{Projet outil\_prov\_vie}
+\newcommand{\datedroit}{Sans objet}
+
+\hypersetup{colorlinks=true, linkcolor=financeblue, urlcolor=financeblue,
+            citecolor=financeblue, pdftitle={Documentation du package provie},
+            pdfauthor={\auteurdoc}}
+% <<< À ADAPTER
+
+\makeatletter
+
+% ================================================ français sans babel ========
+% Reprise, à la main, des effets de babel-french visibles dans le document
+% source.
+% (1) Césure française (motifs chargés dans le format pdfLaTeX).
+\ifdefined\l@french
+  \language=\l@french
+\else
+  \PackageWarningNoLine{charte}{Motifs de césure français absents :
+    césure anglaise utilisée}
+\fi
+\lefthyphenmin=2 \righthyphenmin=2
+% (2) Espacement « à la française » après les points.
+\frenchspacing
+% (3) Libellés.
+\renewcommand{\contentsname}{Table des matières}
+\renewcommand{\listfigurename}{Table des figures}
+\renewcommand{\listtablename}{Liste des tableaux}
+\renewcommand{\refname}{Références}
+\renewcommand{\indexname}{Index}
+\renewcommand{\figurename}{Figure}
+\renewcommand{\tablename}{Table}
+\renewcommand{\partname}{Partie}
+\renewcommand{\appendixname}{Annexe}
+\renewcommand{\abstractname}{Résumé}
+% (4) Date en français (« 1er janvier 2026 »).
+\renewcommand{\today}{\number\day\ifnum\day=1 \textsuperscript{er}\fi\space
+  \ifcase\month\or janvier\or février\or mars\or avril\or mai\or juin\or
+  juillet\or août\or septembre\or octobre\or novembre\or décembre\fi
+  \space\number\year}
+% (5) Premier paragraphe indenté après un titre.
+\let\@afterindentfalse\@afterindenttrue
+\@afterindenttrue
+% (6) Listes : espacement vertical resserré de babel-french, appliqué à tous
+%     les environnements construits sur \list.
+\let\charte@listORI\list
+\newdimen\charte@parskip
+\def\charte@listV{%
+  \setlength{\topsep}{0.8ex plus 0.4ex minus 0.4ex}%
+  \setlength{\partopsep}{0.4ex plus 0.2ex minus 0.2ex}%
+  \charte@parskip=\parskip
+  \addtolength{\topsep}{-\charte@parskip}%
+  \addtolength{\partopsep}{\charte@parskip}%
+  \setlength{\itemsep}{0.4ex plus 0.2ex minus 0.2ex}%
+  \setlength{\parsep}{0.4ex plus 0.2ex minus 0.2ex}%
+  \ifdim\charte@parskip>\z@
+    \setlength{\parsep}{\charte@parskip}%
+    \addtolength{\itemsep}{-\charte@parskip}%
+  \fi}
+\def\list#1#2{\charte@listORI{#1}{\charte@listV #2}}
+% (7) Ponctuation haute : sans babel-french, l'espace qui précède « : » et
+%     l'espace fine qui précède « ; ! ? » ne sont plus ajoutées. On saisit
+%     « ~: » (espace insécable) et « \fsp; », « \fsp! », « \fsp? » (espace
+%     fine insécable, de même largeur que celle de babel-french).
+\newcommand{\fsp}{\unskip\nobreak\hskip .5\fontdimen2\font\relax}
+% (8) Puces en tiret cadratin à tous les niveaux.
+\renewcommand{\labelitemi}{\textemdash}
+\renewcommand{\labelitemii}{\textemdash}
+\renewcommand{\labelitemiii}{\textemdash}
+\renewcommand{\labelitemiv}{\textemdash}
+
+% ================================================ listes sans enumitem =======
+% itemize et enumerate acceptent un argument optionnel à clés, dont la
+% syntaxe est celle d'enumitem pour les clés usuelles :
+%   \begin{itemize}[itemsep=3pt] ... \end{itemize}
+% Clés reconnues : itemsep, topsep, parsep, partopsep, leftmargin,
+% labelsep, listparindent.
+\define@key{charteliste}{itemsep}{\setlength{\itemsep}{#1}}
+\define@key{charteliste}{topsep}{\setlength{\topsep}{#1}}
+\define@key{charteliste}{parsep}{\setlength{\parsep}{#1}}
+\define@key{charteliste}{partopsep}{\setlength{\partopsep}{#1}}
+\define@key{charteliste}{leftmargin}{\setlength{\leftmargin}{#1}}
+\define@key{charteliste}{labelsep}{\setlength{\labelsep}{#1}}
+\define@key{charteliste}{listparindent}{\setlength{\listparindent}{#1}}
+
+\renewenvironment{itemize}[1][]{%
+  \ifnum\@itemdepth>\thr@@\@toodeep\else
+    \advance\@itemdepth\@ne
+    \edef\@itemitem{labelitem\romannumeral\the\@itemdepth}%
+    \expandafter\list\csname\@itemitem\endcsname
+      {\def\makelabel##1{\hss\llap{##1}}\setkeys{charteliste}{#1}}%
+  \fi}{\endlist}
+
+\renewenvironment{enumerate}[1][]{%
+  \ifnum\@enumdepth>\thr@@\@toodeep\else
+    \advance\@enumdepth\@ne
+    \edef\@enumctr{enum\romannumeral\the\@enumdepth}%
+    \expandafter\list\csname label\@enumctr\endcsname
+      {\usecounter\@enumctr\def\makelabel##1{\hss\llap{##1}}%
+       \setkeys{charteliste}{#1}}%
+  \fi}{\endlist}
+
+% ================================================ légendes sans caption ======
+% Étiquette en gras, couleur maincolor, petites capitales ; séparateur
+% « : » précédé d'une espace insécable, comme dans le document source.
+\renewcommand{\fnum@figure}{{\scshape\figurename}\nobreakspace\thefigure}
+\renewcommand{\fnum@table}{{\scshape\tablename}\nobreakspace\thetable}
+\newcommand{\charte@etiquette}[1]{%
+  {\bfseries\color{maincolor}#1\nobreakspace:}\space}
+% Comme avec caption : légende composée en interligne simple, entre deux
+% étais, sans ressort interligne au-dessus ; centrée si elle tient sur une
+% ligne, justifiée sinon.
+\long\def\@makecaption#1#2{%
+  \vskip\abovecaptionskip
+  \sbox\@tempboxa{\normalfont\charte@etiquette{#1}#2}%
+  \nointerlineskip
+  \ifdim\wd\@tempboxa>\hsize
+    \hb@xt@\hsize{\vbox{\setstretch{1}\normalfont
+      \parindent\z@ \leftskip\z@ \rightskip\z@ \parfillskip\z@\@plus1fil
+      \strut\charte@etiquette{#1}#2\strut\par}}%
+  \else
+    \global\@minipagefalse
+    \hb@xt@\hsize{\hfil\setstretch{1}\normalfont\strut\box\@tempboxa\hfil}%
+  \fi
+  \vskip\belowcaptionskip}
+
+% Figures et tableaux « ici » : reprise exacte de la position [H] du
+% package float (boîte non flottante, \intextsep avant et après).
+\newsavebox\charte@boiteH
+\def\charte@debutH#1{%
+  \def\@captype{#1}%
+  \global\setbox\charte@boiteH\color@vbox\normalcolor
+    \vbox\bgroup\hsize\columnwidth\@parboxrestore
+      \@floatboxreset\@setnobreak\ignorespaces}
+\def\charte@finH{%
+  \@endfloatbox
+  \vskip\intextsep\box\charte@boiteH\vskip\intextsep\relax}
+\newenvironment{figureH}{\charte@debutH{figure}}{\charte@finH}
+\newenvironment{tableH}{\charte@debutH{table}}{\charte@finH}
+
+% ================================================ en-têtes et pieds ==========
+\renewcommand{\baselinestretch}{1.08}
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\color{maincolor}\nouppercase{\leftmark}}
+\renewcommand{\headrulewidth}{0pt}
+\renewcommand{\footrulewidth}{0.4pt}
+\fancyfoot[R]{\color{greenline}\textbf{page \thepage}}
+\fancyfoot[L]{\color{maincolor}\titredoc}
+\fancypagestyle{plain}{\fancyhf{}%
+  \renewcommand{\headrulewidth}{0pt}\renewcommand{\footrulewidth}{0.4pt}%
+  \fancyfoot[R]{\color{greenline}\textbf{page \thepage}}%
+  \fancyfoot[L]{\color{maincolor}\titredoc}}
+
+% ================================================ titres sans titlesec =======
+% Bandeau : filet bleu pleine largeur, titre vert en dessous. Utilisé seul
+% pour les pages non numérotées (objet, sommaire) et par \section.
+\newcommand{\titrebandeau}[1]{%
+  \noindent{\color{financeblue}\rule{\linewidth}{2.5pt}}
+  \par\vspace{5mm}
+  {\color{greenline}\raggedright\fontsize{19}{23}\bfseries\selectfont #1\par}
+  \vspace{6mm}}
+
+% Numéros de titre : aucun pour \section (le numéro ne figure qu'au
+% sommaire et dans l'en-tête), 0,7 em puis 0,6 em d'écart ensuite.
+\def\@seccntformat#1{\csname charte@num@#1\endcsname}
+\def\charte@num@section{}
+\def\charte@num@subsection{\strut\thesubsection\hspace{0.7em}}
+\def\charte@num@subsubsection{\strut\thesubsubsection\hspace{0.6em}}
+\def\charte@num@paragraph{\theparagraph\quad}
+\def\charte@num@subparagraph{\thesubparagraph\quad}
+
+% \@startsection passe le titre, entre accolades, à la dernière commande de
+% son argument de style. Pour \section, cette commande est \charte@bandeau :
+% une ligne vide (étai) au-dessus du bandeau et une autre en dessous, et un
+% étai dans chaque ligne, comme la forme « display » de titlesec avec
+% étiquette vide.
+\newcommand{\charte@bandeau}[1]{%
+  \parindent\z@ \everypar{\strut}%
+  {\strut\par}\nobreak
+  \titrebandeau{#1}\nobreak
+  \kern\z@\nobreak\strut\par}
+% Titres en ligne : un étai en fin de titre (le premier est dans le numéro).
+\newcommand{\charte@etai}[1]{\charte@etai@#1}
+\def\charte@etai@#1\@@par{#1\kern\z@\strut\@@par}
+% Réserve avant un titre : si le bas de la page ne peut plus recevoir le titre
+% et trois lignes de texte, le titre passe à la page suivante (M41 : aucun
+% titre en bas de page avec moins de trois lignes sous lui). La réserve
+% compte le titre lui-même et ses espaces (mesurés : bandeau de section
+% 7,4 lignes, sous-section 2,9 lignes), trois lignes et le cadre d'un
+% encadré qui suivrait : 12 lignes pour \section, 7 pour les autres. Logique de la
+% macro \Needspace* du package needspace, sans le charger : la place restante
+% est mesurée (\pagegoal - \pagetotal, après une pénalité nulle qui met la
+% page à jour) et le saut n'est forcé que si elle manque. La forme élastique
+% de \needspace, employée jusqu'ici, créait un point de coupure de faible
+% coût que TeX préférait à toute autre coupure dès qu'un bloc insécable
+% suivait (tableau, encadré), même avec la page aux trois quarts vide. Sans
+% effet juste après un autre titre (\if@nobreak), où elle créerait un point
+% de coupure sous ce titre, ni dans une boîte (\ifinner : minipage, \parbox),
+% où la page en cours ne la concerne pas.
+\newcommand{\charte@reserve}[1]{\par\ifinner\else\if@nobreak\else
+  \penalty\z@ % met à jour \pagetotal
+  \begingroup\setlength{\dimen@}{#1}%
+  \dimen@ii\pagegoal \advance\dimen@ii-\pagetotal
+  \ifdim\pagegoal=\maxdimen\else\ifdim\dimen@>\dimen@ii
+    \vfil\penalty-\@M % place insuffisante : page suivante
+  \fi\fi\endgroup\fi\fi}
+\renewcommand{\section}{\charte@reserve{12\baselineskip}%
+  \@startsection{section}{1}{\z@}%
+  {\z@}{1sp}{\normalfont\charte@bandeau}}
+% Espacements : ceux de titlesec, soit 3,25 ex (+1 ex, -0,2 ex) avant et
+% 1,5 ex (+0,2 ex) après, l'ex étant celui que titlesec mémorise au
+% chargement (Computer Modern à 11 pt, soit 4,71341 pt).
+\newdimen\charte@ex \charte@ex=4.71341pt
+\newskip\charte@avanttitre
+\charte@avanttitre=-3.25\charte@ex \@plus -1\charte@ex \@minus -.2\charte@ex
+\newskip\charte@aprestitre
+\charte@aprestitre=1.5\charte@ex \@plus .2\charte@ex
+\renewcommand{\subsection}{\charte@reserve{7\baselineskip}%
+  \@startsection{subsection}{2}{\z@}%
+  {\charte@avanttitre}{\charte@aprestitre}%
+  {\normalfont\large\bfseries\color{financeblue}\charte@etai}}
+\renewcommand{\subsubsection}{\charte@reserve{7\baselineskip}%
+  \@startsection{subsubsection}{3}{\z@}%
+  {\charte@avanttitre}{\charte@aprestitre}%
+  {\normalfont\normalsize\bfseries\color{financeblue}\charte@etai}}
+
+% ================================================ sommaire sans tocloft ======
+% Sections : gras bleu, numéro sur 2,2 em, numéro de page bleu (maigre),
+% sans points de conduite. Sous-sections : retrait 1,5 em, numéro sur 2,3 em,
+% points de conduite. L'em est celui que tocloft mémorisait au chargement
+% (10,88788 pt), pour un sommaire identique au document source.
+\newdimen\charte@em \charte@em=10.88788pt
+\renewcommand*{\l@section}[2]{%
+  \ifnum\c@tocdepth>\z@
+    \addpenalty\@secpenalty
+    \addvspace{1.0\charte@em \@plus\p@}%
+    \setlength\@tempdima{2.2\charte@em}%
+    \begingroup
+      \parindent\z@ \rightskip\@pnumwidth
+      \parfillskip -\@pnumwidth
+      \leavevmode
+      \advance\leftskip\@tempdima
+      \hskip -\leftskip
+      {\bfseries\color{financeblue}#1}\nobreak\hfil\nobreak
+      \hb@xt@\@pnumwidth{\hss\color{financeblue}#2}\par
+    \endgroup
+  \fi}
+\renewcommand*{\l@subsection}{\@dottedtocline{2}{1.5\charte@em}{2.3\charte@em}}
+\setcounter{tocdepth}{2}
+
+% ================================================ environnements de texte ====
+\newcommand{\code}[1]{\texttt{\small #1}}
+\newcommand{\refl}[1]{{\small\textcolor{maincolor!70!black}{\textit{Référence.} #1}}\par\smallskip}
+
+% Encadré de citation réglementaire : filet vertical bleu en marge.
+\newcommand{\reglement}[2]{%
+  \par\vspace{2mm}\noindent\begin{minipage}{\linewidth}
+  \small\setlength{\parindent}{0pt}
+  \textcolor{financeblue}{\vrule width 2pt}\hspace{4mm}%
+  \begin{minipage}{\dimexpr\linewidth-7mm\relax}
+  \textcolor{financeblue}{\textbf{#1}}
+  \par\vspace{2pt}
+  {\itshape #2}
+  \end{minipage}
+  \end{minipage}\par\vspace{3mm}}
+
+% Encadré générique : fond gris, marge intérieure 6 mm à gauche et 10 pt à
+% droite, 4 pt en haut et en bas, 3 mm avant (sauf après un titre) et
+% après ; premier paragraphe non
+% indenté. Sécable entre pages (framed), selon \charte@coupe ci-dessous. Le
+% cadre garde la profondeur de la boîte d'essai de framed : sa hauteur
+% mesurée est de 8 pt (elle valait -13,68 pt quand la profondeur était
+% annulée, et framed taillait le premier morceau trop grand pour la page).
+\newenvironment{encadre}{%
+  \def\FrameCommand##1{{\setlength{\fboxsep}{\z@}%
+    \colorbox{tablerow}{\hspace*{6mm}%
+      \vbox{\vskip4pt\hbox{##1}\vskip4pt}\hspace*{10pt}}}}%
+  \@ifundefined{OuterFrameSep}{}{\setlength{\OuterFrameSep}{\z@}}%
+  \topsep\z@ \partopsep\z@ % framed antérieur à 0.96 : espacement via \topsep
+  \par
+  \if@nobreak\charte@sanscoupure\else\vskip 3mm\fi
+  \nointerlineskip
+  \MakeFramed{\let\penalty\charte@penalite@ori
+    \advance\hsize-\width \FrameRestore
+    \everypar{{\setbox\z@\lastbox}\everypar{}}}}%
+  {\global\let\fb@put@frame\charte@coupe % hors du groupe de la boîte
+   \global\charte@premiertrue
+   \endMakeFramed
+   \global\let\fb@put@frame\charte@putframe
+   \par
+   \vskip 3mm\prevdepth 4pt
+   \global\@nobreakfalse\global\@endpetrue}
+
+% Coupe de l'encadré (E3.7, M41), décidée à chaque placement d'un morceau,
+% avant la coupe de framed. Premier placement : un encadré court (hauteur
+% totale au plus \charte@encadrecourt) qui ne tient pas dans la place
+% restante est posé entier, et TeX coupe la page au dernier point de coupure
+% qui le précède : juste avant lui, ou avant le titre qu'il suit (aucun point
+% de coupure entre un titre et l'encadré : \charte@sanscoupure). Encadré
+% long : coupé, chaque morceau gardant au moins trois lignes, à chaque page
+% (page suivante si la place restante en tient moins ; page écourtée si le
+% reste en tiendrait moins). Exception : si des flottants attendent la page
+% suivante (\@deferlist) et que l'encadré court ne tient pas avec eux sur une
+% page, posé entier il déborderait ; il est alors coupé comme un encadré
+% long (M200). De même s'il commence en tête de page : il ne peut aller plus
+% loin, et la page peut déjà porter des flottants (M202). Un encadré coupé trop
+% court pour donner deux morceaux de trois lignes (hauteur du contenu, cadre
+% déduit, sous 5,5 interlignes : six lignes ou moins ; sept lignes se coupent
+% en trois et quatre) passe entier à la page suivante. Limites : tous les
+% flottants en attente sont comptés, même ceux qui n'iront pas sur la page
+% suivante ([p], [b] trop grand, \topnumber dépassé) : coupe parfois
+% inutile, avertie par le contrôle 13 ; sur une page qui porte un flottant
+% en tête, la coupe de framed peut déborder d'environ 1 pt (Overfull \vbox
+% mesuré jusqu'à 1,03 pt, toléré en AVERT par le contrôle 3 jusqu'à 1,5 pt,
+% M202).
+\newdimen\charte@encadrecourt \charte@encadrecourt=.5\textheight
+\newif\ifcharte@premier
+\let\charte@putframe\fb@put@frame
+\let\charte@penalite@ori\penalty
+% Pénalités 9999 de \MakeFramed (mise à jour de \pagetotal) rendues
+% insécables juste après un titre ; \penalty est rétabli dans la boîte.
+\def\charte@sanscoupure{\def\penalty{\afterassignment\charte@penalite\count@}}
+\def\charte@penalite{\ifnum\count@=9999 \count@\@M\fi\charte@penalite@ori\count@}
+\def\charte@coupe#1#2{%
+  \let\charte@suite\charte@putframe
+  \ifinner\else\ifdim\pagegoal=\maxdimen\else
+    \fb@sizeofframe#1%
+    \dimen@\pagegoal \advance\dimen@-\pagetotal \advance\dimen@-\fb@frh
+    \advance\dimen@-\pageshrink \advance\dimen@-\pagedepth
+    \dimen@ii\ht\@tempboxa
+    \ifdim\dimen@ii>\dimen@
+      \advance\dimen@ii\fb@frh
+      \ifcharte@premier\ifdim\dimen@ii>\charte@encadrecourt\else
+        \charte@flottants % hauteur des flottants en attente (M200)
+        \advance\dimen@ii\@tempdima
+        \@tempdimb\topskip \advance\@tempdimb\p@
+        \ifdim\pagetotal>\@tempdimb % la page porte déjà du texte
+          \ifdim\dimen@ii>\textheight\else % tient avec eux : posé entier
+            \let\charte@suite\charte@entier
+          \fi
+        \fi % en tête de page (flottants déjà placés) : coupé (M202)
+        \advance\dimen@ii-\@tempdima
+      \fi\fi
+      \advance\dimen@ii-\fb@frh
+      \ifx\charte@suite\charte@entier\else
+        \ifdim\dimen@<3\baselineskip
+          \eject\fb@adjheight
+        \else
+          \@tempdimb\dimen@ii \advance\@tempdimb-\fb@frh
+          \advance\dimen@ii-\dimen@
+          \ifdim\dimen@ii<3\baselineskip
+            \ifdim\@tempdimb<5.5\baselineskip
+              % trop court pour deux morceaux de trois lignes : page suivante
+              \eject\fb@adjheight
+            \else
+              \advance\dimen@ii-3\baselineskip
+              \advance\dimen@ii-\fb@frh % marge : rembourrage du cadre
+              \advance\dimen@ii\pagegoal \pagegoal\dimen@ii % toujours global
+            \fi
+          \fi
+        \fi
+      \fi
+    \fi
+  \fi\fi
+  \global\charte@premierfalse
+  \charte@suite#1#2}
+% Hauteur (\@tempdima) des flottants qui attendent la page suivante
+% (\@deferlist), avec leurs espaces ; zéro s'il n'y en a pas.
+\def\charte@flottants{\@tempdima\z@
+  \ifx\@deferlist\@empty\else
+    \begingroup
+      \def\@elt##1{\global\advance\@tempdima\ht##1%
+        \global\advance\@tempdima\dp##1\global\advance\@tempdima\floatsep}%
+      \@deferlist
+    \endgroup
+    \advance\@tempdima\textfloatsep \advance\@tempdima-\floatsep
+  \fi}
+% Encadré court posé entier : la page déborde et TeX la coupe avant lui.
+\def\charte@entier#1#2{\fb@putboxa#1\fb@afterframe}
+
+% Fiches : un environnement, deux jeux de rubriques fixes. Fiche méthode
+% (corps du guide) : six rubriques, ouvertes par \Principe, ci-dessous ;
+% fiche modèle (annexe technique) : cinq rubriques, ouvertes par \Cadre, au
+% bloc « Macros du dépôt ».
+\newcounter{ficheid}
+\newenvironment{fiche}[1]{%
+  \stepcounter{ficheid}%
+  \phantomsection
+  \subsection{#1}%
+  \label{fiche:\theficheid}%
+}{%
+  \end{rubriques}\vspace{0.5em}%
+}
+% Liste des rubriques : aucun retrait ; l'intitulé fait partie du
+% paragraphe (ses espaces se justifient avec la ligne, comme le style
+% « unboxed » d'enumitem), suivi d'un écart fixe \labelsep.
+\newenvironment{rubriques}{%
+  \list{}{\setlength{\leftmargin}{\z@}\setlength{\labelwidth}{\z@}%
+          \setlength{\itemindent}{\z@}%
+          \setlength{\itemsep}{3pt}\setlength{\topsep}{3pt}%
+          \setlength{\parsep}{2pt}%
+          \let\makelabel\@gobble}%
+  \clubpenalties 3 10000 10000 0
+  \@beginparpenalty\@M \global\charte@rubriques\z@}{\endlist}
+% Un titre de rubrique n'est jamais seul en bas de page : il fait partie de
+% son premier paragraphe, dont les deux premières coupures sont interdites
+% (\clubpenalties, liste des rubriques), et une liste qui le suit ne s'en
+% sépare pas (\@beginparpenalty) ; aucune réserve de place, qui laisserait
+% orphelin le titre de la fiche ; aucune coupure avant la deuxième ni la
+% troisième rubrique, pour que le titre de la fiche garde trois lignes sous
+% lui même quand les premières rubriques tiennent sur une ligne. Le réglage
+% \clubpenalties vaut pour tous les paragraphes de la fiche, listes
+% imbriquées comprises : aucun ne laisse moins de trois lignes en bas de page
+% (un paragraphe court passe alors entier à la page suivante).
+% Limite : un titre de rubrique suivi d'une liste peut garder une seule
+% puce sous lui en bas de page (jamais aucune) ; la règle des trois lignes
+% (M41) est celle des titres de section (M202).
+\newcount\charte@rubriques
+\newcommand{\rubrique}[1]{%
+  \global\advance\charte@rubriques\@ne
+  \ifnum\charte@rubriques<4 \@itempenalty\@M\else\@itempenalty-\@lowpenalty\fi
+  \item[]\@itempenalty-\@lowpenalty % listes de la rubrique : sécables
+  \textcolor{financeblue}{\textbf{#1}}\hskip\labelsep\ignorespaces}
+\newcommand{\Principe}{%
+  \begin{rubriques}%
+  \rubrique{1. Principe et modèle de référence.}}
+\newcommand{\Donnees}{\rubrique{2. Données requises.}}
+\newcommand{\Conditions}{\rubrique{3. Conditions d'usage.}}
+\newcommand{\Forces}{\rubrique{4. Forces.}}
+\newcommand{\Limites}{\rubrique{5. Limites et pièges.}}
+\newcommand{\Referentiels}{\rubrique{6. Référentiels concernés.}}
+
+% Titre de partie : un filet bleu, « Partie » en petites capitales, titre
+% vert.
+\newcommand{\partie}[2]{%
+  \clearpage
+  \vspace*{1cm}
+  \noindent{\color{financeblue}\rule{\linewidth}{2pt}}\par\vspace{3mm}
+  {\color{financeblue}\raggedright\normalsize\bfseries\scshape #1\par}
+  \vspace{1.5mm}
+  {\color{greenline}\raggedright\fontsize{20}{24}\bfseries\selectfont #2\par}
+  \vspace{5mm}
+  \addcontentsline{toc}{section}{\protect\numberline{}\textsc{#1}~: #2}}
+
+% ================================================ page de garde sans TikZ ====
+% \charte@surpage{<matériel vertical>} superpose, sur la prochaine page
+% expédiée, un contenu placé depuis le coin supérieur gauche du papier
+% (atbegshi : fonctionne avec les noyaux LaTeX anciens comme récents).
+\newcommand{\charte@surpage}[1]{%
+  \AtBeginShipoutNext{%
+    \global\setbox\AtBeginShipoutBox\vbox{\offinterlineskip
+      \vbox to\z@{\kern-1in\kern-\voffset
+        \hbox to\z@{\kern-1in\kern-\hoffset
+          \vbox to\z@{#1\vss}\hss}\vss}%
+      \box\AtBeginShipoutBox}}}
+% Trois filets : bleu de 3,2 à 3,28 cm du haut avec amorce verte de 5 cm,
+% bleu de 3,6 à 3,53 cm du bas, entre les marges de 2,5 cm.
+% \leavevmode ouvre le paragraphe comme le faisait la figure TikZ du document
+% source : la mention d'en-tête se place ainsi au-dessus du filet, en retrait.
+\newcommand{\filetsgarde}{%
+  \charte@surpage{%
+    \kern3.2cm
+    \moveright2.5cm\hbox{\color{financeblue}%
+      \rule{\dimexpr\paperwidth-5cm\relax}{0.08cm}}%
+    \kern-0.08cm
+    \moveright2.5cm\hbox{\color{greenline}\rule{5cm}{0.08cm}}%
+    \kern\dimexpr\paperheight-3.6cm-3.28cm\relax
+    \moveright2.5cm\hbox{\color{financeblue}%
+      \rule{\dimexpr\paperwidth-5cm\relax}{0.07cm}}}%
+  \leavevmode}
+
+% ================================================ pages en paysage ===========
+% lscape tourne le contenu ; comme pdflscape, on ajoute /Rotate 90 aux pages
+% concernées pour qu'elles s'affichent à l'endroit à l'écran.
+\newif\ifcharte@paysage
+\apptocmd{\landscape}{\global\charte@paysagetrue}{}{}
+\apptocmd{\endlandscape}{\global\charte@paysagefalse}{}{}
+\AtBeginShipout{%
+  \ifcharte@paysage\global\pdfpageattr{/Rotate 90}%
+  \else\global\pdfpageattr{}\fi}
+
+% ================================================ Macros du dépôt ============
+% Propres au dépôt de guides, identiques dans tous les documents.
+%
+% (1) Statuts de vérification des sources. statuts_sources.tex est généré
+%     depuis le registre des sources (sources/registre.csv) par
+%     outils/controles.sh, et trouvé par TEXINPUTS (répertoire sources/) ;
+%     il contient une ligne \charte@statut{ID}{statut} par identifiant, le
+%     statut valant verifie, incertain, nontrouve ou absent.
+\newif\ifcharte@statuts
+\newcommand{\charte@statut}[2]{\@namedef{charte@src@#1}{#2}}
+\def\charte@verifie{verifie}
+\IfFileExists{statuts_sources.tex}
+  {\input{statuts_sources.tex}\charte@statutstrue}
+  {\PackageWarningNoLine{charte}{statuts_sources.tex introuvable :
+     statuts de vérification des sources non calculés}}
+% (2) \src{ID} : identifiant du registre des sources, placé dans le premier
+%     argument de \reglement ou dans l'argument de \refl, en fin de texte.
+%     Statut vérifié : rien d'imprimé ; incertain, non trouvé ou absent : une
+%     marque † en exposant, accolée au mot qui précède ; identifiant inconnu :
+%     [ID ?] en gras et un avertissement « Source inconnue au registre ».
+\DeclareRobustCommand{\src}[1]{%
+  \ifcharte@statuts
+    \@ifundefined{charte@src@#1}%
+      {\textbf{[#1~?]}%
+       \PackageWarning{charte}{Source inconnue au registre : #1}}%
+      {\unskip
+       \expandafter\ifx\csname charte@src@#1\endcsname\charte@verifie
+       \else\textsuperscript{\dag}\fi}%
+  \fi
+  \protected@write\@auxout{}{\string\charte@srcpage{#1}{\thepage}}}
+% (2 bis) Folios des \src, pour l'annexe des sources citées.
+\newcommand{\charte@srcpage}[2]{%
+  \@ifundefined{charte@pg@#1}%
+    {\global\@namedef{charte@pg@#1}{\hyperpage{#2}}%
+     \global\@namedef{charte@dp@#1}{#2}}%
+    {\def\charte@tmp{#2}%
+     \expandafter\ifx\csname charte@dp@#1\endcsname\charte@tmp\else
+       \expandafter\g@addto@macro\csname charte@pg@#1\endcsname{, \hyperpage{#2}}%
+       \global\@namedef{charte@dp@#1}{#2}\fi}}
+\AtEndDocument{\let\charte@srcpage\@gobbletwo}
+\newcommand{\srcfolios}[1]{%
+  \@ifundefined{charte@pg@#1}%
+    {\textbf{??}\G@refundefinedtrue
+     \PackageWarning{charte}{Folios de la source #1 non definis}}%
+    {\@nameuse{charte@pg@#1}}}
+% (3) Rubriques de la fiche modèle (annexe technique), sur l'environnement
+%     fiche : cinq rubriques fixes, ouvertes par \Cadre.
+\newcommand{\Cadre}{%
+  \begin{rubriques}%
+  \rubrique{1. Cadre et notations.}}
+\newcommand{\Hypotheses}{\rubrique{2. Hypothèses.}}
+\newcommand{\Utilisation}{\rubrique{3. Conditions d'utilisation.}}
+\newcommand{\Formules}{\rubrique{4. Formules et statut.}}
+\newcommand{\LimitesModele}{\rubrique{5. Limites.}}
+% (4) Bibliographie (BibTeX, style plain, base references, soit
+%     sources/references.bib trouvé par BIBINPUTS) : \bibliographiedepot, en
+%     fin de document, ne la compose que si le document cite une entrée par
+%     \cite ou \nocite ; sans citation, bibtex s'arrêterait en erreur
+%     (« I found no \citation commands »).
+\newif\ifcharte@citations
+\pretocmd{\@citex}{\global\charte@citationstrue}{}
+  {\PackageWarningNoLine{charte}{\string\@citex\space non modifiée :
+     bibliographie non composée}}
+\pretocmd{\nocite}{\global\charte@citationstrue}{}
+  {\PackageWarningNoLine{charte}{\string\nocite\space non modifiée :
+     bibliographie non composée}}
+\newcommand{\bibliographiedepot}{%
+  \ifcharte@citations
+    \bibliographystyle{plain}%
+    \bibliography{references}%
+  \fi}
+% (5) Annexe des sources citées. \sourcescitees charge sources_citees.tex,
+%     tableau long généré à chaque compilation par
+%     outils/controles/sources_citees.R depuis le registre des sources et les
+%     \src du document, et trouvé par TEXINPUTS (répertoire de construction) ;
+%     l'annexe ne se saisit jamais à la main.
+\newcommand{\sourcescitees}{%
+  \IfFileExists{sources_citees.tex}
+    {\input{sources_citees.tex}}
+    {\PackageWarningNoLine{charte}{sources_citees.tex introuvable :
+       annexe des sources citées non générée}}}
+
+\makeatother
+
+\emergencystretch=1.5em
+
+\begin{document}
+
+% ============================================================ page de garde ==
+\thispagestyle{empty}
+\filetsgarde
+\vspace*{2.1cm}
+\noindent
+{\color{financeblue}\normalsize\bfseries\scshape Édition \annee}
+
+\vspace{1.7cm}
+\noindent
+{\color{financeblue}\fontsize{28}{34}\bfseries\selectfont
+ Documentation\\ du package provie\par}
+
+\vspace{1.1cm}
+\noindent
+{\color{black}\Large
+ Recalcul des provisions d'assurance vie et de prévoyance\\
+ Modules, fonctions et concordance avec le code\par}
+
+\vspace{0.7cm}
+\noindent
+{\color{black}\normalsize\itshape
+ Garanties vie et prévoyance assurables en France, organismes d'assurance\\
+ Comptes sociaux et Solvabilité~II\par}
+
+\vfill
+\noindent
+{\footnotesize\color{black}
+ Établie le \datedoc\quad\textbar\quad Version \versiondoc\quad\textbar\quad
+ Statut~: \statutdoc\quad\textbar\quad Auteur~: \auteurdoc\par}
+\vspace{2.6cm}
+\clearpage
+
+% ================================================================= objet ====
+\titrebandeau{Objet du document}
+\markboth{Objet du document}{}
+
+\noindent
+Ce document est la \textbf{documentation de fond} du package R
+\code{provie}, moteur de l'outil \code{outil\_prov\_vie}. Il décrit
+l'architecture du package, puis, module par module, son rôle et ses
+fonctions. Il s'adresse à un relecteur externe, qui doit pouvoir comprendre
+ce que fait le package sans lire le code.
+
+\medskip\noindent
+Le document suit l'état du code. Chaque module a son tableau de fonctions,
+vide tant que le module n'en a pas\fsp; ces tableaux sont comparés au code
+par une batterie de tests (section~\ref{sec:concordance}). La documentation ne porte aucun
+chiffre issu d'une exécution~: les résultats d'un calcul sont restitués par
+le rapport figé et la fiche de calcul.
+
+\vspace{6mm}
+\noindent
+\begin{center}
+\small
+\rowcolors{2}{tablerow}{white}
+\begin{tabular}{@{}p{5.2cm}p{9.6cm}@{}}
+\rowcolor{tableheader}
+\textcolor{financeblue}{\textbf{Élément}} & \textcolor{financeblue}{\textbf{Référence}} \\
+Cahier des charges & \code{docs/exigences.md} \\
+Vocabulaire & \code{CONTEXT.md} \\
+Décisions d'architecture & \code{docs/adr/} \\
+Conventions de rédaction & \code{docs/latex/CONVENTIONS.md} \\
+Code du package & \code{R/}, un fichier par module \\
+Batterie de concordance & \code{tests/concordance\_doc\_moteur.R} \\
+\end{tabular}
+\end{center}
+
+\clearpage
+\titrebandeau{Sommaire}
+\markboth{Sommaire}{}
+% \tableofcontents composerait son propre titre, en doublon avec le bandeau :
+% on n'appelle que \@starttoc, qui compose les entrées seules.
+\makeatletter
+\@starttoc{toc}
+\makeatother
+\newpage
+
+
+\partie{Partie I}{Présentation}
+
+% =============================================================================
+\section{Périmètre}
+\label{sec:perimetre}
+% =============================================================================
+
+Le package \code{provie} recalcule, à une date d'arrêté déclarée, les
+provisions des garanties d'assurance vie et de prévoyance assurables en
+France par un organisme d'assurance (société d'assurance, mutuelle,
+institution de prévoyance). Il les calcule sous deux référentiels, les
+comptes sociaux et la meilleure estimation de Solvabilité~II, et restitue le
+tableau de passage de l'un à l'autre.
+
+\begin{encadre}
+\textbf{Portée.} Le package est un outil de \textbf{validation actuarielle}
+(second regard de la fonction actuarielle, revue externe), jamais un calcul
+de production. Les provisions inscrites par l'organisme d'assurance ne sont
+pas une entrée, et le package ne rend aucun verdict de suffisance. IFRS~17
+et le capital de solvabilité requis (SCR) sont hors périmètre.
+\end{encadre}
+
+Les garanties sont traitées par jalons~:
+
+\begin{itemize}[itemsep=2pt]
+\item première version~: décès et arrêt de travail, avec les garanties
+  liées\fsp;
+\item deuxième version~: épargne en euros et en unités de compte, avec
+  l'actif facultatif et la projection actif-passif sous scénarios
+  économiques\fsp;
+\item troisième version~: retraite, préretraite et indemnités de fin de
+  carrière.
+\end{itemize}
+
+Le package reçoit une \textbf{base de gestion} (contrats, affiliations,
+sinistres, événements, dossiers, prestations, rentes en service,
+cotisations) et un \textbf{plan de calcul}, qui déclare toutes les
+hypothèses, sans valeur par défaut. Les tables (réglementaires ou
+d'expérience) sont toujours des entrées. Un triangle n'est jamais une
+entrée~: il est reconstitué de la base sinistres. Le projet ne contient
+aucune donnée réelle~: la base brute fictive est tirée par le simulateur du
+package, sous une loi vraie et une graine, avec des défauts de données
+paramétrés.
+
+% =============================================================================
+\section{Conventions}
+\label{sec:conventions}
+% =============================================================================
+
+\begin{itemize}[itemsep=2pt]
+\item \textbf{Vocabulaire.} Les termes du domaine sont ceux du glossaire du
+  projet (\code{CONTEXT.md}), employés tels quels.
+\item \textbf{Noms.} Les modules, fonctions et colonnes portent des noms
+  français sans accents. Une fonction se cite par \code{nom()}, un module
+  par son nom, qui est celui de son fichier \code{R/<module>.R}.
+\item \textbf{Statuts.} Cinq statuts épistémiques ne se confondent jamais~:
+  résultat exact, résultat asymptotique, approximation numérique, constat de
+  simulation, jugement d'expert.
+\item \textbf{Tableaux de fonctions.} Chaque module a un tableau qui recense
+  ses fonctions de premier niveau, hors auxiliaires (fonctions dont le nom
+  commence par un point). La batterie de concordance compare ces tableaux
+  au code (section~\ref{sec:concordance}).
+\item \textbf{Chiffres.} Aucun chiffre issu d'une exécution du package
+  n'est écrit dans ce document.
+\end{itemize}
+
+
+\partie{Partie II}{Architecture}
+
+% =============================================================================
+\section{Package et point d'entrée}
+\label{sec:package}
+% =============================================================================
+
+Le moteur est le package R \code{provie}. Il n'emploie que les packages de
+priorité \code{base} de R (\code{stats}, \code{tools}, \code{utils}) et ne
+dépend d'aucun programme Java. Il contient toute la logique quantitative.
+L'application Shiny est hors du package~: elle n'appelle que ses fonctions
+exportées et ne calcule rien.
+
+Le package a un \textbf{point d'entrée unique}, porté par le module du
+même nom (section~\ref{sec:calculer-provisions})~:
+
+\begin{center}
+\code{calculer\_provisions(donnees, plan, tables = list(), provenance = NULL)}
+\end{center}
+
+\noindent Il reçoit la base sous forme
+d'une liste de \code{data.frame}, nommés comme dans le dictionnaire de la
+base, un plan de calcul et, en arguments facultatifs, les tables importées
+et la provenance des fichiers lus~: jamais un fichier. Il exécute le plan
+d'un bloc et retourne un objet complet, de classe \code{resultat\_provie},
+dans lequel l'application, le rapport figé et les tests lisent sans
+recalculer.
+
+Le moteur ne parle pas~: il n'émet ni avertissement, ni message, ni sortie
+à la console. Quand le calcul entier est indéfini, il lève un
+\textbf{refus d'appel}, qui interrompt l'appel sans rendre d'objet et porte
+un motif d'une liste fermée (section~\ref{sec:outils}).
+
+% =============================================================================
+\section{Quinze modules et leur graphe}
+\label{sec:modules}
+% =============================================================================
+
+Le package compte quinze modules, un fichier \code{R/<module>.R} par
+module. Un fichier de \code{R/} hors de cette liste est un écart relevé par
+la batterie de concordance. Un fichier de module n'existe qu'à partir du
+moment où le module a un contenu.
+
+La colonne «~Peut appeler~» est le graphe des appels autorisés entre
+modules. Deux modules sont hors de la chaîne du moteur~: \code{lecture}
+(lecture et écriture des fichiers) et \code{simulation} (simulateur)\fsp;
+aucun module du moteur ne les appelle. Un poste qui combine deux familles de
+calcul est une étape de l'orchestration, qui appelle chaque famille et
+applique la règle de combinaison déclarée par le catalogue des
+configurations de garanties\fsp; la famille «~triangle~» n'appelle pas la
+famille «~engagement~».
+
+{\small
+\renewcommand{\arraystretch}{1.22}
+\begin{longtable}{@{}p{3.7cm}>{\raggedright\arraybackslash}p{6.9cm}>{\raggedright\arraybackslash}p{4.5cm}@{}}
+\toprule
+\textbf{Module} & \textbf{Rôle} & \textbf{Peut appeler} \\
+\midrule
+\endfirsthead
+\toprule
+\textbf{Module} & \textbf{Rôle} & \textbf{Peut appeler} \\
+\midrule
+\endhead
+\multicolumn{3}{@{}l@{}}{\textit{Suite page suivante}} \\
+\endfoot
+\bottomrule
+\endlastfoot
+\code{outils} & Services sans contenu métier~: refus, graine locale, empreinte, écriture canonique, sérialisation, plateforme, constantes & Aucun module \\
+\code{dictionnaire} & Lecture et validation du dictionnaire lisible par machine\fsp; accès par table et par colonne & \code{outils} \\
+\code{lecture} & Lecture et écriture des fichiers, types imposés par le dictionnaire\fsp; hors de la chaîne du moteur & \code{dictionnaire}, \code{outils} \\
+\code{donnees} & Contrôles de la base, traitements déclarés des défauts, vue à une date, segments & \code{dictionnaire}, \code{outils} \\
+\code{tables} & Formats des tables, représentation commune, tables embarquées, courbes des taux, plafonds réglementaires & \code{outils} \\
+\code{garanties} & Lecture et validation du catalogue des configurations de garanties & \code{dictionnaire}, \code{outils} \\
+\code{engagement} & Famille «~engagement~»~: échéanciers, valeur actuelle probable sous le modèle multi-états & \code{tables}, \code{garanties}, \code{donnees}, \code{outils} \\
+\code{triangle} & Famille «~triangle~»~: reconstitution, estimateurs, diagnostics & \code{garanties}, \code{donnees}, \code{outils} \\
+\code{risque\_en\_cours} & Famille «~risque en cours~»~: limites du contrat, provision pour risques croissants & \code{engagement}, \code{tables}, \code{garanties}, \code{donnees}, \code{outils} \\
+\code{regles\_comptables} & Catégorie «~règle comptable~» & \code{garanties}, \code{tables}, \code{donnees}, \code{outils} \\
+\code{projection} & Famille «~projection~» (deuxième version) & \code{engagement}, \code{tables}, \code{garanties}, \code{donnees}, \code{outils} \\
+\code{plan} & Validation et canonisation du plan, fiche de calcul, sérialisation & \code{tables}, \code{garanties}, \code{dictionnaire}, \code{donnees}, \code{outils} \\
+\code{rapport} & Représentation canonique du résultat, empreintes, quantités restituées, tableau de passage, comparaison, rapport figé & \code{outils}, \code{dictionnaire}, \code{donnees}, \code{tables}, \code{garanties}, \code{engagement}, \code{triangle}, \code{risque\_en\_cours}, \code{regles\_comptables}, \code{projection}, \code{plan} \\
+\code{simulation} & Simulateur de la base brute fictive\fsp; hors de la chaîne du moteur & \code{dictionnaire}, \code{garanties}, \code{tables}, \code{outils} \\
+\code{calculer\_provisions} & Point d'entrée, table des étapes, combinaison des postes à deux familles, rejeu d'une fiche & Tous les modules, sauf \code{lecture} et \code{simulation} \\
+\end{longtable}
+}
+
+
+\partie{Partie III}{Module outils}
+
+% =============================================================================
+\section{Rôle et fonctions du module outils}
+\label{sec:outils}
+% =============================================================================
+
+Le module \code{outils} (\code{R/outils.R}) rend des services sans contenu
+métier aux autres modules~: refus classés, graine locale, empreinte,
+écriture canonique des valeurs, sérialisation d'une liste nommée en texte,
+description de la plateforme. Il n'appelle aucun autre module. Toute source
+d'aléa du package passe par \code{avec\_graine()}. Aucune fonction du module
+n'est exportée.
+
+\begin{center}
+\small
+\rowcolors{2}{tablerow}{white}
+% concordance-fonctions : outils
+\begin{tabular}{@{}p{3.9cm}>{\raggedright\arraybackslash}p{3.0cm}p{8.2cm}@{}}
+\rowcolor{tableheader}
+\textcolor{financeblue}{\textbf{Fonction}} & \textcolor{financeblue}{\textbf{Arguments}} & \textcolor{financeblue}{\textbf{Rôle}} \\
+\code{refuser()} & \code{message}, \code{motif}, champs facultatifs & Lève un refus d'appel~: condition de classe \code{refus\_provie} (qui hérite de \code{error}), qui interrompt l'appel sans rendre d'objet\fsp; le motif est pris dans la liste fermée \code{MOTIFS\_REFUS}\fsp; les champs facultatifs (\code{module}, \code{table}, \code{colonne}, \code{usage}, \code{nombre}, \code{identifiants}, \code{attendu}, \code{recu}) situent le refus, les identifiants étant tronqués à dix. \\
+\code{avec\_graine()} & \code{graine}, \code{expr} & Évalue \code{expr} sous le générateur Mersenne-Twister (échantillonneurs Inversion et Rejection) et la graine donnée, puis restaure l'état global du générateur, même en cas d'erreur. \\
+\code{empreinte()} & \code{octets} & Rend le MD5 d'un vecteur d'octets (\code{raw}), en 32 caractères hexadécimaux minuscules. \\
+\code{ecrire\_valeurs()} & \code{x}, \code{forme = "texte"} & Écrit un vecteur atomique simple (logique, entier, réel, caractère, date) sous sa forme canonique~: en texte, une chaîne par valeur (réels à 17 chiffres significatifs, dates ISO~8601)\fsp; en octets, sans étiquette de type, nombres en petit-boutiste. \\
+\code{ecrire\_liste()} & \code{x} & Sérialise une liste nommée en texte aplati UTF-8, une ligne par feuille (chemin, type, valeurs), rendu en octets\fsp; n'écrit aucun fichier. \\
+\code{lire\_liste()} & \code{octets} & Relit, sans évaluer de code, les octets écrits par \code{ecrire\_liste()}\fsp; refuse tout texte qui n'est pas canonique, de sorte que l'aller-retour rend une liste identique. \\
+\code{decrire\_plateforme()} & Aucun & Décrit la plateforme d'exécution pour la fiche de calcul (version de R, système, machine, boutisme, bibliothèques d'algèbre linéaire, d'expressions régulières et Unicode), en liste sérialisable par \code{ecrire\_liste()}, sans date ni nom d'utilisateur. \\
+\end{tabular}
+\end{center}
+
+Le module porte aussi les constantes partagées~: \code{VERSION\_FICHE}
+(version du format de la fiche de calcul),
+\code{VERSION\_DICTIONNAIRE\_ATTENDUE} (version du dictionnaire de la base
+que le moteur accepte), \code{REPRESENTATION\_CANONIQUE} (identifiant de la
+représentation canonique du résultat), \code{VERSION\_LISTE} (version du
+format de sérialisation des listes) et \code{MOTIFS\_REFUS} (liste fermée
+des motifs de refus d'appel).
+
+
+\partie{Partie IV}{Module dictionnaire}
+
+% =============================================================================
+\section{Rôle et fonctions du module dictionnaire}
+\label{sec:dictionnaire}
+% =============================================================================
+
+Le module \code{dictionnaire} lit et valide le dictionnaire lisible par
+machine, transcription du dictionnaire de la base, et donne accès, par table
+et par colonne, aux types, domaines, obligations, modes de saisie et défauts
+de données. Il porte aussi l'automate des événements, la liste des
+paramètres et la liste des défauts. Il ne peut appeler que \code{outils}.
+Ce module n'a pas encore de fonction.
+
+\begin{center}
+\small
+\rowcolors{2}{tablerow}{white}
+% concordance-fonctions : dictionnaire
+\begin{tabular}{@{}p{3.9cm}>{\raggedright\arraybackslash}p{3.0cm}p{8.2cm}@{}}
+\rowcolor{tableheader}
+\textcolor{financeblue}{\textbf{Fonction}} & \textcolor{financeblue}{\textbf{Arguments}} & \textcolor{financeblue}{\textbf{Rôle}} \\
+\multicolumn{3}{@{}l@{}}{Aucune fonction.} \\
+\end{tabular}
+\end{center}
+
+
+\partie{Partie V}{Module lecture}
+
+% =============================================================================
+\section{Rôle et fonctions du module lecture}
+\label{sec:lecture}
+% =============================================================================
+
+Le module \code{lecture} est la couche mince de lecture et d'écriture des
+fichiers~: base en CSV, jeux versionnés, tables importées. Les types sont
+imposés par le dictionnaire de la base\fsp; un type incompatible est refusé,
+jamais converti. Le module transmet des \code{data.frame} et la provenance
+des fichiers lus. Il est hors de la chaîne du moteur~: aucun module du
+moteur ne l'appelle. Le format xlsx est lu par l'application, hors du
+package. Il ne peut appeler que \code{dictionnaire} et \code{outils}.
+Ce module n'a pas encore de fonction.
+
+\begin{center}
+\small
+\rowcolors{2}{tablerow}{white}
+% concordance-fonctions : lecture
+\begin{tabular}{@{}p{3.9cm}>{\raggedright\arraybackslash}p{3.0cm}p{8.2cm}@{}}
+\rowcolor{tableheader}
+\textcolor{financeblue}{\textbf{Fonction}} & \textcolor{financeblue}{\textbf{Arguments}} & \textcolor{financeblue}{\textbf{Rôle}} \\
+\multicolumn{3}{@{}l@{}}{Aucune fonction.} \\
+\end{tabular}
+\end{center}
+
+
+\partie{Partie VI}{Module donnees}
+
+% =============================================================================
+\section{Rôle et fonctions du module donnees}
+\label{sec:donnees}
+% =============================================================================
+
+Le module \code{donnees} contrôle la base~: détection des défauts de données
+et contrôles de structure, traitements déclarés (refus, exclusion,
+hypothèse par défaut, signalement), vue à une date, états des sinistres et
+des dossiers à une date, segments, enjeu des lignes écartées. Il ne corrige
+rien en silence. Il ne peut appeler que \code{dictionnaire} et
+\code{outils}. Ce module n'a pas encore de fonction.
+
+\begin{center}
+\small
+\rowcolors{2}{tablerow}{white}
+% concordance-fonctions : donnees
+\begin{tabular}{@{}p{3.9cm}>{\raggedright\arraybackslash}p{3.0cm}p{8.2cm}@{}}
+\rowcolor{tableheader}
+\textcolor{financeblue}{\textbf{Fonction}} & \textcolor{financeblue}{\textbf{Arguments}} & \textcolor{financeblue}{\textbf{Rôle}} \\
+\multicolumn{3}{@{}l@{}}{Aucune fonction.} \\
+\end{tabular}
+\end{center}
+
+
+\partie{Partie VII}{Module tables}
+
+% =============================================================================
+\section{Rôle et fonctions du module tables}
+\label{sec:tables}
+% =============================================================================
+
+Le module \code{tables} traite les tables en entrée~: formats admis,
+conversion vers une représentation commune, catalogue des tables
+embarquées, courbes des taux sans risque de l'EIOPA, série de taux des
+plafonds réglementaires, plafonds réglementaires, calcul de l'âge selon la
+convention déclarée. Il ne peut appeler que \code{outils}. Ce module n'a
+pas encore de fonction.
+
+\begin{center}
+\small
+\rowcolors{2}{tablerow}{white}
+% concordance-fonctions : tables
+\begin{tabular}{@{}p{3.9cm}>{\raggedright\arraybackslash}p{3.0cm}p{8.2cm}@{}}
+\rowcolor{tableheader}
+\textcolor{financeblue}{\textbf{Fonction}} & \textcolor{financeblue}{\textbf{Arguments}} & \textcolor{financeblue}{\textbf{Rôle}} \\
+\multicolumn{3}{@{}l@{}}{Aucune fonction.} \\
+\end{tabular}
+\end{center}
+
+
+\partie{Partie VIII}{Module garanties}
+
+% =============================================================================
+\section{Rôle et fonctions du module garanties}
+\label{sec:garanties}
+% =============================================================================
+
+Le module \code{garanties} lit et valide le catalogue des configurations de
+garanties~: états, transitions, flux, postes, usages de tables, liens entre
+garanties. Une configuration est une donnée, jamais une fonction. Le module
+ne peut appeler que \code{dictionnaire} et \code{outils}. Ce module n'a pas
+encore de fonction.
+
+\begin{center}
+\small
+\rowcolors{2}{tablerow}{white}
+% concordance-fonctions : garanties
+\begin{tabular}{@{}p{3.9cm}>{\raggedright\arraybackslash}p{3.0cm}p{8.2cm}@{}}
+\rowcolor{tableheader}
+\textcolor{financeblue}{\textbf{Fonction}} & \textcolor{financeblue}{\textbf{Arguments}} & \textcolor{financeblue}{\textbf{Rôle}} \\
+\multicolumn{3}{@{}l@{}}{Aucune fonction.} \\
+\end{tabular}
+\end{center}
+
+
+\partie{Partie IX}{Module engagement}
+
+% =============================================================================
+\section{Rôle et fonctions du module engagement}
+\label{sec:engagement}
+% =============================================================================
+
+Le module \code{engagement} porte la famille de calcul «~engagement~»~:
+échéanciers des flux futurs d'un engagement connu, dossier par dossier, et
+leur valeur actuelle probable sous le modèle multi-états. Il ne peut
+appeler que \code{tables}, \code{garanties}, \code{donnees} et
+\code{outils}. Ce module n'a pas encore de fonction.
+
+\begin{center}
+\small
+\rowcolors{2}{tablerow}{white}
+% concordance-fonctions : engagement
+\begin{tabular}{@{}p{3.9cm}>{\raggedright\arraybackslash}p{3.0cm}p{8.2cm}@{}}
+\rowcolor{tableheader}
+\textcolor{financeblue}{\textbf{Fonction}} & \textcolor{financeblue}{\textbf{Arguments}} & \textcolor{financeblue}{\textbf{Rôle}} \\
+\multicolumn{3}{@{}l@{}}{Aucune fonction.} \\
+\end{tabular}
+\end{center}
+
+
+\partie{Partie X}{Module triangle}
+
+% =============================================================================
+\section{Rôle et fonctions du module triangle}
+\label{sec:triangle}
+% =============================================================================
+
+Le module \code{triangle} porte la famille de calcul «~triangle~»~:
+reconstitution des triangles à partir de la base sinistres, estimateurs,
+diagnostics. Il ne peut appeler que \code{garanties}, \code{donnees} et
+\code{outils}. Ce module n'a pas encore de fonction.
+
+\begin{center}
+\small
+\rowcolors{2}{tablerow}{white}
+% concordance-fonctions : triangle
+\begin{tabular}{@{}p{3.9cm}>{\raggedright\arraybackslash}p{3.0cm}p{8.2cm}@{}}
+\rowcolor{tableheader}
+\textcolor{financeblue}{\textbf{Fonction}} & \textcolor{financeblue}{\textbf{Arguments}} & \textcolor{financeblue}{\textbf{Rôle}} \\
+\multicolumn{3}{@{}l@{}}{Aucune fonction.} \\
+\end{tabular}
+\end{center}
+
+
+\partie{Partie XI}{Module risque\_en\_cours}
+
+% =============================================================================
+\section{Rôle et fonctions du module risque\_en\_cours}
+\label{sec:risque-en-cours}
+% =============================================================================
+
+Le module \code{risque\_en\_cours} porte la famille de calcul «~risque en
+cours~»~: limites du contrat et provision pour risques croissants (PRC),
+hors de la première version. Il ne peut appeler que \code{engagement},
+\code{tables}, \code{garanties}, \code{donnees} et \code{outils}. Ce module
+n'a pas encore de fonction.
+
+\begin{center}
+\small
+\rowcolors{2}{tablerow}{white}
+% concordance-fonctions : risque_en_cours
+\begin{tabular}{@{}p{3.9cm}>{\raggedright\arraybackslash}p{3.0cm}p{8.2cm}@{}}
+\rowcolor{tableheader}
+\textcolor{financeblue}{\textbf{Fonction}} & \textcolor{financeblue}{\textbf{Arguments}} & \textcolor{financeblue}{\textbf{Rôle}} \\
+\multicolumn{3}{@{}l@{}}{Aucune fonction.} \\
+\end{tabular}
+\end{center}
+
+
+\partie{Partie XII}{Module regles\_comptables}
+
+% =============================================================================
+\section{Rôle et fonctions du module regles\_comptables}
+\label{sec:regles-comptables}
+% =============================================================================
+
+Le module \code{regles\_comptables} porte la catégorie «~règle
+comptable~»~: postes calculés par application d'une règle déclarée du plan
+(dotation, reprise, prorata temporis, ratio, seuil) à des grandeurs
+reconstituées de la base, tels la provision pour égalisation, la provision
+pour primes non acquises (PPNA) et la provision pour risques en cours
+(PREC). Une règle comptable n'est pas une famille de calcul. Le module ne
+peut appeler que \code{garanties}, \code{tables}, \code{donnees} et
+\code{outils}. Ce module n'a pas encore de fonction.
+
+\begin{center}
+\small
+\rowcolors{2}{tablerow}{white}
+% concordance-fonctions : regles_comptables
+\begin{tabular}{@{}p{3.9cm}>{\raggedright\arraybackslash}p{3.0cm}p{8.2cm}@{}}
+\rowcolor{tableheader}
+\textcolor{financeblue}{\textbf{Fonction}} & \textcolor{financeblue}{\textbf{Arguments}} & \textcolor{financeblue}{\textbf{Rôle}} \\
+\multicolumn{3}{@{}l@{}}{Aucune fonction.} \\
+\end{tabular}
+\end{center}
+
+
+\partie{Partie XIII}{Module projection}
+
+% =============================================================================
+\section{Rôle et fonctions du module projection}
+\label{sec:projection}
+% =============================================================================
+
+Le module \code{projection} portera, dans la deuxième version, la famille
+de calcul «~projection~»~: projection actif-passif sous scénarios
+économiques. Il ne peut appeler que \code{engagement}, \code{tables},
+\code{garanties}, \code{donnees} et \code{outils}. Ce module n'a pas encore
+de fonction.
+
+\begin{center}
+\small
+\rowcolors{2}{tablerow}{white}
+% concordance-fonctions : projection
+\begin{tabular}{@{}p{3.9cm}>{\raggedright\arraybackslash}p{3.0cm}p{8.2cm}@{}}
+\rowcolor{tableheader}
+\textcolor{financeblue}{\textbf{Fonction}} & \textcolor{financeblue}{\textbf{Arguments}} & \textcolor{financeblue}{\textbf{Rôle}} \\
+\multicolumn{3}{@{}l@{}}{Aucune fonction.} \\
+\end{tabular}
+\end{center}
+
+
+\partie{Partie XIV}{Module plan}
+
+% =============================================================================
+\section{Rôle et fonctions du module plan}
+\label{sec:plan}
+% =============================================================================
+
+Le module \code{plan} valide et met sous forme canonique le plan de calcul,
+établit la fiche de calcul et sérialise l'un et l'autre en texte. Il ne
+peut appeler que \code{tables}, \code{garanties}, \code{dictionnaire},
+\code{donnees} et \code{outils}. Ce module n'a pas encore de fonction.
+
+\begin{center}
+\small
+\rowcolors{2}{tablerow}{white}
+% concordance-fonctions : plan
+\begin{tabular}{@{}p{3.9cm}>{\raggedright\arraybackslash}p{3.0cm}p{8.2cm}@{}}
+\rowcolor{tableheader}
+\textcolor{financeblue}{\textbf{Fonction}} & \textcolor{financeblue}{\textbf{Arguments}} & \textcolor{financeblue}{\textbf{Rôle}} \\
+\multicolumn{3}{@{}l@{}}{Aucune fonction.} \\
+\end{tabular}
+\end{center}
+
+
+\partie{Partie XV}{Module rapport}
+
+% =============================================================================
+\section{Rôle et fonctions du module rapport}
+\label{sec:rapport}
+% =============================================================================
+
+Le module \code{rapport} établit la représentation canonique du résultat et
+ses empreintes, les quantités restituées, le tableau de passage, la
+comparaison de deux résultats et le rapport figé. Il peut appeler tous les
+modules qui le précèdent dans le tableau de la section~\ref{sec:modules},
+sauf \code{lecture}. Ce module n'a pas encore de fonction.
+
+\begin{center}
+\small
+\rowcolors{2}{tablerow}{white}
+% concordance-fonctions : rapport
+\begin{tabular}{@{}p{3.9cm}>{\raggedright\arraybackslash}p{3.0cm}p{8.2cm}@{}}
+\rowcolor{tableheader}
+\textcolor{financeblue}{\textbf{Fonction}} & \textcolor{financeblue}{\textbf{Arguments}} & \textcolor{financeblue}{\textbf{Rôle}} \\
+\multicolumn{3}{@{}l@{}}{Aucune fonction.} \\
+\end{tabular}
+\end{center}
+
+
+\partie{Partie XVI}{Module simulation}
+
+% =============================================================================
+\section{Rôle et fonctions du module simulation}
+\label{sec:simulation}
+% =============================================================================
+
+Le module \code{simulation} est le simulateur~: il tire une base brute
+fictive sous une loi vraie et une graine, puis y injecte les défauts de
+données paramétrés. Il rend un objet en mémoire et n'écrit aucun fichier. Il
+est hors de la chaîne du moteur~: aucun module du moteur ne l'appelle. Il
+ne peut appeler que \code{dictionnaire}, \code{garanties}, \code{tables} et
+\code{outils}. Ce module n'a pas encore de fonction.
+
+\begin{center}
+\small
+\rowcolors{2}{tablerow}{white}
+% concordance-fonctions : simulation
+\begin{tabular}{@{}p{3.9cm}>{\raggedright\arraybackslash}p{3.0cm}p{8.2cm}@{}}
+\rowcolor{tableheader}
+\textcolor{financeblue}{\textbf{Fonction}} & \textcolor{financeblue}{\textbf{Arguments}} & \textcolor{financeblue}{\textbf{Rôle}} \\
+\multicolumn{3}{@{}l@{}}{Aucune fonction.} \\
+\end{tabular}
+\end{center}
+
+
+\partie{Partie XVII}{Module calculer\_provisions}
+
+% =============================================================================
+\section{Rôle et fonctions du module calculer\_provisions}
+\label{sec:calculer-provisions}
+% =============================================================================
+
+Le module \code{calculer\_provisions} est l'orchestration~: il porte le
+point d'entrée unique (section~\ref{sec:package}), la table des étapes, la
+combinaison des postes à deux familles de calcul et le rejeu d'une fiche de
+calcul. Il ne calcule aucun poste. Il peut appeler tous les modules, sauf
+\code{lecture} et \code{simulation}. Ce module n'a pas encore de fonction.
+
+\begin{center}
+\small
+\rowcolors{2}{tablerow}{white}
+% concordance-fonctions : calculer_provisions
+\begin{tabular}{@{}p{3.9cm}>{\raggedright\arraybackslash}p{3.0cm}p{8.2cm}@{}}
+\rowcolor{tableheader}
+\textcolor{financeblue}{\textbf{Fonction}} & \textcolor{financeblue}{\textbf{Arguments}} & \textcolor{financeblue}{\textbf{Rôle}} \\
+\multicolumn{3}{@{}l@{}}{Aucune fonction.} \\
+\end{tabular}
+\end{center}
+
+% =============================================================================
+\section{Table des étapes}
+\label{sec:etapes}
+% =============================================================================
+
+L'ordre du calcul est fixé par un tableau constant du module,
+\code{ETAPES}, à quatre colonnes (\code{etape}, \code{module},
+\code{fonction}, \code{condition}). L'orchestration le suit dans l'ordre,
+par une séquence d'appels explicite, sans appel dynamique d'une fonction
+désignée par son nom. Le tableau ci-dessous reproduit \code{ETAPES}\fsp; il
+est vide tant que le module n'existe pas.
+
+\begin{center}
+\small
+\rowcolors{2}{tablerow}{white}
+\begin{tabular}{@{}p{2.6cm}p{3.6cm}p{4.2cm}p{4.2cm}@{}}
+\rowcolor{tableheader}
+\textcolor{financeblue}{\textbf{Étape}} & \textcolor{financeblue}{\textbf{Module}} & \textcolor{financeblue}{\textbf{Fonction}} & \textcolor{financeblue}{\textbf{Condition}} \\
+\multicolumn{4}{@{}l@{}}{Aucune étape.} \\
+\end{tabular}
+\end{center}
+
+
+\partie{Partie XVIII}{Tests}
+
+% =============================================================================
+\section{Batteries}
+\label{sec:batteries}
+% =============================================================================
+
+Trois batteries se lancent depuis la racine du dépôt, dans cet ordre~:
+
+\begin{encadre}
+\small
+\code{Rscript tests/test\_unitaires.R}\\
+\code{Rscript tests/test\_reproductibilite.R}\\
+\code{Rscript tests/concordance\_doc\_moteur.R -{}-strict}
+\end{encadre}
+
+\begin{itemize}[itemsep=2pt]
+\item La \textbf{batterie unitaire} installe le package dans une
+  bibliothèque temporaire, le charge, puis exécute les fichiers de
+  \code{tests/unitaires/}, un par module, plus ceux qui testent le harnais
+  et la batterie de concordance.
+\item La \textbf{batterie de reproductibilité} vérifie les aller-retours
+  identiques du sérialiseur de listes, la graine locale et la restauration
+  de l'état global du générateur.
+\item La \textbf{batterie de concordance} compare la présente documentation
+  au code (section~\ref{sec:concordance}).
+\end{itemize}
+
+Les batteries unitaire et de reproductibilité testent le package installé, à
+travers son espace de noms, jamais en chargeant les fichiers de \code{R/}
+par \code{source()}\fsp; seule la batterie de concordance lit ces fichiers,
+sans les exécuter.
+
+% =============================================================================
+\section{Harnais}
+\label{sec:harnais}
+% =============================================================================
+
+Le harnais (\code{tests/harnais.R}) est l'outillage de test du projet, sans
+le package \code{testthat}. Chaque batterie le source\fsp; il exige que les
+avertissements soient convertis en erreurs (\code{options(warn = 2)}), faute
+de quoi il arrête la batterie. Il fournit~:
+
+\begin{itemize}[itemsep=2pt]
+\item \code{section()}, qui ouvre une section de la sortie\fsp;
+\item \code{verifier()}, qui vérifie une condition\fsp;
+\item \code{verifier\_egal()}, qui vérifie une égalité, exacte ou à une
+  tolérance relative déclarée\fsp;
+\item \code{verifier\_refus()}, qui vérifie qu'un refus d'appel est levé
+  avec le motif attendu\fsp;
+\item \code{attendu\_echec()}, pour un défaut connu, avec renvoi à son
+  issue\fsp;
+\item \code{bilan()}, qui imprime le décompte et termine en échec s'il y a
+  un échec ou un succès inattendu\fsp;
+\item \code{installer\_provie()}, qui installe et charge le package.
+\end{itemize}
+
+Chaque vérification imprime une ligne~: \code{[OK]}, \code{[ECHEC]},
+\code{[ATTENDU]} (échec attendu, avec l'issue) ou \code{[SUCCES INATTENDU]}.
+Un échec attendu qui réussit fait échouer la batterie~: la marque est alors
+retirée pour en faire un test ordinaire.
+
+% =============================================================================
+\section{Concordance entre la documentation et le code}
+\label{sec:concordance}
+% =============================================================================
+
+La batterie \code{tests/concordance\_doc\_moteur.R} lit les tableaux de
+fonctions du présent document et les compare aux fonctions de premier
+niveau de chaque fichier \code{R/<module>.R}, hors auxiliaires dont le nom
+commence par un point. Elle relève comme écarts~:
+
+\begin{itemize}[itemsep=2pt]
+\item une fonction du code absente du tableau de son module, ou une
+  fonction citée absente du code\fsp;
+\item une fonction citée deux fois, deux tableaux pour un même module, un
+  module inconnu\fsp;
+\item un module qui a des fonctions mais aucun tableau\fsp;
+\item un fichier de \code{R/} hors des quinze modules\fsp;
+\item une fonction exportée par le package qui n'est citée dans aucun
+  tableau.
+\end{itemize}
+
+Avec l'option \code{-{}-strict}, tout écart, comme l'absence du document,
+fait échouer la batterie\fsp; sans elle, les écarts sont des avertissements.
+La convention d'écriture des tableaux qu'elle lit est fixée par
+\code{docs/latex/CONVENTIONS.md}.
+
+\end{document}
