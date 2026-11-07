@@ -1,0 +1,788 @@
+\documentclass[a4paper,11pt]{article}
+
+% =============================================================================
+%  Charte graphique des documents LaTeX du projet (gabarit commenté).
+%  Le préambule fixe la mise en forme ; le corps montre chaque élément une fois
+%  et se remplace par le contenu du document. Les passages propres au projet
+%  sont marqués « À ADAPTER ».
+%  Version sans : babel-french, caption, csquotes, dsfont, enumitem, float,
+%  mathrsfs, mdframed, newtxtext, pdflscape, tikz/pgf, titlesec, tocloft.
+%  Moteur : pdfLaTeX. Compatible avec les distributions anciennes
+%  (MiKTeX 2.9, TeX Live 2012 et suivantes) : aucun crochet du noyau récent.
+% =============================================================================
+
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+% \headheight est laissé à 12 pt : fancyhdr le signale et l'agrandit lui-même
+% (avertissement « \headheight is too small »), exactement comme dans le
+% document source ; le fixer ici décalerait l'en-tête ou le texte de 1,6 pt.
+\usepackage[left=2.5cm, right=2.5cm, top=2.5cm, bottom=2.5cm]{geometry}
+\usepackage{setspace}
+\usepackage{graphicx}
+\usepackage{etoolbox}
+\usepackage{keyval}
+\usepackage{fancyhdr}
+\usepackage{amsmath,amssymb,amsfonts}
+\usepackage{url}
+\usepackage[table]{xcolor}  % [table] : \rowcolors sur les anciennes versions
+\usepackage{array}
+\usepackage{booktabs}
+\usepackage{colortbl}
+\usepackage{longtable}
+\usepackage{lscape}   % remplace pdflscape (rotation à l'écran : voir plus bas)
+\usepackage{framed}   % remplace mdframed (encadré sécable)
+\usepackage{atbegshi}  % crochets de sortie de page (remplace \AddToHook)
+\usepackage[unicode]{hyperref}
+
+% ------------------------------------------------------------- polices -------
+% newtxtext composait le texte en TeX Gyre Termes X et le code en txtt ; les
+% mathématiques restaient en Computer Modern. On retrouve la même chose sans
+% newtxtext : TeX Gyre Termes (tgtermes) pour le texte, repli sur le Times de
+% PSNFSS (ptm) s'il est absent ; txtt (txfonts) pour \ttfamily.
+\IfFileExists{tgtermes.sty}
+  {\usepackage{tgtermes}}
+  {\renewcommand{\rmdefault}{ptm}}
+\IfFileExists{t1txtt.fd}{\renewcommand{\ttdefault}{txtt}}{}
+
+% ---------------------------------------------------------------- charte ----
+% Bleu financier pour la structure, vert pour l'accent et les sorties, deux
+% gris de tableau.
+\definecolor{maincolor}{RGB}{0,70,140}
+\definecolor{greenline}{RGB}{0,180,80}
+\definecolor{tableheader}{RGB}{200,220,250}
+\definecolor{tablerow}{RGB}{245,245,245}
+\definecolor{financeblue}{RGB}{0,70,140}
+
+% À ADAPTER : métadonnées du document (page de garde, pied de page, PDF).
+\newcommand{\annee}{2026}
+\newcommand{\datedoc}{\today}
+\newcommand{\versiondoc}{1.0}
+\newcommand{\statutdoc}{Projet}
+\newcommand{\titredoc}{Titre court du document}
+
+\hypersetup{colorlinks=true, linkcolor=financeblue, urlcolor=financeblue,
+            citecolor=financeblue, pdftitle={Titre du document}}
+
+\makeatletter
+
+% ================================================ français sans babel ========
+% Reprise, à la main, des effets de babel-french visibles dans le document
+% source.
+% (1) Césure française (motifs chargés dans le format pdfLaTeX).
+\ifdefined\l@french
+  \language=\l@french
+\else
+  \PackageWarningNoLine{charte}{Motifs de césure français absents :
+    césure anglaise utilisée}
+\fi
+\lefthyphenmin=2 \righthyphenmin=2
+% (2) Espacement « à la française » après les points.
+\frenchspacing
+% (3) Libellés.
+\renewcommand{\contentsname}{Table des matières}
+\renewcommand{\listfigurename}{Table des figures}
+\renewcommand{\listtablename}{Liste des tableaux}
+\renewcommand{\refname}{Références}
+\renewcommand{\indexname}{Index}
+\renewcommand{\figurename}{Figure}
+\renewcommand{\tablename}{Table}
+\renewcommand{\partname}{Partie}
+\renewcommand{\appendixname}{Annexe}
+\renewcommand{\abstractname}{Résumé}
+% (4) Date en français (« 1er janvier 2026 »).
+\renewcommand{\today}{\number\day\ifnum\day=1 \textsuperscript{er}\fi\space
+  \ifcase\month\or janvier\or février\or mars\or avril\or mai\or juin\or
+  juillet\or août\or septembre\or octobre\or novembre\or décembre\fi
+  \space\number\year}
+% (5) Premier paragraphe indenté après un titre.
+\let\@afterindentfalse\@afterindenttrue
+\@afterindenttrue
+% (6) Listes : espacement vertical resserré de babel-french, appliqué à tous
+%     les environnements construits sur \list.
+\let\charte@listORI\list
+\newdimen\charte@parskip
+\def\charte@listV{%
+  \setlength{\topsep}{0.8ex plus 0.4ex minus 0.4ex}%
+  \setlength{\partopsep}{0.4ex plus 0.2ex minus 0.2ex}%
+  \charte@parskip=\parskip
+  \addtolength{\topsep}{-\charte@parskip}%
+  \addtolength{\partopsep}{\charte@parskip}%
+  \setlength{\itemsep}{0.4ex plus 0.2ex minus 0.2ex}%
+  \setlength{\parsep}{0.4ex plus 0.2ex minus 0.2ex}%
+  \ifdim\charte@parskip>\z@
+    \setlength{\parsep}{\charte@parskip}%
+    \addtolength{\itemsep}{-\charte@parskip}%
+  \fi}
+\def\list#1#2{\charte@listORI{#1}{\charte@listV #2}}
+% (7) Ponctuation haute : sans babel-french, l'espace qui précède « : » et
+%     l'espace fine qui précède « ; ! ? » ne sont plus ajoutées. On saisit
+%     « ~: » (espace insécable) et « \fsp; », « \fsp! », « \fsp? » (espace
+%     fine insécable, de même largeur que celle de babel-french).
+\newcommand{\fsp}{\unskip\nobreak\hskip .5\fontdimen2\font\relax}
+% (8) Puces en tiret cadratin à tous les niveaux.
+\renewcommand{\labelitemi}{\textemdash}
+\renewcommand{\labelitemii}{\textemdash}
+\renewcommand{\labelitemiii}{\textemdash}
+\renewcommand{\labelitemiv}{\textemdash}
+
+% ================================================ listes sans enumitem =======
+% itemize et enumerate acceptent un argument optionnel à clés, dont la
+% syntaxe est celle d'enumitem pour les clés usuelles :
+%   \begin{itemize}[itemsep=3pt] ... \end{itemize}
+% Clés reconnues : itemsep, topsep, parsep, partopsep, leftmargin,
+% labelsep, listparindent.
+\define@key{charteliste}{itemsep}{\setlength{\itemsep}{#1}}
+\define@key{charteliste}{topsep}{\setlength{\topsep}{#1}}
+\define@key{charteliste}{parsep}{\setlength{\parsep}{#1}}
+\define@key{charteliste}{partopsep}{\setlength{\partopsep}{#1}}
+\define@key{charteliste}{leftmargin}{\setlength{\leftmargin}{#1}}
+\define@key{charteliste}{labelsep}{\setlength{\labelsep}{#1}}
+\define@key{charteliste}{listparindent}{\setlength{\listparindent}{#1}}
+
+\renewenvironment{itemize}[1][]{%
+  \ifnum\@itemdepth>\thr@@\@toodeep\else
+    \advance\@itemdepth\@ne
+    \edef\@itemitem{labelitem\romannumeral\the\@itemdepth}%
+    \expandafter\list\csname\@itemitem\endcsname
+      {\def\makelabel##1{\hss\llap{##1}}\setkeys{charteliste}{#1}}%
+  \fi}{\endlist}
+
+\renewenvironment{enumerate}[1][]{%
+  \ifnum\@enumdepth>\thr@@\@toodeep\else
+    \advance\@enumdepth\@ne
+    \edef\@enumctr{enum\romannumeral\the\@enumdepth}%
+    \expandafter\list\csname label\@enumctr\endcsname
+      {\usecounter\@enumctr\def\makelabel##1{\hss\llap{##1}}%
+       \setkeys{charteliste}{#1}}%
+  \fi}{\endlist}
+
+% ================================================ légendes sans caption ======
+% Étiquette en gras, couleur maincolor, petites capitales ; séparateur
+% « : » précédé d'une espace insécable, comme dans le document source.
+\renewcommand{\fnum@figure}{{\scshape\figurename}\nobreakspace\thefigure}
+\renewcommand{\fnum@table}{{\scshape\tablename}\nobreakspace\thetable}
+\newcommand{\charte@etiquette}[1]{%
+  {\bfseries\color{maincolor}#1\nobreakspace:}\space}
+% Comme avec caption : légende composée en interligne simple, entre deux
+% étais, sans ressort interligne au-dessus ; centrée si elle tient sur une
+% ligne, justifiée sinon.
+\long\def\@makecaption#1#2{%
+  \vskip\abovecaptionskip
+  \sbox\@tempboxa{\normalfont\charte@etiquette{#1}#2}%
+  \nointerlineskip
+  \ifdim\wd\@tempboxa>\hsize
+    \hb@xt@\hsize{\vbox{\setstretch{1}\normalfont
+      \parindent\z@ \leftskip\z@ \rightskip\z@ \parfillskip\z@\@plus1fil
+      \strut\charte@etiquette{#1}#2\strut\par}}%
+  \else
+    \global\@minipagefalse
+    \hb@xt@\hsize{\hfil\setstretch{1}\normalfont\strut\box\@tempboxa\hfil}%
+  \fi
+  \vskip\belowcaptionskip}
+
+% Figures et tableaux « ici » : reprise exacte de la position [H] du
+% package float (boîte non flottante, \intextsep avant et après).
+\newsavebox\charte@boiteH
+\def\charte@debutH#1{%
+  \def\@captype{#1}%
+  \global\setbox\charte@boiteH\color@vbox\normalcolor
+    \vbox\bgroup\hsize\columnwidth\@parboxrestore
+      \@floatboxreset\@setnobreak\ignorespaces}
+\def\charte@finH{%
+  \@endfloatbox
+  \vskip\intextsep\box\charte@boiteH\vskip\intextsep\relax}
+\newenvironment{figureH}{\charte@debutH{figure}}{\charte@finH}
+\newenvironment{tableH}{\charte@debutH{table}}{\charte@finH}
+
+% ================================================ en-têtes et pieds ==========
+\renewcommand{\baselinestretch}{1.08}
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\color{maincolor}\nouppercase{\leftmark}}
+\renewcommand{\headrulewidth}{0pt}
+\renewcommand{\footrulewidth}{0.4pt}
+\fancyfoot[R]{\color{greenline}\textbf{page \thepage}}
+\fancyfoot[L]{\color{maincolor}\titredoc}
+\fancypagestyle{plain}{\fancyhf{}%
+  \renewcommand{\headrulewidth}{0pt}\renewcommand{\footrulewidth}{0.4pt}%
+  \fancyfoot[R]{\color{greenline}\textbf{page \thepage}}%
+  \fancyfoot[L]{\color{maincolor}\titredoc}}
+
+% ================================================ titres sans titlesec =======
+% Bandeau : filet bleu pleine largeur, titre vert en dessous. Utilisé seul
+% pour les pages non numérotées (objet, sommaire) et par \section.
+\newcommand{\titrebandeau}[1]{%
+  \noindent{\color{financeblue}\rule{\linewidth}{2.5pt}}
+  \par\vspace{5mm}
+  {\color{greenline}\raggedright\fontsize{19}{23}\bfseries\selectfont #1\par}
+  \vspace{6mm}}
+
+% Numéros de titre : aucun pour \section (le numéro ne figure qu'au
+% sommaire et dans l'en-tête), 0,7 em puis 0,6 em d'écart ensuite.
+\def\@seccntformat#1{\csname charte@num@#1\endcsname}
+\def\charte@num@section{}
+\def\charte@num@subsection{\strut\thesubsection\hspace{0.7em}}
+\def\charte@num@subsubsection{\strut\thesubsubsection\hspace{0.6em}}
+\def\charte@num@paragraph{\theparagraph\quad}
+\def\charte@num@subparagraph{\thesubparagraph\quad}
+
+% \@startsection passe le titre, entre accolades, à la dernière commande de
+% son argument de style. Pour \section, cette commande est \charte@bandeau :
+% une ligne vide (étai) au-dessus du bandeau et une autre en dessous, et un
+% étai dans chaque ligne, comme la forme « display » de titlesec avec
+% étiquette vide.
+\newcommand{\charte@bandeau}[1]{%
+  \parindent\z@ \everypar{\strut}%
+  {\strut\par}\nobreak
+  \titrebandeau{#1}\nobreak
+  \kern\z@\strut\par}
+% Titres en ligne : un étai en fin de titre (le premier est dans le numéro).
+\newcommand{\charte@etai}[1]{\charte@etai@#1}
+\def\charte@etai@#1\@@par{#1\kern\z@\strut\@@par}
+\renewcommand{\section}{\@startsection{section}{1}{\z@}%
+  {\z@}{1sp}{\normalfont\charte@bandeau}}
+% Espacements : ceux de titlesec, soit 3,25 ex (+1 ex, -0,2 ex) avant et
+% 1,5 ex (+0,2 ex) après, l'ex étant celui que titlesec mémorise au
+% chargement (Computer Modern à 11 pt, soit 4,71341 pt).
+\newdimen\charte@ex \charte@ex=4.71341pt
+\newskip\charte@avanttitre
+\charte@avanttitre=-3.25\charte@ex \@plus -1\charte@ex \@minus -.2\charte@ex
+\newskip\charte@aprestitre
+\charte@aprestitre=1.5\charte@ex \@plus .2\charte@ex
+\renewcommand{\subsection}{\@startsection{subsection}{2}{\z@}%
+  {\charte@avanttitre}{\charte@aprestitre}%
+  {\normalfont\large\bfseries\color{financeblue}\charte@etai}}
+\renewcommand{\subsubsection}{\@startsection{subsubsection}{3}{\z@}%
+  {\charte@avanttitre}{\charte@aprestitre}%
+  {\normalfont\normalsize\bfseries\color{financeblue}\charte@etai}}
+
+% ================================================ sommaire sans tocloft ======
+% Sections : gras bleu, numéro sur 2,2 em, numéro de page bleu (maigre),
+% sans points de conduite. Sous-sections : retrait 1,5 em, numéro sur 2,3 em,
+% points de conduite. L'em est celui que tocloft mémorisait au chargement
+% (10,88788 pt), pour un sommaire identique au document source.
+\newdimen\charte@em \charte@em=10.88788pt
+\renewcommand*{\l@section}[2]{%
+  \ifnum\c@tocdepth>\z@
+    \addpenalty\@secpenalty
+    \addvspace{1.0\charte@em \@plus\p@}%
+    \setlength\@tempdima{2.2\charte@em}%
+    \begingroup
+      \parindent\z@ \rightskip\@pnumwidth
+      \parfillskip -\@pnumwidth
+      \leavevmode
+      \advance\leftskip\@tempdima
+      \hskip -\leftskip
+      {\bfseries\color{financeblue}#1}\nobreak\hfil\nobreak
+      \hb@xt@\@pnumwidth{\hss\color{financeblue}#2}\par
+    \endgroup
+  \fi}
+\renewcommand*{\l@subsection}{\@dottedtocline{2}{1.5\charte@em}{2.3\charte@em}}
+\setcounter{tocdepth}{2}
+
+% ================================================ environnements de texte ====
+\newcommand{\code}[1]{\texttt{\small #1}}
+\newcommand{\refl}[1]{{\small\textcolor{maincolor!70!black}{\textit{Référence.} #1}}\par\smallskip}
+
+% Encadré de citation réglementaire : filet vertical bleu en marge.
+\newcommand{\reglement}[2]{%
+  \par\vspace{2mm}\noindent\begin{minipage}{\linewidth}
+  \small\setlength{\parindent}{0pt}
+  \textcolor{financeblue}{\vrule width 2pt}\hspace{4mm}%
+  \begin{minipage}{\dimexpr\linewidth-7mm\relax}
+  \textcolor{financeblue}{\textbf{#1}}
+  \par\vspace{2pt}
+  {\itshape #2}
+  \end{minipage}
+  \end{minipage}\par\vspace{3mm}}
+
+% Encadré générique : fond gris, marge intérieure 6 mm à gauche et 10 pt à
+% droite, 4 pt en haut et en bas, 3 mm avant (sauf après un titre) et
+% après ; premier paragraphe non
+% indenté. Sécable entre pages (framed).
+\newenvironment{encadre}{%
+  \def\FrameCommand##1{{\setlength{\fboxsep}{\z@}%
+    \colorbox{tablerow}{\hspace*{6mm}%
+      \vbox{\vskip4pt\setbox\@tempboxa\hbox{##1}\dp\@tempboxa\z@
+            \box\@tempboxa\vskip4pt}\hspace*{10pt}}}}%
+  \@ifundefined{OuterFrameSep}{}{\setlength{\OuterFrameSep}{\z@}}%
+  \topsep\z@ \partopsep\z@ % framed antérieur à 0.96 : espacement via \topsep
+  \par
+  \if@nobreak\else\vskip 3mm\fi
+  \nointerlineskip
+  \MakeFramed{\advance\hsize-\width \FrameRestore
+    \everypar{{\setbox\z@\lastbox}\everypar{}}}}%
+  {\endMakeFramed\par
+   \vskip 3mm\prevdepth 4pt
+   \global\@nobreakfalse\global\@endpetrue}
+
+% Fiches : six rubriques fixes. À ADAPTER : intitulés des rubriques (ici,
+% ceux d'une fiche de test statistique).
+\newcounter{ficheid}
+\newenvironment{fiche}[1]{%
+  \stepcounter{ficheid}%
+  \phantomsection
+  \subsection{#1}%
+  \label{fiche:\theficheid}%
+}{%
+  \end{rubriques}\vspace{0.5em}%
+}
+% Liste des rubriques : aucun retrait ; l'intitulé fait partie du
+% paragraphe (ses espaces se justifient avec la ligne, comme le style
+% « unboxed » d'enumitem), suivi d'un écart fixe \labelsep.
+\newenvironment{rubriques}{%
+  \list{}{\setlength{\leftmargin}{\z@}\setlength{\labelwidth}{\z@}%
+          \setlength{\itemindent}{\z@}%
+          \setlength{\itemsep}{3pt}\setlength{\topsep}{3pt}%
+          \setlength{\parsep}{2pt}%
+          \let\makelabel\@gobble}}{\endlist}
+\newcommand{\rubrique}[1]{%
+  \item[]\textcolor{financeblue}{\textbf{#1}}\hskip\labelsep\ignorespaces}
+\newcommand{\Cadre}{%
+  \begin{rubriques}%
+  \rubrique{1. Cadre, notations et hypothèses de validité (non testées).}}
+\newcommand{\Hzero}{\rubrique{2. Hypothèse nulle.}}
+\newcommand{\Stat}{\rubrique{3. Statistique de test.}}
+\newcommand{\Loi}{\rubrique{4. Loi sous $H_0$.}}
+\newcommand{\Pval}{\rubrique{5. p-value.}}
+\newcommand{\Usage}{\rubrique{6. Usage et limites.}}
+
+% Titre de partie : un filet bleu, « Partie » en petites capitales, titre
+% vert.
+\newcommand{\partie}[2]{%
+  \clearpage
+  \vspace*{1cm}
+  \noindent{\color{financeblue}\rule{\linewidth}{2pt}}\par\vspace{3mm}
+  {\color{financeblue}\raggedright\normalsize\bfseries\scshape #1\par}
+  \vspace{1.5mm}
+  {\color{greenline}\raggedright\fontsize{20}{24}\bfseries\selectfont #2\par}
+  \vspace{5mm}
+  \addcontentsline{toc}{section}{\protect\numberline{}\textsc{#1} --- #2}}
+
+% ================================================ page de garde sans TikZ ====
+% \charte@surpage{<matériel vertical>} superpose, sur la prochaine page
+% expédiée, un contenu placé depuis le coin supérieur gauche du papier
+% (atbegshi : fonctionne avec les noyaux LaTeX anciens comme récents).
+\newcommand{\charte@surpage}[1]{%
+  \AtBeginShipoutNext{%
+    \global\setbox\AtBeginShipoutBox\vbox{\offinterlineskip
+      \vbox to\z@{\kern-1in\kern-\voffset
+        \hbox to\z@{\kern-1in\kern-\hoffset
+          \vbox to\z@{#1\vss}\hss}\vss}%
+      \box\AtBeginShipoutBox}}}
+% Trois filets : bleu de 3,2 à 3,28 cm du haut avec amorce verte de 5 cm,
+% bleu de 3,6 à 3,53 cm du bas, entre les marges de 2,5 cm.
+% \leavevmode ouvre le paragraphe comme le faisait la figure TikZ du document
+% source : la mention d'en-tête se place ainsi au-dessus du filet, en retrait.
+\newcommand{\filetsgarde}{%
+  \charte@surpage{%
+    \kern3.2cm
+    \moveright2.5cm\hbox{\color{financeblue}%
+      \rule{\dimexpr\paperwidth-5cm\relax}{0.08cm}}%
+    \kern-0.08cm
+    \moveright2.5cm\hbox{\color{greenline}\rule{5cm}{0.08cm}}%
+    \kern\dimexpr\paperheight-3.6cm-3.28cm\relax
+    \moveright2.5cm\hbox{\color{financeblue}%
+      \rule{\dimexpr\paperwidth-5cm\relax}{0.07cm}}}%
+  \leavevmode}
+
+% ================================================ pages en paysage ===========
+% lscape tourne le contenu ; comme pdflscape, on ajoute /Rotate 90 aux pages
+% concernées pour qu'elles s'affichent à l'endroit à l'écran.
+\newif\ifcharte@paysage
+\apptocmd{\landscape}{\global\charte@paysagetrue}{}{}
+\apptocmd{\endlandscape}{\global\charte@paysagefalse}{}{}
+\AtBeginShipout{%
+  \ifcharte@paysage\global\pdfpageattr{/Rotate 90}%
+  \else\global\pdfpageattr{}\fi}
+
+\makeatother
+
+\emergencystretch=1.5em
+
+\begin{document}
+
+% ============================================================ page de garde ==
+\thispagestyle{empty}
+\filetsgarde
+\vspace*{2.1cm}
+\noindent
+{\color{financeblue}\normalsize\bfseries\scshape Édition \annee}
+
+\vspace{1.7cm}
+\noindent
+{\color{financeblue}\fontsize{28}{34}\bfseries\selectfont
+ Titre principal\\ du document\par}
+
+\vspace{1.1cm}
+\noindent
+{\color{black}\Large
+ Sous-titre sur une première ligne\\
+ Sous-titre sur une seconde ligne\par}
+
+\vspace{0.7cm}
+\noindent
+{\color{black}\normalsize\itshape
+ Mention de cadrage --- texte de référence, périmètre ou version du code\par}
+
+\vfill
+\noindent
+{\footnotesize\color{black}
+ Établie le \datedoc\quad\textbar\quad Version \versiondoc\quad\textbar\quad
+ Statut~: \statutdoc\quad\textbar\quad Référence \code{chemin/du/fichier}\par}
+\vspace{2.6cm}
+\clearpage
+
+% ================================================================= objet ====
+\titrebandeau{Objet du document}
+\markboth{Objet du document}{}
+
+\noindent
+Ce gabarit reproduit la \textbf{charte graphique} de la documentation
+du projet. Chaque élément de la charte y figure
+une fois, dans son contexte d'usage~: page de garde, page d'objet, sommaire,
+titres de partie, de section et de sous-section, fiches de test, encadrés,
+citations réglementaires, tableaux, tableau long en paysage et figure
+légendée.
+
+\medskip\noindent
+Il est organisé en trois parties. La \textbf{partie~I} présente la palette,
+la typographie et les niveaux de titre. La \textbf{partie~II} montre les
+blocs de texte (encadrés, citations, références, listes) et les tableaux. La
+\textbf{partie~III} donne le modèle de fiche de test et de figure, puis la
+table de correspondance des packages remplacés.
+
+\vspace{8mm}
+\reglement{Article 1\textsuperscript{er} du texte de référence}{Extrait
+cité du texte de référence, en italique, précédé de son intitulé en gras bleu
+et bordé d'un filet vertical en marge.}
+
+\vspace{6mm}
+\noindent
+\begin{center}
+\small
+\rowcolors{2}{tablerow}{white}
+\begin{tabular}{@{}p{5.2cm}p{9.6cm}@{}}
+\rowcolor{tableheader}
+\textcolor{financeblue}{\textbf{Élément}} & \textcolor{financeblue}{\textbf{Référence}} \\
+Texte de référence & Intitulé du texte, articles concernés\fsp; annexes \\
+Cahier des charges & \code{docs/exigences.md} \\
+Module de calcul & \code{<module de calcul>} \\
+Paramètre principal & $n = 100$ observations \\
+\end{tabular}
+\end{center}
+
+\clearpage
+\titrebandeau{Sommaire}
+\markboth{Sommaire}{}
+% \tableofcontents composerait son propre titre, en doublon avec le bandeau :
+% on n'appelle que \@starttoc, qui compose les entrées seules.
+\makeatletter
+\@starttoc{toc}
+\makeatother
+\newpage
+
+
+\partie{Partie I}{Identité visuelle}
+
+% =============================================================================
+\section{Palette et typographie}
+\label{sec:palette}
+% =============================================================================
+
+\subsection{Couleurs}
+
+La charte repose sur deux couleurs d'identité et deux gris de tableau. Le bleu
+porte la structure (filets, titres de sous-section, liens, étiquettes), le
+vert porte l'accent (titres de section et de partie, numéro de page, sorties).
+
+\begin{center}
+\small
+\rowcolors{2}{tablerow}{white}
+\begin{tabular}{@{}p{3.0cm}p{2.6cm}p{1.4cm}p{7.0cm}@{}}
+\rowcolor{tableheader}
+\textcolor{financeblue}{\textbf{Nom}} &
+\textcolor{financeblue}{\textbf{RVB}} &
+\textcolor{financeblue}{\textbf{Aperçu}} &
+\textcolor{financeblue}{\textbf{Usage}} \\
+\code{financeblue} & 0, 70, 140 & \textcolor{financeblue}{\rule{1cm}{2.2ex}} &
+Filets, titres de sous-section, sommaire, liens, rubriques de fiche \\
+\code{maincolor} & 0, 70, 140 & \textcolor{maincolor}{\rule{1cm}{2.2ex}} &
+En-tête, pied de page, étiquettes de légende, références \\
+\code{greenline} & 0, 180, 80 & \textcolor{greenline}{\rule{1cm}{2.2ex}} &
+Titres de section et de partie, numéro de page, amorce de la page de garde \\
+\code{tableheader} & 200, 220, 250 & \textcolor{tableheader}{\rule{1cm}{2.2ex}} &
+Ligne d'en-tête des tableaux \\
+\code{tablerow} & 245, 245, 245 & \textcolor{tablerow}{\rule{1cm}{2.2ex}} &
+Lignes alternées des tableaux, fond des encadrés \\
+\end{tabular}
+\end{center}
+
+\subsection{Typographie}
+
+Le texte courant est composé en Termes (clone de Times), corps 11~pt,
+interligne multiplié par 1,08\fsp; le code, en \code{txtt}, via la macro
+\code{\textbackslash code\{\}}\fsp; les mathématiques restent en Computer Modern,
+par exemple $\bar x = \frac{1}{n}\sum_{i=1}^{n} x_i$.
+
+\subsubsection{Niveau de sous-sous-section}
+
+Troisième niveau de titre, en gras bleu au corps du texte. Il n'apparaît pas
+au sommaire (profondeur limitée à deux niveaux).
+
+\subsection{Niveaux de titre}
+
+\begin{itemize}[itemsep=2pt]
+\item \textbf{Partie}~: \code{\textbackslash partie\{Partie I\}\{Titre\}},
+  nouvelle page, filet bleu, mention en petites capitales, titre vert.
+\item \textbf{Section}~: \code{\textbackslash section\{Titre\}}, bandeau
+  (filet bleu épais, titre vert en 19~pt), numéro visible seulement au
+  sommaire et dans l'en-tête.
+\item \textbf{Sous-section et sous-sous-section}~: gras bleu, numérotées.
+\item \textbf{Bandeau seul}~: \code{\textbackslash titrebandeau\{Titre\}}
+  suivi de \code{\textbackslash markboth\{Titre\}\{\}} pour une page non
+  numérotée (objet, sommaire).
+\end{itemize}
+
+
+\partie{Partie II}{Blocs de texte et tableaux}
+
+% =============================================================================
+\section{Encadrés, citations et listes}
+\label{sec:blocs}
+% =============================================================================
+
+\subsection{Encadré générique}
+
+L'encadré sert aux remarques de portée et aux extraits de code. Il se coupe
+entre deux pages si nécessaire.
+
+\begin{encadre}
+\small
+\code{donnees <- lire\_donnees("chemin/des/donnees")}\\
+\code{res <- calculer(donnees, methode = "standard", n = 100,}\\
+\code{\phantom{res <- calculer(}graine = 20260831)}\\
+\code{res\$resultat\_final \ \ ;\ \ tableau\_resultats(res)}
+\end{encadre}
+
+\begin{encadre}
+\textbf{Portée.} L'encadré de portée dit ce que l'outil fait et ce qu'il ne
+fait pas~: les cas du texte de référence qu'il ne couvre pas, et les méthodes
+qu'il met en \oe uvre.
+\end{encadre}
+
+\subsection{Citation réglementaire et référence}
+
+\refl{A.~Auteur, \emph{Titre de l'article}, \emph{Nom de la revue}, vol.(numéro),
+année, p.~1--26.}
+
+\reglement{Annexe, section A, paragraphe 2}{Second extrait du texte de
+référence.}
+
+\subsection{Listes}
+
+Liste à puces (tiret cadratin), avec un écart réglable par
+\code{[itemsep=...]}~:
+
+\begin{itemize}[itemsep=3pt]
+\item premier élément, sur une ligne\fsp;
+\item second élément, plus long, pour montrer l'alignement des lignes suivantes
+  sous le texte de l'élément et non sous la puce\fsp;
+  \begin{itemize}
+  \item élément de second niveau.
+  \end{itemize}
+\item dernier élément.
+\end{itemize}
+
+Liste numérotée~:
+
+\begin{enumerate}[itemsep=2pt]
+\item contrôle des données d'entrée\fsp;
+\item calcul\fsp;
+\item restitution des résultats.
+\end{enumerate}
+
+% =============================================================================
+\section{Tableaux}
+\label{sec:tableaux}
+% =============================================================================
+
+\subsection{Tableau courant}
+
+En-tête sur fond \code{tableheader} en gras bleu, lignes alternées
+\code{tablerow} et blanc, aucun filet vertical.
+
+\begin{center}
+\small
+\rowcolors{2}{tablerow}{white}
+\begin{tabular}{@{}p{4.3cm}p{5.1cm}p{5.4cm}@{}}
+\rowcolor{tableheader}
+\textcolor{financeblue}{\textbf{Fichier}} &
+\textcolor{financeblue}{\textbf{Contenu}} &
+\textcolor{financeblue}{\textbf{Interdit}} \\
+\code{<module de calcul>} & Logique métier, contrôles des données, calculs &
+Toute primitive d'interface \\
+\code{<point d'entrée>} & Saisie, déclenchement, agencement de l'interface &
+Tout calcul métier \\
+\code{<module d'affichage>} & Formatage des nombres, tableaux et tracés &
+Tout calcul \\
+\end{tabular}
+\end{center}
+
+\subsection{Tableau long en paysage}
+
+Les tableaux longs utilisent \code{longtable} et les filets \code{booktabs},
+en page paysage. Le tableau de la page suivante en montre la structure~:
+en-tête répété, mention de suite, intertitres de groupe en gras bleu.
+
+\begin{landscape}
+\begin{center}
+\scriptsize
+\setlength{\tabcolsep}{4.5pt}
+\renewcommand{\arraystretch}{1.22}
+\begin{longtable}{@{}p{4.4cm}p{0.9cm}p{5.7cm}p{7.8cm}p{2.1cm}@{}}
+\toprule
+\textbf{Élément (fiche)} & \textbf{Réf.} & \textbf{Fonction(s) --- calcul} &
+\textbf{Fonction(s) / méthode --- restitution} & \textbf{Clé} \\
+\midrule
+\endfirsthead
+\toprule
+\textbf{Élément (fiche)} & \textbf{Réf.} & \textbf{Fonction(s) --- calcul} &
+\textbf{Fonction(s) / méthode --- restitution} & \textbf{Clé} \\
+\midrule
+\endhead
+\multicolumn{5}{@{}l@{}}{\textit{Suite page suivante}} \\
+\endfoot
+\bottomrule
+\endlastfoot
+
+\multicolumn{5}{@{}l@{}}{\textbf{\textcolor{financeblue}{Groupe A --- intitulé du premier groupe}}} \\
+\midrule
+Premier élément & \ref{fiche:1} & \code{calcul\_a()} &
+\code{restitution\_a()} (formule exacte) & \code{A1} \\
+Deuxième élément & \ref{fiche:1} & \code{calcul\_b()} &
+\code{restitution\_b()} (approximation, loi $\chi^2$) & --- \\
+\midrule
+\multicolumn{5}{@{}l@{}}{\textbf{\textcolor{financeblue}{Groupe B --- intitulé du second groupe}}} \\
+\midrule
+Troisième élément & \ref{fiche:1} & \code{calcul\_c()} &
+\code{restitution\_c()} (simulation) & \code{C1} \\
+\end{longtable}
+\end{center}
+\end{landscape}
+
+
+\partie{Partie III}{Fiches, figures et notes de mise en \oe uvre}
+
+% =============================================================================
+\section{Fiche de test}
+\label{sec:fiche}
+% =============================================================================
+
+Chaque test fait l'objet d'une fiche en six rubriques fixes, ouverte par
+l'environnement \code{fiche} et la macro \code{\textbackslash Cadre}. Les
+rubriques suivantes sont appelées par \code{\textbackslash Hzero},
+\code{\textbackslash Stat}, \code{\textbackslash Loi}, \code{\textbackslash
+Pval} et \code{\textbackslash Usage}.
+
+\begin{fiche}{Intitulé de la fiche}
+\refl{A.~Auteur, \emph{Titre de l'ouvrage}, éditeur, année, p.~10--12.}
+\Cadre
+Données, notations et hypothèses sous lesquelles le test est valide, sans être
+vérifiées par lui~: un échantillon $x_1,\dots,x_n$ indépendant et de même loi.
+\Hzero
+$H_0 : \mu = \mu_0$.
+\Stat
+\[
+  T = \frac{\bar x - \mu_0}{s/\sqrt{n}}.
+\]
+\Loi
+Loi de $T$ sous $H_0$, exacte ou approchée, avec ses conditions.
+\Pval
+$p = 2\,\bigl(1 - F(|T_{\text{obs}}|)\bigr)$, $F$ fonction de répartition de la
+loi précédente.
+\Usage
+Domaine d'emploi, sensibilité aux hypothèses et limites connues\fsp; renvoi à
+la fonction du module de calcul qui le met en \oe uvre.
+\end{fiche}
+
+% =============================================================================
+\section{Figure légendée}
+\label{sec:figure}
+% =============================================================================
+
+Les figures sont placées à l'endroit exact de l'appel par l'environnement
+\code{figureH} (et \code{tableH} pour un tableau légendé)\fsp; les environnements
+flottants \code{figure} et \code{table} restent disponibles. L'étiquette de
+légende est en gras, en petites capitales et en couleur \code{maincolor}\fsp;
+une légende d'une ligne est centrée, une légende plus longue est justifiée
+(figure~\ref{fig:exemple}).
+
+\begin{figureH}
+\centering
+\fcolorbox{financeblue}{tablerow}{\begin{minipage}[c][4cm][c]{9cm}
+\centering\small\color{financeblue} Emplacement de la figure\\
+\code{\textbackslash includegraphics[width=...]\{fichier.pdf\}}
+\end{minipage}}
+\caption{Exemple de légende longue. Le texte de la légende est composé en
+romain au corps du texte, justifié sur toute la largeur\fsp; seule l'étiquette
+porte la couleur de la charte.}
+\label{fig:exemple}
+\end{figureH}
+
+\begin{figureH}
+\centering
+\fcolorbox{financeblue}{tablerow}{\begin{minipage}[c][2cm][c]{9cm}
+\centering\small\color{financeblue} Emplacement de la figure
+\end{minipage}}
+\caption{Légende courte, centrée.}
+\end{figureH}
+
+% =============================================================================
+\section{Notes de mise en \oe uvre}
+\label{sec:notes}
+% =============================================================================
+
+\subsection{Packages remplacés}
+
+\begin{center}
+\small
+\rowcolors{2}{tablerow}{white}
+\begin{tabular}{@{}p{3.0cm}p{11.8cm}@{}}
+\rowcolor{tableheader}
+\textcolor{financeblue}{\textbf{Package retiré}} &
+\textcolor{financeblue}{\textbf{Remplacement}} \\
+\code{newtxtext} & \code{tgtermes} (repli sur \code{ptm}) pour le texte,
+\code{txtt} pour le code \\
+\code{babel-french} & Césure française, \code{\textbackslash frenchspacing},
+libellés, date, retrait du premier paragraphe, puces et espacement des
+listes, réglés dans le préambule \\
+\code{csquotes} & Guillemets « » saisis directement (codage T1) \\
+\code{caption} & Redéfinition de \code{\textbackslash @makecaption} \\
+\code{float} & Environnements \code{figureH} et \code{tableH} (bloc non flottant) \\
+\code{enumitem} & \code{itemize} et \code{enumerate} redéfinis, clés
+\code{itemsep}, \code{topsep}, \code{parsep}, \code{leftmargin}\fsp; liste
+\code{rubriques} pour les fiches \\
+\code{mdframed} & \code{framed}, avec cadre sur mesure \\
+\code{titlesec} & \code{\textbackslash @startsection} et
+\code{\textbackslash @seccntformat} \\
+\code{tocloft} & Redéfinition de \code{\textbackslash l@section} \\
+\code{pdflscape} & \code{lscape} et \code{/Rotate 90} ajouté aux pages paysage (\code{atbegshi}) \\
+\code{tikz} & Filets de la page de garde superposés à la page par
+\code{atbegshi} (sans crochet du noyau récent) \\
+\code{dsfont}, \code{mathrsfs} & Non utilisés\fsp; \code{\textbackslash mathbb}
+(amssymb) reste disponible \\
+\end{tabular}
+\end{center}
+
+\subsection{Ponctuation}
+
+Sans babel-french, l'espace qui précède les signes doubles n'est plus
+ajoutée automatiquement, et une espace ordinaire saisie avant eux autorise
+une coupure de ligne malvenue. On saisit donc \code{\textasciitilde:} pour le
+deux-points (espace insécable) et \code{\textbackslash fsp;},
+\code{\textbackslash fsp!}, \code{\textbackslash fsp?} pour les autres
+signes (espace fine insécable)\fsp; les guillemets « » se saisissent
+directement, avec des espaces ordinaires à l'intérieur.
+
+\end{document}
