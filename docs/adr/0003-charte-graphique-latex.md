@@ -67,3 +67,10 @@ Les raisons ci-dessous sont celles que la session a exposées au moment du choix
   - **compatibilité ancienne** : annoncée par la charte, non mesurée sur MiKTeX 2.9 ni sur TeX Live 2012.
 
 Issues : #8, #9 (suites ; PR #7, branche `claude/charte-latex`, ouverte à la demande du mainteneur hors branche de travail).
+
+
+## Annotation du 7 novembre 2026 (cadrage d'`outil_prov_vie`, Q24)
+
+Décision du mainteneur à l'entretien de cadrage (`docs/cadrage/2026-11-07-entretien-cadrage.md`, Q13 et Q24) : la documentation LaTeX du projet reprend la **charte graphique de `docu_actu` dans sa version courante**, qui a évolué depuis la version neutralisée du dépôt modèle. Le fichier `docs/latex/charte_graphique.tex` est donc remplacé par celui de `Gerard-Garey/docu_actu` au commit `a440e6a` (1 061 lignes contre 788 ; 421 lignes de différence mesurées par `diff | grep -c "^[<>]"`), à une ligne près : le commentaire d'en-tête qui renvoyait au script de contrôle du préambule de `docu_actu` (`outils/controles.sh`, contrôle 4) renvoie à la présente annotation, ce script n'existant pas encore ici (issue #9 du dépôt modèle, à reprendre).
+
+Ce que la version courante apporte, relevé sur le diff : passages adaptables bornés par les lignes `% >>> À ADAPTER : <objet>` et `% <<< À ADAPTER` (comparables par script) ; métadonnées `\auteurdoc` et `\datedroit` ; réserve avant un titre (`\charte@reserve`), qui envoie un titre en bas de page à la page suivante quand moins de trois lignes le suivraient ; bloc « Macros du dépôt » (`\src`, statuts de vérification des sources, rubriques de la fiche modèle), inactif sans fichier `statuts_sources.tex` (garde `\IfFileExists`). Les points 2 et 6 de la décision restent (préambule repris sans modification hors passages « À ADAPTER ») ; le corps d'exemple sera remplacé par le contenu de `docs/latex/doc_outil_prov_vie.tex` (E3.1). Compilation de la version copiée non mesurée dans ce dépôt (aucune TeX Live sur le poste de la session) : à faire par la première branche documentaire, avec le job de compilation en CI (#8 du modèle, à reprendre).

@@ -1,6 +1,6 @@
 # Routage du modèle et de l'effort des agents
 
-Politique appliquée par la session principale quand elle consulte `architect` ou `expert` (et toute fiche d'expert dupliquée). Décision : ADR 0001. Les agents de réalisation et de vérification (`coder`, `docwriter`, `audit`, `app-review`) suivent une règle plus simple, au § 10 (ADR 0002).
+Politique appliquée par la session principale quand elle consulte `architect`, `actuary` ou `regulatory`. Décision : ADR 0001. Les agents de réalisation et de vérification (`coder`, `docwriter`, `audit`, `app-review`) suivent une règle plus simple, au § 10 (ADR 0002).
 
 **Point de départ, pas politique figée.** Les valeurs ci-dessous sont celles du modèle de dépôt. Chaque projet créé à partir du modèle les adapte à son domaine, à son architecture et à ses risques (passages **À ADAPTER**, § 9), puis les réévalue à mesure qu'il évolue (§ 8).
 
@@ -18,9 +18,9 @@ Le paramètre `model` d'un appel `Agent` l'emporte sur le `model` de la fiche. L
 
 | Fiche | Modèle servi | Effort | `maxTurns` | Usage |
 |---|---|---|---|---|
-| `architect`, `expert` | `opus` | `medium` | 40 | routine (§ 3) |
-| `architect-approfondi`, `expert-approfondi` | `opus` | `high` | 80 | jugement (§ 3) |
-| `architect-approfondi`, `expert-approfondi` appelées avec `model: "fable"` | Fable (fiche : `opus`, l'appel l'emporte) | `high` | 80 | cas du § 4.1, ou accord du mainteneur |
+| `architect`, `actuary`, `regulatory` | `opus` | `medium` | 40 | routine (§ 3) |
+| `architect-approfondi`, `actuary-approfondi`, `regulatory-approfondi` | `opus` | `high` | 80 | jugement (§ 3) |
+| `architect-approfondi`, `actuary-approfondi`, `regulatory-approfondi` appelées avec `model: "fable"` | Fable (fiche : `opus`, l'appel l'emporte) | `high` | 80 | cas du § 4.1, ou accord du mainteneur |
 
 - Les fiches `-approfondi` sont **générées** par `bash .claude/outils/fiches_jumelles.sh` à partir de la fiche de base : seul le frontmatter diffère (nom, description, effort, `maxTurns` et, pour `coder`, le modèle). Ne jamais les modifier à la main ; la CI vérifie la concordance (`--verifier`). La liste des rôles dédoublés est la variable `ROLES` du script (**À ADAPTER** : un expert dupliqué y est ajouté) ; elle comprend aussi `coder`, dont la fiche `-approfondi` a ses propres paramètres (fonction `parametres` du script, § 10).
 - Fable en `xhigh` ou `max` : jamais sans accord explicite du mainteneur (il faudrait alors une troisième fiche, à créer sur décision). Fable en `medium` (fiche de base appelée avec `model: "fable"`) : sur indication explicite du mainteneur seulement.
@@ -39,9 +39,9 @@ Le paramètre `model` d'un appel `Agent` l'emporte sur le `model` de la fiche. L
 | architect | Issue sensible : ADR, invariant de `CLAUDE.md` ou contrat partagé touché | § 4.2 | jugement | ADR et invariants cités, effet sur les contrats, branches touchées | § 4.1 ; sinon Fable **proposé** | avis rendu, ou décision du mainteneur |
 | architect | Rédaction d'un ADR **d'architecture** (couches, invariants, contrats) | — | **Fable** (routage initial) | contexte, options écartées, conséquences | décision du mainteneur | ADR proposé |
 | architect | Rédaction d'un ADR d'organisation (Git, processus, outillage) | — | jugement | idem | idem | idem |
-| expert | Validation après audit, sans changement de résultat | — | routine | diff, rapport d'audit, verdict référencé | relance ciblée si une preuve manque | verdict |
-| expert | Validation avec tableau avant / après (hors résultat final ou verdict) ; conformité à une source ; spécification ou plan | — | jugement | citation précise (texte, article, paragraphe) ou mesure exécutée ; chaque conclusion marquée vérifiée / hypothèse / non vérifiée | § 4.1 ; deux lectures → § 4.4 | verdict, matrice ou plan complet |
-| expert | Nouvelle approche, méthode nouvelle | au moins deux options sans preuve qui départage | jugement | options, apport de chacune, références retrouvées | **arbitrage du mainteneur** ; Fable seulement à sa demande ou par § 4.1 | options décrites |
+| actuary, regulatory | Validation après audit, sans changement de résultat | — | routine | diff, rapport d'audit, verdict référencé | relance ciblée si une preuve manque | verdict |
+| actuary, regulatory | Validation avec tableau avant / après (hors résultat final ou verdict) ; conformité à une source ; spécification ou plan | — | jugement | citation précise (texte, article, paragraphe) ou mesure exécutée ; chaque conclusion marquée vérifiée / hypothèse / non vérifiée | § 4.1 ; deux lectures → § 4.4 | verdict, matrice ou plan complet |
+| actuary, regulatory | Nouvelle approche, méthode nouvelle | au moins deux options sans preuve qui départage | jugement | options, apport de chacune, références retrouvées | **arbitrage du mainteneur** ; Fable seulement à sa demande ou par § 4.1 | options décrites |
 | tous | Changement d'un résultat final ou d'un verdict | tableau avant / après | jugement | tableau avant / après, lignes expliquées | Fable **seulement sur décision du mainteneur** | visa du mainteneur |
 
 Mission absente de la matrice (par exemple révision globale, relecture d'une PR, revue de fond avant livraison) : jugement par défaut ; la session principale propose de l'ajouter à la matrice au point d'étape suivant.
@@ -131,7 +131,7 @@ Un signal auto-déclaré (difficulté ressentie, note de confiance) complète l'
 
 ## 6. Retour structuré des agents
 
-Chaque consultation se termine par un bloc « Retour » (fiches `architect` et `expert`, section « Retour ») : statut (`complet`, `partiel`, `revue requise`), résultat, preuves (chaque conclusion vérifiée / hypothèse / non vérifiée), informations manquantes, décisions non résolues, critères déclenchés (§ 4), prochaine action recommandée. `architect` y ajoute le tableau de couverture du lot et les dépendances modifiées. `complet` exige toutes les preuves prévues au § 3 ; sinon la session principale requalifie en `partiel` (§ 5.1).
+Chaque consultation se termine par un bloc « Retour » (fiches `architect`, `actuary` et `regulatory`, section « Retour ») : statut (`complet`, `partiel`, `revue requise`), résultat, preuves (chaque conclusion vérifiée / hypothèse / non vérifiée), informations manquantes, décisions non résolues, critères déclenchés (§ 4), prochaine action recommandée. `architect` y ajoute le tableau de couverture du lot et les dépendances modifiées. `complet` exige toutes les preuves prévues au § 3 ; sinon la session principale requalifie en `partiel` (§ 5.1).
 
 ## 7. Traçabilité
 
@@ -142,8 +142,8 @@ Chaque consultation se termine par un bloc « Retour » (fiches `architect` et `
 
 ## 8. Calibration et retour arrière
 
-- **Calibration** : après les dix premières consultations `architect` et `expert` d'un projet, puis à chaque point d'étape d'`architect`, relire le bilan du journal et les lignes d'escalade des PR : part des relances ciblées (fiches trop légères ?), escalades vers Fable et leur apport réel, contexte au dernier appel (lectures trop larges ?). Ajuster les seuils et efforts par un commit `claude:` motivé ; une réorientation durable s'annote dans l'ADR 0001.
-- **Retour au comportement antérieur** (Fable pour tout), sur décision du mainteneur : de préférence, annuler le commit de fusion de la PR qui a introduit la politique (`git revert -m 1 <sha>`), puis rétablir l'ADR 0001 (que l'annulation supprime) avec une annotation datée « Politique abandonnée le … » (ou `superseded by NNNN` si un nouvel ADR consigne le retour) ; dans un projet créé depuis le modèle, qui n'a pas ce commit, ou à défaut, à la main : remettre `model: fable` dans `architect.md` et `expert.md`, retirer `effort` et `maxTurns`, retirer `architect` et `expert` de `ROLES` dans `.claude/outils/fiches_jumelles.sh`, supprimer leurs fiches `-approfondi`, retirer de `CLAUDE.md` le paragraphe « Routage du modèle et de l'effort », et annoter l'ADR 0001.
+- **Calibration** : après les dix premières consultations `architect`, `actuary` et `regulatory` d'un projet, puis à chaque point d'étape d'`architect`, relire le bilan du journal et les lignes d'escalade des PR : part des relances ciblées (fiches trop légères ?), escalades vers Fable et leur apport réel, contexte au dernier appel (lectures trop larges ?). Ajuster les seuils et efforts par un commit `claude:` motivé ; une réorientation durable s'annote dans l'ADR 0001.
+- **Retour au comportement antérieur** (Fable pour tout), sur décision du mainteneur : de préférence, annuler le commit de fusion de la PR qui a introduit la politique (`git revert -m 1 <sha>`), puis rétablir l'ADR 0001 (que l'annulation supprime) avec une annotation datée « Politique abandonnée le … » (ou `superseded by NNNN` si un nouvel ADR consigne le retour) ; dans un projet créé depuis le modèle, qui n'a pas ce commit, ou à défaut, à la main : remettre `model: fable` dans `architect.md`, `actuary.md` et `regulatory.md`, retirer `effort` et `maxTurns`, retirer `architect`, `actuary` et `regulatory` de `ROLES` dans `.claude/outils/fiches_jumelles.sh`, supprimer leurs fiches `-approfondi`, retirer de `CLAUDE.md` le paragraphe « Routage du modèle et de l'effort », et annoter l'ADR 0001.
 
 ## 9. Adapter la politique à un projet
 
@@ -152,7 +152,7 @@ Emplacements réellement lus :
 | Emplacement | Ce qu'on y adapte |
 |---|---|
 | `docs/agents/routage.md` (ce fichier) | matrice (§ 3), seuils et contrats partagés (§ 4.2, § 4.3), plafonds (§ 5.2) |
-| frontmatter de `architect.md` et `expert.md` | effort et `maxTurns` de routine ; le script reprend leur modèle, leurs outils et leur corps dans les fiches `-approfondi` |
+| frontmatter de `architect.md`, `actuary.md` et `regulatory.md` | effort et `maxTurns` de routine ; le script reprend leur modèle, leurs outils et leur corps dans les fiches `-approfondi` |
 | `.claude/outils/fiches_jumelles.sh`, variables `ROLES`, `EFFORT_APPROFONDI`, `TOURS_APPROFONDI`, fonction `parametres` | rôles dédoublés (experts supplémentaires), effort et plafond de jugement ; paramètres propres à un rôle (`coder-approfondi`, § 10) |
 | frontmatter de `coder.md`, `audit.md`, `docwriter.md`, `app-review.md` | modèle et effort des agents de réalisation et de vérification (§ 10) |
 | `CLAUDE.md`, « Sous-agents » | renvoi à ce fichier ; règles qui priment (§ 5.5, rang 1) ; liste du § 4.1, plafonds du § 5.2 et règles du § 10, recopiés : à tenir identiques |

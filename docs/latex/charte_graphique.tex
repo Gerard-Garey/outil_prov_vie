@@ -3,8 +3,11 @@
 % =============================================================================
 %  Charte graphique des documents LaTeX du projet (gabarit commenté).
 %  Le préambule fixe la mise en forme ; le corps montre chaque élément une fois
-%  et se remplace par le contenu du document. Les passages propres au projet
-%  sont marqués « À ADAPTER ».
+%  et se remplace par le contenu du document. Un document reprend le préambule
+%  sans modification, hors des passages bornés par les deux lignes
+%  « % >>> À ADAPTER : <objet> » et « % <<< À ADAPTER » (comparaison par
+%  script : à créer, ADR 0003 annoté le 7 novembre 2026). Le bloc « Macros du dépôt »,
+%  en fin de préambule, porte \src et les rubriques de la fiche modèle.
 %  Version sans : babel-french, caption, csquotes, dsfont, enumitem, float,
 %  mathrsfs, mdframed, newtxtext, pdflscape, tikz/pgf, titlesec, tocloft.
 %  Moteur : pdfLaTeX. Compatible avec les distributions anciennes
@@ -53,15 +56,21 @@
 \definecolor{tablerow}{RGB}{245,245,245}
 \definecolor{financeblue}{RGB}{0,70,140}
 
-% À ADAPTER : métadonnées du document (page de garde, pied de page, PDF).
+% >>> À ADAPTER : métadonnées du document (page de garde, pied de page, PDF)
+% Dans un guide, \datedoc est une date figée (jamais \today) et \statutdoc
+% vaut Projet ou Final ; \datedroit est la date de référence du droit.
 \newcommand{\annee}{2026}
 \newcommand{\datedoc}{\today}
 \newcommand{\versiondoc}{1.0}
 \newcommand{\statutdoc}{Projet}
 \newcommand{\titredoc}{Titre court du document}
+\newcommand{\auteurdoc}{Prénom Nom}
+\newcommand{\datedroit}{1\textsuperscript{er} octobre 2026}
 
 \hypersetup{colorlinks=true, linkcolor=financeblue, urlcolor=financeblue,
-            citecolor=financeblue, pdftitle={Titre du document}}
+            citecolor=financeblue, pdftitle={Titre du document},
+            pdfauthor={\auteurdoc}}
+% <<< À ADAPTER
 
 \makeatletter
 
@@ -235,11 +244,34 @@
   \parindent\z@ \everypar{\strut}%
   {\strut\par}\nobreak
   \titrebandeau{#1}\nobreak
-  \kern\z@\strut\par}
+  \kern\z@\nobreak\strut\par}
 % Titres en ligne : un étai en fin de titre (le premier est dans le numéro).
 \newcommand{\charte@etai}[1]{\charte@etai@#1}
 \def\charte@etai@#1\@@par{#1\kern\z@\strut\@@par}
-\renewcommand{\section}{\@startsection{section}{1}{\z@}%
+% Réserve avant un titre : si le bas de la page ne peut plus recevoir le titre
+% et trois lignes de texte, le titre passe à la page suivante (M41 : aucun
+% titre en bas de page avec moins de trois lignes sous lui). La réserve
+% compte le titre lui-même et ses espaces (mesurés : bandeau de section
+% 7,4 lignes, sous-section 2,9 lignes), trois lignes et le cadre d'un
+% encadré qui suivrait : 12 lignes pour \section, 7 pour les autres. Logique de la
+% macro \Needspace* du package needspace, sans le charger : la place restante
+% est mesurée (\pagegoal - \pagetotal, après une pénalité nulle qui met la
+% page à jour) et le saut n'est forcé que si elle manque. La forme élastique
+% de \needspace, employée jusqu'ici, créait un point de coupure de faible
+% coût que TeX préférait à toute autre coupure dès qu'un bloc insécable
+% suivait (tableau, encadré), même avec la page aux trois quarts vide. Sans
+% effet juste après un autre titre (\if@nobreak), où elle créerait un point
+% de coupure sous ce titre, ni dans une boîte (\ifinner : minipage, \parbox),
+% où la page en cours ne la concerne pas.
+\newcommand{\charte@reserve}[1]{\par\ifinner\else\if@nobreak\else
+  \penalty\z@ % met à jour \pagetotal
+  \begingroup\setlength{\dimen@}{#1}%
+  \dimen@ii\pagegoal \advance\dimen@ii-\pagetotal
+  \ifdim\pagegoal=\maxdimen\else\ifdim\dimen@>\dimen@ii
+    \vfil\penalty-\@M % place insuffisante : page suivante
+  \fi\fi\endgroup\fi\fi}
+\renewcommand{\section}{\charte@reserve{12\baselineskip}%
+  \@startsection{section}{1}{\z@}%
   {\z@}{1sp}{\normalfont\charte@bandeau}}
 % Espacements : ceux de titlesec, soit 3,25 ex (+1 ex, -0,2 ex) avant et
 % 1,5 ex (+0,2 ex) après, l'ex étant celui que titlesec mémorise au
@@ -249,10 +281,12 @@
 \charte@avanttitre=-3.25\charte@ex \@plus -1\charte@ex \@minus -.2\charte@ex
 \newskip\charte@aprestitre
 \charte@aprestitre=1.5\charte@ex \@plus .2\charte@ex
-\renewcommand{\subsection}{\@startsection{subsection}{2}{\z@}%
+\renewcommand{\subsection}{\charte@reserve{7\baselineskip}%
+  \@startsection{subsection}{2}{\z@}%
   {\charte@avanttitre}{\charte@aprestitre}%
   {\normalfont\large\bfseries\color{financeblue}\charte@etai}}
-\renewcommand{\subsubsection}{\@startsection{subsubsection}{3}{\z@}%
+\renewcommand{\subsubsection}{\charte@reserve{7\baselineskip}%
+  \@startsection{subsubsection}{3}{\z@}%
   {\charte@avanttitre}{\charte@aprestitre}%
   {\normalfont\normalsize\bfseries\color{financeblue}\charte@etai}}
 
@@ -299,25 +333,121 @@
 % Encadré générique : fond gris, marge intérieure 6 mm à gauche et 10 pt à
 % droite, 4 pt en haut et en bas, 3 mm avant (sauf après un titre) et
 % après ; premier paragraphe non
-% indenté. Sécable entre pages (framed).
+% indenté. Sécable entre pages (framed), selon \charte@coupe ci-dessous. Le
+% cadre garde la profondeur de la boîte d'essai de framed : sa hauteur
+% mesurée est de 8 pt (elle valait -13,68 pt quand la profondeur était
+% annulée, et framed taillait le premier morceau trop grand pour la page).
 \newenvironment{encadre}{%
   \def\FrameCommand##1{{\setlength{\fboxsep}{\z@}%
     \colorbox{tablerow}{\hspace*{6mm}%
-      \vbox{\vskip4pt\setbox\@tempboxa\hbox{##1}\dp\@tempboxa\z@
-            \box\@tempboxa\vskip4pt}\hspace*{10pt}}}}%
+      \vbox{\vskip4pt\hbox{##1}\vskip4pt}\hspace*{10pt}}}}%
   \@ifundefined{OuterFrameSep}{}{\setlength{\OuterFrameSep}{\z@}}%
   \topsep\z@ \partopsep\z@ % framed antérieur à 0.96 : espacement via \topsep
   \par
-  \if@nobreak\else\vskip 3mm\fi
+  \if@nobreak\charte@sanscoupure\else\vskip 3mm\fi
   \nointerlineskip
-  \MakeFramed{\advance\hsize-\width \FrameRestore
+  \MakeFramed{\let\penalty\charte@penalite@ori
+    \advance\hsize-\width \FrameRestore
     \everypar{{\setbox\z@\lastbox}\everypar{}}}}%
-  {\endMakeFramed\par
+  {\global\let\fb@put@frame\charte@coupe % hors du groupe de la boîte
+   \global\charte@premiertrue
+   \endMakeFramed
+   \global\let\fb@put@frame\charte@putframe
+   \par
    \vskip 3mm\prevdepth 4pt
    \global\@nobreakfalse\global\@endpetrue}
 
-% Fiches : six rubriques fixes. À ADAPTER : intitulés des rubriques (ici,
-% ceux d'une fiche de test statistique).
+% Coupe de l'encadré (E3.7, M41), décidée à chaque placement d'un morceau,
+% avant la coupe de framed. Premier placement : un encadré court (hauteur
+% totale au plus \charte@encadrecourt) qui ne tient pas dans la place
+% restante est posé entier, et TeX coupe la page au dernier point de coupure
+% qui le précède : juste avant lui, ou avant le titre qu'il suit (aucun point
+% de coupure entre un titre et l'encadré : \charte@sanscoupure). Encadré
+% long : coupé, chaque morceau gardant au moins trois lignes, à chaque page
+% (page suivante si la place restante en tient moins ; page écourtée si le
+% reste en tiendrait moins). Exception : si des flottants attendent la page
+% suivante (\@deferlist) et que l'encadré court ne tient pas avec eux sur une
+% page, posé entier il déborderait ; il est alors coupé comme un encadré
+% long (M200). De même s'il commence en tête de page : il ne peut aller plus
+% loin, et la page peut déjà porter des flottants (M202). Un encadré coupé trop
+% court pour donner deux morceaux de trois lignes (hauteur du contenu, cadre
+% déduit, sous 5,5 interlignes : six lignes ou moins ; sept lignes se coupent
+% en trois et quatre) passe entier à la page suivante. Limites : tous les
+% flottants en attente sont comptés, même ceux qui n'iront pas sur la page
+% suivante ([p], [b] trop grand, \topnumber dépassé) : coupe parfois
+% inutile, avertie par le contrôle 13 ; sur une page qui porte un flottant
+% en tête, la coupe de framed peut déborder d'environ 1 pt (Overfull \vbox
+% mesuré jusqu'à 1,03 pt, toléré en AVERT par le contrôle 3 jusqu'à 1,5 pt,
+% M202).
+\newdimen\charte@encadrecourt \charte@encadrecourt=.5\textheight
+\newif\ifcharte@premier
+\let\charte@putframe\fb@put@frame
+\let\charte@penalite@ori\penalty
+% Pénalités 9999 de \MakeFramed (mise à jour de \pagetotal) rendues
+% insécables juste après un titre ; \penalty est rétabli dans la boîte.
+\def\charte@sanscoupure{\def\penalty{\afterassignment\charte@penalite\count@}}
+\def\charte@penalite{\ifnum\count@=9999 \count@\@M\fi\charte@penalite@ori\count@}
+\def\charte@coupe#1#2{%
+  \let\charte@suite\charte@putframe
+  \ifinner\else\ifdim\pagegoal=\maxdimen\else
+    \fb@sizeofframe#1%
+    \dimen@\pagegoal \advance\dimen@-\pagetotal \advance\dimen@-\fb@frh
+    \advance\dimen@-\pageshrink \advance\dimen@-\pagedepth
+    \dimen@ii\ht\@tempboxa
+    \ifdim\dimen@ii>\dimen@
+      \advance\dimen@ii\fb@frh
+      \ifcharte@premier\ifdim\dimen@ii>\charte@encadrecourt\else
+        \charte@flottants % hauteur des flottants en attente (M200)
+        \advance\dimen@ii\@tempdima
+        \@tempdimb\topskip \advance\@tempdimb\p@
+        \ifdim\pagetotal>\@tempdimb % la page porte déjà du texte
+          \ifdim\dimen@ii>\textheight\else % tient avec eux : posé entier
+            \let\charte@suite\charte@entier
+          \fi
+        \fi % en tête de page (flottants déjà placés) : coupé (M202)
+        \advance\dimen@ii-\@tempdima
+      \fi\fi
+      \advance\dimen@ii-\fb@frh
+      \ifx\charte@suite\charte@entier\else
+        \ifdim\dimen@<3\baselineskip
+          \eject\fb@adjheight
+        \else
+          \@tempdimb\dimen@ii \advance\@tempdimb-\fb@frh
+          \advance\dimen@ii-\dimen@
+          \ifdim\dimen@ii<3\baselineskip
+            \ifdim\@tempdimb<5.5\baselineskip
+              % trop court pour deux morceaux de trois lignes : page suivante
+              \eject\fb@adjheight
+            \else
+              \advance\dimen@ii-3\baselineskip
+              \advance\dimen@ii-\fb@frh % marge : rembourrage du cadre
+              \advance\dimen@ii\pagegoal \pagegoal\dimen@ii % toujours global
+            \fi
+          \fi
+        \fi
+      \fi
+    \fi
+  \fi\fi
+  \global\charte@premierfalse
+  \charte@suite#1#2}
+% Hauteur (\@tempdima) des flottants qui attendent la page suivante
+% (\@deferlist), avec leurs espaces ; zéro s'il n'y en a pas.
+\def\charte@flottants{\@tempdima\z@
+  \ifx\@deferlist\@empty\else
+    \begingroup
+      \def\@elt##1{\global\advance\@tempdima\ht##1%
+        \global\advance\@tempdima\dp##1\global\advance\@tempdima\floatsep}%
+      \@deferlist
+    \endgroup
+    \advance\@tempdima\textfloatsep \advance\@tempdima-\floatsep
+  \fi}
+% Encadré court posé entier : la page déborde et TeX la coupe avant lui.
+\def\charte@entier#1#2{\fb@putboxa#1\fb@afterframe}
+
+% Fiches : un environnement, deux jeux de rubriques fixes. Fiche méthode
+% (corps du guide) : six rubriques, ouvertes par \Principe, ci-dessous ;
+% fiche modèle (annexe technique) : cinq rubriques, ouvertes par \Cadre, au
+% bloc « Macros du dépôt ».
 \newcounter{ficheid}
 \newenvironment{fiche}[1]{%
   \stepcounter{ficheid}%
@@ -335,17 +465,36 @@
           \setlength{\itemindent}{\z@}%
           \setlength{\itemsep}{3pt}\setlength{\topsep}{3pt}%
           \setlength{\parsep}{2pt}%
-          \let\makelabel\@gobble}}{\endlist}
+          \let\makelabel\@gobble}%
+  \clubpenalties 3 10000 10000 0
+  \@beginparpenalty\@M \global\charte@rubriques\z@}{\endlist}
+% Un titre de rubrique n'est jamais seul en bas de page : il fait partie de
+% son premier paragraphe, dont les deux premières coupures sont interdites
+% (\clubpenalties, liste des rubriques), et une liste qui le suit ne s'en
+% sépare pas (\@beginparpenalty) ; aucune réserve de place, qui laisserait
+% orphelin le titre de la fiche ; aucune coupure avant la deuxième ni la
+% troisième rubrique, pour que le titre de la fiche garde trois lignes sous
+% lui même quand les premières rubriques tiennent sur une ligne. Le réglage
+% \clubpenalties vaut pour tous les paragraphes de la fiche, listes
+% imbriquées comprises : aucun ne laisse moins de trois lignes en bas de page
+% (un paragraphe court passe alors entier à la page suivante).
+% Limite : un titre de rubrique suivi d'une liste peut garder une seule
+% puce sous lui en bas de page (jamais aucune) ; la règle des trois lignes
+% (M41) est celle des titres de section (M202).
+\newcount\charte@rubriques
 \newcommand{\rubrique}[1]{%
-  \item[]\textcolor{financeblue}{\textbf{#1}}\hskip\labelsep\ignorespaces}
-\newcommand{\Cadre}{%
+  \global\advance\charte@rubriques\@ne
+  \ifnum\charte@rubriques<4 \@itempenalty\@M\else\@itempenalty-\@lowpenalty\fi
+  \item[]\@itempenalty-\@lowpenalty % listes de la rubrique : sécables
+  \textcolor{financeblue}{\textbf{#1}}\hskip\labelsep\ignorespaces}
+\newcommand{\Principe}{%
   \begin{rubriques}%
-  \rubrique{1. Cadre, notations et hypothèses de validité (non testées).}}
-\newcommand{\Hzero}{\rubrique{2. Hypothèse nulle.}}
-\newcommand{\Stat}{\rubrique{3. Statistique de test.}}
-\newcommand{\Loi}{\rubrique{4. Loi sous $H_0$.}}
-\newcommand{\Pval}{\rubrique{5. p-value.}}
-\newcommand{\Usage}{\rubrique{6. Usage et limites.}}
+  \rubrique{1. Principe et modèle de référence.}}
+\newcommand{\Donnees}{\rubrique{2. Données requises.}}
+\newcommand{\Conditions}{\rubrique{3. Conditions d'usage.}}
+\newcommand{\Forces}{\rubrique{4. Forces.}}
+\newcommand{\Limites}{\rubrique{5. Limites et pièges.}}
+\newcommand{\Referentiels}{\rubrique{6. Référentiels concernés.}}
 
 % Titre de partie : un filet bleu, « Partie » en petites capitales, titre
 % vert.
@@ -357,7 +506,7 @@
   \vspace{1.5mm}
   {\color{greenline}\raggedright\fontsize{20}{24}\bfseries\selectfont #2\par}
   \vspace{5mm}
-  \addcontentsline{toc}{section}{\protect\numberline{}\textsc{#1} --- #2}}
+  \addcontentsline{toc}{section}{\protect\numberline{}\textsc{#1}~: #2}}
 
 % ================================================ page de garde sans TikZ ====
 % \charte@surpage{<matériel vertical>} superpose, sur la prochaine page
@@ -396,6 +545,88 @@
   \ifcharte@paysage\global\pdfpageattr{/Rotate 90}%
   \else\global\pdfpageattr{}\fi}
 
+% ================================================ Macros du dépôt ============
+% Propres au dépôt de guides, identiques dans tous les documents.
+%
+% (1) Statuts de vérification des sources. statuts_sources.tex est généré
+%     depuis le registre des sources (sources/registre.csv) par
+%     outils/controles.sh, et trouvé par TEXINPUTS (répertoire sources/) ;
+%     il contient une ligne \charte@statut{ID}{statut} par identifiant, le
+%     statut valant verifie, incertain, nontrouve ou absent.
+\newif\ifcharte@statuts
+\newcommand{\charte@statut}[2]{\@namedef{charte@src@#1}{#2}}
+\def\charte@verifie{verifie}
+\IfFileExists{statuts_sources.tex}
+  {\input{statuts_sources.tex}\charte@statutstrue}
+  {\PackageWarningNoLine{charte}{statuts_sources.tex introuvable :
+     statuts de vérification des sources non calculés}}
+% (2) \src{ID} : identifiant du registre des sources, placé dans le premier
+%     argument de \reglement ou dans l'argument de \refl, en fin de texte.
+%     Statut vérifié : rien d'imprimé ; incertain, non trouvé ou absent : une
+%     marque † en exposant, accolée au mot qui précède ; identifiant inconnu :
+%     [ID ?] en gras et un avertissement « Source inconnue au registre ».
+\DeclareRobustCommand{\src}[1]{%
+  \ifcharte@statuts
+    \@ifundefined{charte@src@#1}%
+      {\textbf{[#1~?]}%
+       \PackageWarning{charte}{Source inconnue au registre : #1}}%
+      {\unskip
+       \expandafter\ifx\csname charte@src@#1\endcsname\charte@verifie
+       \else\textsuperscript{\dag}\fi}%
+  \fi
+  \protected@write\@auxout{}{\string\charte@srcpage{#1}{\thepage}}}
+% (2 bis) Folios des \src, pour l'annexe des sources citées.
+\newcommand{\charte@srcpage}[2]{%
+  \@ifundefined{charte@pg@#1}%
+    {\global\@namedef{charte@pg@#1}{\hyperpage{#2}}%
+     \global\@namedef{charte@dp@#1}{#2}}%
+    {\def\charte@tmp{#2}%
+     \expandafter\ifx\csname charte@dp@#1\endcsname\charte@tmp\else
+       \expandafter\g@addto@macro\csname charte@pg@#1\endcsname{, \hyperpage{#2}}%
+       \global\@namedef{charte@dp@#1}{#2}\fi}}
+\AtEndDocument{\let\charte@srcpage\@gobbletwo}
+\newcommand{\srcfolios}[1]{%
+  \@ifundefined{charte@pg@#1}%
+    {\textbf{??}\G@refundefinedtrue
+     \PackageWarning{charte}{Folios de la source #1 non definis}}%
+    {\@nameuse{charte@pg@#1}}}
+% (3) Rubriques de la fiche modèle (annexe technique), sur l'environnement
+%     fiche : cinq rubriques fixes, ouvertes par \Cadre.
+\newcommand{\Cadre}{%
+  \begin{rubriques}%
+  \rubrique{1. Cadre et notations.}}
+\newcommand{\Hypotheses}{\rubrique{2. Hypothèses.}}
+\newcommand{\Utilisation}{\rubrique{3. Conditions d'utilisation.}}
+\newcommand{\Formules}{\rubrique{4. Formules et statut.}}
+\newcommand{\LimitesModele}{\rubrique{5. Limites.}}
+% (4) Bibliographie (BibTeX, style plain, base references, soit
+%     sources/references.bib trouvé par BIBINPUTS) : \bibliographiedepot, en
+%     fin de document, ne la compose que si le document cite une entrée par
+%     \cite ou \nocite ; sans citation, bibtex s'arrêterait en erreur
+%     (« I found no \citation commands »).
+\newif\ifcharte@citations
+\pretocmd{\@citex}{\global\charte@citationstrue}{}
+  {\PackageWarningNoLine{charte}{\string\@citex\space non modifiée :
+     bibliographie non composée}}
+\pretocmd{\nocite}{\global\charte@citationstrue}{}
+  {\PackageWarningNoLine{charte}{\string\nocite\space non modifiée :
+     bibliographie non composée}}
+\newcommand{\bibliographiedepot}{%
+  \ifcharte@citations
+    \bibliographystyle{plain}%
+    \bibliography{references}%
+  \fi}
+% (5) Annexe des sources citées. \sourcescitees charge sources_citees.tex,
+%     tableau long généré à chaque compilation par
+%     outils/controles/sources_citees.R depuis le registre des sources et les
+%     \src du document, et trouvé par TEXINPUTS (répertoire de construction) ;
+%     l'annexe ne se saisit jamais à la main.
+\newcommand{\sourcescitees}{%
+  \IfFileExists{sources_citees.tex}
+    {\input{sources_citees.tex}}
+    {\PackageWarningNoLine{charte}{sources_citees.tex introuvable :
+       annexe des sources citées non générée}}}
+
 \makeatother
 
 \emergencystretch=1.5em
@@ -423,13 +654,15 @@
 \vspace{0.7cm}
 \noindent
 {\color{black}\normalsize\itshape
- Mention de cadrage --- texte de référence, périmètre ou version du code\par}
+ Mention de cadrage~: garantie, organismes d'assurance visés, référentiels\par}
 
 \vfill
 \noindent
 {\footnotesize\color{black}
+ Date de référence du droit~: \datedroit\par
+ \smallskip\noindent
  Établie le \datedoc\quad\textbar\quad Version \versiondoc\quad\textbar\quad
- Statut~: \statutdoc\quad\textbar\quad Référence \code{chemin/du/fichier}\par}
+ Statut~: \statutdoc\quad\textbar\quad Auteur~: \auteurdoc\par}
 \vspace{2.6cm}
 \clearpage
 
@@ -441,21 +674,22 @@
 Ce gabarit reproduit la \textbf{charte graphique} de la documentation
 du projet. Chaque élément de la charte y figure
 une fois, dans son contexte d'usage~: page de garde, page d'objet, sommaire,
-titres de partie, de section et de sous-section, fiches de test, encadrés,
-citations réglementaires, tableaux, tableau long en paysage et figure
-légendée.
+titres de partie, de section et de sous-section, fiche méthode et fiche
+modèle, encadrés, citations réglementaires, tableaux, tableau long en paysage
+et figure légendée.
 
 \medskip\noindent
 Il est organisé en trois parties. La \textbf{partie~I} présente la palette,
 la typographie et les niveaux de titre. La \textbf{partie~II} montre les
 blocs de texte (encadrés, citations, références, listes) et les tableaux. La
-\textbf{partie~III} donne le modèle de fiche de test et de figure, puis la
-table de correspondance des packages remplacés.
+\textbf{partie~III} donne le modèle de fiche méthode, de fiche modèle et de
+figure, puis la table de correspondance des packages remplacés.
 
 \vspace{8mm}
-\reglement{Article 1\textsuperscript{er} du texte de référence}{Extrait
-cité du texte de référence, en italique, précédé de son intitulé en gras bleu
-et bordé d'un filet vertical en marge.}
+\reglement{Code des assurances, article R343-7 \src{CA-R343-7}}{Emplacement
+de l'extrait cité, en italique, précédé de son intitulé en gras bleu et bordé
+d'un filet vertical en marge\fsp; l'intitulé se termine par l'identifiant du
+registre des sources.}
 
 \vspace{6mm}
 \noindent
@@ -554,8 +788,14 @@ au sommaire (profondeur limitée à deux niveaux).
 
 \subsection{Encadré générique}
 
-L'encadré sert aux remarques de portée et aux extraits de code. Il se coupe
-entre deux pages si nécessaire.
+L'encadré sert aux remarques de portée et aux extraits de code. Un encadré
+court (au plus la moitié de la hauteur de page) ne se coupe pas~: s'il
+ne tient pas en bas de page, il passe entier à la page suivante, sauf si
+des flottants l'attendent ou s'il commence en tête de page sous un flottant
+(il se coupe alors comme un encadré long, s'il est assez long pour deux
+morceaux de trois lignes~; sinon il passe entier à la page suivante). Un encadré
+plus long se coupe entre deux pages, chaque morceau gardant au moins trois
+lignes.
 
 \begin{encadre}
 \small
@@ -573,11 +813,17 @@ qu'il met en \oe uvre.
 
 \subsection{Citation réglementaire et référence}
 
-\refl{A.~Auteur, \emph{Titre de l'article}, \emph{Nom de la revue}, vol.(numéro),
-année, p.~1--26.}
+Toute citation, par \code{\textbackslash reglement} ou
+\code{\textbackslash refl}, se termine par l'identifiant du registre des
+sources, \code{\textbackslash src\{ID\}}. Rien ne s'imprime pour un fait
+vérifié\fsp; une marque en exposant signale un fait incertain ou non trouvé
+(référence ci-dessous)\fsp; un identifiant absent du registre s'imprime en gras
+entre crochets.
 
-\reglement{Annexe, section A, paragraphe 2}{Second extrait du texte de
-référence.}
+\refl{Code des assurances, articles R351-x \src{CA-R351}}
+
+\reglement{Code des assurances, article L351-2 \src{CA-L351-2}}{Emplacement
+d'un second extrait.}
 
 \subsection{Listes}
 
@@ -642,13 +888,13 @@ en-tête répété, mention de suite, intertitres de groupe en gras bleu.
 \renewcommand{\arraystretch}{1.22}
 \begin{longtable}{@{}p{4.4cm}p{0.9cm}p{5.7cm}p{7.8cm}p{2.1cm}@{}}
 \toprule
-\textbf{Élément (fiche)} & \textbf{Réf.} & \textbf{Fonction(s) --- calcul} &
-\textbf{Fonction(s) / méthode --- restitution} & \textbf{Clé} \\
+\textbf{Élément (fiche)} & \textbf{Réf.} & \textbf{Fonction(s) de calcul} &
+\textbf{Fonction(s) / méthode de restitution} & \textbf{Clé} \\
 \midrule
 \endfirsthead
 \toprule
-\textbf{Élément (fiche)} & \textbf{Réf.} & \textbf{Fonction(s) --- calcul} &
-\textbf{Fonction(s) / méthode --- restitution} & \textbf{Clé} \\
+\textbf{Élément (fiche)} & \textbf{Réf.} & \textbf{Fonction(s) de calcul} &
+\textbf{Fonction(s) / méthode de restitution} & \textbf{Clé} \\
 \midrule
 \endhead
 \multicolumn{5}{@{}l@{}}{\textit{Suite page suivante}} \\
@@ -656,14 +902,14 @@ en-tête répété, mention de suite, intertitres de groupe en gras bleu.
 \bottomrule
 \endlastfoot
 
-\multicolumn{5}{@{}l@{}}{\textbf{\textcolor{financeblue}{Groupe A --- intitulé du premier groupe}}} \\
+\multicolumn{5}{@{}l@{}}{\textbf{\textcolor{financeblue}{Groupe A~: intitulé du premier groupe}}} \\
 \midrule
 Premier élément & \ref{fiche:1} & \code{calcul\_a()} &
 \code{restitution\_a()} (formule exacte) & \code{A1} \\
 Deuxième élément & \ref{fiche:1} & \code{calcul\_b()} &
-\code{restitution\_b()} (approximation, loi $\chi^2$) & --- \\
+\code{restitution\_b()} (approximation, loi $\chi^2$) & aucune \\
 \midrule
-\multicolumn{5}{@{}l@{}}{\textbf{\textcolor{financeblue}{Groupe B --- intitulé du second groupe}}} \\
+\multicolumn{5}{@{}l@{}}{\textbf{\textcolor{financeblue}{Groupe B~: intitulé du second groupe}}} \\
 \midrule
 Troisième élément & \ref{fiche:1} & \code{calcul\_c()} &
 \code{restitution\_c()} (simulation) & \code{C1} \\
@@ -675,35 +921,61 @@ Troisième élément & \ref{fiche:1} & \code{calcul\_c()} &
 \partie{Partie III}{Fiches, figures et notes de mise en \oe uvre}
 
 % =============================================================================
-\section{Fiche de test}
+\section{Fiche méthode et fiche modèle}
 \label{sec:fiche}
 % =============================================================================
 
-Chaque test fait l'objet d'une fiche en six rubriques fixes, ouverte par
-l'environnement \code{fiche} et la macro \code{\textbackslash Cadre}. Les
-rubriques suivantes sont appelées par \code{\textbackslash Hzero},
-\code{\textbackslash Stat}, \code{\textbackslash Loi}, \code{\textbackslash
-Pval} et \code{\textbackslash Usage}.
+Chaque méthode du corps du document fait l'objet d'une fiche méthode en six
+rubriques fixes, ouverte par l'environnement \code{fiche} et la macro
+\code{\textbackslash Principe}\fsp; les rubriques suivantes sont appelées par
+\code{\textbackslash Donnees}, \code{\textbackslash Conditions},
+\code{\textbackslash Forces}, \code{\textbackslash Limites} et
+\code{\textbackslash Referentiels}.
 
-\begin{fiche}{Intitulé de la fiche}
-\refl{A.~Auteur, \emph{Titre de l'ouvrage}, éditeur, année, p.~10--12.}
+\begin{fiche}{Intitulé de la méthode}
+\Principe
+Ce que la méthode calcule et le modèle de référence qui la fonde, avec le
+renvoi à sa fiche modèle (fiche~\ref{fiche:2}).
+\Donnees
+Données d'entrée, niveau de détail et profondeur d'historique nécessaires.
+\Conditions
+Hypothèses à vérifier sur les données avant l'emploi, et le moyen de les
+vérifier.
+\Forces
+Ce qui justifie le choix de la méthode.
+\Limites
+Situations où la méthode se trompe, sens et ordre de grandeur de l'erreur.
+\Referentiels
+Référentiels où la méthode s'emploie (comptes sociaux, Solvabilité~II,
+IFRS~17) et adaptations propres à chacun.
+\end{fiche}
+
+Chaque modèle cité fait l'objet, en annexe technique, d'une fiche modèle en
+cinq rubriques fixes, référence en tête, ouverte par \code{\textbackslash
+Cadre}\fsp; les rubriques suivantes sont appelées par \code{\textbackslash
+Hypotheses}, \code{\textbackslash Utilisation}, \code{\textbackslash Formules}
+et \code{\textbackslash LimitesModele}.
+
+\begin{fiche}{Intitulé du modèle}
+% Dans un document, ce \refl porte \src{ID} d'une référence de place du
+% registre (contrôle 5) ; le registre n'en compte encore aucune de vérifiée.
+\refl{A.~Auteur, \emph{Titre de la publication originale}, éditeur, année,
+p.~10--12.}
 \Cadre
-Données, notations et hypothèses sous lesquelles le test est valide, sans être
-vérifiées par lui~: un échantillon $x_1,\dots,x_n$ indépendant et de même loi.
-\Hzero
-$H_0 : \mu = \mu_0$.
-\Stat
+Notations et objets du modèle~: un échantillon $x_1,\dots,x_n$.
+\Hypotheses
+Hypothèses du modèle, chacune avec l'effet de son non-respect.
+\Utilisation
+Méthodes du document qui emploient le modèle (fiche~\ref{fiche:1}) et
+conditions de cet emploi.
+\Formules
 \[
-  T = \frac{\bar x - \mu_0}{s/\sqrt{n}}.
+  \hat\theta = \frac{1}{n}\sum_{i=1}^{n} x_i,
 \]
-\Loi
-Loi de $T$ sous $H_0$, exacte ou approchée, avec ses conditions.
-\Pval
-$p = 2\,\bigl(1 - F(|T_{\text{obs}}|)\bigr)$, $F$ fonction de répartition de la
-loi précédente.
-\Usage
-Domaine d'emploi, sensibilité aux hypothèses et limites connues\fsp; renvoi à
-la fonction du module de calcul qui le met en \oe uvre.
+avec, pour chaque formule, son statut épistémique~: résultat exact, résultat
+asymptotique, approximation ou constat empirique.
+\LimitesModele
+Ce que le modèle ne représente pas, et renvoi aux pièges de la fiche méthode.
 \end{fiche}
 
 % =============================================================================
@@ -757,7 +1029,7 @@ porte la couleur de la charte.}
 \code{babel-french} & Césure française, \code{\textbackslash frenchspacing},
 libellés, date, retrait du premier paragraphe, puces et espacement des
 listes, réglés dans le préambule \\
-\code{csquotes} & Guillemets « » saisis directement (codage T1) \\
+\code{csquotes} & Guillemets «~» saisis directement (codage T1), avec espaces insécables \\
 \code{caption} & Redéfinition de \code{\textbackslash @makecaption} \\
 \code{float} & Environnements \code{figureH} et \code{tableH} (bloc non flottant) \\
 \code{enumitem} & \code{itemize} et \code{enumerate} redéfinis, clés
@@ -782,7 +1054,8 @@ ajoutée automatiquement, et une espace ordinaire saisie avant eux autorise
 une coupure de ligne malvenue. On saisit donc \code{\textasciitilde:} pour le
 deux-points (espace insécable) et \code{\textbackslash fsp;},
 \code{\textbackslash fsp!}, \code{\textbackslash fsp?} pour les autres
-signes (espace fine insécable)\fsp; les guillemets « » se saisissent
-directement, avec des espaces ordinaires à l'intérieur.
+signes (espace fine insécable)\fsp; les guillemets se saisissent
+directement, avec une espace insécable à l'intérieur~:
+\code{«\textasciitilde{}texte\textasciitilde{}»} donne «~texte~».
 
 \end{document}
