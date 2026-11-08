@@ -351,7 +351,7 @@ Mêmes méthodes, hypothèses différentes. Lignes propres à ces postes, dans u
 | Table de mortalité | P3, P5 à P7 | table du tarif (P3) ; tables de 142-4 (rentes viagères) | table réaliste |
 | Taux | P3, P5 à P7 ; actualisation de P1, P2, P4 | taux ≤ taux du tarif ; capitaux non actualisés | courbe des taux sans risque, sans correction pour volatilité |
 | Revalorisation légale | P1, P2, P4 | acquise à l'arrêté (Q5 décidée ; revalorisation à courir en sensibilité) | jusqu'au règlement ou au dépôt |
-| Revalorisation des rentes | P5 à P7 | garantie par le contrat ; contrats résiliés : figée sauf clause (D6) | attendue (décisions de gestion futures et comportement attendu, règlement délégué art. 23 et 26 : hypothèse déclarée) |
+| Revalorisation des rentes | P5 à P7 | garantie par le contrat ; contrats résiliés : figée sauf clause (D6) | attendue (revalorisation non garantie : futures décisions de gestion, règlement délégué (UE) 2015/35, art. 23 ; au moins la revalorisation garantie, art. 23, § 1, d) : hypothèse déclarée) |
 | Sans-suite, reconnaissance de l'IAD | P1, § 4 | 0 (Q6) | central |
 | Poursuite d'études, remariage, origine de la survie | P5 à P7 | points prudents | centraux |
 | Hypothèses par défaut | tous | prudentes | centrales |
@@ -510,7 +510,7 @@ Restent liés à des lectures ou à des mesures : Q5 est à revoir sur mesure en
 | R5 | **Lu**, vérifié (intégré au § 3.3 et au § 3.5) |
 | R6 | **Lu**, vérifié ; tranché (D5) ; issue proposée par `regulatory` |
 | R7 | **Lu**, vérifié sur le JO d'origine et la consolidation au 14/11/2024 (outil de documentation). Lignes d'activité : capital décès et rentes de conjoint et d'éducation en ligne 32 (30 avec participation aux bénéfices) ; les lignes 33 et 34 ne visent que les rentes découlant de contrats non-vie ; ligne 29 à citer d'après le RD 2017/669, jamais d'après le texte d'origine. IAD : tranché (D8, ligne 32). Art. 18 : limite du contrat de la temporaire individuelle à prime garantie au terme, § 5 inapplicable ; collectif annuel résiliable limité à la prochaine échéance, sous réserve du § 7 (point de fait par contrat ; B6). Le § 3, 3e alinéa, est modifié au 30/01/2027 par le RD 2026/269 (non relu) : à reprendre en B6. Art. 26 : loi de résiliation obligatoire en meilleure estimation, hypothèse déclarée et justifiée |
-| R8 | **Lu** (CSS L912-3 et loi n° 89-1009, art. 7, en entier, vérifiés) ; tranché (D6), confortée. Reste : art. 29 VII de la loi n° 89-1009 (non lu) |
+| R8 | **Lu** (CSS L912-3 et loi n° 89-1009, art. 7, en entier, vérifiés) ; tranché (D6), confortée. En meilleure estimation, seul l'art. 23 du règlement délégué s'applique à la revalorisation (précision de `regulatory` du 8 novembre 2026 : l'art. 26 vise l'exercice d'options par les preneurs). Reste : art. 29 VII de la loi n° 89-1009 (non lu) ; présentation séparée de la revalorisation discrétionnaire au titre de l'art. 25 (« prestations discrétionnaires futures », terme non défini dans ce qui a été lu) : point d'interprétation pour `actuary`, à trancher par le mainteneur avant B4 |
 | R9 | **Lu** ; tranché (D7) |
 | R10 | **Lu**, vérifié : analogie déclarée, non obligatoire |
 

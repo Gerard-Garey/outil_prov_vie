@@ -343,6 +343,7 @@ NOTA (LEGI) : « Loi 89-1009 du 31 décembre 1989 art. 10 : les dispositions de 
 - **(b)** Il provisionne en plus une revalorisation future attendue (meilleure estimation), au titre des « révisions prévues dans le contrat » quand elles sont discrétionnaires.
 - **Avis** : en comptes sociaux, (a) : le texte n'oblige qu'à ce qui est prévu au contrat, et le plancher suffit au minimum légal. En meilleure estimation, la revalorisation attendue relève des décisions de gestion futures et du comportement attendu (RD art. 23, 26) : hypothèse déclarée. Le texte ne tranche pas ; choix du mainteneur.
 - Le 2e alinéa (« couvert à tout moment […] par des provisions ») ne désigne aucune catégorie de provision (même constat que pour l'art. 7-1 sur #14).
+- **Précision du 8 novembre 2026** (`regulatory`, art. 23 à 26 relus sur la consolidation `02015R0035-20241114`, même empreinte) : seul l'art. 23 s'applique à la revalorisation attendue ; l'art. 26 vise l'exercice d'options contractuelles par les preneurs, pas la revalorisation d'une rente en service. Son emploi pour la résiliation de la temporaire (R7, art. 26) reste conforme.
 
 ## R2 (complément) — Loi n° 2014-617, art. 13 : numéro **non conforme** à l'objet cité (statut : **vérifié**)
 
