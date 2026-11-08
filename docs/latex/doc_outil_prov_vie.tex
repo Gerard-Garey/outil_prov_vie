@@ -900,6 +900,8 @@ exportée.
 \code{ecrire\_liste()} & \code{x} & Sérialise une liste nommée en texte aplati UTF-8, une ligne par feuille (chemin, type, valeurs), rendu en octets\fsp; n'écrit aucun fichier (section~\ref{sec:format-liste}). \\
 \code{lire\_liste()} & \code{octets} & Relit, sans évaluer de code, les octets écrits par \code{ecrire\_liste()}\fsp; refuse tout texte qui n'est pas canonique, de sorte que l'aller-retour rend une liste identique. \\
 \code{decrire\_plateforme()} & Aucun & Décrit la plateforme d'exécution pour la fiche de calcul (version de R, système, machine, boutisme, bibliothèques d'algèbre linéaire, d'expressions régulières et Unicode), en liste sérialisable par \code{ecrire\_liste()}, sans date ni nom d'utilisateur\fsp; chaque champ est une chaîne de longueur~1, et un champ indisponible (\code{Sys.info()} qui rend \code{NULL}, composant absent de \code{Sys.info()} ou d'\code{extSoftVersion()}) vaut \code{NA}. \\
+\code{calculer\_age()} & \code{date\_naissance}, \code{date}, \code{convention} & Rend l'âge entier, en années, à une date, selon une convention de la liste fermée \code{CONVENTIONS\_AGE} (\code{revolu}, \code{millesime}, \code{plus\_proche}, \code{naissance\_31\_decembre})\fsp; né un 29~février, l'anniversaire d'une année non bissextile est le 1er~mars\fsp; \code{NA} si la date précède la naissance\fsp; refuse par \code{plan\_invalide} une convention hors de la liste. Seule fonction d'âge du package. \\
+\code{date\_atteinte\_age()} & \code{date\_naissance}, \code{age}, \code{convention} & Fonction inverse de \code{calculer\_age()}~: première date, au plus tôt la naissance, à laquelle l'âge selon la convention vaut \code{age}. \\
 \end{tabular}
 \end{center}
 
@@ -1233,7 +1235,7 @@ et contrôles de structure, traitements déclarés (refus, exclusion,
 hypothèse par défaut, signalement), vue à une date, états des sinistres et
 des dossiers à une date, segments, enjeu des lignes écartées. Il ne corrige
 rien en silence. Il ne peut appeler que \code{dictionnaire} et
-\code{outils}. Ce module n'a pas encore de fonction.
+\code{outils}. Sa fonction \code{controler\_base()} est exportée.
 
 \begin{center}
 \small
@@ -1242,7 +1244,7 @@ rien en silence. Il ne peut appeler que \code{dictionnaire} et
 \begin{tabular}{@{}p{3.9cm}>{\raggedright\arraybackslash}p{3.0cm}p{8.2cm}@{}}
 \rowcolor{tableheader}
 \textcolor{financeblue}{\textbf{Fonction}} & \textcolor{financeblue}{\textbf{Arguments}} & \textcolor{financeblue}{\textbf{Rôle}} \\
-\multicolumn{3}{@{}l@{}}{Aucune fonction.} \\
+\code{controler\_base()} & \code{donnees}, \code{arrete}, \code{declarations = NULL}, \code{conventions = NULL} & Contrôle la base entière à la date d'arrêté, sans rien modifier, et rend le bilan (contrôles, contrôles non exécutés, refus par table ou par colonne avec refus induits, exclusions, hypothèses par défaut, signalements, déclarations requises, enjeu, vue, segments, tables absentes)\fsp; dans l'état actuel du module, seules les interruptions et la règle~B sont écrites, et chaque contrôle prévu mais non encore écrit figure dans les contrôles non exécutés avec la cause \code{non\_implemente}\fsp; refuse l'appel pour un arrêté absent ou mal formé, une liste mal formée, une table inconnue ou obligatoire absente, une anomalie de la table \code{extraction}, un arrêté postérieur à l'extraction, une déclaration ou une convention mal formée. \\
 \end{tabular}
 \end{center}
 
