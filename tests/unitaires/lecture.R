@@ -8,6 +8,7 @@ ns <- asNamespace("provie")
 d <- dictionnaire()
 u8 <- function(s) { Encoding(s) <- "UTF-8"; s }
 refus_de <- function(expr) tryCatch({ expr; NULL }, refus_provie = function(e) e)
+motif_de_refus <- function(expr) tryCatch({ expr; "aucun" }, refus_provie = function(e) e$motif)
 ecrire_octets <- function(chemin, texte) writeBin(if (is.raw(texte)) texte else charToRaw(texte), chemin)
 lire_octets <- function(chemin) readBin(chemin, "raw", n = file.info(chemin)$size)
 # Dossier vide neuf, contenant les fichiers donnés (nom = texte ou octets), écrits octet par
@@ -26,8 +27,10 @@ section("lecture : exports")
 verifier("lire_base() et ecrire_base() sont exportés",
          all(c("lire_base", "ecrire_base") %in% getNamespaceExports("provie")))
 verifier("les auxiliaires du module ne sont pas exportés",
-         !any(c(".lire_table_csv", ".lire_colonne", ".texte_table_csv", ".champs_colonne",
+         !any(c(".lire_table_csv", ".champs_entre_guillemets", ".texte_table_csv", ".champs_colonne",
                 ".reels_csv") %in% getNamespaceExports("provie")))
+verifier("la grammaire stricte n'est plus dans lecture (lire_texte_type() de dictionnaire)",
+         !exists(".lire_colonne", envir = ns, inherits = FALSE) && is.function(ns$lire_texte_type))
 
 # --- Base valide de référence -----------------------------------------------------------
 
@@ -173,62 +176,92 @@ verifier("fins de ligne CRLF admises", {
   identical(lire_base(dossier_avec(list(contrats.csv = texte)))$contrats$mois_echeance, 1L)
 })
 
-section("lecture : type incompatible, sans conversion")
-e <- refus_de(lire_avec("contrats", list(date_effet = "2026-02-30")))
-verifier("date inexistante (2026-02-30) : type_incompatible, table, colonne, attendu, reçu",
-         !is.null(e) && e$motif == "type_incompatible" && e$module == "lecture" &&
-           e$table == "contrats" && e$colonne == "date_effet" && e$attendu == "Date" &&
-           e$recu == "2026-02-30")
+section("lecture : valeur illisible dans son type, colonne rendue entière en texte exact (M144)")
+# Colonne d'une valeur illisible : rendue en character, texte exact, les autres colonnes
+# typées ; aucune interruption, aucune conversion.
+en_texte <- function(r, table, colonne, attendu) {
+  x <- r[[table]][[colonne]]
+  identical(class(x), "character") && identical(x, attendu)
+}
+r <- lire_avec("contrats", list(date_effet = "2026-02-30"))
+verifier("date inexistante (2026-02-30) : colonne date_effet rendue en texte exact, les autres typées",
+         en_texte(r, "contrats", "date_effet", "2026-02-30") && identical(r$contrats$mois_echeance, 1L) &&
+           identical(r$contrats$tacite_reconduction, TRUE))
 for (v in c("2026/01/02", "26-01-02", "2026-1-2", "2026-01-02 ", "02/01/2026", "NA", "2026-13-01")) {
-  verifier_refus(paste0("date « ", v, " » refusée, pas lue NA"),
-                 lire_avec("contrats", list(date_effet = v)), "type_incompatible")
+  verifier(paste0("date « ", v, " » : rendue en texte exact, pas lue NA ni convertie"),
+           en_texte(lire_avec("contrats", list(date_effet = v)), "contrats", "date_effet", v))
 }
-e <- refus_de(lire_avec("parametres", list(age_min = "abc"), lignes = 3L))
-verifier("texte dans un entier : type_incompatible, nombre et lignes de données",
-         !is.null(e) && e$motif == "type_incompatible" && e$colonne == "age_min" &&
-           e$attendu == "integer" && e$recu == "abc" && e$nombre == 3L &&
-           identical(e$identifiants, c("1", "2", "3")))
+r <- lire_avec("parametres", list(age_min = "abc"), lignes = 3L)
+verifier("texte dans un entier : colonne entière en texte, trois lignes",
+         en_texte(r, "parametres", "age_min", rep("abc", 3L)))
+fichier <- paste0(paste(colonnes_de("parametres")$colonne, collapse = ","), "\n",
+                  "\"g\",\"p\",,7,,1.5\n\"g\",\"p\",,x,,1.5\n\"g\",\"p\",,,,1.5\n")
+r <- lire_base(dossier_avec(list(parametres.csv = fichier)))
+verifier("une seule valeur illisible : la colonne entière reste en texte, valeurs lisibles comprises, champ vide NA",
+         en_texte(r, "parametres", "age_min", c("7", "x", NA)) && identical(r$parametres$valeur, rep(1.5, 3L)))
 for (v in c("1.5", "1.0", "1e3", " 1", "+1", "0x10", "NA", "2147483648", "-2147483648")) {
-  verifier_refus(paste0("entier « ", v, " » refusé, pas converti"),
-                 lire_avec("parametres", list(age_min = v)), "type_incompatible")
+  verifier(paste0("entier « ", v, " » : rendu en texte exact, pas converti"),
+           en_texte(lire_avec("parametres", list(age_min = v)), "parametres", "age_min", v))
 }
-for (v in c("0x10", "Inf", "NaN", "NA", "\"1,5\"", ".5", "1e400", "1e-400", " 1")) {
-  verifier_refus(paste0("réel « ", v, " » refusé"), lire_avec("parametres", list(valeur = v)),
-                 "type_incompatible")
+for (v in c("0x10", "Inf", "NaN", "NA", ".5", "1e400", "1e-400", " 1")) {
+  verifier(paste0("réel « ", v, " » : rendu en texte exact"),
+           en_texte(lire_avec("parametres", list(valeur = v)), "parametres", "valeur", v))
 }
-for (v in c("T", "true", "1", "NA", "\"TRUE \"")) {
-  verifier_refus(paste0("logique « ", v, " » refusé"),
-                 lire_avec("contrats", list(tacite_reconduction = v)), "type_incompatible")
+verifier("réel « \"1,5\" » : rendu en texte exact (1,5)",
+         en_texte(lire_avec("parametres", list(valeur = "\"1,5\"")), "parametres", "valeur", "1,5"))
+for (v in c("T", "true", "1", "NA")) {
+  verifier(paste0("logique « ", v, " » : rendu en texte exact"),
+           en_texte(lire_avec("contrats", list(tacite_reconduction = v)), "contrats", "tacite_reconduction", v))
 }
+verifier("logique « \"TRUE \" » : rendu en texte exact, espace conservée",
+         en_texte(lire_avec("contrats", list(tacite_reconduction = "\"TRUE \"")), "contrats",
+                  "tacite_reconduction", "TRUE "))
+r <- lire_avec("contrats", list(date_effet = "x", mois_echeance = "y"))
+e <- refus_de(controler_types(r))
+verifier("appel isolé : lire_base() rend une base non conforme sans rien dire, controler_types() la refuse (deux écarts comptés)",
+         !is.null(e) && e$motif == "type_incompatible" && e$nombre == 2L &&
+           identical(e$identifiants, c("contrats.date_effet", "contrats.mois_echeance")))
+verifier("appel isolé : aucun avertissement, message ni sortie à la lecture d'une base non conforme", {
+  sortie <- utils::capture.output(r <- withCallingHandlers(
+    lire_avec("contrats", list(date_effet = "x")),
+    warning = function(w) stop("avertissement"), message = function(m) stop("message")))
+  length(sortie) == 0L && identical(r$contrats$date_effet, "x")
+})
 
-section("lecture : chaîne vide entre guillemets et retour chariot dans un champ (type_incompatible)")
-cas_vides <- list(c("contrats", "nature_contrat", "character"), c("contrats", "mois_echeance", "integer"),
-                  c("parametres", "valeur", "numeric"), c("contrats", "date_effet", "Date"),
-                  c("contrats", "tacite_reconduction", "logical"))
+section("lecture : chaîne vide entre guillemets rendue telle quelle (M150), retour chariot dans un champ (fichier_invalide)")
+r <- lire_avec("contrats", list(nature_contrat = "\"\""), lignes = 2L)
+verifier("\"\" dans une colonne character : rendu \"\" (chaîne vide), pas NA",
+         identical(r$contrats$nature_contrat, c("", "")))
+cas_vides <- list(c("contrats", "mois_echeance", "integer", "1"), c("parametres", "valeur", "numeric", "1.5"),
+                  c("contrats", "date_effet", "Date", "2026-01-01"),
+                  c("contrats", "tacite_reconduction", "logical", "TRUE"))
 for (k in cas_vides) {
-  champs <- list("\"\""); names(champs) <- k[2L]
-  e <- refus_de(lire_avec(k[1L], champs, lignes = 2L))
+  fichier <- paste0(sub("\n.*$", "", csv_de(k[1L])), "\n",
+                    sub("^[^\n]*\n", "", csv_de(k[1L], stats::setNames(list("\"\""), k[2L]))),
+                    sub("^[^\n]*\n", "", csv_de(k[1L])),
+                    sub("^[^\n]*\n", "", csv_de(k[1L], stats::setNames(list(""), k[2L]))))
+  r <- lire_base(dossier_avec(stats::setNames(list(fichier), paste0(k[1L], ".csv"))))
   verifier(paste0("\"\" dans une colonne ", k[3L], " (", k[1L], ".", k[2L],
-                  ") : type_incompatible, table, colonne, lignes 1 et 2, pas lu NA"),
-           !is.null(e) && e$motif == "type_incompatible" && e$module == "lecture" &&
-             e$table == k[1L] && e$colonne == k[2L] && e$attendu == k[3L] && e$recu == "\"\"" &&
-             e$nombre == 2L && identical(e$identifiants, c("1", "2")) &&
-             grepl("le champ vide est le seul marqueur de manquant", conditionMessage(e), fixed = TRUE))
+                  ") : colonne en texte exact, \"\" rétabli, champ vide NA"),
+           en_texte(r, k[1L], k[2L], c("", k[4L], NA)))
 }
 r <- lire_avec("contrats", list(id_contrat = "\"\"\"\"", nature_contrat = "\"a\"\"b\"", gestionnaire = ""))
 verifier("non-régression : \"\"\"\" (un guillemet) et \"a\"\"b\" admis, champ vide lu NA",
          identical(r$contrats$id_contrat, "\"") && identical(r$contrats$nature_contrat, "a\"b") &&
            identical(r$contrats$gestionnaire, NA_character_))
 crlf <- function(texte) gsub("\n", "\r\n", texte, fixed = TRUE)
+r <- lire_base(dossier_avec(list(contrats.csv = crlf(csv_de("contrats", list(id_contrat = "\"\"", gestionnaire = "\"\""))))))
+verifier("\"\" dans un fichier CRLF, en début et en fin de ligne : rendu \"\"",
+         identical(r$contrats$id_contrat, "") && identical(r$contrats$gestionnaire, ""))
 for (fichier in c("LF", "CRLF")) {
   texte <- csv_de("contrats", list(id_contrat = "\"A@B\""))
   if (fichier == "CRLF") texte <- crlf(texte)
   for (dans in c("\r\n", "\r")) {
     e <- refus_de(lire_base(dossier_avec(list(contrats.csv = sub("@", dans, texte, fixed = TRUE)))))
-    verifier(sprintf("fichier %s : %s dans un champ entre guillemets : type_incompatible, colonne et ligne",
+    verifier(sprintf("fichier %s : %s dans un champ entre guillemets : fichier_invalide, colonne et ligne",
                      fichier, if (dans == "\r") "CR isolé" else "CRLF"),
-             !is.null(e) && e$motif == "type_incompatible" && e$colonne == "id_contrat" &&
-               identical(e$identifiants, "1"))
+             !is.null(e) && e$motif == "fichier_invalide" && e$module == "lecture" && e$colonne == "id_contrat" &&
+               identical(e$identifiants, "1") && grepl("texte exact", conditionMessage(e), fixed = TRUE))
   }
 }
 deux <- paste0(paste(colonnes_de("contrats")$colonne, collapse = ","), "\n",
@@ -236,31 +269,66 @@ deux <- paste0(paste(colonnes_de("contrats")$colonne, collapse = ","), "\n",
                sub("^[^\n]*\n", "", csv_de("contrats", list(id_contrat = "\"A\nB\""))))
 e <- refus_de(lire_base(dossier_avec(list(contrats.csv = deux))))
 verifier("collision d'identifiants \"A\\r\\nB\" et \"A\\nB\" : refusée (ligne 1), pas de faux doublon",
-         !is.null(e) && e$motif == "type_incompatible" && identical(e$identifiants, "1"))
+         !is.null(e) && e$motif == "fichier_invalide" && identical(e$identifiants, "1"))
+e <- refus_de(lire_avec("contrats", list(id_contrat = "\"A\r\rB\"", gestionnaire = "\"C\rD\""), lignes = 2L))
+verifier("retours chariot : comptés par champ (deux dans un même champ comptent un), lignes de données",
+         !is.null(e) && e$nombre == 4L && identical(e$identifiants, c("1", "1", "2", "2")) &&
+           e$colonne == "id_contrat")
 verifier("\"A\\nB\" seul : admis, saut de ligne conservé",
          identical(lire_avec("contrats", list(id_contrat = "\"A\nB\""))$contrats$id_contrat, "A\nB"))
 verifier("\"A\\nB\" dans un fichier CRLF : admis (le saut de ligne du champ reste \\n)", {
   texte <- sub("@", "\n", crlf(csv_de("contrats", list(id_contrat = "\"A@B\""))), fixed = TRUE)
   identical(lire_base(dossier_avec(list(contrats.csv = texte)))$contrats$id_contrat, "A\nB")
 })
-verifier_refus("\"\" dans l'en-tête : liste_invalide (fichier mal formé)",
-               lire_base(dossier_avec(list(contrats.csv = sub("^id_contrat", "\"\"", csv_de("contrats"))))),
-               "liste_invalide")
+
+section("lecture : localisation juste d'un fichier_invalide (réserves C1 et C3)")
+entete_c <- paste(colonnes_de("contrats")$colonne, collapse = ",")
+ligne_de <- function(champs = list()) sub("^[^\n]*\n", "", csv_de("contrats", champs))
+e <- refus_de(lire_base(dossier_avec(list(contrats.csv = paste0(
+  entete_c, "\n", sub(",[^,]*\n$", "\n", ligne_de()), ligne_de(), ligne_de(list(id_contrat = "\"A\rB\"")))))))
+verifier("C1 : ligne 1 trop courte et retour chariot en ligne 3 : refus de structure, sans colonne ni ligne",
+         !is.null(e) && e$motif == "fichier_invalide" && is.na(e$colonne) && length(e$identifiants) == 0L &&
+           grepl("mal form", conditionMessage(e), fixed = TRUE))
+e <- refus_de(lire_base(dossier_avec(list(contrats.csv = paste0(
+  entete_c, "\n", ligne_de(), "\n", ligne_de(list(id_contrat = "\"\"")))))))
+verifier("C1 : ligne vide puis \"\" : refus de structure (ligne vide), pas une localisation de \"\"",
+         !is.null(e) && e$motif == "fichier_invalide" && is.na(e$colonne) && length(e$identifiants) == 0L)
+e <- refus_de(lire_base(dossier_avec(list(contrats.csv = paste0(
+  entete_c, "\n", sub("\n$", ",\"\"\n", ligne_de()), sub("\n$", ",\"\"\n", ligne_de()))))))
+verifier("C1 : \"\" dans un champ en trop de chaque ligne : refus de structure (en-tête plus court), pas de colonne NA",
+         !is.null(e) && e$motif == "fichier_invalide" && is.na(e$colonne) &&
+           grepl("un champ de moins", conditionMessage(e), fixed = TRUE))
+multi <- ligne_de(list(id_contrat = "\"a,\nb\nc\"", nature_contrat = "\"x,\ny\""))
+e <- refus_de(lire_base(dossier_avec(list(contrats.csv = paste0(
+  entete_c, "\n", multi, ligne_de(), ligne_de(list(gestionnaire = "\"u\rv\"")))))))
+verifier("C3 : après un champ sur plusieurs lignes à virgules, retour chariot en ligne de données 3, colonne gestionnaire",
+         !is.null(e) && e$motif == "fichier_invalide" && e$colonne == "gestionnaire" && identical(e$identifiants, "3"))
+r <- lire_base(dossier_avec(list(contrats.csv = paste0(
+  entete_c, "\n", multi, ligne_de(list(gestionnaire = "\"\"")), ligne_de()))))
+verifier("C3 : après un champ sur plusieurs lignes, \"\" rétabli à sa ligne (2) et dans sa colonne",
+         identical(r$contrats$gestionnaire, c("x", "", "x")) && identical(r$contrats$id_contrat[1L], "a,\nb\nc") &&
+           identical(r$contrats$nature_contrat[1L], "x,\ny"))
+r <- lire_base(dossier_avec(list(contrats.csv = paste0(entete_c, "\r\n", sub("\n$", "\r\n", multi),
+                                                       crlf(ligne_de(list(gestionnaire = "\"\"")))))))
+verifier("C3 : même cas, fins de ligne CRLF hors des champs : \"\" rétabli en ligne 2",
+         identical(r$contrats$gestionnaire, c("x", "")))
 
 section("lecture : tables, colonnes et version")
 e <- refus_de(lire_avec("contrats", list()))
 verifier("table extraction absente du dossier : lue sans elle (contrôle de la base entière : donnees)", is.null(e))
 csv_inconnue <- sub("\n", ",inconnue\n", csv_de("contrats"), fixed = TRUE)
 csv_inconnue <- sub("\n$", ",\"v\"\n", csv_inconnue)
-e <- refus_de(lire_base(dossier_avec(list(contrats.csv = csv_inconnue))))
-verifier("colonne inconnue du dictionnaire : colonne_inconnue (controler_types sur le résultat)",
-         !is.null(e) && e$motif == "colonne_inconnue" && e$colonne == "inconnue")
+r <- lire_base(dossier_avec(list(contrats.csv = csv_inconnue)))
+verifier("colonne inconnue du dictionnaire : rendue en texte, les autres typées (plus de controler_types sur le résultat)",
+         identical(r$contrats$inconnue, "v") && identical(r$contrats$mois_echeance, 1L))
 col <- colonnes_de("contrats")
 garde <- col$colonne != "id_contrat"
 csv_sans <- paste0(paste(col$colonne[garde], collapse = ","), "\n",
                    paste(champ_valide[col$type[garde]], collapse = ","), "\n")
-verifier_refus("colonne obligatoire absente : colonne_absente",
-               lire_base(dossier_avec(list(contrats.csv = csv_sans))), "colonne_absente")
+r <- lire_base(dossier_avec(list(contrats.csv = csv_sans)))
+verifier("colonne obligatoire absente : table rendue sans elle (le contrôle des types ou de la base la refuse)",
+         identical(names(r$contrats), col$colonne[garde]) &&
+           identical(motif_de_refus(controler_types(r)), "colonne_absente"))
 e <- refus_de(lire_avec("extraction", list(version_dictionnaire = "\"1.2\"", date_extraction = "31/12/2026")))
 verifier("version 1.2 : extraction_invalide, avant le type des autres colonnes",
          !is.null(e) && e$motif == "extraction_invalide" && identical(e$recu, "1.2"))
@@ -271,35 +339,50 @@ verifier("version 1.4, version précédente : extraction_invalide, attendu 1.5, 
 verifier_refus("table extraction de deux lignes : extraction_invalide",
                lire_avec("extraction", list(version_dictionnaire = "\"1.5\""), lignes = 2L),
                "extraction_invalide")
+e <- refus_de(lire_avec("extraction", list(version_dictionnaire = "\"1.5\"", date_extraction = "31/12/2026")))
+verifier("extraction : date illisible, refus d'appel type_incompatible (seule table contrôlée strictement à la lecture)",
+         !is.null(e) && e$motif == "type_incompatible" && e$table == "extraction" && e$colonne == "date_extraction")
+e <- refus_de(lire_avec("extraction", list(version_dictionnaire = "\"\"")))
+verifier("extraction : version \"\" (chaîne vide) : extraction_invalide, reçu \"\"",
+         !is.null(e) && e$motif == "extraction_invalide" && identical(e$recu, ""))
+csv_ext <- sub("\n", ",inconnue\n", csv_de("extraction", list(version_dictionnaire = "\"1.5\"")), fixed = TRUE)
+csv_ext <- sub("\n$", ",\"v\"\n", csv_ext)
+verifier_refus("extraction : colonne inconnue : colonne_inconnue (refus d'appel)",
+               lire_base(dossier_avec(list(extraction.csv = csv_ext))), "colonne_inconnue")
+e <- refus_de(lire_base(dossier_avec(list(extraction.csv = csv_de("extraction", list(version_dictionnaire = "\"1.5\"",
+                                                                                     date_extraction = "x")),
+                                          contrats.csv = sub("\"x\"", "\"x", csv_de("contrats"))))))
+verifier("extraction contrôlée une fois tous les fichiers lus : un fichier mal formé est refusé d'abord",
+         !is.null(e) && e$motif == "fichier_invalide" && e$table == "contrats")
 
 section("lecture : dossier et fichiers")
 e <- refus_de(lire_base(dossier_avec(list(contrats.csv = csv_de("contrats"), contrat.csv = "a\n"))))
-verifier("fichier inconnu du dictionnaire (contrat.csv) : liste_invalide, fichier nommé",
-         !is.null(e) && e$motif == "liste_invalide" && identical(e$identifiants, "contrat.csv"))
-verifier_refus("fichier d'une autre extension (notes.txt) : liste_invalide",
-               lire_base(dossier_avec(list(notes.txt = "x\n"))), "liste_invalide")
-verifier_refus("fichier caché : liste_invalide", lire_base(dossier_avec(list(.cache = "x\n"))), "liste_invalide")
+verifier("fichier inconnu du dictionnaire (contrat.csv) : fichier_invalide, fichier nommé",
+         !is.null(e) && e$motif == "fichier_invalide" && identical(e$identifiants, "contrat.csv"))
+verifier_refus("fichier d'une autre extension (notes.txt) : fichier_invalide",
+               lire_base(dossier_avec(list(notes.txt = "x\n"))), "fichier_invalide")
+verifier_refus("fichier caché : fichier_invalide", lire_base(dossier_avec(list(.cache = "x\n"))), "fichier_invalide")
 x <- dossier_avec(); dir.create(file.path(x, "contrats.csv"))
-verifier_refus("dossier nommé <table>.csv : liste_invalide", lire_base(x), "liste_invalide")
-verifier_refus("dossier introuvable : liste_invalide", lire_base(file.path(tempdir(), "absent-xyz")),
-               "liste_invalide")
+verifier_refus("dossier nommé <table>.csv : fichier_invalide", lire_base(x), "fichier_invalide")
+verifier_refus("dossier introuvable : fichier_invalide", lire_base(file.path(tempdir(), "absent-xyz")),
+               "fichier_invalide")
 x <- tempfile("fichier-"); ecrire_octets(x, "x\n")
 e <- refus_de(lire_base(x))
-verifier("chemin d'un fichier : liste_invalide, « n'est pas un dossier » (pas « introuvable »)",
-         !is.null(e) && e$motif == "liste_invalide" && grepl("n'est pas un dossier", conditionMessage(e), fixed = TRUE))
+verifier("chemin d'un fichier : fichier_invalide, « n'est pas un dossier » (pas « introuvable »)",
+         !is.null(e) && e$motif == "fichier_invalide" && grepl("n'est pas un dossier", conditionMessage(e), fixed = TRUE))
 csv_virgule <- sub("^id_contrat", "\"id,contrat\"", csv_de("contrats"))
-e <- refus_de(lire_base(dossier_avec(list(contrats.csv = csv_virgule))))
-verifier("nom d'en-tête entre guillemets avec une virgule : colonne_inconnue (en-tête bien lu), pas fichier mal formé",
-         !is.null(e) && e$motif == "colonne_inconnue" && identical(e$colonne, "id,contrat"))
+r <- lire_base(dossier_avec(list(contrats.csv = csv_virgule)))
+verifier("nom d'en-tête entre guillemets avec une virgule : colonne « id,contrat » (en-tête bien lu), pas fichier mal formé",
+         identical(names(r$contrats)[1L], "id,contrat") && identical(r$contrats[[1L]], "x"))
 csv_guillemet <- sub("^id_contrat", "\"id\"\"contrat\"", csv_de("contrats"))
-e <- refus_de(lire_base(dossier_avec(list(contrats.csv = csv_guillemet))))
-verifier("nom d'en-tête avec un guillemet doublé : colonne_inconnue",
-         !is.null(e) && e$motif == "colonne_inconnue" && identical(e$colonne, "id\"contrat"))
-verifier_refus("chemin qui n'est pas une chaîne unique : liste_invalide", lire_base(c("a", "b")),
-               "liste_invalide")
+r <- lire_base(dossier_avec(list(contrats.csv = csv_guillemet)))
+verifier("nom d'en-tête avec un guillemet doublé : colonne « id\"contrat »",
+         identical(names(r$contrats)[1L], "id\"contrat"))
+verifier_refus("chemin qui n'est pas une chaîne unique : fichier_invalide", lire_base(c("a", "b")),
+               "fichier_invalide")
 verifier("dossier vide : base vide", identical(lire_base(dossier_avec()), list()))
 
-section("lecture : fichiers mal formés, refusés (liste_invalide)")
+section("lecture : fichiers mal formés, refusés (fichier_invalide)")
 valide <- csv_de("contrats")
 mal_formes <- list(
   "fichier vide" = "",
@@ -319,8 +402,32 @@ mal_formes <- list(
   "guillemets ouverts au milieu d'un champ (ab\"cd\")" = sub("\"x\"", "ab\"cd\"", valide)
 )
 for (cas in names(mal_formes)) {
-  verifier_refus(cas, lire_base(dossier_avec(list(contrats.csv = mal_formes[[cas]]))), "liste_invalide")
+  verifier_refus(cas, lire_base(dossier_avec(list(contrats.csv = mal_formes[[cas]]))), "fichier_invalide")
 }
+
+section("lecture : en-tête (réserve C2 : message juste, texte exact des noms)")
+message_de <- function(texte) {
+  e <- refus_de(lire_base(dossier_avec(list(contrats.csv = texte))))
+  if (is.null(e)) "aucun" else paste(e$motif, conditionMessage(e))
+}
+verifier("première ligne vide : fichier_invalide, « première ligne vide », pas « un champ de moins »",
+         grepl("^fichier_invalide .*re ligne vide ; l'en-t", message_de(paste0("\n", valide))) &&
+           !grepl("un champ de moins", message_de(paste0("\n", valide)), fixed = TRUE))
+verifier("en-tête d'un champ de moins : « un champ de moins que les lignes de données »",
+         grepl("^fichier_invalide .*un champ de moins", message_de(sub("^id_contrat,", "", valide))))
+r <- lire_base(dossier_avec(list(contrats.csv = sub("^id_contrat,nature_contrat", "id_contrat , nature_contrat", valide))))
+verifier("espaces autour d'un nom : noms rendus au texte exact de l'en-tête (« id_contrat  », «  nature_contrat »), pas de refus",
+         identical(names(r$contrats)[1:2], c("id_contrat ", " nature_contrat")) &&
+           identical(r$contrats[["id_contrat "]], "x"))
+verifier("nom de colonne vide dans l'en-tête : fichier_invalide",
+         grepl("^fichier_invalide .*nom de colonne vide", message_de(sub("^id_contrat", "", valide))))
+verifier("\"\" dans l'en-tête : fichier_invalide (nom de colonne vide)",
+         grepl("^fichier_invalide .*nom de colonne vide", message_de(sub("^id_contrat", "\"\"", valide))))
+verifier("nom de colonne en double : fichier_invalide, nom cité",
+         grepl("^fichier_invalide .*en double : id_contrat",
+               message_de(sub("^id_contrat,nature_contrat", "id_contrat,id_contrat", valide))))
+verifier("retour chariot dans un nom entre guillemets : fichier_invalide (en-tête)",
+         grepl("^fichier_invalide .*en-t", message_de(sub("^id_contrat", "\"id\rcontrat\"", valide))))
 
 # --- Écriture : refus avant toute écriture ---------------------------------------------------
 
@@ -332,7 +439,7 @@ verifier_refus("type incompatible (integer reçu en numeric) : type_incompatible
 x <- tempfile("base-")
 b <- base["contrats"]; b$contrats$id_contrat[1L] <- ""
 e <- refus_de(ecrire_base(b, x))
-verifier("chaîne vide \"\" : liste_invalide (elle serait relue NA), colonne nommée",
+verifier("chaîne vide \"\" : liste_invalide (hors domaine, une base écrite est conforme), colonne nommée",
          !is.null(e) && e$motif == "liste_invalide" && e$colonne == "id_contrat" && e$nombre == 1L)
 verifier("refus avant toute écriture : dossier non créé", !file.exists(x))
 b <- base["contrats"]; b$contrats$id_contrat[1L] <- "a\rb"
@@ -369,10 +476,12 @@ if (isTRUE(l10n_info()[["UTF-8"]])) {
            !is.null(e) && e$motif == "liste_invalide" && e$module == "lecture" && e$colonne == "id_contrat")
 }
 x <- dossier_avec(list(ancien.txt = "x\n"))
-verifier_refus("dossier existant non vide : liste_invalide", ecrire_base(base["contrats"], x), "liste_invalide")
+verifier_refus("dossier existant non vide : fichier_invalide", ecrire_base(base["contrats"], x), "fichier_invalide")
 x <- tempfile("fichier-"); ecrire_octets(x, "x\n")
-verifier_refus("chemin d'un fichier : liste_invalide", ecrire_base(base["contrats"], x), "liste_invalide")
-verifier_refus("parent du dossier absent : liste_invalide",
-               ecrire_base(base["contrats"], file.path(tempfile("absent-"), "base")), "liste_invalide")
+verifier_refus("chemin d'un fichier : fichier_invalide", ecrire_base(base["contrats"], x), "fichier_invalide")
+verifier_refus("parent du dossier absent : fichier_invalide",
+               ecrire_base(base["contrats"], file.path(tempfile("absent-"), "base")), "fichier_invalide")
+verifier_refus("chemin qui n'est pas une chaîne unique : fichier_invalide", ecrire_base(base["contrats"], NA_character_),
+               "fichier_invalide")
 x <- dossier_avec()
 verifier("dossier existant vide : admis", identical(lire_base(ecrire_base(base["contrats"], x)), base["contrats"]))

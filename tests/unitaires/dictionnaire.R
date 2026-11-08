@@ -58,7 +58,8 @@ section("dictionnaire : exports")
 verifier("dictionnaire() et controler_types() sont exportés",
          all(c("dictionnaire", "controler_types") %in% getNamespaceExports("provie")))
 verifier("les auxiliaires du module ne sont pas exportés",
-         !any(c(".lire_dictionnaire", ".controler_types_table", ".controler_extraction") %in%
+         !any(c(".lire_dictionnaire", ".controler_structure_table", ".constats_forme", ".controler_extraction",
+                "constater_forme", "lire_texte_type", "controler_version_extraction") %in%
                 getNamespaceExports("provie")))
 
 # --- Lecture du dictionnaire du package ---------------------------------------------------
@@ -200,6 +201,9 @@ verifier("référence composite vers la table qui la porte (affiliations) : refu
                motif_reference("affiliations.id_contrat;affiliations.college")))
 verifier_egal("référence simple (garanties_souscrites.college) : forme admise par le module, l'écart au texte relève de la concordance",
               motif_reference("garanties_souscrites.college"), "aucun")
+verifier("référence simple vers la colonne qui la porte (affiliations.college) : refus",
+         grepl("^dictionnaire_invalide .*vers la colonne qui la porte : affiliations\\.college$",
+               motif_reference("affiliations.college")))
 x <- copie_alteree("colonnes.csv", function(df) { df$defauts[df$defauts == "D01a"][1L] <- "D99"; df })
 verifier_refus("code de défaut inconnu", lire_dictionnaire(x), "dictionnaire_invalide")
 x <- copie_alteree("colonnes.csv", function(df) { df$colonne_saisie[df$saisie == "P"][1L] <- "date_effet"; df })
@@ -240,12 +244,30 @@ verifier("code de la forme d'un défaut (D09) : refus",
          grepl("^dictionnaire_invalide .*controles\\.csv : codes distincts",
                motif_controles(function(df) { df$code[4L] <- "D09"; df })))
 verifier("motif de refus d'appel hors de MOTIFS_REFUS : refus",
-         grepl("^dictionnaire_invalide .*hors de MOTIFS_REFUS : fichier_invalide",
-               motif_controles(function(df) { df$motif_refus_appel[4L] <- "fichier_invalide"; df })))
+         grepl("^dictionnaire_invalide .*hors de MOTIFS_REFUS : motif_inconnu",
+               motif_controles(function(df) { df$motif_refus_appel[4L] <- "motif_inconnu"; df })))
+verifier("motif de refus d'appel d'un autre code (plan_invalide sur manquant_obligatoire) : refus",
+         grepl("^dictionnaire_invalide .*controles\\.csv, ligne 5 : motif de refus d'appel diff",
+               motif_controles(function(df) { df$motif_refus_appel[4L] <- "plan_invalide"; df })))
+verifier("code qui est un motif de refus d'appel, sans ce motif (type_incompatible vidé) : refus",
+         grepl("^dictionnaire_invalide .*controles\\.csv, ligne 4 : motif de refus d'appel diff",
+               motif_controles(function(df) { df$motif_refus_appel[3L] <- ""; df })))
+verifier("code qui est un motif de refus d'appel, avec un autre motif (colonne_absente sur colonne_inconnue) : refus",
+         grepl("^dictionnaire_invalide .*controles\\.csv, ligne 3 : motif de refus d'appel diff",
+               motif_controles(function(df) { df$motif_refus_appel[2L] <- "colonne_absente"; df })))
+verifier("controles.csv sans aucun code : refus",
+         grepl("^dictionnaire_invalide .*controles\\.csv : aucun code",
+               motif_controles(function(df) df[0L, , drop = FALSE])))
+verifier("détection répétée (exacte;exacte) : refus",
+         grepl("^dictionnaire_invalide .*controles\\.csv, ligne 2 : d.*sans r",
+               motif_controles(function(df) { df$detection[1L] <- "exacte;exacte"; df })))
 verifier("détection hors de exacte, presomptive : refus",
          startsWith(motif_controles(function(df) { df$detection[1L] <- "probable"; df }), "dictionnaire_invalide"))
 verifier("objet vide : refus",
          startsWith(motif_controles(function(df) { df$objet[1L] <- ""; df }), "dictionnaire_invalide"))
+verifier("objet blanc (espaces et tabulation) : refus",
+         grepl("^dictionnaire_invalide .*controles\\.csv, ligne 2 : objet absent",
+               motif_controles(function(df) { df$objet[1L] <- " \t "; df })))
 verifier_egal("portée colonne (admise, non employée par le texte 1.5) : admise",
               motif_controles(function(df) { df$portee[3L] <- "colonne"; df }), "aucun")
 
@@ -374,6 +396,112 @@ verifier_egal("deux lignes dont une d'une autre version : extraction_invalide su
               refus_de(controler_types(b))$colonne, "version_dictionnaire")
 verifier_egal("version contrôlée avant les autres tables (extraction est T1)",
               motif_de(controler_types(b)), "extraction_invalide")
+
+section("controler_types : tous les écarts de forme relevés avant le refus")
+b <- base
+b$contrats$inconnue <- character(0)
+b$contrats$mois_echeance <- numeric(0)
+b$contrats$id_contrat <- NULL
+b$evaluations_gestion[[d$colonnes$colonne[d$colonnes$table == "evaluations_gestion" &
+                                            d$colonnes$type == "Date"][1L]]] <- character(0)
+e <- refus_de(controler_types(b))
+verifier_egal("quatre écarts dans deux tables : nombre", e$nombre, 4L)
+verifier_egal("identifiants : <table>.<colonne> de chaque écart, ordre des tables puis de constater_forme()",
+              e$identifiants,
+              c("contrats.inconnue", "contrats.id_contrat", "contrats.mois_echeance",
+                paste0("evaluations_gestion.", d$colonnes$colonne[d$colonnes$table == "evaluations_gestion" &
+                                                                    d$colonnes$type == "Date"][1L])))
+verifier("motif, table et colonne du premier écart (colonne inconnue de contrats)",
+         e$motif == "colonne_inconnue" && e$table == "contrats" && e$colonne == "inconnue" && e$module == "dictionnaire")
+verifier("chaque écart est nommé dans le message",
+         all(vapply(c("colonne inconnue", "colonne obligatoire ou conditionnelle absente",
+                      "type integer attendu, numeric", "evaluations_gestion"),
+                    function(m) grepl(m, conditionMessage(e), fixed = TRUE), NA)))
+b <- base   # contrats d'une ligne, colonnes manquantes, sauf date_effet en texte
+b$contrats <- data.frame(lapply(base$contrats, function(x) x[NA_integer_]), stringsAsFactors = FALSE)
+b$contrats$date_effet <- "2026-01-01"
+e <- refus_de(controler_types(b))
+verifier("Date reçue en texte entièrement lisible : type_incompatible, « la colonne n'est pas convertie »",
+         !is.null(e) && e$motif == "type_incompatible" && e$recu == "character" &&
+           grepl("toutes les valeurs se lisent dans le type Date", conditionMessage(e), fixed = TRUE))
+b$contrats$date_effet <- "2026-02-30"
+e <- refus_de(controler_types(b))
+verifier("Date reçue en texte illisible : la valeur et sa ligne sont citées",
+         !is.null(e) && grepl("2026-02-30", conditionMessage(e), fixed = TRUE) &&
+           grepl("date inexistante", conditionMessage(e), fixed = TRUE))
+
+section("constater_forme : relevé sans interruption (seam de la règle de forme)")
+verifier("constater_forme() n'est pas exportée, et existe sans point dans le package",
+         !("constater_forme" %in% getNamespaceExports("provie")) && is.function(ns$constater_forme))
+constater_forme <- ns$constater_forme
+c0 <- constater_forme(base$contrats, "contrats", d)
+verifier("table conforme : aucun écart, data.frame de la forme attendue",
+         is.data.frame(c0) && nrow(c0) == 0L &&
+           identical(names(c0), c("table", "colonne", "code", "attendu", "recu", "nombre", "lignes", "message")))
+t1 <- data.frame(lapply(base$contrats, function(x) x[c(NA_integer_, NA_integer_, NA_integer_)]),
+                 stringsAsFactors = FALSE)
+t1$mois_echeance <- c("1", "x", NA)
+t1$date_effet <- 1:3
+t1$id_adherent <- NULL
+t1$zz <- "a"
+c1 <- constater_forme(t1, "contrats", d)
+verifier_egal("écarts : colonne inconnue d'abord, puis colonnes du dictionnaire dans leur ordre",
+              paste(c1$colonne, c1$code),
+              c("zz colonne_inconnue", "id_adherent colonne_absente", "date_effet type_incompatible",
+                "mois_echeance type_incompatible"))
+verifier_egal("lignes d'une colonne restée en texte : les seules valeurs illisibles (ligne 2)",
+              c1$lignes[[4L]], 2L)
+verifier_egal("lignes d'une colonne d'un autre type : toutes les lignes", c1$lignes[[3L]], 1:3)
+verifier_egal("nombre : lignes concernées, NA pour une colonne absente ou inconnue", c1$nombre, c(NA, NA, 3L, 1L))
+verifier_egal("attendu et reçu", paste(c1$attendu, c1$recu),
+              c("NA NA", "NA NA", "Date integer", "integer character"))
+verifier("codes : ceux de controles.csv", all(c1$code %in% d$controles$code))
+verifier("la table n'est pas modifiée", identical(t1$mois_echeance, c("1", "x", NA)))
+verifier_refus("table inconnue : liste_invalide", constater_forme(t1, "contrat", d), "liste_invalide")
+verifier_refus("objet qui n'est pas un data.frame : liste_invalide", constater_forme(list(), "contrats", d),
+               "liste_invalide")
+t2 <- t1; names(t2)[2L] <- names(t2)[1L]
+verifier_refus("noms de colonnes dupliqués : liste_invalide", constater_forme(t2, "contrats", d), "liste_invalide")
+
+section("lire_texte_type : grammaire stricte, sans conversion ni refus")
+lire_texte_type <- ns$lire_texte_type
+verifier("lire_texte_type() n'est pas exportée, et existe sans point dans le package",
+         !("lire_texte_type" %in% getNamespaceExports("provie")) && is.function(lire_texte_type))
+verifier("controler_version_extraction() n'est pas exportée, et existe sans point dans le package",
+         !("controler_version_extraction" %in% getNamespaceExports("provie")) &&
+           is.function(ns$controler_version_extraction) &&
+           !exists(".controler_version_extraction", envir = ns, inherits = FALSE))
+lisible <- function(x, type, attendu) {
+  r <- lire_texte_type(x, type)
+  identical(r$valeurs, attendu) && length(r$illisibles) == 0L && identical(r$precision, "")
+}
+verifier("integer : 007, -0, bornes, champ vide", lisible(c("007", "-0", "2147483647", "-2147483647", NA), "integer",
+                                                          c(7L, 0L, 2147483647L, -2147483647L, NA)))
+verifier("numeric : exposant, zéros de tête", lisible(c("1.5e-3", "007.50", NA), "numeric", c(1.5e-3, 7.5, NA)))
+verifier("Date : stockée en double", {
+  r <- lire_texte_type(c("2026-01-01", NA), "Date")
+  identical(r$valeurs, as.Date(c("2026-01-01", NA))) && is.double(r$valeurs)
+})
+verifier("logical : TRUE, FALSE", lisible(c("TRUE", "FALSE", NA), "logical", c(TRUE, FALSE, NA)))
+verifier("character : toute chaîne, \"\" comprise", lisible(c("", "NA", " a"), "character", c("", "NA", " a")))
+illisible <- function(x, type, illisibles, precision) {
+  r <- lire_texte_type(x, type)
+  is.null(r$valeurs) && identical(r$illisibles, illisibles) && grepl(precision, r$precision, fixed = TRUE)
+}
+verifier("integer : \"\" illisible, hors bornes, première règle rendue",
+         illisible(c("1", "", "2147483648", "1.0"), "integer", c(2L, 3L, 4L), "sans point ni exposant"))
+verifier("integer : hors bornes seul", illisible(c("1", "-2147483648"), "integer", 2L, "bornes"))
+verifier("numeric : dépassement et soupassement", illisible(c("1e400", "1", "1e-400"), "numeric", c(1L, 3L), "tendue"))
+verifier("numeric : 0e-999 (zéro écrit) lisible", lisible("0e-999", "numeric", 0))
+verifier("Date : date inexistante", illisible(c("2026-02-30", "2026-01-01"), "Date", 1L, "date inexistante"))
+verifier("Date : forme", illisible(c("2026/01/02", ""), "Date", 1:2, "AAAA-MM-JJ"))
+verifier("logical : T, true, \"\"", illisible(c("T", "true", "", "TRUE"), "logical", 1:3, "TRUE ou FALSE"))
+verifier("aucun avertissement sur des valeurs illisibles (as.numeric non appliqué aux illisibles)", {
+  withCallingHandlers({ lire_texte_type(c("abc", "1"), "numeric"); lire_texte_type(c("abc", "1"), "integer"); TRUE },
+                      warning = function(w) stop("avertissement"))
+})
+verifier("type hors des cinq : erreur", inherits(tryCatch(lire_texte_type("1", "factor"), error = function(e) e), "error"))
+verifier("x non character : erreur", inherits(tryCatch(lire_texte_type(1, "integer"), error = function(e) e), "error"))
 
 # --- Témoins du contrôle de concordance --------------------------------------------------
 
