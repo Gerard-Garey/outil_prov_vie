@@ -60,7 +60,7 @@
 % Dans un guide, \datedoc est une date figée (jamais \today) et \statutdoc
 % vaut Projet ou Final ; \datedroit est la date de référence du droit.
 \newcommand{\annee}{2026}
-\newcommand{\datedoc}{7 novembre 2026}
+\newcommand{\datedoc}{8 novembre 2026}
 \newcommand{\versiondoc}{0.1}
 \newcommand{\statutdoc}{Projet}
 \newcommand{\titredoc}{Documentation du package provie}
@@ -881,8 +881,10 @@ Le module \code{outils} (\code{R/outils.R}) rend des services sans contenu
 métier aux autres modules~: refus classés, graine locale, empreinte,
 écriture canonique des valeurs, sérialisation d'une liste nommée en texte,
 description de la plateforme. Il n'appelle aucun autre module. Toute source
-d'aléa du package passe par \code{avec\_graine()}. Aucune fonction du module
-n'est exportée.
+d'aléa du package passe par \code{avec\_graine()}~: aucun autre fichier de
+\code{R/} ne règle le générateur pseudo-aléatoire, ce que vérifie un script
+de contrôle (section~\ref{sec:controles}). Aucune fonction du module n'est
+exportée.
 
 \begin{center}
 \small
@@ -892,22 +894,254 @@ n'est exportée.
 \rowcolor{tableheader}
 \textcolor{financeblue}{\textbf{Fonction}} & \textcolor{financeblue}{\textbf{Arguments}} & \textcolor{financeblue}{\textbf{Rôle}} \\
 \code{refuser()} & \code{message}, \code{motif}, champs facultatifs & Lève un refus d'appel~: condition de classe \code{refus\_provie} (qui hérite de \code{error}), qui interrompt l'appel sans rendre d'objet\fsp; le motif est pris dans la liste fermée \code{MOTIFS\_REFUS}\fsp; les champs facultatifs (\code{module}, \code{table}, \code{colonne}, \code{usage}, \code{nombre}, \code{identifiants}, \code{attendu}, \code{recu}) situent le refus, les identifiants étant tronqués à dix. \\
-\code{avec\_graine()} & \code{graine}, \code{expr} & Évalue \code{expr} sous le générateur Mersenne-Twister (échantillonneurs Inversion et Rejection) et la graine donnée, puis restaure l'état global du générateur, même en cas d'erreur. \\
-\code{empreinte()} & \code{octets} & Rend le MD5 d'un vecteur d'octets (\code{raw}), en 32 caractères hexadécimaux minuscules. \\
-\code{ecrire\_valeurs()} & \code{x}, \code{forme = "texte"} & Écrit un vecteur atomique simple (logique, entier, réel, caractère, date) sous sa forme canonique~: en texte, une chaîne par valeur (réels à 17 chiffres significatifs, dates ISO~8601)\fsp; en octets, sans étiquette de type, nombres en petit-boutiste. \\
-\code{ecrire\_liste()} & \code{x} & Sérialise une liste nommée en texte aplati UTF-8, une ligne par feuille (chemin, type, valeurs), rendu en octets\fsp; n'écrit aucun fichier. \\
+\code{avec\_graine()} & \code{graine}, \code{expr} & Évalue \code{expr} sous le générateur Mersenne-Twister (échantillonneurs Inversion et Rejection) et la graine donnée, puis rétablit les genres du générateur et la graine de l'appelant, même en cas d'erreur (section~\ref{sec:graine}). \\
+\code{empreinte()} & \code{octets} & Rend le MD5 d'un vecteur d'octets (\code{raw}), en 32 caractères hexadécimaux minuscules, calculé par \code{tools::md5sum()} sur un fichier temporaire supprimé à la sortie (R~4.3.3 ne calcule le MD5 que d'un fichier). \\
+\code{ecrire\_valeurs()} & \code{x}, \code{forme = "texte"} & Écrit un vecteur atomique simple (logique, entier, réel, caractère, date) sous sa forme canonique~: en texte, une chaîne par valeur (réels à 17 chiffres significatifs, dates ISO~8601)\fsp; en octets, sans étiquette de type, nombres en petit-boutiste (section~\ref{sec:ecriture}). \\
+\code{ecrire\_liste()} & \code{x} & Sérialise une liste nommée en texte aplati UTF-8, une ligne par feuille (chemin, type, valeurs), rendu en octets\fsp; n'écrit aucun fichier (section~\ref{sec:format-liste}). \\
 \code{lire\_liste()} & \code{octets} & Relit, sans évaluer de code, les octets écrits par \code{ecrire\_liste()}\fsp; refuse tout texte qui n'est pas canonique, de sorte que l'aller-retour rend une liste identique. \\
 \code{decrire\_plateforme()} & Aucun & Décrit la plateforme d'exécution pour la fiche de calcul (version de R, système, machine, boutisme, bibliothèques d'algèbre linéaire, d'expressions régulières et Unicode), en liste sérialisable par \code{ecrire\_liste()}, sans date ni nom d'utilisateur. \\
 \end{tabular}
 \end{center}
 
-Le module porte aussi les constantes partagées~: \code{VERSION\_FICHE}
-(version du format de la fiche de calcul),
-\code{VERSION\_DICTIONNAIRE\_ATTENDUE} (version du dictionnaire de la base
-que le moteur accepte), \code{REPRESENTATION\_CANONIQUE} (identifiant de la
-représentation canonique du résultat), \code{VERSION\_LISTE} (version du
-format de sérialisation des listes) et \code{MOTIFS\_REFUS} (liste fermée
-des motifs de refus d'appel).
+Le module porte aussi les cinq constantes partagées du package
+(section~\ref{sec:outils-constantes}).
+
+% =============================================================================
+\section{Constantes et motifs de refus}
+\label{sec:outils-constantes}
+% =============================================================================
+
+Les constantes sont citées d'après le code (\code{R/outils.R}).
+
+\begin{center}
+\small
+\rowcolors{2}{tablerow}{white}
+\begin{tabular}{@{}p{5.6cm}p{3.7cm}p{5.8cm}@{}}
+\rowcolor{tableheader}
+\textcolor{financeblue}{\textbf{Constante}} & \textcolor{financeblue}{\textbf{Valeur}} & \textcolor{financeblue}{\textbf{Objet}} \\
+\code{VERSION\_FICHE} & entier \code{1} & Version du format de la fiche de calcul. Aucune fonction ne la lit encore. \\
+\code{VERSION\_DICTIONNAIRE\_ATTENDUE} & \code{"1.3"} & Version du dictionnaire de la base attendue par le moteur (dictionnaire de la base, version~1.3). Aucune fonction ne la lit encore~: le contrôle de la table \code{extraction} viendra avec le module \code{donnees}. \\
+\code{REPRESENTATION\_CANONIQUE} & \code{"provie-resultat-1"} & Identifiant de la représentation canonique du résultat. Aucune fonction ne la lit encore. \\
+\code{VERSION\_LISTE} & entier \code{1} & Version du format de sérialisation des listes (section~\ref{sec:format-liste}). \\
+\code{MOTIFS\_REFUS} & dix-sept motifs & Liste fermée des motifs de refus d'appel (ci-dessous). \\
+\end{tabular}
+\end{center}
+
+\textbf{Refus d'appel.} La fonction \code{refuser()} lève une condition R
+de classe \code{refus\_provie}, qui hérite de \code{error}~: l'appel est
+interrompu sans rendre d'objet, et l'appelant peut attraper la condition
+par sa classe et lire son motif. Le motif doit appartenir à la liste fermée
+\code{MOTIFS\_REFUS}. Un motif hors de la liste, ou un champ facultatif mal
+formé (\code{module}, \code{table}, \code{colonne} ou \code{usage} qui n'est
+pas une chaîne unique, \code{nombre} qui n'est pas un entier unique,
+\code{attendu} ou \code{recu} qui n'est pas une valeur atomique unique), est
+une erreur de programmation~: \code{refuser()} lève alors une erreur R
+ordinaire, qui n'est pas un refus d'appel. Les \code{identifiants} sont
+tronqués aux dix premiers\fsp; \code{nombre} porte le total, quand
+l'appelant le renseigne.
+
+La liste fermée compte dix-sept motifs. Dans l'état du code, seules les
+fonctions du module \code{outils} lèvent des refus, avec deux motifs~;
+les quinze autres sont réservés aux modules qui les lèveront, et leur sens
+se documentera avec eux.
+
+\begin{center}
+\small
+\rowcolors{2}{tablerow}{white}
+\begin{tabular}{@{}p{5.6cm}p{9.5cm}@{}}
+\rowcolor{tableheader}
+\textcolor{financeblue}{\textbf{Motif}} & \textcolor{financeblue}{\textbf{Levé, dans l'état du code, par}} \\
+\code{plan\_incomplet} & Aucune fonction. \\
+\code{plan\_invalide} & Aucune fonction. \\
+\code{liste\_invalide} & \code{ecrire\_valeurs()}, \code{ecrire\_liste()} et \code{lire\_liste()}~: valeur, liste ou texte que l'écriture canonique ou le format de liste n'admet pas (sections~\ref{sec:ecriture} et~\ref{sec:format-liste}). \\
+\code{table\_base\_absente} & Aucune fonction. \\
+\code{colonne\_absente} & Aucune fonction. \\
+\code{colonne\_inconnue} & Aucune fonction. \\
+\code{type\_incompatible} & Aucune fonction. \\
+\code{extraction\_invalide} & Aucune fonction. \\
+\code{arrete\_posterieur\_extraction} & Aucune fonction. \\
+\code{declaration\_manquante} & Aucune fonction. \\
+\code{table\_absente} & Aucune fonction. \\
+\code{empreinte\_discordante} & Aucune fonction. \\
+\code{version\_discordante} & \code{lire\_liste()}~: en-tête d'une autre version du format de liste, avec la version attendue (\code{attendu}) et la version reçue (\code{recu}). \\
+\code{lien\_non\_declare} & Aucune fonction. \\
+\code{catalogue\_invalide} & Aucune fonction. \\
+\code{dictionnaire\_invalide} & Aucune fonction. \\
+\code{format\_table\_inconnu} & Aucune fonction. \\
+\end{tabular}
+\end{center}
+
+% =============================================================================
+\section{Graine locale}
+\label{sec:graine}
+% =============================================================================
+
+\code{avec\_graine(graine, expr)} est la seule voie vers l'aléa dans le
+package. La graine doit être une valeur numérique entière et finie, au plus
+égale en valeur absolue au plus grand entier de R (\code{.Machine\$integer.max})\fsp;
+sinon la fonction lève une erreur R ordinaire. La fonction procède ainsi~:
+
+\begin{enumerate}[itemsep=2pt]
+\item elle relève l'état global de l'appelant~: la présence et la valeur de
+  la graine courante (\code{.Random.seed}), et les trois genres du
+  générateur (\code{RNGkind()})~: générateur uniforme, échantillonneur de
+  la loi normale, échantillonneur de \code{sample()}\fsp;
+\item elle fixe les genres Mersenne-Twister, Inversion et Rejection, puis la
+  graine (\code{set.seed()})\fsp;
+\item elle évalue \code{expr}, dans l'environnement de l'appelant, et rend
+  sa valeur\fsp;
+\item à la sortie, que l'évaluation ait réussi ou non, elle rétablit les
+  trois genres de l'appelant, puis sa graine~: la graine est réaffectée si
+  elle existait, supprimée sinon. Le rétablissement de la graine est fait
+  même si celui des genres échoue.
+\end{enumerate}
+
+Rétablir l'échantillonneur «~Rounding~» de \code{sample()} (celui de R
+antérieur à la version~3.6.0) fait émettre par R un avertissement, qui n'a
+pas à sortir d'une restauration. Quand l'échantillonneur de l'appelant est
+«~Rounding~», le rétablissement des genres est donc fait sous
+\code{suppressWarnings()}, par décision du mainteneur du 7~novembre~2026.
+Dans tous les autres cas, un avertissement émis par le rétablissement
+remonte à l'appelant, et devient une erreur si les avertissements sont
+convertis en erreurs (\code{options(warn = 2)}, comme dans les batteries de
+tests)~; c'est le cas, par décision du mainteneur du même jour, de
+l'avertissement de l'échantillonneur de la loi normale «~Buggy
+Kinderman-Ramage~». Les genres et la graine de l'appelant sont rétablis dans
+les deux cas. Une limite subsiste~: si l'appelant combine «~Buggy
+Kinderman-Ramage~» et «~Rounding~», l'avertissement du premier est étouffé
+avec celui du second (issue~27 du dépôt).
+
+Statut~: la batterie de reproductibilité constate, sur la plateforme où
+elle tourne, que deux appels de même graine rendent les mêmes tirages, que
+la graine et les genres de l'appelant sont rétablis à l'identique, y
+compris après une erreur dans \code{expr}, et que la suite des tirages de
+l'appelant est inchangée. Elle compare aussi trois tirages sous une graine
+fixée à des valeurs écrites en dur, à une tolérance relative déclarée~; en
+intégration continue, cette comparaison tourne sur la plateforme de
+référence (section~\ref{sec:batteries}). La fonction ne garantit pas, à
+elle seule, l'identité des tirages d'une plateforme à l'autre.
+
+% =============================================================================
+\section{Écriture canonique des valeurs}
+\label{sec:ecriture}
+% =============================================================================
+
+\code{ecrire\_valeurs(x, forme)} écrit un vecteur atomique simple~: logique,
+entier, réel ou caractère sans aucun attribut, ou date (vecteur de réels qui
+porte le seul attribut de classe \code{Date}). Tout autre objet (facteur,
+vecteur nommé, complexe, liste\ldots) est refusé (\code{liste\_invalide}).
+
+\textbf{Forme texte} (\code{forme = "texte"}), une chaîne par valeur~:
+
+\begin{itemize}[itemsep=2pt]
+\item logique~: \code{T}, \code{F}, \code{NA}\fsp;
+\item entier~: écriture décimale, \code{NA}\fsp;
+\item réel~: 17 chiffres significatifs (format \code{\%.17g}), jetons
+  \code{NA}, \code{NaN}, \code{Inf} et \code{-Inf}\fsp; le zéro négatif
+  s'écrit \code{0}. Dix-sept chiffres significatifs suffisent à retrouver
+  exactement tout réel double précision de la norme IEEE~754 (résultat
+  exact, propriété du format binaire64, sous réserve que l'écriture et la
+  relecture décimales de la bibliothèque C soient correctement
+  arrondies)\fsp; la batterie de reproductibilité
+  le constate sur trois mille réels, relus au bit près\fsp;
+\item date~: ISO~8601, \code{AAAA-MM-JJ}, l'année complétée à quatre chiffres
+  (l'an~999 s'écrit \code{0999})\fsp; \code{NA}. Une date non entière, infinie
+  ou dont l'année ne tient pas sur quatre chiffres est refusée
+  (\code{liste\_invalide})\fsp;
+\item caractère~: la chaîne en UTF-8, la barre oblique inverse, la
+  tabulation, le saut de ligne et le retour chariot étant échappés en
+  \code{\textbackslash\textbackslash}, \code{\textbackslash t},
+  \code{\textbackslash n} et \code{\textbackslash r}, les autres caractères
+  de contrôle et le caractère DEL en \code{\textbackslash x} suivi de deux
+  chiffres hexadécimaux minuscules\fsp; une valeur manquante s'écrit
+  \code{\textbackslash N}.
+\end{itemize}
+
+\textbf{Forme octets} (\code{forme = "octets"}), un vecteur \code{raw} sans
+étiquette de type (le type doit donc être connu de celui qui relit)~:
+logique sur un octet (0, 1, et 2 pour \code{NA})\fsp; entier sur quatre
+octets petit-boutistes\fsp; réel sur huit octets IEEE~754 petit-boutistes,
+\code{NA} et \code{NaN} sur deux motifs fixes (\code{7FF00000000007A2} et
+\code{7FF8000000000000} en hexadécimal, octet de poids fort en tête), le
+zéro négatif écrit comme \code{0}\fsp; caractère par sa longueur en octets
+UTF-8 sur quatre octets petit-boutistes (\code{FFFFFFFF} pour \code{NA}),
+suivie de ses octets UTF-8\fsp; date comme sa chaîne ISO~8601.
+
+\textbf{Encodage des chaînes.} Les chaînes sont ramenées en UTF-8 sans
+jamais être corrigées~: une chaîne ASCII est prise telle quelle\fsp; une
+chaîne marquée UTF-8 est validée\fsp; une chaîne marquée Latin-1 est
+traduite en UTF-8\fsp; une chaîne marquée «~bytes~» est refusée. Une chaîne
+non ASCII sans marque d'encodage est refusée si la locale de la session
+n'est pas UTF-8, et validée comme UTF-8 sinon. Le refus vient de ce que R
+ne sait pas dire, hors locale UTF-8, quel est l'encodage d'une chaîne non
+marquée~: la convertir écrirait d'autres octets que les siens (constat du
+7~novembre~2026 sous R~4.3.3~: les deux octets de «~é~» sont devenus le
+texte \code{<c3><a9>}). Une chaîne qui n'est pas de l'UTF-8 valide est
+refusée. Tous ces refus portent le motif \code{liste\_invalide}. Cette règle
+vaut aussi pour les noms d'une liste sérialisée (section~\ref{sec:format-liste})\fsp;
+une chaîne lue d'un fichier doit donc porter la marque UTF-8 pour être
+écrite sous toute locale.
+
+% =============================================================================
+\section{Format provie-liste 1}
+\label{sec:format-liste}
+% =============================================================================
+
+\code{ecrire\_liste(x)} sérialise une liste nommée en un texte UTF-8, rendu
+en octets (l'écriture d'un fichier revient à l'appelant). Le format porte le
+numéro \code{VERSION\_LISTE}~:
+
+\begin{itemize}[itemsep=2pt]
+\item lignes terminées par un saut de ligne, y compris la dernière\fsp;
+  première ligne \code{provie-liste 1}\fsp;
+\item puis une ligne par feuille, dans l'ordre des éléments de la liste,
+  sous-listes parcourues en profondeur, faite de champs séparés par une
+  tabulation~: le chemin, le type, puis une valeur par élément du
+  vecteur (aucune pour un vecteur vide), écrite sous la forme texte de la
+  section~\ref{sec:ecriture}\fsp;
+\item le chemin joint par \code{/} les noms des ancêtres et de la feuille,
+  chaque nom échappé comme une chaîne, et le caractère \code{/} d'un nom
+  écrit \code{\textbackslash x2f}\fsp;
+\item le type est l'un de \code{null}, \code{liste} (liste vide),
+  \code{logical}, \code{integer}, \code{double}, \code{character},
+  \code{date}.
+\end{itemize}
+
+Une feuille est \code{NULL}, une liste vide ou un vecteur atomique simple.
+Les éléments d'une liste non vide ont des noms renseignés et distincts, et
+aucune liste ne porte d'autre attribut que ses noms\fsp; sinon l'écriture est
+refusée (\code{liste\_invalide}). Une liste vide s'écrit par la seule ligne
+d'en-tête. Par exemple, la liste \code{list(a = 1.5, b = list(c = "x", d =
+NULL))} s'écrit en trois lignes (la tabulation est figurée ici par un
+espacement)~:
+
+\begin{encadre}
+\small
+\code{provie-liste 1}\\
+\code{a}\quad\code{double}\quad\code{1.5}\\
+\code{b/c}\quad\code{character}\quad\code{x}\\
+\code{b/d}\quad\code{null}
+\end{encadre}
+
+\textbf{Lecture stricte.} La fonction \code{lire\_liste(octets)} relit ce
+texte sans évaluer de code. Elle refuse, par le motif
+\code{liste\_invalide}, un contenu qui contient un octet nul, qui n'est pas de l'UTF-8 valide ou qui ne finit pas
+par un saut de ligne, un en-tête absent, une ligne sans chemin ou sans
+type, un chemin mal formé, un chemin dupliqué ou une feuille placée sous
+une autre, un jeton qui n'est pas de son type, une date inexistante, une
+séquence d'échappement inconnue ou l'octet nul échappé. Un en-tête
+\code{provie-liste} d'une autre version est refusé par le motif
+\code{version\_discordante}. Enfin, la liste relue est réécrite, et la
+lecture est refusée si la réécriture diffère, ne serait-ce que d'un octet,
+du texte reçu (\code{1.50} au lieu de \code{1.5}, par exemple)~: seul le
+texte canonique est accepté, par décision du mainteneur du
+7~novembre~2026. Il en résulte, par construction, que tout texte accepté
+est restitué à l'octet près par \code{ecrire\_liste(lire\_liste(octets))}.
+Que \code{lire\_liste(ecrire\_liste(x))} rende une liste identique à
+\code{x} est un constat de test (batterie de reproductibilité, sur une
+liste qui couvre les sept types, les valeurs manquantes, les réels
+spéciaux, les chaînes échappées et la description de la plateforme), non
+une démonstration.
 
 
 \partie{Partie IV}{Module dictionnaire}

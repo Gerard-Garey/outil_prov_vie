@@ -50,7 +50,7 @@ La batterie `tests/concordance_doc_moteur.R` (en-tête du script : il fait foi) 
 - Aucune référence fabriquée ; un fait de `docs/recherche/` au statut « incertain » ou « non trouvé » ne se cite pas.
 - Typographie : `~:` avant le deux-points, `\fsp;`, `\fsp!`, `\fsp?` ; guillemets `«~…~»` ; pas de tiret cadratin dans le texte ; aucune cellule de tableau vide (« Aucun », « Sans objet ») ; `-{}-` pour un double tiret dans `\code` (`-{}-strict`).
 
-## 5. Points ouverts
+## 5. Points tranchés
 
-- **Citation des textes qui font foi.** La charte cite un texte par `\reglement` ou `\refl` suivis de `\src{ID}`, identifiant d'un registre des sources ; ce dépôt n'a pas de registre, et `\src` n'y imprime rien. La convention de citation (registre ou référence en clair, statut de vérification) se fixe avant la première citation, au plus tard avec la partie « cadre par référentiel et par garantie ».
-- **PDF versionné** (E3.1) : emplacement et moment du dépôt du PDF compilé à fixer.
+- **Citation des textes qui font foi** (tranché, M110). Un texte se cite **en clair** (« Code des assurances, art. R343-3 »), dans la phrase, dans `\refl` ou en titre de `\reglement`, sans `\src{ID}` : ce dépôt n'a pas de registre des sources, et `\src` n'y imprime rien. Le statut de vérification d'un texte se lit dans `docs/exigences.md` § 2.8 et dans le rapport de recherche (`docs/recherche/2026-11-07-cadre-provisionnement-vie.md`), auxquels le document renvoie. Un registre des sources éventuel ferait l'objet d'une issue.
+- **PDF versionné** (tranché, M111). Aucun PDF de la documentation n'est versionné avant le jalon de livraison B11 ; la CI compile seulement (job « Documents LaTeX »). L'emplacement du PDF (E3.1) se tranche en B11.
