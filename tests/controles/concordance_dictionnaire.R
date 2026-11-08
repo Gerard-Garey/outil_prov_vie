@@ -2,14 +2,19 @@
 # (inst/extdata/dictionnaire/) avec le texte vise docs/specifications/dictionnaire-base-v1.md
 # (ADR 0010, points 23 et 26 ; M100, M117 ; issue #18). Le texte fait foi : une divergence
 # est une erreur du CSV, sauf nouvelle version visee du texte.
-#   1. le dossier contient exactement les six CSV et dictionnaire.txt ;
+#   1. le dossier contient exactement les sept CSV et dictionnaire.txt ;
 #   2. dictionnaire.txt : version egale a celle de l'en-tete du texte et a
 #      VERSION_DICTIONNAIRE_ATTENDUE (R/outils.R), date de visa egale a celle de la ligne de
 #      la version dans l'historique du texte, empreinte MD5 de chaque CSV ;
 #   3. chaque CSV est compare au tableau correspondant du texte, ligne a ligne, champ a
 #      champ et dans le meme ordre : tables.csv (section 2.1), colonnes.csv (section 3,
 #      tableaux T1 a T20), types_evenements.csv (section 4 et automate), parametres.csv
-#      (section 5), defauts.csv (section 9), filiation.csv (annexe A.1).
+#      (section 5), defauts.csv (section 9), filiation.csv (annexe A.1), controles.csv
+#      (section 1.10, tableau sous "**Codes des controles de structure**", version 1.5) ;
+#   4. codes des controles de structure (ADR 0010, annotation de la cinquieme serie, (e)) :
+#      disjoints des codes de defauts.csv ; leur intersection avec MOTIFS_REFUS
+#      (R/outils.R) est exactement colonne_absente, colonne_inconnue, type_incompatible ;
+#      chaque motif de refus d'appel renseigne est un element de MOTIFS_REFUS.
 # Deux sortes de champs :
 #   - transcrits ou derives par une regle fixe, ecrite ci-dessous, et recalcules ici :
 #     compares a l'identique, ordre des valeurs compris. C'est le cas de tous les champs,
@@ -17,7 +22,9 @@
 #     l'unite (en tete du domaine ou \u00ab , en <unite> \u00bb), les motifs d'un type d'evenement
 #     (\u00ab motifs : \u00bb, \u00ab `motif` facultatif : \u00bb, ou codes entre parentheses apres un etat),
 #     l'automate (etat_depuis : puces de la section 4, dans leur ordre ; etat_vers : effet)
-#     et la table v1 d'une colonne renommee (designee par la cible), sauf :
+#     et la table v1 d'une colonne renommee (designee par la cible), la portee d'un code de
+#     controle (colonne, table, ligne ; "colonne, ou table pour une colonne de cle" donne
+#     colonne_table), sauf :
 #   - les sous-parametres des defauts, transcrits a la main : chacun doit etre cite entre
 #     accents graves dans la cellule d'intensite, dans l'ordre de la cellule, sans porter le
 #     nom d'une table ni d'une modalite, et tout autre jeton de la cellule (hors le
@@ -27,8 +34,11 @@
 # code de garantie, nature de sinistre, type d'evenement, modalite d'une autre colonne) ou
 # figurer dans JETONS_ADMIS, chacun motive.
 # Limites (mutations que le script ne peut pas detecter) :
-#   - un sous-parametre oublie dont le nom est aussi une table ou une modalite ;
-#   - les regles de derivation decrivent le texte de la version 1.4 : une version nouvelle
+#   - un jeton de la cellule d'intensite qui porte le nom d'une table ou d'une modalite est
+#     toujours lu comme tel, jamais comme sous-parametre : un sous-parametre de ce nom est
+#     refuse (reserve R1, M138), si bien que le texte ne peut pas en nommer un ; s'il le
+#     faisait, son oubli dans defauts.csv ne serait pas detecte ;
+#   - les regles de derivation decrivent le texte de la version 1.5 : une version nouvelle
 #     peut demander de les etendre (le script echoue alors sur la forme non reconnue ou sur
 #     l'ecart, il ne valide pas en silence ce qu'il ne lit pas) ;
 #   - le sens des cellules transcrites mot pour mot (domaine, effet, objet...) n'est pas
@@ -59,7 +69,7 @@ fin <- function() quit(save = "no", status = if (.n_echec > 0L) 1L else 0L)
 FLECHE <- "\u2192"
 TIRET <- "\u2014"
 FICHIERS_CSV <- c("tables.csv", "colonnes.csv", "types_evenements.csv", "parametres.csv",
-                  "defauts.csv", "filiation.csv")
+                  "defauts.csv", "filiation.csv", "controles.csv")
 COLONNES_CSV <- list(
   tables.csv = c("numero", "table", "objet", "cle_primaire", "obligatoire", "visibilite"),
   colonnes.csv = c("table", "colonne", "type", "modalites", "domaine", "unite", "obligatoire",
@@ -72,8 +82,15 @@ COLONNES_CSV <- list(
                      "condition"),
   defauts.csv = c("code", "defaut", "tables", "colonnes", "detection", "traitements",
                   "parametre_intensite", "sous_parametres"),
-  filiation.csv = c("table_de", "colonne_de", "table_v1", "colonne_v1", "statut", "motif")
+  filiation.csv = c("table_de", "colonne_de", "table_v1", "colonne_v1", "statut", "motif"),
+  controles.csv = c("code", "objet", "detection", "portee", "motif_refus_appel")
 )
+# Motifs de refus d'appel qui sont aussi des codes de controle de structure (meme anomalie,
+# deux niveaux : ADR 0010, annotation de la cinquieme serie, (e)).
+MOTIFS_DE_FORME <- c("colonne_absente", "colonne_inconnue", "type_incompatible")
+# Portee d'un code de controle : cellule du texte (section 1.10) et valeur de controles.csv.
+PORTEES_TEXTE <- c("colonne", "table", "colonne, ou table pour une colonne de cl\u00e9", "ligne")
+PORTEES_CSV <- c("colonne", "table", "colonne_table", "ligne")
 # Jetons de domaine admis sans etre une modalite de leur colonne ni avoir un autre sens
 # connu (liste fermee, chacun motive) :
 #   - TRUE : valeur logique citee dans une condition (structure_cotisation_sante) ;
@@ -499,6 +516,24 @@ derive_filiation <- function(lignes, tables, colonnes, types, parametres) {
   df
 }
 
+# Codes des controles de structure (section 1.10, version 1.5) : tableau sous la ligne en
+# gras ; detection lue comme pour un defaut ; portee par PORTEES_TEXTE -> PORTEES_CSV ;
+# motif de refus d'appel : code entre accents graves, vide pour un tiret.
+derive_controles <- function(lignes) {
+  t <- tableau_apres(lignes, "^\\*\\*Codes des contr\u00f4les de structure\\*\\*")
+  portee <- PORTEES_CSV[match(t$c4, PORTEES_TEXTE)]
+  portee[is.na(portee)] <- paste0("<non reconnu : ", t$c4[is.na(portee)], ">")
+  data.frame(
+    code = vapply(t$c1, function(x) joindre(jetons(x)), ""), objet = t$c2,
+    detection = vapply(t$c3, function(d) {
+      joindre(c(if (grepl("exacte", d, fixed = TRUE)) "exacte",
+                if (grepl("pr\u00e9somptive", d, fixed = TRUE)) "presomptive"))
+    }, ""),
+    portee = portee,
+    motif_refus_appel = vapply(vide_si_tiret(t$c5), function(x) joindre(jetons(x)), ""),
+    ligne_texte = attr(t, "lignes"), stringsAsFactors = FALSE, row.names = NULL)
+}
+
 # --- Fin des fonctions de derivation ----------------------------------------------------
 
 lire_csv <- function(chemin) {
@@ -551,7 +586,7 @@ if (!identical(presents, attendus)) {
                 paste(attendus, collapse = ", ")), dossier)
   fin()
 }
-ok("dossier inst/extdata/dictionnaire : six CSV et dictionnaire.txt, rien d'autre")
+ok("dossier inst/extdata/dictionnaire : sept CSV et dictionnaire.txt, rien d'autre")
 
 csv <- list()
 for (f in FICHIERS_CSV) {
@@ -562,7 +597,7 @@ for (f in FICHIERS_CSV) {
     fin()
   }
 }
-ok("en-t\u00eates des six CSV conformes \u00e0 l'ADR 0010, point 23")
+ok("en-t\u00eates des sept CSV conformes \u00e0 l'ADR 0010, point 23")
 
 # 2. dictionnaire.txt (texte de lire_liste(), lu ici sans le package : une ligne par
 # feuille, champs separes par une tabulation)
@@ -577,10 +612,17 @@ valeur_liste <- function(chemin_feuille, type) {
   champs_liste[[i]][-(1:2)]
 }
 constante <- NA_character_
+motifs_refus <- NULL
 for (e in parse(file.path(racine, "R", "outils.R"), keep.source = FALSE)) {
   if (is.call(e) && identical(e[[1L]], as.name("<-")) &&
       identical(e[[2L]], as.name("VERSION_DICTIONNAIRE_ATTENDUE")) && is.character(e[[3L]])) {
     constante <- e[[3L]]
+  }
+  # MOTIFS_REFUS : appel c() de chaines, evalue sans environnement (aucun autre symbole).
+  if (is.call(e) && identical(e[[1L]], as.name("<-")) && identical(e[[2L]], as.name("MOTIFS_REFUS")) &&
+      is.call(e[[3L]]) && identical(e[[3L]][[1L]], as.name("c")) &&
+      all(vapply(as.list(e[[3L]])[-1L], is.character, NA))) {
+    motifs_refus <- unlist(as.list(e[[3L]])[-1L])
   }
 }
 version_liste <- valeur_liste("version", "character")
@@ -621,7 +663,7 @@ for (f in FICHIERS_CSV) {
           chemin("dictionnaire.txt"))
   }
 }
-if (.n_echec == avant) ok("dictionnaire.txt : champs version, date_visa et empreintes MD5 des six CSV, dans l'ordre, empreintes concordantes")
+if (.n_echec == avant) ok("dictionnaire.txt : champs version, date_visa et empreintes MD5 des sept CSV, dans l'ordre, empreintes concordantes")
 
 # 3. Tableaux, tous les champs
 tables_t <- derive_tables(lignes)
@@ -662,6 +704,42 @@ if (identical(ignorees, "Fichiers `diagnostic-`")) {
 }
 if (anyDuplicated(paste(fi$table_de, fi$colonne_de))) {
   echec("filiation.csv : colonne du dictionnaire double effet en double", chemin("filiation.csv"))
+}
+
+controles_t <- derive_controles(lignes)
+co <- csv$controles.csv
+comparer("controles.csv", co, controles_t, COLONNES_CSV$controles.csv, chemin("controles.csv"), chemin_texte)
+
+# 4. Codes des controles de structure : liste fermee distincte des defauts et des motifs de
+# refus d'appel, sauf les trois motifs de forme (ADR 0010, annotation de la cinquieme serie, (e)).
+avant <- .n_echec
+if (anyDuplicated(co$code)) {
+  echec(sprintf("controles.csv : code en double : %s", paste(unique(co$code[duplicated(co$code)]), collapse = ", ")),
+        chemin("controles.csv"))
+}
+communs <- intersect(co$code, de$code)
+if (length(communs)) {
+  echec(sprintf("controles.csv : codes communs avec defauts.csv : %s", paste(communs, collapse = ", ")),
+        chemin("controles.csv"))
+}
+if (is.null(motifs_refus)) {
+  echec("MOTIFS_REFUS introuvable dans R/outils.R (affectation d'un c() de cha\u00eenes attendue)",
+        file.path(racine, "R", "outils.R"))
+} else {
+  inter <- sort(intersect(co$code, motifs_refus), method = "radix")
+  if (!identical(inter, sort(MOTIFS_DE_FORME, method = "radix"))) {
+    echec(sprintf("controles.csv : intersection avec MOTIFS_REFUS : %s ; attendue : %s",
+                  paste(inter, collapse = ", "), paste(MOTIFS_DE_FORME, collapse = ", ")), chemin("controles.csv"))
+  }
+  hors <- setdiff(co$motif_refus_appel[co$motif_refus_appel != ""], motifs_refus)
+  if (length(hors)) {
+    echec(sprintf("controles.csv : motifs de refus d'appel hors de MOTIFS_REFUS : %s", paste(hors, collapse = ", ")),
+          chemin("controles.csv"))
+  }
+}
+if (.n_echec == avant) {
+  ok(sprintf("controles.csv : %d codes distincts, disjoints des codes de defauts.csv ; intersection avec MOTIFS_REFUS : %s",
+             nrow(co), paste(MOTIFS_DE_FORME, collapse = ", ")))
 }
 
 # --- Coherence des regles avec le texte -------------------------------------------------

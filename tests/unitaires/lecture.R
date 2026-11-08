@@ -56,7 +56,7 @@ base <- lapply(d$tables$table, function(t) table_de(t, valeurs_de))
 names(base) <- d$tables$table
 base$extraction <- data.frame(date_extraction = as.Date("2026-12-31"),
                               debut_historique = as.Date("2017-01-01"),
-                              type_organisme = "mutuelle", version_dictionnaire = "1.4",
+                              type_organisme = "mutuelle", version_dictionnaire = "1.5",
                               devise = "EUR", stringsAsFactors = FALSE)
 base$catastrophes <- table_de("catastrophes", function(type) vide_de(type, 0L))   # aucune ligne
 base$victimes <- table_de("victimes", function(type) vide_de(type, 3L))           # colonnes vides
@@ -264,8 +264,12 @@ verifier_refus("colonne obligatoire absente : colonne_absente",
 e <- refus_de(lire_avec("extraction", list(version_dictionnaire = "\"1.2\"", date_extraction = "31/12/2026")))
 verifier("version 1.2 : extraction_invalide, avant le type des autres colonnes",
          !is.null(e) && e$motif == "extraction_invalide" && identical(e$recu, "1.2"))
+e <- refus_de(lire_avec("extraction", list(version_dictionnaire = "\"1.4\"")))
+verifier("version 1.4, version précédente : extraction_invalide, attendu 1.5, reçu 1.4",
+         !is.null(e) && e$motif == "extraction_invalide" && identical(e$attendu, "1.5") &&
+           identical(e$recu, "1.4"))
 verifier_refus("table extraction de deux lignes : extraction_invalide",
-               lire_avec("extraction", list(version_dictionnaire = "\"1.4\""), lignes = 2L),
+               lire_avec("extraction", list(version_dictionnaire = "\"1.5\""), lignes = 2L),
                "extraction_invalide")
 
 section("lecture : dossier et fichiers")
