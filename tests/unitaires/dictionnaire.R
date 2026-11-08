@@ -268,6 +268,13 @@ verifier("objet vide : refus",
 verifier("objet blanc (espaces et tabulation) : refus",
          grepl("^dictionnaire_invalide .*controles\\.csv, ligne 2 : objet absent",
                motif_controles(function(df) { df$objet[1L] <- " \t "; df })))
+for (blanc in c("00a0", "202f", "2003", "3000", "200b", "feff")) {
+  verifier(paste0("objet blanc Unicode (U+", toupper(blanc), " et espaces) : refus (réserve m-b)"),
+           grepl("^dictionnaire_invalide .*controles\\.csv, ligne 2 : objet absent",
+                 motif_controles(function(df) { df$objet[1L] <- paste0(" ", intToUtf8(strtoi(blanc, 16L)), " "); df })))
+}
+verifier("objet non blanc après un blanc Unicode : accepté",
+         identical(motif_controles(function(df) { df$objet[1L] <- paste0(intToUtf8(160L), "x"); df }), "aucun"))
 verifier_egal("portée colonne (admise, non employée par le texte 1.5) : admise",
               motif_controles(function(df) { df$portee[3L] <- "colonne"; df }), "aucun")
 
@@ -377,6 +384,10 @@ for (v in c("1.0", "1.1", "1.2", "1.3", "1.4", "1.50", " 1.5", "")) {
   verifier_refus(paste0("version « ", v, " » refusée"),
                  controler_types(avec("extraction", "version_dictionnaire", v)), "extraction_invalide")
 }
+e <- refus_de(controler_types(avec("extraction", "version_dictionnaire", "")))
+verifier("version \"\" : message qui la cite entre guillemets français (réserve m-a)",
+         !is.null(e) && grepl(paste0("version du dictionnaire ", intToUtf8(171L), "  ", intToUtf8(187L), " ;"),
+                              conditionMessage(e), fixed = TRUE))
 verifier_refus("version manquante", controler_types(avec("extraction", "version_dictionnaire", NA_character_)),
                "extraction_invalide")
 b <- base; b$extraction <- rbind(base$extraction, base$extraction)

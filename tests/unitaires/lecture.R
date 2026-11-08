@@ -281,6 +281,26 @@ verifier("\"A\\nB\" dans un fichier CRLF : admis (le saut de ligne du champ rest
   identical(lire_base(dossier_avec(list(contrats.csv = texte)))$contrats$id_contrat, "A\nB")
 })
 
+section("lecture : guillemet non fermé (fichier_invalide, sans chemin temporaire)")
+cas_guillemet <- list(
+  list("dernier champ ouvert, fichier fini", "id_adherent,secteur_activite\n\"A1\",\"x\n", "ligne de donn"),
+  list("guillemet final après une valeur", "id_adherent,secteur_activite\nA1,x\"\n", "ligne de donn"),
+  list("deuxième ligne ouverte", "id_adherent,secteur_activite\n\"A1\",x\n\"A2,y\n", "ligne de donn\u00e9es 2"),
+  list("en-tête ouvert", "\"id_adherent,secteur_activite\nA1,x\n", "en-t\u00eate"))
+for (cas in cas_guillemet) {
+  e <- refus_de(lire_base(dossier_avec(list(adherents.csv = cas[[2L]]))))
+  verifier(paste0("guillemet non fermé (", cas[[1L]], ") : fichier_invalide, « guillemet non fermé », fichier et ligne, aucun chemin"),
+           !is.null(e) && e$motif == "fichier_invalide" && e$table == "adherents" &&
+             grepl(u8("guillemet non ferm\u00e9"), conditionMessage(e), fixed = TRUE) &&
+             grepl("adherents.csv", conditionMessage(e), fixed = TRUE) &&
+             grepl(u8(cas[[3L]]), conditionMessage(e), fixed = TRUE) &&
+             !grepl(tempdir(), conditionMessage(e), fixed = TRUE) &&
+             !grepl("readTableHeader", conditionMessage(e), fixed = TRUE))
+}
+verifier("guillemet doublé dans un champ entre guillemets : pas un guillemet non fermé",
+         identical(lire_base(dossier_avec(list(adherents.csv = "id_adherent,secteur_activite\n\"A\"\"1\",x\n")))$adherents$id_adherent,
+                   "A\"1"))
+
 section("lecture : localisation juste d'un fichier_invalide (réserves C1 et C3)")
 entete_c <- paste(colonnes_de("contrats")$colonne, collapse = ",")
 ligne_de <- function(champs = list()) sub("^[^\n]*\n", "", csv_de("contrats", champs))
