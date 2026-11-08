@@ -525,3 +525,150 @@ decrire_plateforme <- function() {
     icu = champ(logiciels, "ICU")
   )
 }
+
+# --- Conventions d'âge -------------------------------------------------------------
+
+# Liste fermée des conventions de lecture de l'âge (M154 ; spécification du module
+# `donnees`, docs/specifications/module-donnees-v1.md, § 5.2). Le choix est une déclaration
+# du plan (conventions$age), sans valeur par défaut ; `naissance_31_decembre` est une
+# convention retenue par analogie (jugement d'expert), jamais présentée comme exigée par
+# l'art. 143-3 du règlement ANC 2015-11.
+CONVENTIONS_AGE <- c("revolu", "millesime", "plus_proche", "naissance_31_decembre")
+
+# Âge entier, en années, de personnes nées à `date_naissance` à la date `date`, selon
+# `convention` (un élément de CONVENTIONS_AGE ; refus plan_invalide sinon) :
+#   revolu : nombre d'anniversaires atteints au plus tard à `date` ; né un 29 février,
+#     l'anniversaire d'une année non bissextile est le 1er mars ;
+#   millesime : année(date) - année(naissance) ;
+#   plus_proche : revolu, plus 1 si l'anniversaire suivant est plus proche de `date` que le
+#     précédent (en jours) ; à égalité, l'âge supérieur ;
+#   naissance_31_decembre : revolu sur la naissance reportée au 31 décembre le plus voisin
+#     (celui de l'année précédente si la naissance tombe au plus tard le 1er juillet, celui
+#     de l'année de naissance sinon) ; entre la naissance et un 31 décembre reporté
+#     postérieur, l'âge vaut 0 (la formule rendrait -1 : choix signalé à `actuary`).
+# Vectorisée : `date_naissance` et `date` de même longueur, ou l'une de longueur 1. Rend un
+# entier ; NA si une date manque ou si `date` précède la naissance.
+calculer_age <- function(date_naissance, date, convention) {
+  .controler_convention_age(convention, "calculer_age")
+  .controler_dates_age(date_naissance, "date_naissance", "calculer_age")
+  .controler_dates_age(date, "date", "calculer_age")
+  n <- .longueur_commune(length(date_naissance), length(date), "calculer_age")
+  naissance <- rep_len(as.numeric(date_naissance), n)
+  jour <- rep_len(as.numeric(date), n)
+  age <- rep(NA_integer_, n)
+  ok <- !is.na(naissance) & !is.na(jour) & jour >= naissance
+  if (!any(ok)) return(age)
+  nai <- .composantes_date(naissance[ok])
+  d <- .composantes_date(jour[ok])
+  if (convention == "naissance_31_decembre") {
+    report <- nai$annee - as.integer(nai$mois * 100L + nai$jour <= 701L)
+    nai <- list(annee = report, mois = rep(12L, length(report)), jour = rep(31L, length(report)))
+  }
+  millesime <- d$annee - nai$annee
+  revolu <- millesime - as.integer(d$mois * 100L + d$jour < nai$mois * 100L + nai$jour)
+  res <- switch(convention,
+    revolu = revolu,
+    millesime = millesime,
+    naissance_31_decembre = pmax(revolu, 0L),
+    plus_proche = {
+      precedent <- .anniversaire(nai, revolu)
+      suivant <- .anniversaire(nai, revolu + 1L)
+      revolu + as.integer(suivant - jour[ok] <= jour[ok] - precedent)
+    })
+  age[ok] <- as.integer(res)
+  age
+}
+
+# Âge le plus élevé admis par date_atteinte_age() (borne de programmation : au-delà, refus par
+# erreur, jamais un NA silencieux ; réserve m4).
+AGE_MAXIMUM <- 200L
+
+# Fonction inverse de calculer_age() : première date, au plus tôt la naissance, à laquelle
+# l'âge selon `convention` vaut `age` (entier de 0 à AGE_MAXIMUM, ou NA ; au-delà : erreur) ; calculer_age(n, date_atteinte_age(n,
+# a, c), c) vaut a. Vectorisée comme calculer_age() ; rend une Date (stockée en double),
+# NA si la naissance ou l'âge manque.
+date_atteinte_age <- function(date_naissance, age, convention) {
+  .controler_convention_age(convention, "date_atteinte_age")
+  .controler_dates_age(date_naissance, "date_naissance", "date_atteinte_age")
+  if (is.logical(age) && all(is.na(age))) age <- as.integer(age)   # NA logique : âge manquant
+  if (!is.numeric(age) || !is.null(dim(age)) ||
+      any(!is.na(age) & (!is.finite(age) | age < 0 | age != trunc(age) | age > AGE_MAXIMUM))) {
+    stop(paste0("date_atteinte_age() : `age` doit \u00eatre un vecteur d'entiers de 0 \u00e0 ", AGE_MAXIMUM,
+                " (ou NA)"), call. = FALSE)
+  }
+  n <- .longueur_commune(length(date_naissance), length(age), "date_atteinte_age")
+  naissance <- rep_len(as.numeric(date_naissance), n)
+  a <- rep_len(as.integer(age), n)
+  res <- rep(NA_real_, n)
+  ok <- !is.na(naissance) & !is.na(a)
+  if (any(ok)) {
+    nai <- .composantes_date(naissance[ok])
+    ak <- a[ok]
+    jours <- switch(convention,
+      revolu = .anniversaire(nai, ak),
+      millesime = .jour_de(nai$annee + ak, 1L, 1L),
+      naissance_31_decembre = {
+        report <- nai$annee - as.integer(nai$mois * 100L + nai$jour <= 701L)
+        # âge 0 dès la naissance (calculer_age() le borne à 0 avant le 31 décembre reporté)
+        ifelse(ak == 0L, naissance[ok], .jour_de(report + ak, 12L, 31L))
+      },
+      plus_proche = {
+        precedent <- .anniversaire(nai, pmax(ak - 1L, 0L))
+        suivant <- .anniversaire(nai, ak)
+        precedent + ceiling((suivant - precedent) / 2)
+      })
+    res[ok] <- pmax(jours, naissance[ok])
+  }
+  structure(res, class = "Date")
+}
+
+.controler_convention_age <- function(convention, fonction) {
+  if (!is.character(convention) || length(convention) != 1L || is.na(convention) ||
+      !(convention %in% CONVENTIONS_AGE)) {
+    refuser(paste0(fonction, "() : convention d'\u00e2ge hors de la liste ferm\u00e9e (",
+                   paste(CONVENTIONS_AGE, collapse = ", "), ")"),
+            "plan_invalide", module = "outils",
+            recu = if (is.character(convention) && length(convention) == 1L) convention else NA_character_)
+  }
+  invisible(NULL)
+}
+
+.controler_dates_age <- function(x, nom, fonction) {
+  if (!identical(class(x), "Date") || !is.null(dim(x))) {
+    stop(paste0(fonction, "() : `", nom, "` doit \u00eatre un vecteur de classe Date"), call. = FALSE)
+  }
+  v <- as.numeric(x)
+  if (any(!is.na(v) & (!is.finite(v) | v != trunc(v)))) {
+    stop(paste0(fonction, "() : `", nom, "` doit porter des dates enti\u00e8res et finies"), call. = FALSE)
+  }
+  invisible(NULL)
+}
+
+.longueur_commune <- function(n1, n2, fonction) {
+  if (n1 == n2 || n2 == 1L) return(n1)
+  if (n1 == 1L) return(n2)
+  stop(paste0(fonction, "() : longueurs incompatibles (", n1, " et ", n2, ")"), call. = FALSE)
+}
+
+# Année, mois, jour (entiers) de dates données en nombre de jours depuis 1970-01-01.
+.composantes_date <- function(jours) {
+  lt <- as.POSIXlt(structure(jours, class = "Date"))
+  list(annee = lt$year + 1900L, mois = lt$mon + 1L, jour = lt$mday)
+}
+
+# Nombre de jours (depuis 1970-01-01) de la date annee-mois-jour, le 29 février d'une
+# année non bissextile étant lu 1er mars.
+.jour_de <- function(annee, mois, jour) {
+  n <- max(length(annee), length(mois), length(jour))
+  annee <- rep_len(annee, n)
+  mois <- rep_len(mois, n)
+  jour <- rep_len(jour, n)
+  bissextile <- (annee %% 4L == 0L & annee %% 100L != 0L) | annee %% 400L == 0L
+  mars <- mois == 2L & jour == 29L & !bissextile
+  mois[mars] <- 3L
+  jour[mars] <- 1L
+  as.numeric(as.Date(sprintf("%04d-%02d-%02d", annee, mois, jour), format = "%Y-%m-%d"))
+}
+
+# Anniversaire d'ordre `age` d'une naissance (composantes) : en nombre de jours.
+.anniversaire <- function(nai, age) .jour_de(nai$annee + age, nai$mois, nai$jour)
