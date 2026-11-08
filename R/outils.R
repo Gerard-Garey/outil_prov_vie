@@ -29,7 +29,7 @@ MOTIFS_REFUS <- c(
 
 # Lève un refus d'appel : condition classée c("refus_provie", "error", "condition"),
 # interrompt l'appel sans rendre d'objet. `identifiants` est tronqué à dix éléments ;
-# le total va dans `nombre`.
+# `nombre` est repris tel quel (NA par défaut) : c'est à l'appelant d'y porter le total.
 refuser <- function(message, motif, module = NA_character_, table = NA_character_,
                     colonne = NA_character_, usage = NA_character_,
                     nombre = NA_integer_, identifiants = character(0),

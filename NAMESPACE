@@ -1,4 +1,4 @@
 # NAMESPACE écrit à la main (ADR 0006, point 5 ; ADR 0010, point 13) : un export() par
 # ligne, sans exportPattern. Aucun export en T1 : le module `outils` est interne, les
-# tests l'atteignent par provie::: (ADR 0010, point 1). Les exports de B1 viennent avec
-# les modules `dictionnaire`, `lecture`, `donnees` et `simulation`.
+# tests l'atteignent par provie::: (ADR 0010, point 1). Les exports viendront avec les
+# modules `dictionnaire`, `lecture`, `donnees` et `simulation` (#18, #19).
