@@ -94,6 +94,16 @@ verifier_egal("nombre hors des bornes entières : erreur ordinaire",
               motif_de(refuser("m", "plan_invalide", nombre = 2^31)), "autre")
 verifier_egal("nombre réel entier (3) accepté et converti",
               tryCatch(refuser("m", "plan_invalide", nombre = 3), refus_provie = function(e) e$nombre), 3L)
+verifier_egal("nombre NA logique accepté (NA entier)",
+              tryCatch(refuser("m", "plan_invalide", nombre = NA), refus_provie = function(e) e$nombre),
+              NA_integer_)
+verifier_egal("nombre NA chaîne accepté (NA entier)",
+              tryCatch(refuser("m", "plan_invalide", nombre = NA_character_),
+                       refus_provie = function(e) e$nombre), NA_integer_)
+verifier_egal("nombre NaN : erreur ordinaire",
+              motif_de(refuser("m", "plan_invalide", nombre = NaN)), "autre")
+verifier_egal("nombre infini : erreur ordinaire",
+              motif_de(refuser("m", "plan_invalide", nombre = Inf)), "autre")
 verifier_egal("attendu de longueur 2 : erreur ordinaire",
               motif_de(refuser("m", "plan_invalide", attendu = c("a", "b"))), "autre")
 verifier_egal("recu de longueur 0 : erreur ordinaire",
@@ -165,6 +175,12 @@ verifier_egal("facteur refusé", motif_de(ecrire_valeurs(factor("a"))), "liste_i
 verifier_egal("vecteur nommé refusé", motif_de(ecrire_valeurs(c(a = 1))), "liste_invalide")
 verifier_egal("matrice refusée", motif_de(ecrire_valeurs(matrix(1:4, 2))), "liste_invalide")
 verifier_egal("Date non finie refusée", motif_de(ecrire_valeurs(as.Date(Inf))), "liste_invalide")
+verifier_egal("Date NaN refusée (texte)",
+              motif_de(ecrire_valeurs(structure(NaN, class = "Date"))), "liste_invalide")
+verifier_egal("Date NaN refusée (octets)",
+              motif_de(ecrire_valeurs(structure(c(0, NaN), class = "Date"), "octets")), "liste_invalide")
+verifier_egal("Date NaN refusée (liste)",
+              motif_de(ecrire_liste(list(d = structure(NaN, class = "Date")))), "liste_invalide")
 verifier_egal("Date fractionnaire refusée",
               motif_de(ecrire_valeurs(structure(0.5, class = "Date"))), "liste_invalide")
 verifier_egal("année à cinq chiffres refusée",
