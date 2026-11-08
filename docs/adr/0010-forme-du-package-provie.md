@@ -229,3 +229,12 @@ Issues : #17 (ADR de forme et socle), #18 (module `donnees`, et par cet ADR `dic
 - **Questions ouvertes de l'annotation « T2 et T3 »** : (1) `environment()` sans argument, (2) analyse de portée par fonction dans `graphe_modules.R` (N6), et la portée de M112 (commentaires accentués dans `R/`) sont **renvoyées par le mainteneur à l'issue #27** (durcissement des scripts de contrôle et d'`avec_graine()`, N1 à N7), non tranchées sur B1. Jusqu'à la décision, les scripts de `tests/controles/` font foi de l'état mesuré (`environment` interdit sous toutes ses formes, commentaires exemptés), pas d'une décision.
 
 **Effet sur les résultats** : aucun (aucune provision calculée dans B1). Issues : #17, #18, #19, #27.
+
+## Annotation du 8 novembre 2026 (seconde série) — motif de M115, branche de #18 et #19
+
+*Rédigée par `architect` le 8 novembre 2026 (branche `claude/socle-donnees`, PR #21, tête `22432bb`), sur les décisions du mainteneur du même jour (M132 et M134 de `docs/feuille-de-route.md`, § 4). Le texte ci-dessus et les annotations précédentes ne sont pas réécrits.*
+
+- **Points 18 et 21, `avec_graine()` : motif de M115** (l'annotation « T2 et T3 » l'énonce sans motif). « Rounding » est l'état ordinaire d'un appelant qui rejoue d'anciens résultats par `RNGversion()` : l'avertissement de son rétablissement n'a pas à sortir d'une restauration. « Buggy Kinderman-Ramage » est un générateur défectueux dont l'usage doit être signalé : son avertissement remonte (M132 ; hypothèse d'`actuary`, retenue par le mainteneur).
+- **Branche de #18 et #19** : l'annotation précédente du 8 novembre 2026 renvoie à « la branche qui porte #18 / #19 », B2 par défaut. Cette branche est la **branche de données propre `claude/donnees-simulation`**, intercalée entre B1 et B2 (M134 ; écart à la lettre de M66 assumé par le mainteneur). La forme décidée par le présent ADR ne change pas.
+
+**Effet sur les résultats** : aucun. Issues : #17, #18, #19.
