@@ -8,7 +8,9 @@
 >
 > *Révision 3 du même jour : décisions du mainteneur sur D1 à D7, Q5, Q13 et Q14 consignées (§ 2), toutes conformes aux recommandations ; rattachement des rentes à constituer fixé dans `postes.csv`.*
 >
-> *Statut : **soumis au visa du mainteneur** (E2.16) ; les branches B2 (capital décès), B3 (tardifs) et B4 (rentes) en partent. Le recensement des tardifs sera complété en B3 (`docs/feuille-de-route.md`, § 2, ligne B3).*
+> *Révision 4 du 8 novembre 2026 (session principale, sans modification de méthode) : seconde passe de `regulatory` intégrée (`docs/recherche/2026-11-07-lecture-regulatory-20.md`, « Complément du 7 novembre 2026 ») — R7 (lignes d'activité, art. 18 et 26 du règlement délégué), R8 (loi n° 89-1009, art. 7, lu en entier : D6 n'est plus provisoire), R3 (A223-8, A932-3-11), R2 (loi n° 2014-617, art. 13 ; décret de taux des institutions de prévoyance) ; décision D8 du mainteneur sur la ligne d'activité de l'IAD (§ 2).*
+>
+> *Statut : **visé par le mainteneur le 8 novembre 2026** (E2.16, M131) ; les branches B2 (capital décès), B3 (tardifs) et B4 (rentes) en partent. Le recensement des tardifs sera complété en B3 (`docs/feuille-de-route.md`, § 2, ligne B3).*
 >
 > *Résultats modifiés : aucun (aucun code).*
 
@@ -117,8 +119,9 @@ Il propose aussi les lignes du catalogue des configurations de garanties de la v
 | D3 (R3) | **ANC 142-4** (tables de rentiers en vigueur à chaque inventaire) appliqué à la rente de conjoint temporaire | M123 |
 | D4 (R4) | **Reconduction annuelle = souscription** ; taux de la version de garantie en vigueur à la survenance ; indicateur M85 à l'arrêté étiqueté « approximation », plus une ligne du même indicateur à la date d'effet de la version | M124 |
 | D5 (R6) et Q13 | **Item (2) de la branche `claude/prc` retiré** ; la question des garanties complémentaires d'invalidité des contrats vie (R321-5) reste ouverte pour cette branche | M125 |
-| D6 (R8) | Revalorisation des rentes des contrats résiliés : **hypothèse déclarée par segment**, montant figé sauf clause contractuelle de revalorisation par l'organisme résilié ; **provisoire** jusqu'à la relecture de la loi n° 89-1009, art. 7, en entier | M126 |
+| D6 (R8) | Revalorisation des rentes des contrats résiliés : **hypothèse déclarée par segment**, montant figé sauf clause contractuelle de revalorisation par l'organisme résilié ; décision prise à titre provisoire, **confortée** par la lecture intégrale de la loi n° 89-1009, art. 7 (révision 4 : plancher de la dernière prestation, « révisions prévues dans le contrat » réservées, aucune revalorisation future imposée à l'organisme résilié) | M126 |
 | D7 (R9) | **IAD = opération vie** (paiement anticipé du capital décès, sans prime distincte), en **PSAP vie** avec le capital décès | M127 |
+| D8 (R7) | **Ligne d'activité de l'IAD : 32 « Autre assurance vie »** (lecture (a) de `regulatory` : paiement anticipé du capital décès, partie de l'engagement vie ; règlement délégué 2015/35, annexe I et art. 55), cohérente avec D7 ; décision du mainteneur du 8 novembre 2026 | M129 |
 | Q14 | Indicateur **`R132_3_1`** (minimum de revalorisation légale par année civile, depuis la série TME) restitué par le module `tables` ; taux retenu déclaré, un taux inférieur signalé (M62) | M128 |
 
 **Lecture de `regulatory` du 7 novembre 2026 (#20)** : intégrée poste par poste ci-dessous. Lignes de registre proposées par `regulatory` : à reporter par la session principale.
@@ -129,7 +132,7 @@ Il propose aussi les lignes du catalogue des configurations de garanties de la v
 
 **Rattachement.**
 - Comptes sociaux : PSAP vie (M81).
-- Solvabilité II : meilleure estimation ; ligne d'activité : lecture de `regulatory` en cours (R7).
+- Solvabilité II : meilleure estimation ; ligne d'activité **32 « Autre assurance vie »** (règlement délégué 2015/35, annexe I, D ; 30 si le contrat prévoit une participation aux bénéfices : point de fait du contrat, à déclarer), IAD comprise (D8).
 
 **Périmètre.** En vue à la date d'arrêté :
 - dossier `deces` ouvert, de sinistre `deces` ou `iad`, non clos ou rouvert ;
@@ -188,9 +191,9 @@ Défauts lus : D03c, D09 (dont le capital incohérent), D05, D06, D10 (a) et (b)
 - L132-5, **3e alinéa** (revalorisation du décès jusqu'à la réception des pièces ou au dépôt) ;
 - L132-5, 4e et dernier alinéa (plancher de taux fixé par décret) ;
 - R132-3-1 (taux) ;
-- **L132-27-2** (dépôt à la Caisse des dépôts et consignations ; version en vigueur depuis le 24/05/2019, loi n° 2019-486, art. 71). La citation « loi n° 2014-617, art. 13 » est retirée (numéro non relu ce jour) ;
+- **L132-27-2** (dépôt à la Caisse des dépôts et consignations ; version en vigueur depuis le 24/05/2019, loi n° 2019-486, art. 71). créé par la loi n° 2014-617, art. 3. La citation « loi n° 2014-617, art. 13 » est retirée : l'art. 13, lu en révision 4, est une disposition transitoire (reprise du stock au 01/01/2016), sans effet sur un calcul à une date d'arrêté de 2026 ;
 - mutuelles : L223-19-1, R223-9, L223-25-4, R223-11 ;
-- institutions de prévoyance : CSS L932-23 (renvoi), décret de taux non trouvé.
+- institutions de prévoyance : CSS L932-23 (renvoi), décret de taux non trouvé. Deux lectures (`regulatory`, révision 4) : (a) R132-3-1 s'applique aux institutions de prévoyance par le renvoi de L932-23 à L132-5 ; (b) il ne s'applique pas faute de décret propre. Avis de `regulatory` : (a) ; pour le moteur, règle de R132-3-1 en hypothèse déclarée pour les institutions de prévoyance, statut **incertain** mentionné.
 
 Tous sont vérifiés (`regulatory`, 07/11), sauf le décret de taux des institutions de prévoyance.
 
@@ -269,7 +272,7 @@ Tous sont vérifiés (`regulatory`, 07/11), sauf le décret de taux des institut
 
 | Méthode | Statut | Ce qu'elle calcule | Conditions d'usage | Statut ; incertitude |
 |---|---|---|---|---|
-| `vap_rente` | **recommandée** (deux référentiels ; une implémentation, partagée avec l'invalidité en B5) | Valeur actuelle probable de l'échéancier daté des arrérages futurs et des frais futurs de gestion, à partir de la fin de la dernière période payée, au montant en vigueur reconstitué des événements. **Conjoint** : rente viagère ou temporaire (`age_terme`), mortalité, remariage si `non_remariage`. **Éducation** : jusqu'à `age_limite`, prolongée selon la poursuite d'études ; viagère si `prolongation_handicap` et `situation = handicape` ; paliers d'âge. Fractionnement exact. Rente suspendue : provisionnée en comptes sociaux, probabilité de reprise en meilleure estimation. Revalorisation future : hypothèse déclarée ; pour les contrats résiliés, par segment, montant figé sauf clause (D6 décidée, provisoire). | Hypothèses déclarées sans défaut : table par usage (§ 14, D3) ; remariage ; poursuite d'études (service certain jusqu'à `age_limite_etudes` pour un enfant scolarisé ou apprenti à la dernière information : point prudent, E2.15) ; origine de la survie en option du plan (Q7 décidée) ; taux de chargement de gestion tarifaire (absent du dictionnaire : déclaré). | **Exact** sous les hypothèses. Aléa de processus exact ; erreur de modèle par sensibilités. Aucune erreur d'estimation propre (tables en entrée). |
+| `vap_rente` | **recommandée** (deux référentiels ; une implémentation, partagée avec l'invalidité en B5) | Valeur actuelle probable de l'échéancier daté des arrérages futurs et des frais futurs de gestion, à partir de la fin de la dernière période payée, au montant en vigueur reconstitué des événements. **Conjoint** : rente viagère ou temporaire (`age_terme`), mortalité, remariage si `non_remariage`. **Éducation** : jusqu'à `age_limite`, prolongée selon la poursuite d'études ; viagère si `prolongation_handicap` et `situation = handicape` ; paliers d'âge. Fractionnement exact. Rente suspendue : provisionnée en comptes sociaux, probabilité de reprise en meilleure estimation. Revalorisation future : hypothèse déclarée ; pour les contrats résiliés, par segment, montant figé sauf clause (D6 décidée). | Hypothèses déclarées sans défaut : table par usage (§ 14, D3) ; remariage ; poursuite d'études (service certain jusqu'à `age_limite_etudes` pour un enfant scolarisé ou apprenti à la dernière information : point prudent, E2.15) ; origine de la survie en option du plan (Q7 décidée) ; taux de chargement de gestion tarifaire (absent du dictionnaire : déclaré). | **Exact** sous les hypothèses. Aléa de processus exact ; erreur de modèle par sensibilités. Aucune erreur d'estimation propre (tables en entrée). |
 | `vap_monte_carlo` | **témoin** | Simulation des trajectoires, contrôle du calcul exact. | Graine. | **Constat de simulation** ; l'écart est une erreur de simulation. |
 | Coût moyen × nombre ; table d'expérience construite par l'outil ; copules | **écartées** | — | — | Données dossier par dossier disponibles ; tables toujours en entrée (ADR 0009) ; la dépendance entre conjoints ne joue plus après le premier décès. |
 
@@ -290,7 +293,7 @@ Tous sont vérifiés (`regulatory`, 07/11), sauf le décret de taux des institut
 
 La table unique de A132-18-1 est une faculté de **tarif** pour les contrats de L911-1 du Code de la sécurité sociale. Son contenu n'est pas lu (fac-similé du JO) et sa reprise en provision est une interprétation (R3).
 
-**Textes.** R343-3, 1° ; ANC 142-3, 142-4 ; A132-18 ; A132-18-1 (texte, sans la table), tous vérifiés. Loi n° 89-1009, art. 7 (non relu en entier ce jour) et CSS L912-3 (vérifié) pour la revalorisation après résiliation (D6 décidée, provisoire ; relecture de l'art. 7 : lecture de `regulatory` en cours). ANC 143-3 (date de naissance reportée au 31 décembre le plus voisin) est rangé au chapitre des opérations autres que vie : son emploi pour une rente vie est une convention du plan.
+**Textes.** R343-3, 1° ; ANC 142-3, 142-4 ; A132-18 ; A132-18-1 (texte, sans la table), tous vérifiés. Loi n° 89-1009, art. 7 (lu en entier, vérifié sur la consolidation LEGI ; l'art. 29 VII, dérogation au 2e alinéa, n'est pas lu) et CSS L912-3 (vérifié) pour la revalorisation après résiliation (D6 décidée). Pour les mutuelles et les institutions de prévoyance, A223-8 et A932-3-11 (vérifiés) étendent expressément aux **provisions techniques** des rentes viagères, temporaires comprises, le plancher des tables homologuées ; A132-18 ne le dit que du tarif : D3 en est confortée. ANC 143-3 (date de naissance reportée au 31 décembre le plus voisin) est rangé au chapitre des opérations autres que vie : son emploi pour une rente vie est une convention du plan.
 
 ### 3.6 P6 — Rentes à constituer
 
@@ -337,7 +340,7 @@ La table unique de A132-18-1 est une faculté de **tarif** pour les contrats de 
 4. Rentes ouvertes par une IAD : P5 à P7.
 5. Frontière avec le maintien de la garantie décès : B5.
 
-Classement : opération vie, PSAP vie (D7 décidée).
+Classement : opération vie, PSAP vie (D7 décidée) ; Solvabilité II : ligne d'activité 32 « Autre assurance vie » (D8 décidée).
 
 ## 5. Meilleure estimation et tableau de passage
 
@@ -348,7 +351,7 @@ Mêmes méthodes, hypothèses différentes. Lignes propres à ces postes, dans u
 | Table de mortalité | P3, P5 à P7 | table du tarif (P3) ; tables de 142-4 (rentes viagères) | table réaliste |
 | Taux | P3, P5 à P7 ; actualisation de P1, P2, P4 | taux ≤ taux du tarif ; capitaux non actualisés | courbe des taux sans risque, sans correction pour volatilité |
 | Revalorisation légale | P1, P2, P4 | acquise à l'arrêté (Q5 décidée ; revalorisation à courir en sensibilité) | jusqu'au règlement ou au dépôt |
-| Revalorisation des rentes | P5 à P7 | garantie par le contrat ; contrats résiliés : figée sauf clause (D6, provisoire) | attendue |
+| Revalorisation des rentes | P5 à P7 | garantie par le contrat ; contrats résiliés : figée sauf clause (D6) | attendue (décisions de gestion futures et comportement attendu, règlement délégué art. 23 et 26 : hypothèse déclarée) |
 | Sans-suite, reconnaissance de l'IAD | P1, § 4 | 0 (Q6) | central |
 | Poursuite d'études, remariage, origine de la survie | P5 à P7 | points prudents | centraux |
 | Hypothèses par défaut | tous | prudentes | centrales |
@@ -492,22 +495,22 @@ Le type de lien `ouverture_rente` est nouveau (Q8 décidée ; A1).
 
 ## 9. Questions au mainteneur
 
-Toutes les questions des révisions 1 et 2 sont tranchées le 7 novembre 2026 (§ 2) : Q1 à Q14, D1 à D7. **Aucune question ouverte**, hormis le visa du recensement lui-même.
+Toutes les questions sont tranchées (§ 2) : Q1 à Q14, D1 à D7 le 7 novembre 2026, D8 le 8 novembre 2026. Le recensement est visé le 8 novembre 2026 (M131). **Aucune question ouverte.**
 
-Restent liés à des lectures : D6 est provisoire jusqu'à la relecture de la loi n° 89-1009, art. 7 ; Q5 est à revoir sur mesure en B2 ; Q14 étend E2.9 et l'ADR 0009, point 6 (report par `architect`).
+Restent liés à des lectures ou à des mesures : Q5 est à revoir sur mesure en B2 ; Q14 étend E2.9 et l'ADR 0009, point 6 (report par `architect`).
 
 ## 10. Points pour `regulatory` (après la lecture du 7 novembre 2026)
 
 | Point | État |
 |---|---|
 | R1 | **Lu** ; tranché (D1) |
-| R2 | **Lu** ; citations corrigées au § 3.2. Reste : le décret de taux des institutions de prévoyance (non trouvé, copie du CSS incomplète) ; l'application aux contrats collectifs des entreprises d'assurance (incertain) ; le texte de la loi n° 2014-617, art. 13 (non relu) |
-| R3 | **Lu** ; tranché (D3). Reste : A223-8 et A932-3-11 ; la table annexée à A132-18-1 (fac-similé du JO) ; quelles tables de A132-18, a), sont « applicables aux contrats de rente viagère » |
+| R2 | **Lu** ; citations corrigées au § 3.2 ; loi n° 2014-617, art. 13, lu (disposition transitoire, citation retirée). Reste : le décret de taux des institutions de prévoyance (**non trouvé** dans le CSS, dont la copie est complète ; deux lectures, avis (a), § 3.2 ; texte JORF du décret n° 2015-1092 non lu) ; l'application aux contrats collectifs des entreprises d'assurance (incertain) |
+| R3 | **Lu** ; tranché (D3) ; A223-8 et A932-3-11 lus, vérifiés (§ 3.5). Reste : A223-8-1 (non lu) ; la table annexée à A132-18-1 (fac-similé du JO) ; quelles tables de A132-18, a), sont « applicables aux contrats de rente viagère » |
 | R4 | **Lu** ; tranché (D4) |
 | R5 | **Lu**, vérifié (intégré au § 3.3 et au § 3.5) |
 | R6 | **Lu**, vérifié ; tranché (D5) ; issue proposée par `regulatory` |
-| R7 | **Lecture de `regulatory` en cours** : annexe I, art. 18 et 26 du règlement délégué (EUR-Lex) |
-| R8 | **Lu en partie** (CSS L912-3 vérifié) ; tranché à titre provisoire (D6) ; relecture de la loi n° 89-1009, art. 7 : **lecture de `regulatory` en cours** |
+| R7 | **Lu**, vérifié sur le JO d'origine et la consolidation au 14/11/2024 (outil de documentation). Lignes d'activité : capital décès et rentes de conjoint et d'éducation en ligne 32 (30 avec participation aux bénéfices) ; les lignes 33 et 34 ne visent que les rentes découlant de contrats non-vie ; ligne 29 à citer d'après le RD 2017/669, jamais d'après le texte d'origine. IAD : tranché (D8, ligne 32). Art. 18 : limite du contrat de la temporaire individuelle à prime garantie au terme, § 5 inapplicable ; collectif annuel résiliable limité à la prochaine échéance, sous réserve du § 7 (point de fait par contrat ; B6). Art. 26 : loi de résiliation obligatoire en meilleure estimation, hypothèse déclarée et justifiée |
+| R8 | **Lu** (CSS L912-3 et loi n° 89-1009, art. 7, en entier, vérifiés) ; tranché (D6), confortée. Reste : art. 29 VII de la loi n° 89-1009 (non lu) |
 | R9 | **Lu** ; tranché (D7) |
 | R10 | **Lu**, vérifié : analogie déclarée, non obligatoire |
 
@@ -591,7 +594,7 @@ L'incohérence de version du dictionnaire relevée en révision 1 (§ 0 : `1.2` 
 
 - **Recommandé : hypothèse déclarée par segment de contrats résiliés.** En comptes sociaux, **montant figé** (lecture (a)) sauf clause contractuelle qui garantit la revalorisation par l'organisme résilié, auquel cas elle est provisionnée (lecture (b), au taux garanti). Le dictionnaire ne porte pas cette clause : le plan la déclare par segment (`contrats` résiliés, `motif_fin`). La documentation propose « figé » comme valeur et dit l'alternative et son effet (jugement d'expert).
 - **Motif** : L912-3 met la poursuite de la revalorisation à la charge de l'acte fondateur du régime, qui l'organise, en général auprès du nouvel organisme. L'art. 7 de la loi n° 89-1009, tel que lu au cadrage, garantit un plancher (la dernière prestation), pas une revalorisation.
-- **Réserve** : lecture provisoire. L'art. 7 est à relire en entier par `regulatory` avant visa.
+- **Réserve levée** (révision 4) : l'art. 7, lu en entier par `regulatory`, garantit un plancher et réserve les révisions contractuelles ; il n'impose aucune revalorisation future à l'organisme résilié.
 - **Alternative** : revalorisation future provisionnée pour toutes les rentes de contrats résiliés (point prudent).
 - **Effet sur un total** : l'alternative augmente la provision mathématique des rentes des contrats résiliés de la valeur actuelle de la revalorisation future. Cet effet est sensible pour une rente viagère de conjoint (longue durée) et faible pour une rente d'éducation. À mesurer en B4.
 
