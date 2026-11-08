@@ -1,6 +1,6 @@
 # Dictionnaire de la base brute fictive — v1 (décès, arrêt de travail, garanties liées)
 
-> *Rédigé par l'agent actuary-approfondi (IA) le 7 novembre 2026 (issue #16, branche `claude/socle-donnees`). Révisé le 7 novembre 2026 par l'agent actuary (IA) sur les décisions du mainteneur du même jour relatives à l'avis P13 (filiation avec le dictionnaire double effet de `docu_actu`). Révisé le 8 novembre 2026 par l'agent actuary (IA) sur l'issue #30 et les décisions du mainteneur du même jour (version `1.4`). Statut : version `1.4` **visée** par le mainteneur le 8 novembre 2026 (M139) ; versions `1.0` à `1.3` **visées** par le mainteneur le 7 novembre 2026 (E2.2, M17). Points visés le 7 novembre 2026 : recommandations de P1 à P4, P7, P11, P12, P15 et P16 ; P14 sous sa forme reformulée (§ 3, T6) ; P13 soldé par l'annexe A. Visa global : 7 novembre 2026.*
+> *Rédigé par l'agent actuary-approfondi (IA) le 7 novembre 2026 (issue #16, branche `claude/socle-donnees`). Révisé le 7 novembre 2026 par l'agent actuary (IA) sur les décisions du mainteneur du même jour relatives à l'avis P13 (filiation avec le dictionnaire double effet de `docu_actu`). Révisé le 8 novembre 2026 par l'agent actuary (IA) sur l'issue #30 et les décisions du mainteneur du même jour (version `1.4`). Révisé le 8 novembre 2026 par l'agent actuary (IA) sur l'issue #31 et les décisions du mainteneur du même jour relatives à la question 5d (version `1.5`). Statut : version `1.5` **visée** par le mainteneur le 8 novembre 2026 (M146) ; version `1.4` **visée** par le mainteneur le 8 novembre 2026 (M139) ; versions `1.0` à `1.3` **visées** par le mainteneur le 7 novembre 2026 (E2.2, M17). Points visés le 7 novembre 2026 : recommandations de P1 à P4, P7, P11, P12, P15 et P16 ; P14 sous sa forme reformulée (§ 3, T6) ; P13 soldé par l'annexe A. Visa global : 7 novembre 2026.*
 >
 > *Historique des versions :*
 > - *`1.0` : visée par le mainteneur le 7 novembre 2026 (visa global, #16) ;*
@@ -8,8 +8,9 @@
 > - *`1.2` : visée par le mainteneur le 7 novembre 2026 ; P18 soldé par la lecture de `regulatory` du 7 novembre 2026 (conditions d'emploi des données du contrat frais de santé couplé, § 3, T20, et § 11), sans changement de table, de colonne ni de défaut.*
 > - *`1.3` : visée par le mainteneur le 7 novembre 2026 ; correction d'une incohérence relevée par `actuary-approfondi` au recensement de #20 : le domaine de `extraction.version_dictionnaire` (§ 3, T1) restait à `1.1` ; il vaut désormais la version de l'en-tête. Texte seul, sans changement de table, de colonne ni de défaut (M103).*
 > - *`1.4` : visée par le mainteneur le 8 novembre 2026 (M139) ; corrections relevées à la transcription en CSV (#18), issue #30, et décisions du mainteneur du 8 novembre 2026 (points 2, 6 et 8 de #30) : domaine de `affiliations.date_saisie` (borne tronquée remplacée) ; `mise_a_jour` (§ 4) : seule `source_information` est requise, justificatif attendu ; tables de D03g (`designations`, `ayants_droit_sante`) et de D04b (`evaluations_gestion`, § 7.5) complétées ; annexe A.1, rangée T2 : cible `garanties_souscrites` ; `ayants_droit_sante.fin_couverture` : futur admis ; sous-paramètres de D02c et de D10 nommés, absence du sous-cas (g) de D10 justifiée sans renumérotation ; clé étrangère composite de `affiliations.college` écrite ; § 1.2 : table inconnue refusée, `Date` stockée en double (point 9 de #30), champ `""` d'un CSV refusé à la lecture (avis d'`actuary` sur le module `lecture`, visa du mainteneur du 8 novembre 2026). Sans changement de table, de colonne ni de défaut (M103).*
+> - *`1.5` : visée par le mainteneur le 8 novembre 2026 (M146) ; T1 : un autre nombre de lignes est un refus d'appel (M143) ; issue #31, décisions du mainteneur du 8 novembre 2026 sur la question 5d (option B, lecture L2 de la couche de lecture, lecture (a) de D09) : § 1.10 : portée d'un refus `R` (colonne ou table, refus induit par les clés étrangères ; colonne `F` refusée sans hypothèse par défaut ; table facultative refusée sans variante « sans ») ; § 9, D09 : refus `R`, la ligne comptée et identifiée ; § 2.1 : `victimes` absente avec `catastrophes` présente, refus `R` de `catastrophes` ; § 7.5 : écarts de type et de forme de `evaluations_gestion`, refus de la table seule ; § 1.2 et § 1.6 : la lecture ne convertit pas, ce qu'elle rend passe par le contrôle des types, qui refuse ; champ `""` d'un CSV rendu tel quel, hors domaine (lecture (ii) de M144) ; § 1.10 et § 10 : codes des contrôles de structure et septième CSV `controles.csv` (proposition (e) de l'ADR 0010, cinquième série, retenue par le mainteneur le 8 novembre 2026). Sans changement de table, de colonne ni de défaut (M103).*
 
-Version du dictionnaire : `1.4`. C'est la valeur attendue dans `extraction.version_dictionnaire`.
+Version du dictionnaire : `1.5`. C'est la valeur attendue dans `extraction.version_dictionnaire`.
 
 ## 0. Objet, portée, statut
 
@@ -50,7 +51,7 @@ Les noms de tables et de colonnes sont en minuscules, sans accents, avec des mot
 
 ### 1.2 Types, fichiers, colonnes
 
-**Types.** Cinq types R : `character`, `integer`, `numeric`, `Date`, `logical`. Une colonne d'un autre type est refusée par la couche de lecture, sans conversion (E2.5, E4.4). Une `Date` est stockée en double ; une `Date` stockée en entier est refusée, sans conversion. Le module `donnees` contrôle les types une seconde fois, parce que le moteur peut recevoir des `data.frame` construits sans la couche de lecture.
+**Types.** Cinq types R : `character`, `integer`, `numeric`, `Date`, `logical`. La couche de lecture ne convertit pas ; ce qu'elle rend passe par le contrôle des types, qui refuse une colonne d'un autre type, sans conversion (E2.5, E4.4). Une `Date` est stockée en double ; une `Date` stockée en entier est refusée, sans conversion. Le module `donnees` contrôle les types une seconde fois, parce que le moteur peut recevoir des `data.frame` construits sans la couche de lecture.
 
 **Format CSV :**
 - UTF-8 sans marque d'ordre ;
@@ -110,7 +111,7 @@ Les noms de tables et de colonnes sont en minuscules, sans accents, avec des mot
 
 ### 1.6 Manquants
 
-- En R, un manquant est `NA`. En CSV, **le champ vide est le seul marqueur** de manquant. Un champ `""` (guillemets sans contenu) n'est pas un champ vide : c'est une chaîne vide, refusée à la lecture.
+- En R, un manquant est `NA`. En CSV, **le champ vide est le seul marqueur** de manquant. Un champ `""` (guillemets sans contenu) n'est pas un champ vide : c'est une chaîne vide, que la lecture rend telle quelle : hors domaine (refus `R` de portée colonne, code `chaine_vide`, § 1.10) ; dans une colonne déclarée d'un autre type que `character`, la colonne reste en texte et relève de `type_incompatible`.
 - Aucune valeur sentinelle n'en tient lieu (`0`, `-`, `inconnu`, `NULL`) : une sentinelle est une valeur, contrôlée contre le domaine.
 - Dans un `data.frame` reçu directement, la chaîne `""` n'est pas un manquant : elle est hors domaine.
 
@@ -157,6 +158,30 @@ Chaque contrôle et chaque défaut a un traitement unique, pris parmi quatre (E2
 
 **Exclusions en cascade.** Exclure un sinistre exclut, dans la même famille de calcul, ses dossiers, rentes, bénéficiaires, événements, prestations et évaluations. L'enjeu restitué couvre toute la cascade. Une anomalie qui n'a pas de traitement dans la liste du § 9 est un refus (ADR 0008, point 5).
 
+**Portée d'un refus `R`** (décision du mainteneur du 8 novembre 2026, question 5d). Un refus `R` porte sur une colonne ou sur une table ; la ligne en est l'unité de compte et d'identification (motif, nombre de lignes, dix premiers identifiants) :
+- refus sur une colonne ordinaire (type, domaine, manquant `O` hors du § 9, valeur `C` hors condition) : portée **colonne** ; seuls les postes qui lisent la colonne sont arrêtés ;
+- refus sur une colonne de clé primaire ou étrangère (dont D01a), colonne `O` ou `C` absente, colonne inconnue : portée **table** ;
+- **refus induit** : le refus d'une table entraîne, de proche en proche, celui des tables dont une clé étrangère la vise ; il est enregistré avec son origine ;
+- une colonne `F` refusée n'est pas une colonne absente (§ 1.2) : elle ne déclenche aucune hypothèse par défaut ;
+- une table facultative refusée n'est pas une table absente : elle n'est pas remplacée par la variante « sans » de la méthode qui la lit.
+
+**Codes des contrôles de structure** (liste fermée, distincte des défauts du § 9 et des motifs de refus d'appel ; forme lisible par machine : `controles.csv`, § 10). Chaque anomalie qui n'est pas un défaut du § 9 s'enregistre au bilan sous l'un de ces codes.
+
+| Code | Objet | Détection | Portée | Motif de refus d'appel |
+|---|---|---|---|---|
+| `colonne_absente` | Colonne `O` ou `C` du § 3 absente de sa table (§ 1.2) | exacte | table | `colonne_absente` |
+| `colonne_inconnue` | Colonne absente du § 3 (§ 1.2, P7) | exacte | table | `colonne_inconnue` |
+| `type_incompatible` | Colonne d'un autre type que son type déclaré, dont une colonne restée en texte parce qu'une valeur au moins ne se lit pas dans son type, et une `Date` stockée en entier (§ 1.2) | exacte | colonne, ou table pour une colonne de clé | `type_incompatible` |
+| `manquant_obligatoire` | Manquant dans une colonne `O` qui n'a pas de défaut au § 9, ou dans une colonne `C` sous sa condition (§ 1.7) ; manquant dans une colonne `O` de clé primaire | exacte | colonne, ou table pour une colonne de clé | — |
+| `hors_domaine` | Valeur hors du domaine de sa colonne (modalité, borne, sentinelle, valeur `C` présente hors condition : § 1.6, § 1.7), hors des cas qui ont un défaut au § 9 | exacte | colonne, ou table pour une colonne de clé | — |
+| `chaine_vide` | Chaîne `""` dans une colonne `character`, lue d'un CSV ou reçue dans un `data.frame` : valeur hors domaine (§ 1.6) | exacte | colonne, ou table pour une colonne de clé | — |
+| `chevauchement` | Versions d'une même garantie et d'un même collège qui se chevauchent (§ 3, T4) ; paliers d'un même paramètre qui se chevauchent (§ 3, T5) | exacte | table | — |
+| `table_conditionnelle_absente` | `victimes` absente alors que `catastrophes` est présente (§ 2.1) : refus de `catastrophes` | exacte | table | — |
+| `refus_induit` | Table dont une clé étrangère vise une table refusée ; l'origine est enregistrée | exacte | table | — |
+| `somme_parts` | Somme des parts des bénéficiaires d'un dossier différente de 1 (§ 3, T11) : signalement | exacte | ligne | — |
+
+Renvois au § 9, sans code de contrôle : doublon de clé primaire, D01a ; clé étrangère orpheline, D04a et D04b (clé composite de `affiliations.college` comprise) ; date hors bornes, D02c ; signe d'un montant contraire au domaine, D09 ; garantie incompatible ou victime d'un autre assuré, D10 (a) et (h). Ne sont pas des codes de contrôle mais des refus d'appel : une anomalie de la table `extraction`, une table inconnue, une table obligatoire absente. Une table facultative refusée porte le code de sa cause. Un contrôle qu'un refus empêche est un contrôle non exécuté, non une anomalie.
+
 ## 2. Vue d'ensemble
 
 ### 2.1 Tables
@@ -183,6 +208,8 @@ Chaque contrôle et chaque défaut a un traitement unique, pris parmi quatre (E2
 | T18 | `evaluations_gestion` | Évaluations de gestion par dossier (M68) | `id_evaluation` | `id_dossier` | F | S |
 | T19 | `designations` | Bénéficiaires nommés d'une désignation nominative d'une affiliation | `id_designation` | `id_affiliation` | F | S |
 | T20 | `ayants_droit_sante` | Périodes de couverture des ayants droit du contrat frais de santé couplé | `id_ayant_droit` | `id_affiliation`, `id_assure_membre` | F | S |
+
+`victimes` (T17) absente alors que `catastrophes` (T16) est présente : refus `R` de `catastrophes` (§ 1.10), et non refus d'appel.
 
 **Liens entre tables :**
 - `adherents` 1–n `contrats` 1–n `garanties_souscrites` 1–n `parametres` ;
@@ -245,14 +272,14 @@ Lecture des colonnes : Obl. et Saisie, voir § 1.7 et § 1.8 ; « Défauts » re
 
 ### T1. `extraction`
 
-Une ligne exactement ; tout autre nombre de lignes est un refus (R).
+Une ligne exactement ; tout autre nombre de lignes est un refus d'appel (M143).
 
 | Colonne | Type | Domaine | Obl. | Saisie | Défauts |
 |---|---|---|---|---|---|
 | `date_extraction` | Date | Date d'extraction ; ≥ toute date de saisie de la base | O | — | — |
 | `debut_historique` | Date | < `date_extraction` | O | — | — |
 | `type_organisme` | character | `societe_assurance`, `mutuelle`, `institution_prevoyance` | O | — | — |
-| `version_dictionnaire` | character | `1.4` (version d'un autre dictionnaire : refus) | O | — | — |
+| `version_dictionnaire` | character | `1.5` (version d'un autre dictionnaire : refus) | O | — | — |
 | `devise` | character | `EUR` | O | — | — |
 
 ### T2. `adherents`
@@ -667,7 +694,7 @@ La vue à l'arrêté A (A ≤ `date_extraction`) retient :
    - **(b) triangle des évaluations de gestion** : à la date de chaque cellule, paiements cumulés plus dernière évaluation saisie à cette date. Il est distinct du triangle de charges, qui porte les provisions recalculées par l'outil (E2.12, M65). Il est restitué comme diagnostic, jamais comme triangle d'une méthode.
 3. **Critère d'acceptation** (test à écrire avec le module `donnees`) : toutes les provisions sont identiques au bit près avec ou sans la table ; seuls les diagnostics changent.
 4. **Absence de la table** : les diagnostics (a) et (b) ne sont pas produits, et la fiche de calcul le signale. Ce n'est pas un refus.
-5. **Pas de défaut injecté** dans cette table en v1 : elle n'entre pas dans le calcul. Ses incohérences (montant négatif, saisie antérieure à l'effet) sont des refus de la table seule ; elles n'arrêtent aucun poste.
+5. **Pas de défaut injecté** dans cette table en v1 : elle n'entre pas dans le calcul. Ses écarts de type et de forme (colonne mal typée, absente ou inconnue) et ses incohérences (montant négatif, saisie antérieure à l'effet) sont des refus de la table seule ; ils n'arrêtent aucun poste.
 
 ## 8. Table de couverture (postes de la v1 → tables et colonnes lues)
 
@@ -727,7 +754,7 @@ La famille de calcul et le rattachement de chaque poste sont ceux d'E2.14 et E2.
 | **D06** | Clôture sans justificatif | `sortie` (`reprise_travail`, `deces`), `fin_service` (`deces_beneficiaire`) au `justificatif` manquant ; `cloture_dossier` de motif `regle` sans prestation du dossier, ou `depot_cdc` sans prestation `capital` | exacte pour l'absence ; le caractère erroné d'une clôture n'est pas observable | **S** (clôture retenue) ou **H** (clôture non retenue : dossier valorisé comme ouvert depuis sa dernière information, point prudent des comptes sociaux) | `cloture_sans_justificatif` (justificatif effacé d'une clôture vraie) ; `cloture_erronee` (clôture sans justificatif ajoutée à un dossier vraiment ouvert) ; `cloture_sans_prestation` (prestation justificative supprimée d'un dossier clos) |
 | **D07** | Extinction non enregistrée | Absence de `sortie`, de `fin_service` ou de `cloture_dossier` (`extinction`) | (a) **exacte** : sinistre décès de l'assuré, ou `second_deces` ou `fin_service` (`deces_beneficiaire`) sur un autre dossier du même bénéficiaire, alors que le service continue ; (b) **présomptive** : aucune prestation depuis plus de N mois (N déclaré) ; (c) **exacte** : rente d'éducation en service ou dossier `double_effet` non clos dont le plus jeune enfant à charge a dépassé `age_limite` (ou `age_limite_etudes` s'il est justifié), hors `prolongation_handicap` avec `situation` = `handicape` | (a) **H** (extinction retenue à la date du décès connu) ou **S** ; (b) **S** ou **X** par famille ; (c) **H** (extinction retenue à la date reconstituée ; naissance manquante : pas d'extinction, D03a) ou **S** | `extinction_non_enregistree` (événement de sortie ou de clôture supprimé, prestations arrêtées à la date vraie) ; sous-paramètres `deces_connu_ailleurs` et `fin_de_charge` |
 | **D08** | Rechute enregistrée comme nouveau sinistre | `sinistres`, `evenements`, `dossiers` | présomptive : nouveau sinistre `arret_travail` du même assuré dont la survenance suit une `sortie` (`reprise_travail`) de moins de `delai_rechute_jours` | **H** : rattachement déclaré (ancienneté depuis la survenance initiale, sinistre compté une fois) ; ou **S** (conservé distinct) | `rechute_nouveau_sinistre` |
-| **D09** | Montant aberrant | `prestations.montant`, `evenements.montant`, `cotisations.montant`, `affiliations.salaire_reference`, `parametres.valeur` | exacte pour un signe contraire au domaine (refus de la ligne, **R**) ; présomptive pour un écart aux seuils **déclarés dans le plan** (rapport au plafond contractuel ou au salaire, multiple de la médiane du segment) | **S** ; **X** par famille ; jamais de correction (aucune division par 100). Capital fixé (`fixation_capital`) ou réglé différent du capital contractuel reconstitué : détection exacte quand aucune majoration familiale ne s'applique ; traitement **S** + **H** (capital contractuel retenu pour les garanties liées, alternative du capital réglé chiffrée) | `montant_aberrant` ; sous-paramètres `facteur` (ex. 100, centimes saisis en euros), `part_signe_inverse` et `capital_incoherent` (facteur 10 ou deux chiffres permutés) |
+| **D09** | Montant aberrant | `prestations.montant`, `evenements.montant`, `cotisations.montant`, `affiliations.salaire_reference`, `parametres.valeur` | exacte pour un signe contraire au domaine : refus **R** (la ligne est comptée et identifiée ; les postes qui lisent la colonne sont arrêtés) ; présomptive pour un écart aux seuils **déclarés dans le plan** (rapport au plafond contractuel ou au salaire, multiple de la médiane du segment) | **S** ; **X** par famille ; jamais de correction (aucune division par 100). Capital fixé (`fixation_capital`) ou réglé différent du capital contractuel reconstitué : détection exacte quand aucune majoration familiale ne s'applique ; traitement **S** + **H** (capital contractuel retenu pour les garanties liées, alternative du capital réglé chiffrée) | `montant_aberrant` ; sous-paramètres `facteur` (ex. 100, centimes saisis en euros), `part_signe_inverse` et `capital_incoherent` (facteur 10 ou deux chiffres permutés) |
 | **D10** | Incohérence entre garanties | `dossiers`, `garanties_souscrites`, `evenements`, `beneficiaires`, `victimes` | exacte | (a) garantie ou type de prestation incompatible avec la nature du sinistre : **R** ; (b) version de garantie hors vigueur à la survenance : **S** + **X** ; (c) dossier de rente ou de double effet sans dossier `deces` du même sinistre alors que la garantie décès est souscrite : **S** ; (d) `passage_invalidite` sans garantie `invalidite` souscrite : **S** ; (e) qualité du bénéficiaire incompatible avec la garantie : **X** ; (f) décès du conjoint saisi sur un dossier et pas sur l'autre (`second_deces` sans `fin_service` de la rente de conjoint, ou l'inverse) : **H** (extinction retenue) ou **S** ; (h) victime dont le sinistre est d'un autre assuré : **R**. La lettre (g) n'est attribuée à aucun sous-cas depuis la première version du texte ; les lettres ne sont pas renumérotées, pour garder le code D10h cité au § 3 (T17) et par le recensement des méthodes | `incoherence_garanties`, sous-paramètres par sous-cas : `garantie_incompatible` (a), `version_hors_vigueur` (b), `sans_dossier_deces` (c), `passage_sans_invalidite` (d), `qualite_incompatible` (e), `deces_conjoint_partiel` (f), `victime_autre_assure` (h) |
 | **D11** *(ajout)* | Sinistre hors période de couverture | `sinistres.date_survenance` face aux affiliations de l'assuré et à `contrats` | exacte, hors portabilité et hors maintien de la garantie décès | **S** ; **X** par famille | `hors_couverture` |
 | **D12** *(ajout)* | Suite d'états impossible | `evenements` (automate du § 4) | exacte | **X** par sinistre, pour la famille « engagement » ; **S** pour la famille « triangle », qui ne lit pas les états | `suite_impossible` : événement d'état permuté ou dupliqué |
@@ -768,7 +795,8 @@ Sous `inst/extdata/dictionnaire/` :
 - `types_evenements.csv` : le § 4, avec l'automate des transitions ;
 - `parametres.csv` : le § 5 ;
 - `defauts.csv` : le § 9, avec code, traitements admis, paramètre d'intensité et nature de la détection ;
-- `filiation.csv` : l'annexe A, une ligne par colonne du dictionnaire double effet de `docu_actu`.
+- `filiation.csv` : l'annexe A, une ligne par colonne du dictionnaire double effet de `docu_actu` ;
+- `controles.csv` : les codes des contrôles de structure du § 1.10.
 
 Un test de concordance compare ces fichiers aux tableaux du présent texte, que le module `donnees` lit et que le simulateur respecte. Les tableaux de ce texte gardent donc une forme régulière.
 
