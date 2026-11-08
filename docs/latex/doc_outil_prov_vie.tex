@@ -1185,6 +1185,9 @@ Ses deux fonctions sont exportées.
 \textcolor{financeblue}{\textbf{Fonction}} & \textcolor{financeblue}{\textbf{Arguments}} & \textcolor{financeblue}{\textbf{Rôle}} \\
 \code{dictionnaire()} & Aucun & Lit et valide le dictionnaire lisible par machine embarqué sous \code{inst/extdata/dictionnaire/}, et le rend en liste de \code{data.frame}\fsp; refuse par \code{dictionnaire\_invalide} un dictionnaire incohérent. \\
 \code{controler\_types()} & \code{donnees} & Contrôle, sans rien convertir, les tables, les colonnes et leurs types R contre le dictionnaire, et la version de \code{extraction}\fsp; rend la base inchangée ou la refuse. \\
+\code{constater\_forme()} & \code{donnee}, \code{table}, \code{dico} & Relève, sans s'interrompre ni rien convertir, les écarts de forme d'une table (colonne inconnue, colonne obligatoire ou conditionnelle absente, type R) et les rend en \code{data.frame}, une ligne par écart, avec son code de \code{controles.csv} et les lignes concernées\fsp; non exportée, appelée par \code{controler\_types()}. \\
+\code{lire\_texte\_type()} & \code{x}, \code{type} & Lit une colonne de texte dans un type du dictionnaire par la grammaire stricte, sans convertir ce qui n'est pas exactement l'écriture du type\fsp; rend la colonne typée si toutes ses valeurs se lisent, et les numéros des valeurs illisibles\fsp; non exportée, appelée par \code{lire\_base()} et \code{constater\_forme()}. \\
+\code{controler\_version\_extraction()} & \code{donnee} & Refuse (\code{extraction\_invalide}) une table \code{extraction} d'une autre version du dictionnaire que celle qu'attend le moteur\fsp; non exportée, appelée par \code{controler\_types()} et \code{lire\_base()}. \\
 \end{tabular}
 \end{center}
 
