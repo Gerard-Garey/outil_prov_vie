@@ -338,7 +338,8 @@ ecrire_liste <- function(x) {
   unlist(lapply(seq_along(x), function(i) {
     el <- x[[i]]
     if (is.list(el) && length(el) > 0L) {
-      if (!identical(names(attributes(el)), "names")) {
+      # une liste sans aucun attribut passe : l'absence de noms est refusee a l'appel suivant
+      if (!is.null(attributes(el)) && !identical(names(attributes(el)), "names")) {
         refuser(paste0("ecrire_liste() : attributs non admis en \u00ab ", chemins[i], " \u00bb"),
                 "liste_invalide", module = "outils")
       }
@@ -407,18 +408,24 @@ lire_liste <- function(octets) {
   if (!all(grepl("^[^/]+(/[^/]+)*$", chemins))) {
     refuser("lire_liste() : chemin mal form\u00e9", "liste_invalide", module = "outils")
   }
-  segments <- strsplit(chemins, "/", fixed = TRUE)
-  ancetres <- unlist(lapply(segments, function(s) {
-    vapply(seq_len(length(s) - 1L), function(j) paste(s[seq_len(j)], collapse = "/"), "")
+  # Les controles portent sur les noms decodes : deux ecritures d'un meme nom (a, \x61)
+  # designent le meme noeud. Une cle de chemin prefixe chaque nom de sa longueur en octets :
+  # un nom decode peut contenir « / » ou tout autre separateur.
+  noms_chemins <- lapply(strsplit(chemins, "/", fixed = TRUE), function(s) {
+    vapply(s, .desechapper, "", USE.NAMES = FALSE)
+  })
+  cle <- function(noms) paste(nchar(noms, "bytes"), noms, sep = ":", collapse = "|")
+  cles <- vapply(noms_chemins, cle, "")
+  ancetres <- unlist(lapply(noms_chemins, function(noms) {
+    vapply(seq_len(length(noms) - 1L), function(j) cle(noms[seq_len(j)]), "")
   }))
-  if (anyDuplicated(chemins) || any(chemins %in% ancetres)) {
+  if (anyDuplicated(cles) || any(cles %in% ancetres)) {
     refuser("lire_liste() : chemins dupliqu\u00e9s ou feuille plac\u00e9e sous une autre feuille",
             "liste_invalide", module = "outils")
   }
   resultat <- list()
   for (i in seq_along(champs)) {
-    noms <- vapply(segments[[i]], .desechapper, "", USE.NAMES = FALSE)
-    resultat <- .inserer(resultat, noms, .lire_feuille(champs[[i]], chemins[i]))
+    resultat <- .inserer(resultat, noms_chemins[[i]], .lire_feuille(champs[[i]], chemins[i]))
   }
   # lecture stricte : tout texte non canonique est refuse (1.50, \xe9 pour un caractere
   # imprimable, ordre ou entrelacement des chemins...) ; on a donc toujours
@@ -498,17 +505,22 @@ lire_liste <- function(octets) {
 decrire_plateforme <- function() {
   logiciels <- extSoftVersion()
   systeme <- Sys.info()
+  # Sys.info() peut rendre NULL (documente par R) et extSoftVersion() peut omettre un
+  # composant : un champ indisponible vaut NA_character_
+  champ <- function(vecteur, nom) {
+    if (is.character(vecteur) && nom %in% names(vecteur)) unname(vecteur[[nom]]) else NA_character_
+  }
   list(
     r = R.version.string,
     plateforme = R.version$platform,
-    systeme = unname(systeme[["sysname"]]),
-    version_systeme = unname(systeme[["release"]]),
-    machine = unname(systeme[["machine"]]),
+    systeme = champ(systeme, "sysname"),
+    version_systeme = champ(systeme, "release"),
+    machine = champ(systeme, "machine"),
     boutisme = .Platform$endian,
-    blas = unname(logiciels[["BLAS"]]),
+    blas = champ(logiciels, "BLAS"),
     lapack = La_library(),
     lapack_version = La_version(),
-    pcre = unname(logiciels[["PCRE"]]),
-    icu = unname(logiciels[["ICU"]])
+    pcre = champ(logiciels, "PCRE"),
+    icu = champ(logiciels, "ICU")
   )
 }
