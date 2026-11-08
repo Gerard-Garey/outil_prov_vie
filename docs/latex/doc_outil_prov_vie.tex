@@ -997,16 +997,20 @@ sinon la fonction lève une erreur R ordinaire. La fonction procède ainsi~:
 \end{enumerate}
 
 Rétablir l'échantillonneur «~Rounding~» de \code{sample()} (celui de R
-antérieur à la version~3.6.0) fait émettre par R un avertissement, qui n'a
-pas à sortir d'une restauration. Quand l'échantillonneur de l'appelant est
-«~Rounding~», le rétablissement des genres est donc fait sous
-\code{suppressWarnings()}, par décision du mainteneur du 7~novembre~2026.
-Dans tous les autres cas, un avertissement émis par le rétablissement
-remonte à l'appelant, et devient une erreur si les avertissements sont
-convertis en erreurs (\code{options(warn = 2)}, comme dans les batteries de
-tests)~; c'est le cas, par décision du mainteneur du même jour, de
-l'avertissement de l'échantillonneur de la loi normale «~Buggy
-Kinderman-Ramage~». Les genres et la graine de l'appelant sont rétablis dans
+antérieur à la version~3.6.0) fait émettre par R un avertissement. Quand
+l'échantillonneur de l'appelant est «~Rounding~», le rétablissement des
+genres est donc fait sous \code{suppressWarnings()}, par décision du
+mainteneur du 7~novembre~2026. Dans tous les autres cas, un avertissement
+émis par le rétablissement remonte à l'appelant, et devient une erreur si
+les avertissements sont convertis en erreurs (\code{options(warn = 2)},
+comme dans les batteries de tests)~; c'est le cas, par décision du
+mainteneur du même jour, de l'avertissement de l'échantillonneur de la loi
+normale «~Buggy Kinderman-Ramage~». Le motif de cette différence, donné par
+le mainteneur le 8~novembre~2026~: «~Rounding~» est l'état ordinaire d'un
+appelant qui rejoue d'anciens résultats par \code{RNGversion()}, et son
+avertissement n'a pas à sortir d'une restauration\fsp; «~Buggy
+Kinderman-Ramage~» est un générateur défectueux, dont l'usage doit être
+signalé. Les genres et la graine de l'appelant sont rétablis dans
 les deux cas. Une limite subsiste~: si l'appelant combine «~Buggy
 Kinderman-Ramage~» et «~Rounding~», l'avertissement du premier est étouffé
 avec celui du second (issue~27 du dépôt).
@@ -1039,11 +1043,17 @@ vecteur nommé, complexe, liste\ldots) est refusé (\code{liste\_invalide}).
 \item réel~: 17 chiffres significatifs (format \code{\%.17g}), jetons
   \code{NA}, \code{NaN}, \code{Inf} et \code{-Inf}\fsp; le zéro négatif
   s'écrit \code{0}. Dix-sept chiffres significatifs suffisent à retrouver
-  exactement tout réel double précision de la norme IEEE~754 (résultat
-  exact, propriété du format binaire64, sous réserve que l'écriture et la
-  relecture décimales de la bibliothèque C soient correctement
-  arrondies)\fsp; la batterie de reproductibilité
-  le constate sur trois mille réels, relus au bit près\fsp;
+  tout réel double précision (binaire64 de la norme IEEE~754) lorsque les
+  deux conversions, vers le décimal et depuis le décimal, sont
+  correctement arrondies. Dans \code{provie}, l'écriture passe par
+  \code{sprintf()}, donc par la bibliothèque C\fsp; la relecture passe par
+  \code{as.numeric()}, c'est-à-dire par le convertisseur propre de R
+  (\code{R\_strtod}), qui accumule les chiffres et les puissances de dix en
+  \code{long double}~: il n'est pas garanti correctement arrondi, et sa
+  précision dépend du \code{long double} de la plateforme. L'aller-retour
+  exact est donc un constat~: la batterie de reproductibilité le vérifie
+  sur trois mille réels, relus au bit près, sur la plateforme où elle
+  tourne\fsp;
 \item date~: ISO~8601, \code{AAAA-MM-JJ}, l'année complétée à quatre chiffres
   (l'an~999 s'écrit \code{0999})\fsp; \code{NA}. Une date non entière, infinie
   ou dont l'année ne tient pas sur quatre chiffres est refusée
@@ -1138,10 +1148,14 @@ texte canonique est accepté, par décision du mainteneur du
 7~novembre~2026. Il en résulte, par construction, que tout texte accepté
 est restitué à l'octet près par \code{ecrire\_liste(lire\_liste(octets))}.
 Que \code{lire\_liste(ecrire\_liste(x))} rende une liste identique à
-\code{x} est un constat de test (batterie de reproductibilité, sur une
-liste qui couvre les sept types, les valeurs manquantes, les réels
-spéciaux, les chaînes échappées et la description de la plateforme), non
-une démonstration.
+\code{x} est un constat (batterie de reproductibilité, sur une liste qui
+couvre les sept types, les valeurs manquantes, les réels spéciaux, les
+chaînes échappées et la description de la plateforme), non une
+démonstration. «~Identique~» s'entend au sens d'\code{identical()} avec
+ses réglages par défaut, qui ne distingue pas \code{-0} de \code{0} et
+ignore la marque d'encodage des chaînes~: un zéro négatif est relu
+\code{0} (section~\ref{sec:ecriture}), et une chaîne marquée Latin-1 est
+relue marquée UTF-8.
 
 
 \partie{Partie IV}{Module dictionnaire}
