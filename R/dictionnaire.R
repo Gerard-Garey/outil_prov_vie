@@ -213,11 +213,28 @@ dictionnaire <- function() {
     if (col$futur_admis[i] == "programmable" && col$table[i] != "evenements") {
       echec("colonnes.csv", i, "futur admis programmable hors de la table evenements")
     }
+    # reference : `table.colonne`, ou clé étrangère composite `table.c1;table.c2` (version
+    # 1.4, affiliations.college) : toutes les colonnes visées dans une même table, chacune
+    # présente aussi dans la table de la ligne (colonne locale de même nom). Contrainte
+    # d'existence du n-uplet dans la table cible, qui n'en fait pas une clé de cette table.
     ref <- col$reference[i]
     if (ref != "") {
-      morceaux <- strsplit(ref, ".", fixed = TRUE)[[1L]]
-      if (length(morceaux) != 2L || !existe(morceaux[1L], morceaux[2L])) {
+      cibles <- strsplit(.eclater(ref), ".", fixed = TRUE)
+      if (!grepl("^[a-z_]+\\.[a-z_]+(;[a-z_]+\\.[a-z_]+)*$", ref) ||
+          !all(vapply(cibles, function(m) existe(m[1L], m[2L]), NA))) {
         echec("colonnes.csv", i, paste0("r\u00e9f\u00e9rence vers une colonne inconnue : ", ref))
+      }
+      if (length(cibles) > 1L) {
+        if (length(unique(vapply(cibles, `[`, "", 1L))) != 1L) {
+          echec("colonnes.csv", i, paste0("r\u00e9f\u00e9rence composite vers plusieurs tables : ", ref))
+        }
+        locales <- vapply(cibles, `[`, "", 2L)
+        if (anyDuplicated(locales)) {
+          echec("colonnes.csv", i, paste0("r\u00e9f\u00e9rence composite qui cite deux fois une colonne : ", ref))
+        }
+        if (!all(vapply(locales, function(c1) existe(col$table[i], c1), NA))) {
+          echec("colonnes.csv", i, paste0("r\u00e9f\u00e9rence composite dont une colonne locale manque : ", ref))
+        }
       }
     }
     for (d in .eclater(col$defauts[i])) {
@@ -401,7 +418,7 @@ controler_types <- function(donnees) {
 # Table extraction : version du dictionnaire égale à VERSION_DICTIONNAIRE_ATTENDUE (ADR 0010,
 # point 23 et annotations ; M117), contrôlée avant les autres colonnes de la table quand
 # version_dictionnaire est présente et de type character : une base d'une autre version est
-# refusée pour sa version (extraction_invalide), non pour une colonne inconnue de la 1.3 ;
+# refusée pour sa version (extraction_invalide), non pour une colonne inconnue de la version attendue ;
 # absente ou d'un autre type, le contrôle des colonnes la refuse (colonne_absente,
 # type_incompatible).
 .controler_version_extraction <- function(donnee) {

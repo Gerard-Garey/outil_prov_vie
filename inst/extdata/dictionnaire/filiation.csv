@@ -24,7 +24,7 @@
 "adherents","date_radiation","contrats","`contrats.date_fin` (motif `resiliation_adherent`)","renommee",""
 "adherents","gestionnaire","contrats","`contrats.gestionnaire`","renommee",""
 "adherents","date_debut_gestion","contrats","`contrats.date_debut_gestion`","renommee",""
-"adherents","option_rente_education","","garantie souscrite `rente_education`","renommee",""
+"adherents","option_rente_education","garanties_souscrites","`garanties_souscrites` (`code_garantie` = `rente_education`)","renommee",""
 "assures","designation","affiliations","designation","reprise",""
 "assures","date_designation","affiliations","date_designation","reprise",""
 "assures","sante_organisme","affiliations","sante_organisme","reprise",""
