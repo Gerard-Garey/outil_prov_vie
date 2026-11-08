@@ -100,7 +100,7 @@ cb <- function(b, arrete = A, ...) controler_base(b, arrete, ...)
 avec <- function(f) { b <- base_ref; f(b) }
 # Lignes du bilan pour un code (et une table, une colonne) donnés.
 ligne <- function(df, code, table = NULL, colonne = NULL, champ = "code") {
-  i <- df[[champ]] == code
+  i <- df[[champ]] %in% code
   if (!is.null(table)) i <- i & df$table == table
   if (!is.null(colonne)) i <- i & (if (is.na(colonne)) is.na(df$colonne) else df$colonne %in% colonne)
   df[i, , drop = FALSE]
@@ -111,13 +111,24 @@ refus <- function(r, code, table, colonne = NULL) ligne(r$refus_tables, code, ta
 # Une même clé (code, table, colonne) peut porter deux lignes de controles sous deux
 # traitements (réserve m3) : chaque élément de traitement la porte alors une fois au plus, et
 # le nombre de lignes de controles d'une clé égale le nombre de lignes de traitement.
+# exclusions et declarations_requises n'ont ni table ni colonne : une ligne de controles
+# qui n'est ni dans refus_tables ni dans signalements doit voir son code (motif) dans l'un
+# d'eux ; une clé portée deux fois dans controles (deux traitements) l'est au plus une fois
+# par élément (réserve M2 de l'audit : le prédicat bascule dès que la sous-partie (ii-b)
+# place les constats en attente).
 partition <- function(r) {
   cle <- function(code, table, colonne) paste(code, table, colonne, sep = "|")
   c0 <- cle(r$controles$code, r$controles$table, r$controles$colonne)
   dans <- list(cle(r$refus_tables$motif, r$refus_tables$table, r$refus_tables$colonne),
                cle(r$signalements$code, r$signalements$table, r$signalements$colonne))
-  !any(vapply(dans, anyDuplicated, 0L) > 0L) &&
-    identical(sort(c0, method = "radix"), sort(unlist(dans), method = "radix"))
+  places <- unlist(dans)
+  motifs_attente <- unique(c(r$exclusions$motif, r$declarations_requises$motif))
+  n_c0 <- table(c0)
+  n_pl <- table(factor(places, levels = names(n_c0)))
+  code <- sub("\\|.*$", "", names(n_c0))
+  reste <- as.vector(n_c0) - as.vector(n_pl)
+  !any(vapply(dans, anyDuplicated, 0L) > 0L) && all(places %in% c0) &&
+    all(reste == 0L | (reste == 1L & code %in% motifs_attente))
 }
 ni_present <- function(b) {
   ni <- ns$CONTROLES_NON_IMPLEMENTES
@@ -147,47 +158,112 @@ verifier_egal("colonnes de declarations_requises", names(r0$declarations_requise
 verifier_egal("colonnes de enjeu (table longue, M152)", names(r0$enjeu),
               c("table", "colonne", "motif", "famille", "action", "garantie", "poste", "composante", "unite",
                 "montant", "nombre_dossiers", "nombre_valeurs", "cause"))
-verifier("base de référence : aucun constat ; seuls les contrôles non implémentés sont non exécutés ; aucune table absente",
+verifier("base de référence : aucun constat ; seuls les contrôles non implémentés et D03h non lisible sont non exécutés ; aucune table absente",
          nrow(r0$controles) == 0L && nrow(r0$refus_tables) == 0L && length(r0$tables_absentes) == 0L &&
-           all(r0$controles_non_executes$cause == "non_implemente") &&
-           nrow(r0$controles_non_executes) == nrow(ni_present(base_ref)))
+           all(r0$controles_non_executes$cause %in% c("non_implemente", "non_lisible")) &&
+           nrow(r0$controles_non_executes) == nrow(ni_present(base_ref)) + 1L)
 verifier_egal("état partiel porté par l'objet : chaque contrôle non implémenté est une ligne non exécutée",
-              r0$controles_non_executes[, c("code", "table", "colonne")],
+              ns$.trier(r0$controles_non_executes[r0$controles_non_executes$cause == "non_implemente",
+                                                  c("code", "table", "colonne")], d),
               ns$.trier(ni_present(base_ref), d))
-# Couverture : aucun code de controles.csv ni défaut du § 9 n'est absent à la fois des
-# contrôles écrits (chaînes des règles du module, plus les codes de constater_forme()) et de
-# CONTROLES_NON_IMPLEMENTES ; un sous-cas (D10a) couvre son défaut (D10).
+x <- ligne(r0$controles_non_executes, "D03h", "garanties_souscrites")
+verifier_egal("D03h, garantie décès d'un contrat collectif qui porte le maintien (non lisible, D2) : non exécuté, cause non_lisible, colonne NA",
+              list(x$colonne, x$cause), list(NA_character_, "non_lisible"))
+# Couverture des codes de controles.csv : aucun n'est absent à la fois des contrôles écrits
+# (chaînes des règles du module, plus les codes de constater_forme()) et de
+# CONTROLES_NON_IMPLEMENTES.
 ecrits <- unique(unlist(lapply(c(".regle_forme", ".regle_domaine", ".regle_date_programmable", ".regles_propres",
-                                 ".regle_signe", ".regle_cles", ".refus_induits"), function(f) {
+                                 ".regle_signe", ".regle_cles", ".orphelines", ".refus_induits", ".regle_prealable",
+                                 ".regle_v"), function(f) {
   txt <- paste(deparse(get(f, envir = ns)), collapse = " ")
   regmatches(txt, gregexpr("\"(D[0-9]{2}[a-z]?|[a-z_]+)\"", txt))[[1L]]
 })))
 ecrits <- c(gsub("\"", "", ecrits), "colonne_absente", "colonne_inconnue", "type_incompatible")
-couverts <- c(ecrits, ns$CONTROLES_NON_IMPLEMENTES$code)
-couvert <- function(code) code %in% couverts || any(startsWith(couverts, code) & grepl("^D[0-9]{2}[a-z]$", couverts))
 verifier("couverture : chaque code de controles.csv est écrit ou déclaré non implémenté",
-         all(vapply(d$controles$code, couvert, NA)))
-verifier("couverture : chaque défaut du § 9 (defauts.csv) est écrit ou déclaré non implémenté",
-         all(vapply(d$defauts$code, couvert, NA)))
+         all(d$controles$code %in% c(ecrits, ns$CONTROLES_NON_IMPLEMENTES$code)))
+# Couverture des défauts du § 9 par (code, table) (réserves r1 et M1) : la référence est
+# tirée de defauts.csv (une paire par table de la colonne `tables`), D10 par sous-cas (le CSV
+# ne dit pas quelle table porte chaque sous-cas : tables du constat d'après le texte du § 9,
+# ci-dessous) ; les règles écrites sont relevées en exécution, par trace() de .regle() sur la
+# base de référence à l'arrêté égal à l'extraction. Une paire est couverte par une règle
+# écrite de ce code qui porte son constat sur la table (`tr$table`), par une ligne de
+# CONTROLES_NON_IMPLEMENTES de ce code sur la table, ou par la liste fermée LUES des tables
+# que le CSV nomme parce que le défaut les lit, sans y porter de constat.
+regles_tracees <- function(b, arrete) {
+  .GlobalEnv$.regles_tracees <- list()
+  suppressMessages(trace(".regle", where = ns, print = FALSE, tracer = quote(
+    .GlobalEnv$.regles_tracees[[length(.GlobalEnv$.regles_tracees) + 1L]] <-
+      data.frame(code = code, table = table, colonne = colonne,
+                 lue = unique(c(table, sub("\\..*$", "", lit))), stringsAsFactors = FALSE))))
+  on.exit({ suppressMessages(untrace(".regle", where = ns)); rm(".regles_tracees", envir = .GlobalEnv) })
+  controler_base(b, arrete)
+  unique(do.call(rbind, .GlobalEnv$.regles_tracees))
+}
+tr <- regles_tracees(base_ref, A)
+defaut_de <- function(code) ifelse(code %in% d$defauts$code | !grepl("^D[0-9]{2}[a-z]$", code), code, sub("[a-z]$", "", code))
+tr$defaut <- defaut_de(tr$code)
+ni <- ns$CONTROLES_NON_IMPLEMENTES
+paires <- function(code, tables) data.frame(code = code, table = tables, stringsAsFactors = FALSE)
+# D10 par sous-cas (§ 9) : (a) garantie ou type de prestation incompatible, sur dossiers,
+# rentes, prestations ; (b) version hors vigueur, (c) sans dossier décès, sur dossiers ;
+# (d) passage_invalidite, (f) décès du conjoint, sur evenements ; (e) qualité, sur
+# beneficiaires ; (h) victime d'un autre assuré, sur victimes.
+SOUS_CAS_D10 <- rbind(paires("D10a", c("dossiers", "rentes", "prestations")), paires("D10b", "dossiers"),
+                      paires("D10c", "dossiers"), paires("D10d", "evenements"), paires("D10e", "beneficiaires"),
+                      paires("D10f", "evenements"), paires("D10h", "victimes"))
+# Tables lues sans constat : D04a, « dossier sans sinistre » (dossiers lue par la règle de
+# prestations.id_dossier) ; D08, rechute (constat sur le nouveau sinistre, dossiers et
+# evenements lus) ; D10, garanties_souscrites et sinistres (lues par les sous-cas a, b, c) ;
+# D11, hors couverture (constat sur sinistres, contrats et affiliations lus).
+LUES <- rbind(paires("D04a", "dossiers"), paires("D08", c("dossiers", "evenements")),
+              paires("D10", c("garanties_souscrites", "sinistres")), paires("D11", c("contrats", "affiliations")))
+reference <- do.call(rbind, lapply(seq_len(nrow(d$defauts)), function(i) {
+  if (d$defauts$code[i] == "D10") return(SOUS_CAS_D10)
+  paires(d$defauts$code[i], ns$.eclater_champ(d$defauts$tables[i]))
+}))
+reference <- reference[!(paste(reference$code, reference$table) %in% paste(LUES$code, LUES$table)), , drop = FALSE]
+manquantes_de <- function(tr) {
+  couverte <- function(code, table) table %in% tr$table[tr$code == code] || table %in% ni$table[ni$code == code]
+  m <- reference[!mapply(couverte, reference$code, reference$table), , drop = FALSE]
+  paste(m$code, m$table)
+}
+verifier_egal("couverture (code, table) : chaque table de chaque défaut du § 9 (D10 par sous-cas) porte une règle écrite ou déclarée non implémentée",
+              manquantes_de(tr), character(0))
+verifier("couverture (code, table) : LUES et D10 tirés du CSV (chaque paire de LUES est une paire de defauts.csv ; les tables de D10 sont celles du CSV)",
+         all(paste(LUES$code, LUES$table) %in% paste(rep(d$defauts$code, lengths(strsplit(d$defauts$tables, ";"))),
+                                                     unlist(strsplit(d$defauts$tables, ";")))) &&
+           setequal(c(SOUS_CAS_D10$table, LUES$table[LUES$code == "D10"]),
+                    ns$.eclater_champ(d$defauts$tables[d$defauts$code == "D10"])))
+verifier("couverture (code, table) : les tables lues sans constat d'un défaut écrit le sont bien par une de ses règles (D04a, D10)",
+         all(c("garanties_souscrites", "sinistres") %in% tr$lue[tr$defaut == "D10"]) && "dossiers" %in% tr$lue[tr$code == "D04a"])
+verifier_egal("couverture (code, table) : témoins, la suppression d'une règle écrite est vue (D02b sur catastrophes, D10b)",
+              list(manquantes_de(tr[!(tr$code == "D02b" & tr$table == "catastrophes"), ]),
+                   manquantes_de(tr[tr$code != "D10b", ])),
+              list("D02b catastrophes", "D10b dossiers"))
+verifier("règles tracées : codes connus, tables du dictionnaire", all(tr$defaut %in% c(d$defauts$code, d$controles$code)) &&
+           all(tr$table %in% d$tables$table))
+# Ce qui est écrit n'est plus déclaré non implémenté : aucune ligne de CONTROLES_NON_IMPLEMENTES
+# ne désigne une règle écrite (code, table, colonne) ; une ligne de colonne NA sur une table où
+# le code est écrit n'est admise que pour les sous-cas D02c (âge) et D09 (seuils).
+cle3 <- function(x) paste(x$code, x$table, x$colonne)
+verifier_egal("CONTROLES_NON_IMPLEMENTES : aucune règle écrite n'y figure", intersect(cle3(ni), cle3(tr)), character(0))
+verifier_egal("CONTROLES_NON_IMPLEMENTES : colonne NA sur une table écrite seulement pour D02c (âge) et D09 (seuils)",
+              unique(ni$code[is.na(ni$colonne) & paste(ni$code, ni$table) %in% paste(tr$code, tr$table)]),
+              c("D02c", "D09"))
 verifier("CONTROLES_NON_IMPLEMENTES : codes connus, tables et colonnes du dictionnaire, sans doublon",
          {
-           ni <- ns$CONTROLES_NON_IMPLEMENTES
            all(ni$code %in% d$controles$code | sub("[a-z]$", "", ni$code) %in% d$defauts$code | ni$code %in% d$defauts$code) &&
              all(ni$table %in% d$tables$table) &&
              all(is.na(ni$colonne) | paste(ni$table, ni$colonne) %in% paste(d$colonnes$table, d$colonnes$colonne)) &&
-             !anyDuplicated(ni)
+             !anyDuplicated(ni[, c("code", "table", "colonne")])
          })
-verifier("D04a et D04b traités X, D02c (âge), D07, somme_parts : déclarés non implémentés",
-         all(c("D04a", "D04b", "D02c", "D07", "somme_parts", "D02b", "D03g") %in% r0$controles_non_executes$code))
+verifier("D02c (âge) et D07 : déclarés non implémentés ; D02b, D03g, D04a, D04b, somme_parts : écrits, plus déclarés",
+         all(c("D02c", "D07") %in% r0$controles_non_executes$code) &&
+           !any(c("D02b", "D03g", "D04a", "D04b", "somme_parts") %in% ni$code))
 r <- cb(base_ref, conventions = NULL)
 verifier("sans conventions : D02c (âge) et D07 portent non_implemente, qui prime sur declaration_absente",
          all(ligne(r$controles_non_executes, "D02c", "assures", NA)$cause == "non_implemente") &&
            all(ligne(r$controles_non_executes, "D07", "evenements", NA)$cause == "non_implemente"))
-r <- cb(avec(function(b) { b$prestations$id_dossier[1L] <- "DOX"; b$evenements$id_sinistre[1L] <- "SIX"; b }))
-verifier("orpheline traitée X (D04a, D04b) : aucun constat, mais la ligne non exécutée non_implemente le dit",
-         nrow(r$controles) == 0L &&
-           ligne(r$controles_non_executes, "D04a", "prestations", "id_dossier")$cause == "non_implemente" &&
-           ligne(r$controles_non_executes, "D04b", "evenements", "id_sinistre")$cause == "non_implemente")
 verifier_egal("vue : date d'arrêté et date d'extraction", r0$vue[c("date_arrete", "date_extraction")],
               list(date_arrete = A, date_extraction = A))
 verifier("la base n'est pas modifiée (aucune correction silencieuse)", {
@@ -470,12 +546,18 @@ multi <- avec(function(b) {
   b$parametres$age_min[5L] <- 17L; b$evenements$date_effet[1L] <- as.Date("2027-05-01"); b$victimes <- NULL; b })
 r <- cb(multi)
 verifier("partition : chaque ligne de controles est dans exactement un élément de traitement", partition(r))
+# EV1 (entree_incapacite) à une date future : D02c refuse evenements.date_effet, que D02a lit
+# (règle V non exécutée, cause D02c, décision D3) ; evenements est de plus refusée par
+# induction (D01a de sinistres) : aucun constat en attente de déclaration (réserve m3)
+verifier("multi : D02a sur evenements non exécuté (colonne et table refusées en règle B)",
+         nrow(ligne(r$controles, "D02a", "evenements")) == 0L &&
+           nrow(ligne(r$controles_non_executes, "D02a", "evenements", "date_effet")) == 1L)
 verifier("aucun code de portée ligne dans refus_tables ; portée effective colonne ou table seulement",
          !any(r$refus_tables$motif %in% d$controles$code[d$controles$portee == "ligne"]) &&
            all(r$refus_tables$portee %in% c("colonne", "table")))
 verifier("controles_non_executes : causes parmi les codes de refus et declaration_absente",
          all(r$controles_non_executes$cause %in% c(d$controles$code, d$defauts$code, "declaration_absente",
-                                                   "non_implemente")))
+                                                   "non_implemente", "non_lisible")))
 verifier("controler_base() ne rend aucun poste arrêté (B2) ni nombre de visibles en règle B seule (NA)",
          all(is.na(r$refus_tables$postes_arretes)))
 melange <- lapply(multi, function(t) if (nrow(t) > 1L) t[rev(seq_len(nrow(t))), rev(names(t)), drop = FALSE] else t)
@@ -488,6 +570,258 @@ verifier_egal("invariance en A (règle B) : refus_tables (hors nombre_visibles) 
               r_a0$refus_tables[, names(r$refus_tables) != "nombre_visibles"],
               r$refus_tables[, names(r$refus_tables) != "nombre_visibles"])
 verifier_egal("vue : date d'arrêté consignée", r_a0$vue$date_arrete, A0)
+
+section("donnees : règle P (D02b, D03g) et vue à une date (règles I, 1, M156)")
+verifier_egal("vue de la base de référence : sous-éléments, aucune visibilité non déterminée",
+              list(names(r0$vue), nrow(r0$vue$visibilite_non_determinee), r0$vue$provisoire),
+              list(c("date_arrete", "date_extraction", "visibilite_non_determinee", "provisoire"), 0L, FALSE))
+verifier_egal("colonnes de vue$visibilite_non_determinee", names(r0$vue$visibilite_non_determinee),
+              c("table", "colonne", "motif", "nombre", "identifiants"))
+pb <- avec(function(b) {
+  b$evenements$date_saisie[2L] <- D("2024-05-01")      # saisie avant la date d'effet (ouverture_service)
+  b$sinistres$date_saisie[2L] <- D("2024-03-04")       # saisie avant la déclaration
+  b$beneficiaires$date_saisie <- D("2025-01-15")       # fille saisie avant son dossier (DO1 : 2025-01-22)
+  b$catastrophes$date_saisie <- D("2026-05-31")        # saisie avant l'événement
+  b$contrats$date_fin[2L] <- D("2026-12-31"); b$contrats$motif_fin[2L] <- "resiliation_adherent"
+  b$contrats$date_saisie_fin[2L] <- D("2015-12-01")    # fin saisie avant l'effet du contrat
+  b$prestations$date_saisie[1L] <- NA                  # D03g
+  b$affiliations$date_fin <- D("2026-06-30"); b$affiliations$motif_fin <- "depart_entreprise"   # D03g de la fin
+  b })
+r <- cb(pb)
+x <- ligne(r$controles, "D02b", NULL)
+verifier_egal("D02b détecté sur la base entière : saisie avant l'effet, avant la déclaration, fille avant parente, fin de contrat",
+              paste(x$table, x$colonne, x$identifiants),
+              c("contrats date_saisie_fin CT2", "sinistres date_saisie SI2", "beneficiaires date_saisie BE1",
+                "evenements date_saisie EV2", "catastrophes date_saisie CA1"))
+x <- ligne(r$controles, "D03g", NULL)
+verifier_egal("D03g : date de saisie manquante, date de saisie de fin manquante sous sa condition",
+              paste(x$table, x$colonne, x$identifiants),
+              c("affiliations date_saisie_fin AF1", "prestations date_saisie PR1"))
+verifier("règle I : à l'arrêté égal à l'extraction, D02b et D03g sont des signalements, aucune visibilité non déterminée",
+         all(c("D02b", "D03g") %in% r$signalements$code) && nrow(r$vue$visibilite_non_determinee) == 0L &&
+           !r$vue$provisoire && partition(r))
+r_a0 <- cb(pb, A0)
+verifier_egal("invariance (règle P) : lignes de D02b et D03g identiques à deux arrêtés",
+              ligne(r_a0$controles, c("D02b", "D03g"), NULL), ligne(r$controles, c("D02b", "D03g"), NULL))
+verifier("arrêté antérieur : D02b et D03g attendent une déclaration, hors des signalements",
+         !any(c("D02b", "D03g") %in% r_a0$signalements$code))
+x <- r_a0$vue$visibilite_non_determinee
+verifier_egal("arrêté antérieur : visibilité non déterminée par table, colonne (partie de ligne ; NA : ligne entière) et motif, filles recensées (M156, D1)",
+              paste(x$table, x$colonne, x$motif, x$nombre, x$identifiants),
+              c("contrats date_saisie_fin D02b 1 CT2", "affiliations date_saisie_fin D03g 1 AF1", "sinistres NA D02b 1 SI2",
+                "dossiers NA parente_non_determinee 1 DO3", "beneficiaires NA D02b 1 BE1", "evenements NA D02b 1 EV2",
+                "evenements NA parente_non_determinee 2 EV1;EV3", "prestations NA D03g 1 PR1", "catastrophes NA D02b 1 CA1",
+                "evaluations_gestion NA parente_non_determinee 1 EG1"))
+verifier("arrêté antérieur : vue$provisoire vrai", isTRUE(r_a0$vue$provisoire))
+ctx_vue <- function(b, arrete) {
+  ctx <- ns$.contexte(b, d, list(date_extraction = A), arrete)
+  ns$.visibilite_propre(ctx); ns$.regle_prealable(ctx); ns$.construire_vue(ctx)
+  ctx
+}
+ctx <- ctx_vue(pb, A0)
+verifier("vue : une ligne de visibilité non déterminée est tenue hors de la vue, et ses filles avec elle (règle 1)",
+         !ctx$retenu$sinistres[2L] && !any(ctx$retenu$evenements[1:3]) && !ctx$retenu$dossiers[3L] &&
+           !ctx$retenu$prestations[1L])
+verifier("vue : une partie de ligne indéterminée laisse la ligne dans la vue, partie masquée (D1, A1)",
+         ctx$retenu$contrats[2L] && ctx$retenu$affiliations[1L] &&
+           is.na(ns$.valeurs_vue(ctx, "contrats", "date_fin")[2L]) && is.na(ns$.valeurs_vue(ctx, "affiliations", "date_fin")[1L]))
+ctx <- ctx_vue(base_ref, A0)
+verifier_egal("vue de la base de référence au 2025-06-30 : lignes visibles selon le § 6",
+              lapply(ctx$retenu[c("contrats", "sinistres", "dossiers", "evenements", "prestations", "cotisations",
+                                  "catastrophes", "victimes", "designations")], which),
+              list(contrats = 1:2, sinistres = 1:2, dossiers = 1:3, evenements = 1:6, prestations = 1:3,
+                   cotisations = integer(0), catastrophes = integer(0), victimes = integer(0), designations = 1L))
+ctx <- ctx_vue(base_ref, D("2024-05-15"))
+verifier_egal("vue au 2024-05-15 : fille d'une parente invisible invisible ; assuré retenu s'il est référencé",
+              list(which(ctx$retenu$dossiers), which(ctx$retenu$evenements), which(ctx$retenu$prestations),
+                   which(ctx$retenu$beneficiaires), which(ctx$retenu$assures)),
+              list(3L, 1L, integer(0), integer(0), 1:2))
+b <- avec(function(b) { b$famille <- rbind(b$famille, transform(b$famille, date_saisie = D("2025-09-01"), situation = "apprenti")); b })
+verifier_egal("vue : seule la dernière saisie retenue d'un membre de famille est valable",
+              c(which(ctx_vue(b, A0)$retenu$famille), which(ctx_vue(b, A)$retenu$famille)), c(1L, 2L))
+b <- avec(function(b) { b$contrats$date_fin[1L] <- D("2026-06-30"); b$contrats$motif_fin[1L] <- "resiliation_adherent"
+                        b$contrats$date_saisie_fin[1L] <- D("2026-04-01"); b$sinistres$date_instruction[2L] <- D("2025-09-01"); b })
+ctx <- ctx_vue(b, A0)
+verifier_egal("vue : partie de ligne inconnue à l'arrêté (fin saisie après, instruction postérieure) manquante",
+              list(ns$.valeurs_vue(ctx, "contrats", "date_fin")[1L], ns$.valeurs_vue(ctx, "sinistres", "date_instruction")[2L],
+                   ns$.valeurs_vue(ctx_vue(b, D("2026-05-01")), "contrats", "date_fin")[1L]),
+              list(as.Date(NA), as.Date(NA), D("2026-06-30")))
+r <- cb(avec(function(b) { b$evenements$date_saisie <- as.character(b$evenements$date_saisie); b }), A0)
+verifier("règle P et vue : une date de saisie mal typée empêche D02b, D03g et les règles de la vue qui la lisent",
+         all(c("D02b", "D03g") %in% ligne(r$controles_non_executes, c("D02b", "D03g"), "evenements", "date_saisie")$code) &&
+           all(ligne(r$controles_non_executes, c("D02b", "D03g"), "evenements")$cause == "type_incompatible"))
+verifier("Q4 : une règle P non exécutée à un arrêté antérieur rend la vue provisoire ; à l'extraction, non",
+         isTRUE(r$vue$provisoire) && nrow(r$vue$visibilite_non_determinee) == 0L &&
+           !cb(avec(function(b) { b$evenements$date_saisie <- as.character(b$evenements$date_saisie); b }))$vue$provisoire)
+verifier_egal("m6 : famille.id_membre et famille.date_saisie lues pour établir la vue de famille, à tout arrêté",
+              list(ctx_vue(base_ref, A)$lit_vue$famille, all(c("famille.id_membre", "famille.date_saisie") %in%
+                                                              ctx_vue(base_ref, A0)$lit_vue$famille)),
+              list(c("famille.id_membre", "famille.date_saisie"), TRUE))
+pc <- avec(function(b) { b$contrats$date_fin[1L] <- D("2026-03-31"); b$contrats$motif_fin[1L] <- "resiliation_adherent"
+                         b$garanties_souscrites$taux_technique_tarif[3L] <- NA; b$affiliations$salaire_reference <- NA_real_; b })
+r <- cb(pc, D("2026-06-30"))
+verifier("D1 : date_saisie_fin manquante d'un contrat : partie recensée, le contrat et ses garanties et affiliations restent dans la vue (D03h, D03c détectés)",
+         identical(paste(r$vue$visibilite_non_determinee$table, r$vue$visibilite_non_determinee$colonne),
+                   "contrats date_saisie_fin") &&
+           ligne(r$controles, "D03h", "garanties_souscrites")$identifiants == "GS3" &&
+           ligne(r$controles, "D03c", "affiliations")$identifiants == "AF1")
+r <- cb(avec(function(b) { b$assures$sexe <- c("X", NA); b }))
+verifier("D3 : une colonne refusée pour une valeur (hors_domaine, portée colonne) n'est pas lue par la règle V (D03b non exécuté)",
+         nrow(ligne(r$controles, "D03b", "assures")) == 0L &&
+           identical(ligne(r$controles_non_executes, "D03b", "assures", "sexe")$cause, "hors_domaine"))
+r <- cb(avec(function(b) { b$assures <- rbind(b$assures, transform(b$assures[1L, ], sexe = NA_character_)); b }))
+verifier("A9 : une table refusée (D01a) n'est pas lue par la règle V (D03b non exécuté, cause D01a)",
+         nrow(ligne(r$controles, "D03b", "assures")) == 0L &&
+           identical(ligne(r$controles_non_executes, "D03b", "assures", "sexe")$cause, "D01a"))
+r <- cb(avec(function(b) { b$sinistres$date_saisie[2L] <- D("2027-01-05"); b$sinistres$date_declaration[2L] <- D("2027-01-02"); b }), A0)
+verifier("D3 : une date de visibilité refusée (D02c) empêche la règle P et les règles V de la table à un arrêté antérieur",
+         identical(ligne(r$controles_non_executes, "D02b", "sinistres", "date_saisie")$cause, "D02c") &&
+           isTRUE(r$vue$provisoire))
+
+section("donnees : orphelines traitées X (D04a, D04b) et somme_parts (règle V)")
+ob <- avec(function(b) { b$prestations$id_dossier[1L] <- "DOX"; b$prestations$id_dossier[2L] <- NA
+                         b$evenements$id_sinistre[1L] <- "SIX"; b$victimes$id_catastrophe <- "CAX"; b })
+r <- cb(ob)
+x <- ligne(r$controles, c("D04a", "D04b"), NULL)
+verifier_egal("orphelines X détectées (prestation au dossier absent ou manquant, événement, victime)",
+              paste(x$code, x$table, x$colonne, x$identifiants),
+              c("D04b evenements id_sinistre EV1", "D04a prestations id_dossier PR1;PR2", "D04b victimes id_catastrophe VI1"))
+verifier("orphelines X : aucun refus, aucun refus induit (traitement X, attente d'une déclaration)",
+         nrow(r$refus_tables) == 0L && !any(c("D04a", "D04b") %in% r$signalements$code))
+verifier("orphelines X : détection sur la base entière, identique à tout arrêté (A3 ; spécification, § 2.5, critères 1 et 3)",
+         identical(ligne(cb(ob, A0)$controles, c("D04a", "D04b"), NULL), x) &&
+           identical(ligne(cb(ob, D("2024-05-15"))$controles, c("D04a", "D04b"), NULL), x))
+sb <- avec(function(b) { b$beneficiaires <- rbind(b$beneficiaires, transform(b$beneficiaires, id_beneficiaire = "BE2", part = 0.25)); b })
+r <- cb(sb)
+x <- ligne(r$signalements, "somme_parts", "beneficiaires", "part")
+verifier("somme_parts : parts d'un dossier de somme 1,25, toutes les lignes du dossier signalées (S)",
+         nrow(x) == 1L && x$identifiants == "BE1;BE2" && x$nombre == 2L && partition(r))
+r <- cb(avec(function(b) { b$beneficiaires <- rbind(b$beneficiaires, b$beneficiaires, b$beneficiaires)
+                           b$beneficiaires$id_beneficiaire <- c("BE1", "BE2", "BE3"); b$beneficiaires$part <- 1 / 3; b }))
+verifier("somme_parts : trois tiers en double précision ne sont pas signalés", !any(r$controles$code == "somme_parts"))
+verifier_egal("somme_parts sur la vue : bénéficiaires invisibles au 2024-05-15, rien de signalé",
+              nrow(ligne(cb(sb, D("2024-05-15"))$controles, "somme_parts", NULL)), 0L)
+r <- cb(ob)
+attendu_echec("partition : un constat qui attend une déclaration (X) est placé dans exclusions ou declarations_requises",
+              "#18, sous-partie (ii-b)", partition(r))
+verifier("partition (M2) : le prédicat bascule dès que les constats en attente sont placés (exclusions simulées)", {
+  r$exclusions <- data.frame(motif = c("D04a", "D04b"), famille = "engagement", action = "exclure", nombre_lignes = 1L,
+                             nombre_dossiers = NA_integer_, stringsAsFactors = FALSE)
+  partition(r)
+})
+
+section("donnees : règle V, manquants (D03a à D03c, D03e, D03f, D03h) et ordre des dates (D02a)")
+mb <- avec(function(b) {
+  b$assures$date_naissance[2L] <- NA; b$famille$sexe <- NA_character_; b$affiliations$salaire_reference <- NA_real_
+  b$evenements <- rbind(b$evenements, transform(b$evenements[1L, ], id_evenement = "EV7", type_evenement = "passage_invalidite",
+                                                date_effet = D("2024-06-01"), date_saisie = D("2024-06-02")))
+  b$prestations$fin_periode[1L] <- NA; b$cotisations$debut_periode[2L] <- NA
+  b$garanties_souscrites$taux_technique_tarif[c(3L, 4L)] <- NA; b })
+r <- cb(mb)
+x <- ligne(r$controles, c("D03a", "D03b", "D03c", "D03e", "D03f", "D03h"), NULL)
+verifier_egal("manquants qui ont un défaut au § 9 : détectés sur la vue, un constat par table",
+              paste(x$code, x$table, x$colonne, x$identifiants),
+              c("D03h garanties_souscrites taux_technique_tarif GS3;GS4", "D03a assures date_naissance AS2",
+                "D03c affiliations salaire_reference AF1", "D03b famille sexe ME1|2025-02-01",
+                "D03e evenements categorie_invalidite EV7", "D03f prestations NA PR1", "D03f cotisations NA CO2"))
+verifier("manquants : aucun refus (le manquant relève du défaut, non de manquant_obligatoire)", nrow(r$refus_tables) == 0L)
+r <- cb(avec(function(b) { b$famille$date_naissance <- NA; b$famille$situation <- "a_naitre"; b }))
+verifier("D03a : naissance manquante d'un enfant à naître non détectée", !any(r$controles$code == "D03a"))
+r <- cb(avec(function(b) { b$garanties_souscrites$taux_technique_tarif[1L] <- NA; b }))
+verifier("D03h, décès d'un contrat collectif (maintien non lisible) : pas de détection, sous-cas non exécuté (non_lisible), jamais un zéro rassurant (D2)",
+         !any(r$controles$code == "D03h") &&
+           identical(ligne(r$controles_non_executes, "D03h", "garanties_souscrites", NA)$cause, "non_lisible"))
+r <- cb(mb, D("2024-05-15"))
+x <- ligne(r$controles, c("D03a", "D03b", "D03c", "D03e", "D03f", "D03h"), NULL)
+verifier_egal("manquants sur la vue au 2024-05-15 : lignes invisibles écartées (EV7, PR1, CO2, membre de 2025)",
+              paste(x$code, x$table), c("D03h garanties_souscrites", "D03a assures", "D03c affiliations"))
+ob <- avec(function(b) {
+  b$contrats$date_debut_gestion[1L] <- D("2014-12-31"); b$garanties_souscrites$date_fin[2L] <- D("2014-06-30")
+  b$affiliations$date_fin <- D("2014-12-31"); b$affiliations$motif_fin <- "depart_entreprise"; b$affiliations$date_saisie_fin <- D("2015-01-06")
+  b$ayants_droit_sante$fin_couverture <- D("2014-01-01"); b$prestations$debut_periode[1L] <- D("2024-07-01")
+  b$sinistres$date_declaration[1L] <- D("2025-01-05"); b$sinistres$date_instruction[1L] <- D("2025-01-03")
+  b$famille$date_naissance <- D("2025-03-01"); b$assures$date_naissance[1L] <- D("2024-04-01")
+  b$evenements$date_effet[1L] <- D("2024-03-02"); b })
+r <- cb(ob)
+x <- ligne(r$controles, "D02a", NULL)
+verifier_egal("D02a : chaque sous-cas détecté sur sa colonne (date qui devrait être la plus tardive)",
+              paste(x$table, x$colonne, x$identifiants),
+              c("contrats date_debut_gestion CT1", "garanties_souscrites date_fin GS2", "affiliations date_fin AF1",
+                "famille date_naissance ME1|2025-02-01", "sinistres date_survenance SI2", "sinistres date_declaration SI1",
+                "sinistres date_instruction SI1", "evenements date_effet EV1", "prestations fin_periode PR1",
+                "ayants_droit_sante fin_couverture AY1"))
+verifier("D02a : traitement X ou H en attente de déclaration, hors des refus et des signalements",
+         !any(r$refus_tables$motif == "D02a") && !any(r$signalements$code == "D02a"))
+r <- cb(avec(function(b) { b$famille$date_naissance <- NA; b$famille$situation <- "a_naitre"; b }))
+verifier("D02a : un enfant à naître n'est jamais rejeté", !any(r$controles$code == "D02a"))
+r <- cb(avec(function(b) { b$evenements <- rbind(b$evenements, transform(b$evenements[4L, ], id_evenement = "EV7",
+                             type_evenement = "mise_a_jour", date_effet = D("2025-01-01"), montant = NA)); b }))
+verifier_egal("D02a : mise à jour datée avant la survenance", ligne(r$controles, "D02a", "evenements")$identifiants, "EV7")
+b <- avec(function(b) { b$sinistres$date_instruction[1L] <- D("2025-09-01"); b$sinistres$date_declaration[1L] <- D("2025-08-01")
+                        b$sinistres$date_saisie[1L] <- D("2025-01-21"); b })
+verifier_egal("D02a sur la vue : un sinistre de visibilité non déterminée (D02b) est hors de la vue à un arrêté antérieur",
+              ligne(cb(b, A0)$controles, "D02a", "sinistres")$colonne, character(0))
+
+section("donnees : règle V, doublons de contenu (D01b), clôtures (D05, D06, D13), garanties (D10 b et c)")
+db <- avec(function(b) {
+  b$prestations <- rbind(b$prestations, transform(b$prestations[1L, ], id_prestation = "PR0", date_saisie = D("2025-09-01")))
+  b$sinistres <- rbind(b$sinistres, transform(b$sinistres[2L, ], id_sinistre = "SI0", date_saisie = D("2024-03-07")))
+  b$cotisations <- rbind(b$cotisations, transform(b$cotisations[1L, ], id_cotisation = "CO0"))
+  b })
+r <- cb(db)
+x <- ligne(r$controles, "D01b", NULL)
+verifier_egal("D01b : la copie saisie après l'original est comptée (à date égale, la clé départage), colonne NA ; S + X : deux lignes",
+              paste(x$table, x$colonne, x$identifiants),
+              rep(c("sinistres NA SI0", "prestations NA PR0", "cotisations NA CO1"), each = 2L))
+verifier_egal("D01b, S + X (A5) : le signalement est placé, l'exclusion attend sa déclaration",
+              paste(ligne(r$signalements, "D01b", NULL)$table), c("sinistres", "prestations", "cotisations"))
+verifier_egal("D01b sur la vue : au 2025-06-30, la copie PR0 (saisie en septembre) n'est pas visible",
+              unique(paste(ligne(cb(db, A0)$controles, "D01b", NULL)$table)), "sinistres")
+r <- cb(avec(function(b) { b$sinistres <- rbind(b$sinistres, b$sinistres[1L, ]); b }))
+verifier("D01b : un doublon d'identifiant (D01a) n'est pas une copie sous un nouvel identifiant", !any(r$controles$code == "D01b"))
+r <- cb(avec(function(b) { b$evenements$motif[3L] <- NA; b$prestations <- b$prestations[-1L, ]; b$evaluations_gestion <- NULL; b }))
+x <- ligne(r$controles, "D05", "evenements", "motif")
+verifier("D05 : sortie au motif manquant sans prestation du sinistre, en attente de déclaration (H ou S)",
+         nrow(x) == 1L && x$identifiants == "EV3" && !any(r$signalements$code == "D05") && !any(r$refus_tables$motif == "D05"))
+r <- cb(avec(function(b) { b$evenements$justificatif[3L] <- NA; b$evenements$motif[6L] <- "deces_beneficiaire"
+                           b$evenements$date_effet[6L] <- D("2026-03-01")
+                           b$evenements <- rbind(b$evenements, transform(b$evenements[4L, ], id_evenement = "EV7",
+                             type_evenement = "cloture_dossier", motif = "depot_cdc", montant = NA, date_effet = D("2025-02-10"),
+                             date_saisie = D("2025-02-11")), transform(b$evenements[2L, ], id_evenement = "EV8",
+                             type_evenement = "cloture_dossier", motif = "regle", montant = NA, id_dossier = "DO3"))
+                           b$prestations <- b$prestations[-1L, ]; b$evaluations_gestion <- NULL; b }))
+verifier_egal("D06 : sortie et fin de service sans justificatif ; clôture regle sans prestation ; depot_cdc avec capital non détecté",
+              ligne(r$controles, "D06", "evenements", "justificatif")$identifiants, "EV3;EV6;EV8")
+ib <- avec(function(b) { b$sinistres$date_instruction[1L] <- NA; b })
+verifier_egal("D13 : sinistre décès sans instruction dont le dossier décès a une prestation capital",
+              ligne(cb(ib)$controles, "D13", "sinistres", "date_instruction")$identifiants, "SI1")
+verifier_egal("D13 sur la vue : au 2025-02-15, la prestation capital (réglée en mars) n'est pas visible",
+              nrow(ligne(cb(ib, D("2025-02-15"))$controles, "D13", NULL)), 0L)
+verifier_egal("D13 sur la vue : instruction postérieure à l'arrêté = instruction absente à l'arrêté",
+              ligne(cb(avec(function(b) { b$prestations$date_reglement[2L] <- D("2025-01-30")
+                                          b$prestations$date_saisie[2L] <- D("2025-01-30"); b }), D("2025-01-31"))$controles,
+                    "D13", NULL)$identifiants, "SI1")
+gb <- avec(function(b) { b$garanties_souscrites$date_effet[3L] <- D("2025-06-01"); b$dossiers$id_garantie_souscrite[1L] <- "GS4"; b })
+r <- cb(gb)
+x <- ligne(r$controles, "D10b", "dossiers", "id_garantie_souscrite")
+verifier("D10 (b) : version hors vigueur à la survenance : deux lignes de même clé (S et X), le signalement placé",
+         nrow(x) == 2L && all(x$identifiants == "DO2") &&
+           ligne(r$signalements, "D10b", "dossiers", "id_garantie_souscrite")$identifiants == "DO2")
+r <- cb(avec(function(b) { b$dossiers <- b$dossiers[-1L, ]; b$beneficiaires <- b$beneficiaires[0L, ]
+                           b$evenements <- b$evenements[-4L, ]; b$prestations <- b$prestations[-2L, ]; b }))
+x <- ligne(r$signalements, "D10c", "dossiers", NA)
+verifier("D10 (c) : dossier de rente d'éducation sans dossier décès du sinistre, garantie décès souscrite au contrat : signalement",
+         nrow(x) == 1L && x$identifiants == "DO2")
+verifier("D10 (c) : rien sur la base de référence (dossier décès DO1 du même sinistre)", !any(r0$controles$code == "D10c"))
+sans_do1 <- function(b) { b$dossiers <- b$dossiers[-1L, ]; b$beneficiaires <- b$beneficiaires[0L, ]
+                          b$evenements <- b$evenements[-4L, ]; b$prestations <- b$prestations[-2L, ]; b }
+verifier("D10 (c) (A6) : garantie décès d'un autre collège, ou d'une version hors vigueur à la survenance : pas de signalement",
+         !any(cb(avec(function(b) { b <- sans_do1(b); b$garanties_souscrites$college[1L] <- "cadres"
+                                    b$affiliations$college <- "cadres"; b }))$controles$code == "D10c") &&
+           !any(cb(avec(function(b) { b <- sans_do1(b); b$garanties_souscrites$date_fin[1L] <- D("2020-12-31"); b }))$controles$code == "D10c"))
+verifier("D10 (c) (A6) : la garantie décès doit être retenue dans la vue (version d'effet postérieur à l'arrêté : rien)",
+         !any(cb(avec(function(b) { b <- sans_do1(b); b$garanties_souscrites$date_effet[1L] <- D("2025-01-01"); b }),
+                 D("2024-12-31"))$controles$code == "D10c"))
 
 section("donnees : même bilan par lire_base() d'un CSV et par le data.frame (M144, M150)")
 b <- avec(function(b) { b$sinistres$canal_declaration[1L] <- "courriel"; b$prestations$montant[1L] <- -5; b })
@@ -503,17 +837,18 @@ verifier("\"\" d'un CSV dans une colonne character : chaine_vide au bilan, sans 
 
 section("donnees : reprise de l'audit (m2, m3, identifiants)")
 r <- cb(avec(function(b) { b$dossiers$id_sinistre <- factor(b$dossiers$id_sinistre); b$evenements$id_dossier[1L] <- "DO3"; b }))
-verifier("m2 : une clé détectée par une règle et non exécutée par une autre n'est que dans controles",
+verifier("r2 : une clé détectée par une règle et non exécutée par une autre est dans les deux éléments (détection partielle, cause gardée)",
          nrow(ligne(r$controles, "hors_domaine", "evenements", "id_dossier")) == 1L &&
-           nrow(ligne(r$controles_non_executes, "hors_domaine", "evenements", "id_dossier")) == 0L)
+           ligne(r$controles, "hors_domaine", "evenements", "id_dossier")$identifiants == "EV1" &&
+           identical(ligne(r$controles_non_executes, "hors_domaine", "evenements", "id_dossier")$cause, "type_incompatible"))
 r <- cb(avec(function(b) { b$dossiers$id_sinistre <- factor(b$dossiers$id_sinistre); b }))
 verifier("m2 : sans détection, la règle non exécutée reste dans controles_non_executes (pas de zéro rassurant)",
          nrow(ligne(r$controles_non_executes, "hors_domaine", "evenements", "id_dossier")) == 1L &&
            nrow(ligne(r$controles, "hors_domaine", "evenements", "id_dossier")) == 0L)
 r <- cb(avec(function(b) { b$dossiers$id_sinistre <- factor(b$dossiers$id_sinistre); b$prestations$montant[1L] <- -5; b }))
-verifier("m2 : aucune clé à la fois dans controles et dans controles_non_executes",
-         !any(paste(r$controles$code, r$controles$table, r$controles$colonne) %in%
-                paste(r$controles_non_executes$code, r$controles_non_executes$table, r$controles_non_executes$colonne)))
+verifier("r2 : une seule ligne non exécutée par (code, table, colonne), la première cause gardée",
+         !anyDuplicated(r$controles_non_executes[, c("code", "table", "colonne")]) &&
+           identical(ligne(r$controles_non_executes, "hors_domaine", "evenements", "id_dossier")$cause, "type_incompatible"))
 b <- base_ref; b$assures$date_naissance[2L] <- as.Date("1900-06-01")
 ctx <- ns$.contexte(b, d, list(date_extraction = A), A)
 ns$.ajouter_constat(ctx, "D02c", "assures", "date_naissance", 2L, "R", "exacte")
