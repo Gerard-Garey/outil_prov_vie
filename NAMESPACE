@@ -6,3 +6,9 @@
 # point 2) et par l'utilisateur sans Shiny.
 export(dictionnaire)
 export(controler_types)
+# Module `lecture` (#18) : lire_base() et ecrire_base(), appelés hors du package par
+# l'utilisateur sans Shiny (lecture d'une base CSV en liste de data.frame à passer au moteur,
+# qui ne reçoit jamais un fichier ; écriture d'une base construite à la main) et par les
+# tests (aller-retour) (ADR 0010, points 2 et 13).
+export(lire_base)
+export(ecrire_base)
