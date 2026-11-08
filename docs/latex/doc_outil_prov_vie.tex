@@ -933,12 +933,14 @@ interrompu sans rendre d'objet, et l'appelant peut attraper la condition
 par sa classe et lire son motif. Le motif doit appartenir à la liste fermée
 \code{MOTIFS\_REFUS}. Un motif hors de la liste, ou un champ facultatif mal
 formé (\code{module}, \code{table}, \code{colonne} ou \code{usage} qui n'est
-pas une chaîne unique, \code{nombre} qui n'est pas un entier unique,
-\code{attendu} ou \code{recu} qui n'est pas une valeur atomique unique), est
+pas une chaîne unique, \code{nombre} qui n'est ni une valeur numérique
+unique entière et finie, au plus égale en valeur absolue au plus grand
+entier de R, ni une valeur manquante \code{NA} unique d'un type atomique
+quelconque, \code{NaN} étant refusé, \code{attendu} ou \code{recu} qui n'est pas une valeur atomique unique), est
 une erreur de programmation~: \code{refuser()} lève alors une erreur R
 ordinaire, qui n'est pas un refus d'appel. Les \code{identifiants} sont
-tronqués aux dix premiers\fsp; \code{nombre} porte le total, quand
-l'appelant le renseigne.
+tronqués aux dix premiers\fsp; \code{nombre}, converti en entier, porte
+le total quand l'appelant le renseigne.
 
 La liste fermée compte dix-sept motifs. Dans l'état du code, seules les
 fonctions du module \code{outils} lèvent des refus, avec deux motifs~;
@@ -999,8 +1001,8 @@ sinon la fonction lève une erreur R ordinaire. La fonction procède ainsi~:
 Rétablir l'échantillonneur «~Rounding~» de \code{sample()} (celui de R
 antérieur à la version~3.6.0) fait émettre par R un avertissement. Quand
 l'échantillonneur de l'appelant est «~Rounding~», le rétablissement des
-genres est donc fait sous \code{suppressWarnings()}, par décision du
-mainteneur du 7~novembre~2026. Dans tous les autres cas, un avertissement
+genres est fait sous \code{suppressWarnings()}, par décision du
+mainteneur du 7~novembre~2026 (motif ci-dessous). Dans tous les autres cas, un avertissement
 émis par le rétablissement remonte à l'appelant, et devient une erreur si
 les avertissements sont convertis en erreurs (\code{options(warn = 2)},
 comme dans les batteries de tests)~; c'est le cas, par décision du
@@ -1055,8 +1057,8 @@ vecteur nommé, complexe, liste\ldots) est refusé (\code{liste\_invalide}).
   sur trois mille réels, relus au bit près, sur la plateforme où elle
   tourne\fsp;
 \item date~: ISO~8601, \code{AAAA-MM-JJ}, l'année complétée à quatre chiffres
-  (l'an~999 s'écrit \code{0999})\fsp; \code{NA}. Une date non entière, infinie
-  ou dont l'année ne tient pas sur quatre chiffres est refusée
+  (l'an~999 s'écrit \code{0999})\fsp; \code{NA}. Une date non entière, \code{NaN},
+  infinie ou dont l'année ne tient pas sur quatre chiffres est refusée
   (\code{liste\_invalide})\fsp;
 \item caractère~: la chaîne en UTF-8, la barre oblique inverse, la
   tabulation, le saut de ligne et le retour chariot étant échappés en
@@ -1122,7 +1124,7 @@ Les éléments d'une liste non vide ont des noms renseignés et distincts, et
 aucune liste ne porte d'autre attribut que ses noms\fsp; sinon l'écriture est
 refusée (\code{liste\_invalide}). Une liste vide s'écrit par la seule ligne
 d'en-tête. Par exemple, la liste \code{list(a = 1.5, b = list(c = "x", d =
-NULL))} s'écrit en trois lignes (la tabulation est figurée ici par un
+NULL))} s'écrit en quatre lignes, en-tête compris (la tabulation est figurée ici par un
 espacement)~:
 
 \begin{encadre}
