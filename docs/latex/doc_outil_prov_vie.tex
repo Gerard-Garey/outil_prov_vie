@@ -787,7 +787,8 @@ paramétrés.
 
 Le moteur est le package R \code{provie}. Il n'emploie que les packages de
 priorité \code{base} de R (\code{stats}, \code{tools}, \code{utils}) et ne
-dépend d'aucun programme Java. Il contient toute la logique quantitative.
+dépend d'aucun programme Java~; deux scripts de contrôle le vérifient
+(section~\ref{sec:controles}). Il contient toute la logique quantitative.
 L'application Shiny est hors du package~: elle n'appelle que ses fonctions
 exportées et ne calcule rien.
 
@@ -807,7 +808,9 @@ dans lequel l'application, le rapport figé et les tests lisent sans
 recalculer.
 
 Le moteur ne parle pas~: il n'émet ni avertissement, ni message, ni sortie
-à la console. Quand le calcul entier est indéfini, il lève un
+à la console, et ne lit pas la date du système\fsp; un script de contrôle
+le vérifie (section~\ref{sec:controles}). Quand le calcul entier est
+indéfini, il lève un
 \textbf{refus d'appel}, qui interrompt l'appel sans rendre d'objet et porte
 un motif d'une liste fermée (section~\ref{sec:outils}).
 
@@ -818,7 +821,8 @@ un motif d'une liste fermée (section~\ref{sec:outils}).
 
 Le package compte quinze modules, un fichier \code{R/<module>.R} par
 module. Un fichier de \code{R/} hors de cette liste est un écart relevé par
-la batterie de concordance. Un fichier de module n'existe qu'à partir du
+la batterie de concordance et par le script de contrôle du graphe des
+modules (section~\ref{sec:controles}). Un fichier de module n'existe qu'à partir du
 moment où le module a un contenu.
 
 La colonne «~Peut appeler~» est le graphe des appels autorisés entre
@@ -828,7 +832,9 @@ aucun module du moteur ne les appelle. Un poste qui combine deux familles de
 calcul est une étape de l'orchestration, qui appelle chaque famille et
 applique la règle de combinaison déclarée par le catalogue des
 configurations de garanties\fsp; la famille «~triangle~» n'appelle pas la
-famille «~engagement~».
+famille «~engagement~». Le script de contrôle du graphe des modules
+vérifie, sur le source, que chaque module n'appelle que les modules de sa
+colonne «~Peut appeler~» (section~\ref{sec:controles}).
 
 {\small
 \renewcommand{\arraystretch}{1.22}
@@ -1301,10 +1307,13 @@ Trois batteries se lancent depuis la racine du dépôt, dans cet ordre~:
 \end{encadre}
 
 \begin{itemize}[itemsep=2pt]
-\item La \textbf{batterie unitaire} installe le package dans une
-  bibliothèque temporaire, le charge, puis exécute les fichiers de
-  \code{tests/unitaires/}, un par module, plus ceux qui testent le harnais
-  et la batterie de concordance.
+\item La \textbf{batterie unitaire} exécute d'abord les scripts de
+  contrôle du dépôt (section~\ref{sec:controles}), chacun dans un processus
+  \code{Rscript} distinct~: un script compte en échec si son statut de
+  sortie n'est pas nul ou si sa sortie contient une ligne \code{[ECHEC]}.
+  Elle installe ensuite le package dans une bibliothèque temporaire, le
+  charge, puis exécute les fichiers de \code{tests/unitaires/}, un par
+  module, plus ceux qui testent le harnais et la batterie de concordance.
 \item La \textbf{batterie de reproductibilité} vérifie les aller-retours
   identiques du sérialiseur de listes, la graine locale et la restauration
   de l'état global du générateur.
@@ -1314,8 +1323,54 @@ Trois batteries se lancent depuis la racine du dépôt, dans cet ordre~:
 
 Les batteries unitaire et de reproductibilité testent le package installé, à
 travers son espace de noms, jamais en chargeant les fichiers de \code{R/}
-par \code{source()}\fsp; seule la batterie de concordance lit ces fichiers,
-sans les exécuter.
+par \code{source()}\fsp; seules la batterie de concordance et les scripts
+de contrôle lisent ces fichiers, sans les exécuter.
+
+\textbf{Intégration continue.} Les trois batteries tournent, dans l'ordre
+ci-dessus, dans le job «~Tests (R~4.3.3)~» de l'intégration continue du
+dépôt, exécuté dans le conteneur \code{rocker/r-ver:4.3.3} épinglé par
+digest~: c'est la \textbf{plateforme de référence}, sur
+laquelle seront produites les références de non-régression. Avant les
+batteries, le job imprime au journal \code{sessionInfo()},
+\code{extSoftVersion()} et \code{La\_version()}. Le job «~Documents LaTeX~» compile la
+charte graphique et le présent document par pdfLaTeX, en trois passes, et
+échoue sur une erreur, une référence indéfinie ou une ligne trop longue
+(\textit{Overfull})\fsp; il exécute ensuite le script de contrôle du
+préambule. Aucun PDF n'est versionné.
+
+% =============================================================================
+\section{Scripts de contrôle du dépôt}
+\label{sec:controles}
+% =============================================================================
+
+Cinq scripts de \code{tests/controles/} vérifient des règles du dépôt qui ne
+sont pas des tests du package. Chacun s'exécute seul, depuis la racine du
+dépôt (\code{Rscript tests/controles/<script>.R}), n'emploie que R de base,
+imprime une ligne par constat (\code{[OK]}, \code{[ECHEC]}, et
+\code{[AVERT]} pour le contrôle de Java), avec le fichier et la ligne en
+cause, et sort avec un statut non nul au moindre échec. Un argument
+facultatif désigne une autre racine, ce qui permet de démontrer qu'un
+script refuse une copie du dépôt délibérément fautive (témoin négatif).
+
+\begin{center}
+\small
+\rowcolors{2}{tablerow}{white}
+\begin{tabular}{@{}p{5.3cm}p{9.8cm}@{}}
+\rowcolor{tableheader}
+\textcolor{financeblue}{\textbf{Script}} & \textcolor{financeblue}{\textbf{Ce qu'il vérifie}} \\
+\code{liste\_blanche\_description.R} & Les champs \code{Depends}, \code{Imports}, \code{LinkingTo} et \code{Suggests} de \code{DESCRIPTION}, et les directives d'import de \code{NAMESPACE}, ne citent que des packages de priorité \code{base} (et R lui-même dans \code{Depends}). \\
+\code{absence\_java.R} & Aucun package connu pour dépendre de Java n'est déclaré dans \code{DESCRIPTION}, ni présent dans la fermeture de ses dépendances parmi les packages installés\fsp; aucun fichier de \code{NAMESPACE}, \code{R/}, \code{app/}, \code{tests/} ou \code{.github/} ne charge un tel package ni n'installe un environnement Java. La liste des packages à Java est un jugement de mise en œuvre, écrit dans le script. \\
+\code{graphe\_modules.R} & Les fichiers de \code{R/} sont parmi les quinze modules\fsp; chaque module n'appelle que les modules de sa colonne «~Peut appeler~» (section~\ref{sec:modules})\fsp; aucun appel dynamique (fonction désignée par son nom, accès à un espace de noms)\fsp; un nom de premier niveau n'est défini que dans un seul fichier. \\
+\code{frontiere\_calcul\_affichage.R} & Aucun élément de Shiny dans \code{R/}\fsp; aucun réglage du générateur pseudo-aléatoire (\code{set.seed()}, \code{RNGkind()}, \code{RNGversion()}, \code{.Random.seed}) hors de \code{R/outils.R}\fsp; aucun appel de \code{warning()}, \code{message()}, \code{cat()}, \code{print()}, \code{writeLines()}, \code{writeChar()}, \code{packageStartupMessage()}, \code{Sys.time()}, \code{Sys.Date()} ni \code{date()}, hors du corps des fonctions de premier niveau nommées \code{print.*} et \code{format.*}\fsp; code ASCII hors commentaires\fsp; si \code{app/} existe, aucun appel aux fonctions internes du package ni à une liste de fonctions de calcul. \\
+\code{preambule\_latex.R} & Le préambule de chaque document LaTeX de \code{docs/latex/} est identique à celui de la charte graphique, hors des blocs bornés par «~À ADAPTER~», dont le nombre, l'ordre et l'objet doivent être ceux de la charte. \\
+\end{tabular}
+\end{center}
+
+Ces scripts sont des \textbf{contrôles statiques}~: ils analysent le texte
+des fichiers, sans exécuter le package. Ils ne prouvent pas l'absence de
+toute violation~: les cas résiduels de faux négatifs et de faux positifs
+relevés par l'audit de leur première version sont suivis par l'issue~27 du
+dépôt.
 
 % =============================================================================
 \section{Harnais}
