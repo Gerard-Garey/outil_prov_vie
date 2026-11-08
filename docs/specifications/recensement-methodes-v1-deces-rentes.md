@@ -176,7 +176,7 @@ Défauts lus : D03c, D09 (dont le capital incohérent), D05, D06, D10 (a) et (b)
 
 **Rattachement.**
 - Comptes sociaux : **PSAP vie** (D2 décidée ; lecture (a) de `regulatory` : compte 32, montant liquidé, ANC 223-1).
-- Solvabilité II : meilleure estimation.
+- Solvabilité II : meilleure estimation ; ligne d'activité 32 (30 avec participation aux bénéfices), comme P1 (R7).
 
 **Champ** (Q4 décidé) : décès **connus**, capital exigible non réglé, et critère du plan (bénéficiaire `non_identifie`, ou aucune réclamation depuis N mois déclarés). Les décès inconnus de l'organisme sont des tardifs (P4) ; la frontière est compatible avec le texte (lecture de `regulatory`, R2, point 5).
 
@@ -191,7 +191,7 @@ Défauts lus : D03c, D09 (dont le capital incohérent), D05, D06, D10 (a) et (b)
 - L132-5, **3e alinéa** (revalorisation du décès jusqu'à la réception des pièces ou au dépôt) ;
 - L132-5, 4e et dernier alinéa (plancher de taux fixé par décret) ;
 - R132-3-1 (taux) ;
-- **L132-27-2** (dépôt à la Caisse des dépôts et consignations ; version en vigueur depuis le 24/05/2019, loi n° 2019-486, art. 71). créé par la loi n° 2014-617, art. 3. La citation « loi n° 2014-617, art. 13 » est retirée : l'art. 13, lu en révision 4, est une disposition transitoire (reprise du stock au 01/01/2016), sans effet sur un calcul à une date d'arrêté de 2026 ;
+- **L132-27-2** (dépôt à la Caisse des dépôts et consignations ; version en vigueur depuis le 24/05/2019, loi n° 2019-486, art. 71 ; article créé par la loi n° 2014-617, art. 3). La citation « loi n° 2014-617, art. 13 » est retirée : l'art. 13, lu en révision 4, est une disposition transitoire (reprise du stock au 01/01/2016), sans effet sur un calcul à une date d'arrêté de 2026 ;
 - mutuelles : L223-19-1, R223-9, L223-25-4, R223-11 ;
 - institutions de prévoyance : CSS L932-23 (renvoi), décret de taux non trouvé. Deux lectures (`regulatory`, révision 4) : (a) R132-3-1 s'applique aux institutions de prévoyance par le renvoi de L932-23 à L132-5 ; (b) il ne s'applique pas faute de décret propre. Avis de `regulatory` : (a) ; pour le moteur, règle de R132-3-1 en hypothèse déclarée pour les institutions de prévoyance, statut **incertain** mentionné.
 
@@ -231,7 +231,7 @@ Tous sont vérifiés (`regulatory`, 07/11), sauf le décret de taux des institut
 
 **Rattachement.**
 - Comptes sociaux : PSAP vie, **sous-compte des tardifs** du compte 32 (ANC 333-4, vérifié). Aucun texte de calcul : l'analogie avec ANC 143-10 est une hypothèse déclarée (R10, vérifié).
-- Solvabilité II : meilleure estimation.
+- Solvabilité II : meilleure estimation ; ligne d'activité 32 (30 avec participation aux bénéfices), comme P1 (R7).
 
 **Définition.** Décès (et IAD) survenus avant l'arrêté et non déclarés à l'arrêté. Un décès déclaré non instruit relève de P1 et, pour ses rentes, de P6. Le poste combine deux familles : nombre (« triangle ») × coût moyen (« engagement »), plus la composante catastrophe (Q12).
 
@@ -266,7 +266,7 @@ Tous sont vérifiés (`regulatory`, 07/11), sauf le décret de taux des institut
 - Comptes sociaux : provision mathématique vie (M84) ; taux retenu ≤ taux du tarif ; indicateur A132-1 (M85) à l'arrêté, étiqueté « approximation », plus une ligne à la date d'effet de la version de garantie en vigueur à la survenance (D4 décidée).
 - Les **frais futurs de gestion** sont inclus : la provision mathématique d'un contrat « faisant intervenir une table de survie ou de mortalité » les comprend « au-delà de la durée de paiement des primes », au montant des chargements de gestion tarifaires (R343-3, 1°, vérifié). Une rente servie après le décès est tout entière au-delà du paiement des primes.
 - Arrérages échus non payés : **PSAP vie** (D1 décidée), restitués à part.
-- Solvabilité II : meilleure estimation.
+- Solvabilité II : meilleure estimation ; ligne d'activité 32 (30 avec participation aux bénéfices), comme P1 (R7).
 
 **Modèle de référence** : modèle multi-états des bénéficiaires (E2.11 ; Dickson, Hardy et Waters 2020, chap. 8 ; Norberg 1991).
 
@@ -293,13 +293,13 @@ Tous sont vérifiés (`regulatory`, 07/11), sauf le décret de taux des institut
 
 La table unique de A132-18-1 est une faculté de **tarif** pour les contrats de L911-1 du Code de la sécurité sociale. Son contenu n'est pas lu (fac-similé du JO) et sa reprise en provision est une interprétation (R3).
 
-**Textes.** R343-3, 1° ; ANC 142-3, 142-4 ; A132-18 ; A132-18-1 (texte, sans la table), tous vérifiés. Loi n° 89-1009, art. 7 (lu en entier, vérifié sur la consolidation LEGI ; l'art. 29 VII, dérogation au 2e alinéa, n'est pas lu) et CSS L912-3 (vérifié) pour la revalorisation après résiliation (D6 décidée). Pour les mutuelles et les institutions de prévoyance, A223-8 et A932-3-11 (vérifiés) étendent expressément aux **provisions techniques** des rentes viagères, temporaires comprises, le plancher des tables homologuées ; A132-18 ne le dit que du tarif : D3 en est confortée. ANC 143-3 (date de naissance reportée au 31 décembre le plus voisin) est rangé au chapitre des opérations autres que vie : son emploi pour une rente vie est une convention du plan.
+**Textes.** R343-3, 1° ; ANC 142-3, 142-4 ; A132-18 ; A132-18-1 (texte, sans la table), tous vérifiés. Loi n° 89-1009, art. 7 (lu en entier, vérifié sur la consolidation LEGI ; l'art. 29 VII, dérogation au 2e alinéa, n'est pas lu) et CSS L912-3 (vérifié) pour la revalorisation après résiliation (D6 décidée). Pour les mutuelles et les institutions de prévoyance, A223-8 et A932-3-11 (vérifiés) étendent expressément aux **provisions techniques** des rentes viagères, temporaires comprises, le plancher des tables homologuées ; A132-18 ne le dit que du tarif : D3 en est confortée, sans que la lecture devienne littérale pour les entreprises d'assurance (`regulatory`). ANC 143-3 (date de naissance reportée au 31 décembre le plus voisin) est rangé au chapitre des opérations autres que vie : son emploi pour une rente vie est une convention du plan.
 
 ### 3.6 P6 — Rentes à constituer
 
 **Rattachement.**
 - Comptes sociaux (D1 décidée, lecture mixte) : **PSAP vie** (compte 32) pour les trois situations ci-dessous, par analogie avec R343-7, 4° (« capitaux constitutifs des rentes non encore mises à la charge de l'entreprise », vérifié, autres opérations) et ANC 223-1 ; la rente passe en **provision mathématique vie** (P5) à son `ouverture_service`. Bases alignées : taux ≤ taux du tarif, tables de 142-4, frais au niveau des chargements de gestion tarifaires (hypothèse déclarée).
-- Solvabilité II : meilleure estimation.
+- Solvabilité II : meilleure estimation ; ligne d'activité 32 (30 avec participation aux bénéfices), comme P1 (R7).
 
 **Trois situations**, chacune restituée à part :
 1. rente créée sans `ouverture_service` ;
@@ -320,7 +320,7 @@ La table unique de A132-18-1 est une faculté de **tarif** pour les contrats de 
 
 **Rattachement.**
 - Comptes sociaux : **PSAP vie, sous-compte des tardifs** (ANC 333-4 : existence du compte vérifiée, aucun texte de calcul).
-- Solvabilité II : meilleure estimation.
+- Solvabilité II : meilleure estimation ; ligne d'activité 32 (30 avec participation aux bénéfices), comme P1 (R7).
 
 | Méthode | Statut | Ce qu'elle calcule | Conditions d'usage | Statut ; incertitude |
 |---|---|---|---|---|
@@ -495,7 +495,7 @@ Le type de lien `ouverture_rente` est nouveau (Q8 décidée ; A1).
 
 ## 9. Questions au mainteneur
 
-Toutes les questions sont tranchées (§ 2) : Q1 à Q14, D1 à D7 le 7 novembre 2026, D8 le 8 novembre 2026. Le recensement est visé le 8 novembre 2026 (M131). **Aucune question ouverte.**
+Toutes les questions sont tranchées (§ 2) : Q1 à Q14, D1 à D7 le 7 novembre 2026, D8 le 8 novembre 2026. Le recensement est visé le 8 novembre 2026 (M131). **Aucune question ouverte** : le décret de taux des institutions de prévoyance (deux lectures de `regulatory`, § 3.2) n'est pas tranché sur le fond ; la règle de R132-3-1 y est retenue en hypothèse déclarée, statut incertain (décision du mainteneur du 8 novembre 2026, M133).
 
 Restent liés à des lectures ou à des mesures : Q5 est à revoir sur mesure en B2 ; Q14 étend E2.9 et l'ADR 0009, point 6 (report par `architect`).
 
@@ -509,7 +509,7 @@ Restent liés à des lectures ou à des mesures : Q5 est à revoir sur mesure en
 | R4 | **Lu** ; tranché (D4) |
 | R5 | **Lu**, vérifié (intégré au § 3.3 et au § 3.5) |
 | R6 | **Lu**, vérifié ; tranché (D5) ; issue proposée par `regulatory` |
-| R7 | **Lu**, vérifié sur le JO d'origine et la consolidation au 14/11/2024 (outil de documentation). Lignes d'activité : capital décès et rentes de conjoint et d'éducation en ligne 32 (30 avec participation aux bénéfices) ; les lignes 33 et 34 ne visent que les rentes découlant de contrats non-vie ; ligne 29 à citer d'après le RD 2017/669, jamais d'après le texte d'origine. IAD : tranché (D8, ligne 32). Art. 18 : limite du contrat de la temporaire individuelle à prime garantie au terme, § 5 inapplicable ; collectif annuel résiliable limité à la prochaine échéance, sous réserve du § 7 (point de fait par contrat ; B6). Art. 26 : loi de résiliation obligatoire en meilleure estimation, hypothèse déclarée et justifiée |
+| R7 | **Lu**, vérifié sur le JO d'origine et la consolidation au 14/11/2024 (outil de documentation). Lignes d'activité : capital décès et rentes de conjoint et d'éducation en ligne 32 (30 avec participation aux bénéfices) ; les lignes 33 et 34 ne visent que les rentes découlant de contrats non-vie ; ligne 29 à citer d'après le RD 2017/669, jamais d'après le texte d'origine. IAD : tranché (D8, ligne 32). Art. 18 : limite du contrat de la temporaire individuelle à prime garantie au terme, § 5 inapplicable ; collectif annuel résiliable limité à la prochaine échéance, sous réserve du § 7 (point de fait par contrat ; B6). Le § 3, 3e alinéa, est modifié au 30/01/2027 par le RD 2026/269 (non relu) : à reprendre en B6. Art. 26 : loi de résiliation obligatoire en meilleure estimation, hypothèse déclarée et justifiée |
 | R8 | **Lu** (CSS L912-3 et loi n° 89-1009, art. 7, en entier, vérifiés) ; tranché (D6), confortée. Reste : art. 29 VII de la loi n° 89-1009 (non lu) |
 | R9 | **Lu** ; tranché (D7) |
 | R10 | **Lu**, vérifié : analogie déclarée, non obligatoire |
