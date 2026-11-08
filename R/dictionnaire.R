@@ -1,5 +1,5 @@
 # Module `dictionnaire` (ADR 0010, points 1, 2 et 23) : lecture et validation de la forme
-# lisible par machine du dictionnaire de la base brute (six CSV et dictionnaire.txt sous
+# lisible par machine du dictionnaire de la base brute (sept CSV et dictionnaire.txt sous
 # inst/extdata/dictionnaire/, transcription du texte visé
 # docs/specifications/dictionnaire-base-v1.md, contrôlée par
 # tests/controles/concordance_dictionnaire.R) ; contrôle des types d'une base.
@@ -31,8 +31,12 @@ TYPES_DICTIONNAIRE <- c("character", "integer", "numeric", "Date", "logical")   
 # types_evenements.programmable, motif compris).
 FUTUR_ADMIS_VALEURS <- c("TRUE", "FALSE", "programmable")
 
+# Valeurs de controles.csv, portee (section 1.10 du texte, version 1.5) : colonne, table,
+# colonne_table (colonne, ou table pour une colonne de clé), ligne (signalement).
+PORTEES_CONTROLES <- c("colonne", "table", "colonne_table", "ligne")
+
 FICHIERS_DICTIONNAIRE <- c("tables.csv", "colonnes.csv", "types_evenements.csv",
-                           "parametres.csv", "defauts.csv", "filiation.csv")
+                           "parametres.csv", "defauts.csv", "filiation.csv", "controles.csv")
 
 COLONNES_DICTIONNAIRE <- list(                                                  # point 23
   tables.csv = c("numero", "table", "objet", "cle_primaire", "obligatoire", "visibilite"),
@@ -46,14 +50,17 @@ COLONNES_DICTIONNAIRE <- list(                                                  
                      "condition"),
   defauts.csv = c("code", "defaut", "tables", "colonnes", "detection", "traitements",
                   "parametre_intensite", "sous_parametres"),
-  filiation.csv = c("table_de", "colonne_de", "table_v1", "colonne_v1", "statut", "motif")
+  filiation.csv = c("table_de", "colonne_de", "table_v1", "colonne_v1", "statut", "motif"),
+  # Version 1.5 : colonnes du tableau du texte (section 1.10), et non celles proposées par
+  # l'annotation de la cinquième série de l'ADR, (e) (code, portee, description, section).
+  controles.csv = c("code", "objet", "detection", "portee", "motif_refus_appel")
 )
 
 # --- Lecture du dictionnaire -----------------------------------------------------
 
 # Rend le dictionnaire de la base, lu et validé à chaque appel depuis
 # inst/extdata/dictionnaire/ du package installé : liste nommée `version`, `date_visa`,
-# `tables`, `colonnes`, `types_evenements`, `parametres`, `defauts`, `filiation` (un
+# `tables`, `colonnes`, `types_evenements`, `parametres`, `defauts`, `filiation`, `controles` (un
 # data.frame par CSV, colonnes de texte, sauf `types_evenements$ordre` entier ;
 # `colonnes$futur_admis` vaut "TRUE", "FALSE" ou "programmable", FUTUR_ADMIS_VALEURS). Refus `dictionnaire_invalide` si la forme lue n'est pas
 # celle attendue (version, empreintes, colonnes, références internes).
@@ -89,7 +96,7 @@ dictionnaire <- function() {
                tables = lus[["tables.csv"]], colonnes = lus[["colonnes.csv"]],
                types_evenements = lus[["types_evenements.csv"]],
                parametres = lus[["parametres.csv"]], defauts = lus[["defauts.csv"]],
-               filiation = lus[["filiation.csv"]])
+               filiation = lus[["filiation.csv"]], controles = lus[["controles.csv"]])
   if (!all(dico$colonnes$futur_admis %in% FUTUR_ADMIS_VALEURS)) {
     .refus_dictionnaire("colonnes.csv, futur_admis : TRUE, FALSE ou programmable attendu")
   }
@@ -214,9 +221,10 @@ dictionnaire <- function() {
       echec("colonnes.csv", i, "futur admis programmable hors de la table evenements")
     }
     # reference : `table.colonne`, ou clé étrangère composite `table.c1;table.c2` (version
-    # 1.4, affiliations.college) : toutes les colonnes visées dans une même table, chacune
-    # présente aussi dans la table de la ligne (colonne locale de même nom). Contrainte
-    # d'existence du n-uplet dans la table cible, qui n'en fait pas une clé de cette table.
+    # 1.4, affiliations.college) : toutes les colonnes visées dans une même table, autre que
+    # la table de la ligne, chacune présente aussi dans la table de la ligne (colonne locale
+    # de même nom), la colonne de la ligne parmi elles. Contrainte d'existence du n-uplet
+    # dans la table cible, qui n'en fait pas une clé de cette table.
     ref <- col$reference[i]
     if (ref != "") {
       cibles <- strsplit(.eclater(ref), ".", fixed = TRUE)
@@ -228,7 +236,13 @@ dictionnaire <- function() {
         if (length(unique(vapply(cibles, `[`, "", 1L))) != 1L) {
           echec("colonnes.csv", i, paste0("r\u00e9f\u00e9rence composite vers plusieurs tables : ", ref))
         }
+        if (cibles[[1L]][1L] == col$table[i]) {
+          echec("colonnes.csv", i, paste0("r\u00e9f\u00e9rence composite vers la table qui la porte : ", ref))
+        }
         locales <- vapply(cibles, `[`, "", 2L)
+        if (!(col$colonne[i] %in% locales)) {
+          echec("colonnes.csv", i, paste0("r\u00e9f\u00e9rence composite dont le n-uplet ne contient pas la colonne de la ligne : ", ref))
+        }
         if (anyDuplicated(locales)) {
           echec("colonnes.csv", i, paste0("r\u00e9f\u00e9rence composite qui cite deux fois une colonne : ", ref))
         }
@@ -314,6 +328,25 @@ dictionnaire <- function() {
     if (!all(.eclater(fil$table_v1[i]) %in% noms_tables)) echec("filiation.csv", i, "table v1 inconnue")
     if (fil$statut[i] == "reprise" && !existe(fil$table_v1[i], fil$colonne_v1[i])) {
       echec("filiation.csv", i, "colonne reprise absente de sa table v1")
+    }
+  }
+
+  # controles.csv (version 1.5, section 1.10) : codes distincts et bien formés (minuscules et
+  # soulignés, donc disjoints des codes D.. de defauts.csv) ; motif de refus d'appel vide ou
+  # élément de MOTIFS_REFUS.
+  ctl <- dico$controles
+  if (anyDuplicated(ctl$code) || !all(grepl("^[a-z_]+$", ctl$code))) {
+    .refus_dictionnaire("controles.csv : codes distincts, en minuscules et soulign\u00e9s, attendus")
+  }
+  for (i in seq_len(nrow(ctl))) {
+    if (!nzchar(ctl$objet[i])) echec("controles.csv", i, "objet absent")
+    d <- .eclater(ctl$detection[i])
+    if (length(d) == 0L || !all(d %in% c("exacte", "presomptive"))) echec("controles.csv", i, "d\u00e9tection : exacte ou presomptive")
+    if (!(ctl$portee[i] %in% PORTEES_CONTROLES)) {
+      echec("controles.csv", i, paste0("port\u00e9e hors de ", paste(PORTEES_CONTROLES, collapse = ", "), " : ", ctl$portee[i]))
+    }
+    if (ctl$motif_refus_appel[i] != "" && !(ctl$motif_refus_appel[i] %in% MOTIFS_REFUS)) {
+      echec("controles.csv", i, paste0("motif de refus d'appel hors de MOTIFS_REFUS : ", ctl$motif_refus_appel[i]))
     }
   }
   invisible(NULL)

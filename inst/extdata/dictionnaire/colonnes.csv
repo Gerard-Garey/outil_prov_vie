@@ -2,7 +2,7 @@
 "extraction","date_extraction","Date","","Date d'extraction ; ≥ toute date de saisie de la base","","O","","","",FALSE,"",""
 "extraction","debut_historique","Date","","< `date_extraction`","","O","","","",FALSE,"",""
 "extraction","type_organisme","character","societe_assurance;mutuelle;institution_prevoyance","`societe_assurance`, `mutuelle`, `institution_prevoyance`","","O","","","",FALSE,"",""
-"extraction","version_dictionnaire","character","1.4","`1.4` (version d'un autre dictionnaire : refus)","","O","","","",FALSE,"",""
+"extraction","version_dictionnaire","character","1.5","`1.5` (version d'un autre dictionnaire : refus)","","O","","","",FALSE,"",""
 "extraction","devise","character","EUR","`EUR`","","O","","","",FALSE,"",""
 "adherents","id_adherent","character","","Identifiant","","O","","L","",FALSE,"","D01a"
 "adherents","secteur_activite","character","","Code opaque de secteur, pour la segmentation","","F","","E","",FALSE,"",""
