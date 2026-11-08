@@ -172,6 +172,14 @@ verifier_egal("octets Date : chaîne ISO", ecrire_valeurs(as.Date("2026-11-07"),
               ecrire_valeurs("2026-11-07", "octets"))
 verifier_egal("forme inconnue : erreur ordinaire", motif_de(ecrire_valeurs(1, "xml")), "autre")
 verifier_egal("facteur refusé", motif_de(ecrire_valeurs(factor("a"))), "liste_invalide")
+verifier_egal("liste imbriquée sans noms refusée", motif_de(ecrire_liste(list(a = list(1, 2)))),
+              "liste_invalide")
+verifier("liste imbriquée sans noms : le message désigne l'absence de noms, pas des attributs",
+         grepl("noms", tryCatch(ecrire_liste(list(a = list(1, 2))), refus_provie = conditionMessage)) &&
+           !grepl("attributs", tryCatch(ecrire_liste(list(a = list(1, 2))), refus_provie = conditionMessage)))
+verifier("liste imbriquée avec attribut : le message désigne les attributs",
+         grepl("attributs non admis", tryCatch(ecrire_liste(list(a = structure(list(b = 1), classe = "x"))),
+                                               refus_provie = conditionMessage)))
 verifier_egal("vecteur nommé refusé", motif_de(ecrire_valeurs(c(a = 1))), "liste_invalide")
 verifier_egal("matrice refusée", motif_de(ecrire_valeurs(matrix(1:4, 2))), "liste_invalide")
 verifier_egal("Date non finie refusée", motif_de(ecrire_valeurs(as.Date(Inf))), "liste_invalide")
@@ -211,6 +219,30 @@ verifier_egal("nom contenant « / » : échappé dans le chemin",
               "a\\x2fb\tinteger\t1")
 verifier("aller-retour de decrire_plateforme()",
          identical(lire_liste(ecrire_liste(decrire_plateforme())), decrire_plateforme()))
+# Sys.info() peut rendre NULL (documenté par R) ; extSoftVersion() peut omettre un composant
+plateforme_avec <- function(sys_info, logiciels = NULL) {
+  f <- decrire_plateforme
+  environment(f) <- list2env(
+    c(list(Sys.info = function() sys_info),
+      if (!is.null(logiciels)) list(extSoftVersion = function() logiciels)),
+    parent = asNamespace("provie"))
+  f()
+}
+p_nul <- plateforme_avec(NULL)
+verifier_egal("Sys.info() NULL : systeme, version_systeme et machine valent NA_character_",
+              p_nul[c("systeme", "version_systeme", "machine")],
+              list(systeme = NA_character_, version_systeme = NA_character_, machine = NA_character_))
+verifier_egal("Sys.info() NULL : les autres champs et l'ordre sont inchangés",
+              names(p_nul), names(decrire_plateforme()))
+verifier_egal("Sys.info() NULL : sérialisable, aller-retour identique", lire_liste(ecrire_liste(p_nul)), p_nul)
+verifier_egal("Sys.info() partiel : champ présent conservé, absents NA",
+              plateforme_avec(c(sysname = "Linux"))[c("systeme", "version_systeme", "machine")],
+              list(systeme = "Linux", version_systeme = NA_character_, machine = NA_character_))
+verifier_egal("extSoftVersion() sans BLAS ni ICU : NA_character_",
+              plateforme_avec(NULL, c(PCRE = "10.42"))[c("blas", "pcre", "icu")],
+              list(blas = NA_character_, pcre = "10.42", icu = NA_character_))
+verifier("decrire_plateforme() : tous les champs sont des chaînes de longueur 1",
+         all(vapply(decrire_plateforme(), function(v) is.character(v) && length(v) == 1L, NA)))
 verifier_egal("liste sans nom refusée", motif_de(ecrire_liste(list(1, 2))), "liste_invalide")
 verifier_egal("noms en double refusés", motif_de(ecrire_liste(list(a = 1, a = 2))),
               "liste_invalide")
@@ -284,6 +316,29 @@ verifier_egal("feuille sous une feuille",
 verifier_egal("feuille liste vide sous une feuille",
               motif_de(lire_liste(brut(paste0(entete, "a\tliste\na/b\tinteger\t2\n")))),
               "liste_invalide")
+# deux écritures d'un même nom (a, \x61) désignent le même noeud : refus liste_invalide,
+# jamais une erreur ordinaire d'insertion (contrôle des ancêtres sur les noms décodés)
+for (feuille in c("null", "liste", "integer\t1", "double\t1.5", "logical\tT", "character\tx",
+                  "date\t2020-01-01")) {
+  verifier_egal(paste0("alias : feuille ", sub("\t.*$", "", feuille), " sous un alias de son nom"),
+                motif_de(lire_liste(brut(paste0(entete, "a\t", feuille, "\n\\x61/b\tnull\n")))),
+                "liste_invalide")
+  verifier_egal(paste0("alias : feuille ", sub("\t.*$", "", feuille), ", alias sous le nom en clair"),
+                motif_de(lire_liste(brut(paste0(entete, "\\x61\t", feuille, "\na/b\tnull\n")))),
+                "liste_invalide")
+}
+verifier_egal("alias : doublon par alias",
+              motif_de(lire_liste(brut(paste0(entete, "a\tinteger\t1\n\\x61\tinteger\t2\n")))),
+              "liste_invalide")
+verifier_egal("alias : doublon par alias en profondeur",
+              motif_de(lire_liste(brut(paste0(entete, "x/a\tinteger\t1\nx/\\x61\tinteger\t2\n")))),
+              "liste_invalide")
+verifier_egal("alias : ancêtre d'une Date, en profondeur",
+              motif_de(lire_liste(brut(paste0(entete, "x/a\tdate\t2020-01-01\nx/\\x61/b\tnull\n")))),
+              "liste_invalide")
+verifier_egal("un nom contenant « / » n'est pas l'ancêtre d'un chemin",
+              names(lire_liste(brut(paste0(entete, "a\\x2fb\tinteger\t1\na\tinteger\t2\n")))),
+              c("a/b", "a"))
 verifier_egal("lecture sans évaluation : un nom qui ressemble à du code reste un nom",
               names(lire_liste(brut(paste0(entete, "system('x')\tinteger\t1\n")))), "system('x')")
 

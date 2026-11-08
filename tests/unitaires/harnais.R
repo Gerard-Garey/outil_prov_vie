@@ -87,3 +87,16 @@ sortie <- suppressWarnings(system2(file.path(R.home("bin"), "Rscript"), shQuote(
                                    stdout = TRUE, stderr = TRUE))
 unlink(script_warn1)
 verifier("warn = 1 est aussi refusé", !is.null(attr(sortie, "status")) && attr(sortie, "status") == 1L)
+
+section("harnais : installer_provie")
+paquet_faux <- tempfile("paquet-faux")
+dir.create(file.path(paquet_faux, "R"), recursive = TRUE)
+writeLines(c("Package: provie", "Version: 0.0.1", "Title: faux", "Description: faux.",
+             "License: file LICENSE", "Encoding: UTF-8"), file.path(paquet_faux, "DESCRIPTION"))
+writeLines("", file.path(paquet_faux, "NAMESPACE"))
+writeLines("f <- function( {", file.path(paquet_faux, "R", "x.R"))
+r <- executer_harnais(sprintf("installer_provie('%s')", paquet_faux))
+unlink(paquet_faux, recursive = TRUE)
+verifier("TEMOIN : un package qui ne s'installe pas : sortie de R CMD INSTALL, [ECHEC] et statut 1 sous warn = 2",
+         r$statut == 1L && grepl("ERROR: unable to collate and parse R files", r$sortie, fixed = TRUE) &&
+           grepl("[ECHEC] installation du package provie", r$sortie, fixed = TRUE))

@@ -129,10 +129,13 @@ bilan <- function() {
 installer_provie <- function(racine) {
   bibliotheque <- file.path(tempdir(), "bibliotheque-provie")
   dir.create(bibliotheque, showWarnings = FALSE, recursive = TRUE)
-  sortie <- system2(file.path(R.home("bin"), "R"),
-                    c("CMD", "INSTALL", "--no-docs", "--no-multiarch",
-                      paste0("--library=", shQuote(bibliotheque)), shQuote(racine)),
-                    stdout = TRUE, stderr = TRUE)
+  # sous options(warn = 2), le statut non nul de system2() deviendrait une erreur : le
+  # statut est lu dans l'attribut de la sortie
+  sortie <- suppressWarnings(system2(file.path(R.home("bin"), "R"),
+                                     c("CMD", "INSTALL", "--no-docs", "--no-multiarch",
+                                       paste0("--library=", shQuote(bibliotheque)),
+                                       shQuote(racine)),
+                                     stdout = TRUE, stderr = TRUE))
   statut <- attr(sortie, "status")
   if (!is.null(statut) && statut != 0L) {
     cat(sortie, sep = "\n")
