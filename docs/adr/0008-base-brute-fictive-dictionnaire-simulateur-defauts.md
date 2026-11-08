@@ -50,3 +50,85 @@ Arrêtée par le mainteneur le 7 novembre 2026 (Q5 contre la recommandation ; Q6
 - **Vocabulaire** : `CONTEXT.md`, « Base brute fictive », « Dictionnaire de la base », « Simulateur », « Loi vraie », « Jeu propre », « Défaut de données », « Traitement », « Jeu versionné », « Extraction », « Empreinte », « Vue à une date », « Date de saisie », « Constat de simulation », « Témoin ».
 
 Issues : #4 (ADR de cadrage).
+
+## Annotation du 7 novembre 2026 — dictionnaire de la base v1 visé (#16)
+
+*Rédigée par `architect` le 7 novembre 2026 (branche `claude/socle-donnees`, PR #21). Elle consigne, sans rouvrir la décision, les écarts que le dictionnaire de la base v1 (`docs/specifications/dictionnaire-base-v1.md`, version `1.0`) apporte au point 1 et au point 5. Le dictionnaire a été visé globalement par le mainteneur le 7 novembre 2026, commit `df4ceaa` ; les commits précédents sont `ec7162c` (rédaction, `actuary-approfondi`) et `73c3364` (filiation avec le double effet de `docu_actu`, avis P13). Décisions du mainteneur : M73 à M77 de `docs/feuille-de-route.md`, § 4. En cas d'écart entre le présent ADR et le dictionnaire visé, le dictionnaire fait foi pour la liste des tables, des colonnes et des défauts. L'ADR reste la référence pour les principes (points 2 à 10).*
+
+**Point 1, liste des tables : écarts visés** (dictionnaire, § 2.1 et § 2.2 ; P1 visé pour les écarts 1 à 5, écarts 6 et 7 visés avec le dictionnaire) :
+
+1. **`extraction`**, table nouvelle d'une ligne. Elle porte la date d'extraction et la version du dictionnaire, contre lesquelles se contrôlent l'arrêté du plan et l'absence d'information postérieure.
+2. **« Garanties souscrites et leurs paramètres »** devient `garanties_souscrites` et `parametres`. `parametres` est en format long, de clé composite (`id_garantie_souscrite`, `parametre`, `categorie_invalidite`, `age_min`), et toutes ses valeurs sont `numeric`.
+3. **« Famille et bénéficiaires »** devient `famille`, qui porte les personnes, et `beneficiaires`, qui porte le lien entre un dossier et une personne avec sa part. **La clé de `famille` est composite, (`id_membre`, `date_saisie`)** : un membre est constaté à l'instruction d'un sinistre et rattaché à ce sinistre. Une correction ajoute une ligne complète de même `id_membre`. La ligne valable à un arrêté A est la dernière saisie au plus tard à A. La table est donc historisée et lisible en vue à une date (dictionnaire, T8).
+4. **« Rentes en service »** devient `rentes` : une ligne par rente, en service, à constituer ou terminée. L'état « en service » à une date et le montant en vigueur se reconstituent du journal des événements (`ouverture_service`, `suspension`, `reprise_service`, `fin_service`, `modification_montant`). Une table d'état à l'extraction serait un champ dérivé, au sens des options écartées ci-dessus (P3 visé). Le stock à la date d'extraction, survenances antérieures à la fenêtre comprises, reste exigé (point 6 et E2.3).
+5. **Évaluation de gestion** : la « colonne facultative » du point 1 et du paragraphe « Réglé après rédaction » devient la **table facultative datée `evaluations_gestion`** (T18). Chaque ligne est une évaluation successive d'un dossier : montant restant, date d'effet, date de saisie. Ses lecteurs sont inchangés (M68) : la comparaison par dossier et le **triangle des évaluations de gestion**, ce dernier **distinct du triangle de charges** qui porte les provisions recalculées par l'outil (M65). La mention « triangles de charges » du paragraphe « Réglé après rédaction » se lit dans ce sens (dictionnaire, § 7). Critère d'acceptation : toutes les provisions sont identiques au bit près avec ou sans la table.
+6. **Tables facultatives T19 `designations` et T20 `ayants_droit_sante`**, reprises du double effet sur décision du mainteneur (option (a) de l'avis P13, M75). Elles portent l'information de famille des assurés vivants : bénéficiaires nommés d'une désignation nominative, et périodes de couverture des ayants droit du contrat frais de santé couplé. Seule l'approche par tête les lit, et toute méthode qui les lit fonctionne sans elles. Leurs conditions d'usage, qui touchent aux données de santé, sont un point ouvert confié à `regulatory` (dictionnaire, § 11, P18) : aucun poste ne les exige avant cette lecture.
+7. **Conventions de filiation avec le double effet** (annexe A du dictionnaire) :
+   - un contrat de branche s'écrit, en v1, comme un contrat par adhérent ;
+   - le sexe et la date de naissance du décédé ont une seule source, `assures` ;
+   - la modalité `H` devient `M` ;
+   - les pourcentages deviennent des fractions.
+
+Il en résulte **vingt tables**, dont cinq facultatives : T16 à T20, T17 étant obligatoire en présence de T16. Les **dates de saisie** sont portées par les affiliations, les prestations, les bénéficiaires, les rentes, la famille et les sinistres, en plus des événements. Ce point était laissé au dictionnaire par « Ce qui reste à faire » (P2 visé).
+
+**Information de famille des assurés** (P14, reformulé par la correction M2 de l'avis P13). `assures.situation_familiale` et `nombre_enfants_charge` sont la dernière valeur déclarée, **datée** par `date_situation_familiale`, et **facultatives**. Pour un assuré décédé ou radié, c'est la valeur déclarée avant la radiation. Leur absence ou leur péremption est un phénomène du portefeuille. Elle ne devient le défaut D03d que pour un poste qui les requiert. La limite est restituée dans le rapport figé.
+
+**Point 5, liste des défauts** (dictionnaire, § 9, « liste amendée ») : les défauts sont codés D01a à D14 et aucun défaut d'E2.4 n'est retiré. Les ajouts et extensions sont les suivants :
+
+- **D03g**, date de saisie manquante ;
+- **D04b**, extension de « prestation sans sinistre » à toute ligne orpheline ;
+- **D11**, sinistre hors période de couverture ;
+- **D12**, suite d'états impossible ;
+- **D13**, instruction absente ;
+- **D14**, dossier double effet non ouvert.
+
+D13 et D14 viennent du dictionnaire double effet. D02a, D03a, D06, D07 et D09 sont étendus aux cas du double effet. D03d se lit désormais « situation de famille absente ou périmée, requise par un poste ».
+
+La liste des phénomènes du portefeuille, qui ne sont pas des défauts, s'étend aux suivants :
+
+- information de famille absente ou périmée ;
+- désignation non mise à jour ;
+- instruction pendante à l'extraction ;
+- couverture partielle des ayants droit santé ;
+- radiations saisies avec retard ;
+- régularisations.
+
+Le principe du point 5 est inchangé : liste fermée, intensité paramétrée, traitement déclaré, exclusion par famille de calcul (P16 visé), un défaut hors liste étant un refus.
+
+**Autres points visés avec le dictionnaire, sans effet sur le présent ADR** :
+
+- une assiette unique par affiliation en v1 (P4) ;
+- une colonne inconnue du dictionnaire est refusée (P7, application du point 10) ;
+- souscripteur = assuré pour un contrat individuel en v1 (P11) ;
+- bornes de contrôle retenues comme jugement d'expert (P12) ;
+- historique du stock exigé complet, sans défaut « premier état manquant » en v1 (P15).
+
+**Restent ouverts** :
+
+- la forme lisible par machine (point 2, toujours `[proposé]` ; dictionnaire, § 10), qui relève de l'ADR de forme de #17 ;
+- la base à plusieurs dates d'extraction (P17, avec B10) ;
+- P5, P6, P8 à P10 (#13, #14) ;
+- P18.
+
+**Effet sur les résultats** : aucun, puisqu'aucun code n'existe. Le dictionnaire est un contrat partagé (`docs/agents/routage.md`, § 4.2) : toute modification passe par une nouvelle version visée. Issues : #16 ; #14 et #13 pour les points renvoyés.
+
+## Annotation du 7 novembre 2026 — forme lisible par machine et forme des jeux (ADR 0010)
+
+*Rédigée par `architect` le 7 novembre 2026 (branche `claude/socle-donnees`, PR #21) après l'acceptation de l'ADR 0010 par le mainteneur (décisions M87 à M96 de `docs/feuille-de-route.md`, § 4). Le texte ci-dessus n'est pas réécrit ; en cas d'écart, l'ADR 0010 fait foi pour les points qui suivent.*
+
+- **Point 2, forme lisible par machine** : la mention `[proposé]` est levée. Six fichiers CSV sous `inst/extdata/dictionnaire/` (`tables.csv`, `colonnes.csv`, `types_evenements.csv`, `parametres.csv`, `defauts.csv`, `filiation.csv`) et `dictionnaire.txt` (version, date de visa, empreinte de chaque CSV) transcrivent le texte visé, qui reste la spécification ; `tests/controles/concordance_dictionnaire.R` compare chaque CSV au tableau correspondant du texte (ADR 0010, point 23). Ces fichiers sont lus par le module **`dictionnaire`**, et non par `donnees` comme le disait le point 2 (ADR 0010, point 1 ; M88). Le premier tiret des « Restent ouverts » de l'annotation précédente est soldé.
+- **Point 3** : le simulateur appelle `dictionnaire`, jamais `donnees` ; la règle « sans appeler les contrôles du module `donnees` » est désormais contrôlée par le script du graphe (ADR 0010, point 1).
+- **Points 4 et 6, forme des jeux** : un jeu simulé est un objet `jeu_simule` (`base`, `loi_vraie`, `verite` avec le **registre des défauts**, `manifeste`) ; un jeu versionné est un dossier `inst/extdata/jeux/<jalon>-<volumetrie>-<nn>/` (`base/`, `loi_vraie.txt`, `verite/`, `manifeste.txt`, `empreintes.md5`), écrit par `ecrire_jeu()` du module `lecture`, le simulateur n'écrivant aucun fichier (ADR 0010, points 19 et 20). La loi vraie est sérialisée sans évaluation (`lire_liste()`), et non par `dput()`. Le **jeu propre n'est pas versionné** : il se reconstitue de la base et des valeurs propres du registre, et se régénère à la graine (M94).
+- **Point 5, liste des défauts** : le dictionnaire, amendé le 7 novembre 2026 (commit `eb82c24`, décision T1 sur #14, M86), ajoute **D03h**, taux du tarif manquant, traité par hypothèse par défaut de 0 % (jugement d'expert, déclaré et signalé). Le principe du point 5 est inchangé.
+
+**Effet sur les résultats** : aucun (aucun code). Issues : #17, #18, #19, #14.
+
+## Annotation du 7 novembre 2026 — toute modification du dictionnaire fait une nouvelle version (P18, version 1.2)
+
+*Rédigée par `architect` le 7 novembre 2026 (branche `claude/socle-donnees`, PR #21), sur décision du mainteneur du même jour (M103 de `docs/feuille-de-route.md`, § 4). Le texte ci-dessus n'est pas réécrit.*
+
+- **Règle précisée** : **toute modification du dictionnaire de la base, même de texte seul, fait une nouvelle version visée** (version portée dans l'en-tête, l'historique des versions, `VERSION_DICTIONNAIRE_ATTENDUE` et `dictionnaire.txt`). La règle « toute modification passe par une nouvelle version visée » de la première annotation ne distinguait pas le texte de la structure ; le mainteneur l'a appliquée à un changement de texte seul. Motif : le numéro de version est la seule marque qu'un jeu, une fiche de calcul ou une revue externe puisse citer pour dire quel texte il a suivi ; une version qui couvre deux textes différents casserait cette traçabilité.
+- **Version `1.2`** (commit `f6b30ea`) : le point ouvert **P18** (conditions d'emploi des données du contrat frais de santé couplé) est soldé par la lecture de `regulatory` du 7 novembre 2026 : quatre conditions cumulatives (même responsable du traitement ; finalité compatible ; aucune donnée de santé ; minimisation, pseudonymisation et information), que l'organisme d'assurance apprécie avec son délégué à la protection des données, l'outil ne les vérifiant pas. Décisions du mainteneur : **lecture A** — le lien, le sexe, la date de naissance et les dates de couverture ne sont pas des données de santé (M101) ; **obligation légale de constituer les provisions citée à l'appui de la compatibilité de finalité**, et non comme condition distincte, écart de formulation assumé avec M132 (1) de `docu_actu` (M102). Aucune table, colonne ni défaut ne change. Le dernier tiret des « Restent ouverts » de la première annotation (P18) est soldé.
+- **Hors P18** : le cadre des données de sinistres d'arrêt de travail (données concernant la santé, art. 9 du règlement (UE) 2016/679) relève de l'issue **#23**, hors du périmètre de B1.
+
+**Effet sur les résultats** : aucun (texte seul ; aucune provision calculée dans B1). Issues : #16, #23, #17.

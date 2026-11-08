@@ -1,8 +1,15 @@
 name: CI
 
-# Contrôles requis par le ruleset de main (README, « Sécurité du dépôt »).
-# Le job « Tests (R 4.3.3) » (batteries de CLAUDE.md) est ajouté par la première
-# branche de code, et son nom aux contrôles requis du ruleset (cadrage, A2).
+# Trois contrôles requis par le ruleset de main (README, « Sécurité du dépôt » ;
+# .github/ruleset-main.json ; M90 et M91) :
+#   - « Contrôles du dépôt » : réglages Claude Code, fiches d'agents, fichiers sensibles ;
+#   - « Tests (R 4.3.3) » : les trois batteries de CLAUDE.md dans le conteneur
+#     rocker/r-ver:4.3.3 épinglé par digest (plateforme de référence, ADR 0010, point 27 ;
+#     CONTEXT.md, « Plateforme de référence »), sans package CRAN ;
+#   - « Documents LaTeX » : pdfLaTeX (trois passes) sur la charte et la documentation de
+#     fond, puis le contrôle du préambule (issue #7).
+# Le workflow de régénération des références de non-régression s'écrira en B2, sur la
+# même image.
 
 on:
   pull_request:
@@ -52,3 +59,96 @@ jobs:
             echo "::error::fichier sensible versionné (voir la liste ci-dessus)"; exit 1
           fi
           echo "Aucun fichier sensible versionné."
+
+  tests:
+    name: Tests (R 4.3.3)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    # Plateforme de référence (ADR 0010, point 27) : image épinglée par digest. Digest
+    # relevé le 7 novembre 2026 dans le journal « Initialize containers » du premier
+    # passage (run 42415820075, job « Tests (R 4.3.3) », ligne « Digest: » de
+    # `docker pull rocker/r-ver:4.3.3`) ; plateforme imprimée : R 4.3.3, Ubuntu 22.04.5,
+    # OpenBLAS 0.3.20, LAPACK 3.10.0. Consigné dans CONTEXT.md, « Plateforme de référence ».
+    container: rocker/r-ver:4.3.3@sha256:732d15020af326da9e919c07f70ca32bf5d3e409220af32e0a4b6d0a89437309
+    steps:
+      # git peut manquer dans l'image : l'action télécharge alors l'archive par l'API.
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - name: Plateforme (R, bibliothèques d'algèbre linéaire)
+        run: Rscript -e 'sessionInfo(); print(extSoftVersion()); print(La_version())'
+      - name: Batterie unitaire
+        run: Rscript tests/test_unitaires.R
+      - name: Batterie de reproductibilité
+        run: Rscript tests/test_reproductibilite.R
+      - name: Concordance documentation et moteur
+        run: Rscript tests/concordance_doc_moteur.R --strict
+
+  latex:
+    name: Documents LaTeX
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      # Répertoire d'archives apt propre à l'utilisateur du runner : actions/cache peut le
+      # restaurer sans sudo (un cache de /var/cache/apt/archives, propriété de root, ne le
+      # permet pas). Seuls les .deb sont mis en cache ; l'installation est refaite.
+      ARCHIVES_APT: /home/runner/apt-archives
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      # actions/cache est une action de GitHub, donc admise par la limitation des actions
+      # du dépôt ; une action tierce de cache apt ne l'est pas. Clé fixe : pour renouveler
+      # le cache, changer le suffixe.
+      - name: Cache des paquets apt
+        uses: actions/cache@5a3ec84eff668545956fd18022155c47e93e2684 # v4.2.3
+        with:
+          path: ${{ env.ARCHIVES_APT }}
+          key: apt-latex-ubuntu-24.04-v1
+      # r-base-core : le contrôle du préambule est exécuté ici (ADR 0010, point 27), il
+      # n'emploie que R de base et ne dépend pas de la version 4.3.3.
+      - name: TeX Live et R
+        run: |
+          set -euo pipefail
+          mkdir -p "$ARCHIVES_APT/partial"
+          apt_options=(-o "Dir::Cache::archives=$ARCHIVES_APT" -o APT::Sandbox::User=root)
+          sudo apt-get update
+          sudo apt-get install -y "${apt_options[@]}" \
+            texlive-latex-base texlive-latex-extra texlive-fonts-recommended \
+            texlive-lang-french tex-gyre
+          sudo apt-get install -y --no-install-recommends "${apt_options[@]}" r-base-core
+          # apt crée partial/ et lock en root : sans cela, actions/cache (utilisateur du
+          # runner) ne peut ni archiver ni restaurer le répertoire.
+          sudo rm -rf "$ARCHIVES_APT/partial" "$ARCHIVES_APT/lock"
+          sudo chown -R "$(id -u):$(id -g)" "$ARCHIVES_APT"
+      - name: Compilation (pdfLaTeX, trois passes)
+        run: |
+          set -euo pipefail
+          sortie="$RUNNER_TEMP/latex"
+          mkdir -p "$sortie"
+          cd docs/latex
+          statut=0
+          for document in charte_graphique doc_outil_prov_vie; do
+            echoue=0
+            for passe in 1 2 3; do
+              if ! pdflatex -halt-on-error -interaction=nonstopmode \
+                   -output-directory="$sortie" "$document.tex" > "$sortie/$document-$passe.sortie" 2>&1; then
+                echo "::error file=docs/latex/$document.tex::pdflatex a échoué (passe $passe)"
+                tail -n 40 "$sortie/$document-$passe.sortie"; echoue=1; break
+              fi
+            done
+            # Journal de la passe 3 : aucune ligne « ! », aucune référence ou citation
+            # indéfinie, aucun Overfull (docs/latex/CONVENTIONS.md, compilation).
+            if [ "$echoue" -eq 0 ]; then
+              if grep -n '^! ' "$sortie/$document.log"; then
+                echo "::error file=docs/latex/$document.tex::ligne « ! » dans le journal de pdflatex"; echoue=1
+              fi
+              if grep -nE '^Overfull|undefined references|Reference .* undefined|Citation .* undefined' "$sortie/$document.log"; then
+                echo "::error file=docs/latex/$document.tex::Overfull ou référence indéfinie dans le journal de pdflatex"; echoue=1
+              fi
+            fi
+            if [ "$echoue" -eq 0 ]; then echo "$document : compilé."; else statut=1; fi
+          done
+          exit $statut
+      - name: Préambule identique à celui de la charte
+        run: Rscript tests/controles/preambule_latex.R

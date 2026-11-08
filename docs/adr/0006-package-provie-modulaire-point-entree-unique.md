@@ -72,3 +72,16 @@ Issues : #4 (ADR de cadrage).
 Depuis la décision M61 (catégorie « règle comptable »), la PPNA et la PREC relèvent du seul module `regles_comptables` : la ligne `risque_en_cours` du tableau du point 2 se lit « famille « risque en cours » : limites du contrat, PRC (hors v1) », sans PPNA ni PREC (une méthode, une implémentation : point 3 de l'ADR 0005). La ligne `regles_comptables` comprend aussi, en v2, la provision pour frais d'acquisition reportés (ADR 0005, annotation visée, point (b) ; E2.10). Constat d'`actuary` à la revue finale de la PR #6 ; aucun effet sur les résultats.
 
 Au point 4, l'argument facultatif `provenance = NULL` ajouté à la signature à deux arguments est le troisième argument, non le « quatrième » (constat de forme de la même revue).
+
+## Annotation du 7 novembre 2026 — ADR de forme accepté (ADR 0010)
+
+*Rédigée par `architect` le 7 novembre 2026 (branche `claude/socle-donnees`, PR #21) après l'acceptation de l'ADR 0010 par le mainteneur (décisions M87 à M96 de `docs/feuille-de-route.md`, § 4). Le texte ci-dessus n'est pas réécrit ; en cas d'écart, l'ADR 0010 fait foi pour les points qui suivent.*
+
+- **Point 2, tableau des modules** : le tableau « proposé » est **confirmé** par l'ADR 0010, point 1, qui le remplace (quinze modules), avec trois changements :
+  - un module **`dictionnaire`** (`R/dictionnaire.R`), détaché de `donnees`, lit la forme lisible par machine du dictionnaire ; `donnees`, `garanties`, `lecture`, `plan` et `simulation` l'appellent, ainsi que `rapport` et l'orchestration (M88) ;
+  - le module **`lecture`** (`R/lecture.R`) est confirmé dans le package, hors de la chaîne du moteur : ni l'orchestration ni aucun module du moteur ne l'appellent (point 8 ci-dessus, « proposé », confirmé) ;
+  - **`simulation` n'appelle plus `donnees`** (conforme à l'ADR 0008, point 3) ; il peut appeler `dictionnaire`, `garanties`, `tables` et `outils` (M88).
+- **Point 4, signature** : **réouvert** et remplacé par `calculer_provisions(donnees, plan, tables = list(), provenance = NULL)` (ADR 0010, point 5 ; M87). Deux arguments obligatoires, inchangés sur le fond ; `tables` est le canal des tables importées, contrôlées par leur empreinte contre le plan ; `provenance` devient le **quatrième** argument (l'annotation précédente le disait troisième, à juste titre avant l'ajout de `tables`). Motif de la réouverture : une table importée ne peut entrer ni dans le plan (texte canonique, ADR 0007) ni dans `donnees` (table inconnue du dictionnaire refusée, P7). Contrat partagé touché (`docs/agents/routage.md`, § 4.2). À reporter : `docs/exigences.md`, E4.1 et E4.4 ; `CLAUDE.md`, « Architecture » (sur décision du mainteneur).
+- **« Ce qui reste à faire »** : soldé par l'ADR 0010 pour la liste des modules et du graphe, l'objet retourné, les refus, le harnais, les arguments facultatifs et la place de la couche de lecture.
+
+**Effet sur les résultats** : aucun (aucun code). Issues : #17, #18.
