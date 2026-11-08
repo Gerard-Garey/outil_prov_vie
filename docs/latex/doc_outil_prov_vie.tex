@@ -1203,7 +1203,7 @@ jamais converti. Le module transmet des \code{data.frame} et la provenance
 des fichiers lus. Il est hors de la chaîne du moteur~: aucun module du
 moteur ne l'appelle. Le format xlsx est lu par l'application, hors du
 package. Il ne peut appeler que \code{dictionnaire} et \code{outils}.
-Ce module n'a pas encore de fonction.
+Ses deux fonctions sont exportées.
 
 \begin{center}
 \small
@@ -1212,7 +1212,8 @@ Ce module n'a pas encore de fonction.
 \begin{tabular}{@{}p{3.9cm}>{\raggedright\arraybackslash}p{3.0cm}p{8.2cm}@{}}
 \rowcolor{tableheader}
 \textcolor{financeblue}{\textbf{Fonction}} & \textcolor{financeblue}{\textbf{Arguments}} & \textcolor{financeblue}{\textbf{Rôle}} \\
-\multicolumn{3}{@{}l@{}}{Aucune fonction.} \\
+\code{lire\_base()} & \code{dossier} & Lit une base écrite en CSV (un fichier par table, nommé d'après la table) et la rend en liste de \code{data.frame}, chaque colonne lue dans le type du dictionnaire\fsp; refuse sans rien convertir une valeur illisible dans son type, une chaîne vide entre guillemets ou un retour chariot dans un champ entre guillemets (\code{type\_incompatible}), un fichier inconnu du dictionnaire ou mal formé (\code{liste\_invalide}), puis contrôle le résultat par \code{controler\_types()}. \\
+\code{ecrire\_base()} & \code{donnees}, \code{dossier} & Écrit une base contrôlée par \code{controler\_types()} en CSV UTF-8, un fichier par table, dans un dossier neuf ou vide, au format que relit \code{lire\_base()}\fsp; refuse avant toute écriture ce que le CSV ne relirait pas à l'identique (chaîne vide, retour chariot, réel non fini, date non entière ou hors de quatre chiffres d'année, chaîne d'encodage inconnu ou non UTF-8)\fsp; rend le dossier. \\
 \end{tabular}
 \end{center}
 
