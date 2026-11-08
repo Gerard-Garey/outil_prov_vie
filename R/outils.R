@@ -16,9 +16,10 @@ VERSION_DICTIONNAIRE_ATTENDUE <- "1.5"           # ADR 0010, point 23 ; M117, M1
 REPRESENTATION_CANONIQUE <- "provie-resultat-1"  # ADR 0010, point 22
 VERSION_LISTE <- 1L                              # format du serialiseur (ADR 0010, point 18)
 
-# Liste fermée des motifs de refus d'appel (ADR 0010, point 11).
+# Liste fermée des motifs de refus d'appel (ADR 0010, point 11) ; fichier_invalide (M141) :
+# refus de `lecture` qui tient au système de fichiers ou à la syntaxe d'un fichier.
 MOTIFS_REFUS <- c(
-  "plan_incomplet", "plan_invalide", "liste_invalide", "table_base_absente",
+  "plan_incomplet", "plan_invalide", "liste_invalide", "fichier_invalide", "table_base_absente",
   "colonne_absente", "colonne_inconnue", "type_incompatible", "extraction_invalide",
   "arrete_posterieur_extraction", "declaration_manquante", "table_absente",
   "empreinte_discordante", "version_discordante", "lien_non_declare",
