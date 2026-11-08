@@ -899,7 +899,7 @@ exportée.
 \code{ecrire\_valeurs()} & \code{x}, \code{forme = "texte"} & Écrit un vecteur atomique simple (logique, entier, réel, caractère, date) sous sa forme canonique~: en texte, une chaîne par valeur (réels à 17 chiffres significatifs, dates ISO~8601)\fsp; en octets, sans étiquette de type, nombres en petit-boutiste (section~\ref{sec:ecriture}). \\
 \code{ecrire\_liste()} & \code{x} & Sérialise une liste nommée en texte aplati UTF-8, une ligne par feuille (chemin, type, valeurs), rendu en octets\fsp; n'écrit aucun fichier (section~\ref{sec:format-liste}). \\
 \code{lire\_liste()} & \code{octets} & Relit, sans évaluer de code, les octets écrits par \code{ecrire\_liste()}\fsp; refuse tout texte qui n'est pas canonique, de sorte que l'aller-retour rend une liste identique. \\
-\code{decrire\_plateforme()} & Aucun & Décrit la plateforme d'exécution pour la fiche de calcul (version de R, système, machine, boutisme, bibliothèques d'algèbre linéaire, d'expressions régulières et Unicode), en liste sérialisable par \code{ecrire\_liste()}, sans date ni nom d'utilisateur. \\
+\code{decrire\_plateforme()} & Aucun & Décrit la plateforme d'exécution pour la fiche de calcul (version de R, système, machine, boutisme, bibliothèques d'algèbre linéaire, d'expressions régulières et Unicode), en liste sérialisable par \code{ecrire\_liste()}, sans date ni nom d'utilisateur\fsp; chaque champ est une chaîne de longueur~1, et un champ indisponible (\code{Sys.info()} qui rend \code{NULL}, composant absent de \code{Sys.info()} ou d'\code{extSoftVersion()}) vaut \code{NA}. \\
 \end{tabular}
 \end{center}
 
@@ -1122,7 +1122,8 @@ numéro \code{VERSION\_LISTE}~:
 Une feuille est \code{NULL}, une liste vide ou un vecteur atomique simple.
 Les éléments d'une liste non vide ont des noms renseignés et distincts, et
 aucune liste ne porte d'autre attribut que ses noms\fsp; sinon l'écriture est
-refusée (\code{liste\_invalide}). Une liste vide s'écrit par la seule ligne
+refusée (\code{liste\_invalide}), avec un message propre à chacune des deux
+causes (noms absents ou non distincts, attribut non admis). Une liste vide s'écrit par la seule ligne
 d'en-tête. Par exemple, la liste \code{list(a = 1.5, b = list(c = "x", d =
 NULL))} s'écrit en quatre lignes, en-tête compris (la tabulation est figurée ici par un
 espacement)~:
@@ -1140,7 +1141,8 @@ texte sans évaluer de code. Elle refuse, par le motif
 \code{liste\_invalide}, un contenu qui contient un octet nul, qui n'est pas de l'UTF-8 valide ou qui ne finit pas
 par un saut de ligne, un en-tête absent, une ligne sans chemin ou sans
 type, un chemin mal formé, un chemin dupliqué ou une feuille placée sous
-une autre, un jeton qui n'est pas de son type, une date inexistante, une
+une autre (comparaison faite sur les noms décodés~: \code{a} et
+\code{\textbackslash x61} sont le même nom), un jeton qui n'est pas de son type, une date inexistante, une
 séquence d'échappement inconnue ou l'octet nul échappé. Un en-tête
 \code{provie-liste} d'une autre version est refusé par le motif
 \code{version\_discordante}. Enfin, la liste relue est réécrite, et la
@@ -1643,7 +1645,9 @@ de quoi il arrête la batterie. Il fournit~:
   issue\fsp;
 \item \code{bilan()}, qui imprime le décompte et termine en échec s'il y a
   un échec ou un succès inattendu\fsp;
-\item \code{installer\_provie()}, qui installe et charge le package.
+\item \code{installer\_provie()}, qui installe et charge le package\fsp; si
+  l'installation échoue, il imprime la sortie de \code{R CMD INSTALL}, puis
+  une ligne \code{[ECHEC]}, et arrête la batterie avec le statut~1.
 \end{itemize}
 
 Chaque vérification imprime une ligne~: \code{[OK]}, \code{[ECHEC]},
