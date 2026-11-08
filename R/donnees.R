@@ -55,8 +55,14 @@ COMPOSANTES_ENJEU <- data.frame(
   definition = c(
     "somme sign\u00e9e des montants des prestations du dossier visibles \u00e0 l'arr\u00eat\u00e9",
     "montant du dernier fixation_capital connu \u00e0 l'arr\u00eat\u00e9 (dossier deces ou double_effet)",
-    "somme, sur les rentes sans fin_service connue \u00e0 l'arr\u00eat\u00e9, du dernier montant de service",
-    "dernier montant de service d'un dossier incapacite, sauf fin_service ou sortie connue \u00e0 l'arr\u00eat\u00e9",
+    paste0("somme, sur les rentes du dossier, du montant du dernier ouverture_service ou modification_montant de la ",
+           "rente, si, parmi ses \u00e9v\u00e9nements de service et de fin_service de date d'effet <= A connus \u00e0 A, ",
+           "le dernier dans l'ordre du \u00a7 4.2 est un service ; sans valeur sinon (une r\u00e9ouverture apr\u00e8s ",
+           "fin_service rallume la rente)"),
+    paste0("Montant du dernier ouverture_service ou modification_montant du dossier incapacite, si, parmi ses ",
+           "\u00e9v\u00e9nements de service et d'extinction (fin_service du dossier, sortie du sinistre) de date ",
+           "d'effet <= A connus \u00e0 A, le dernier dans l'ordre du \u00a7 4.2 est un service ; sans valeur sinon (une ",
+           "rechute suivie d'une nouvelle ouverture rallume l'indemnit\u00e9)"),
     "somme sign\u00e9e des montants des prestations refus\u00e9es ou exclues",
     "somme sign\u00e9e des montants emission, annulation et regularisation",
     "somme des montants encaissement",
@@ -121,6 +127,25 @@ CONVENTIONS_LIMITE_AGE <- c("revolu", "millesime")
 # référentiels) : une hypothèse porte sur tous les postes, avec la même valeur pour les deux
 # référentiels ; aucune n'est un signalement déclaré (S seulement à l'extraction).
 .MOTIFS_REGLE_P <- c("D02b", "D03g")
+# Motifs à traitement unique (dictionnaire, § 1.10 et § 9 : X et H y sont deux alternatives
+# pour toute ligne) : une exclusion et une hypothèse déclarées pour un même motif de cette
+# liste rendent le plan invalide, quelles qu'en soient les familles ou les référentiels
+# (décision du mainteneur, D8). D03g n'y est pas (D11) : X et H se déclarent ensemble, X
+# pour les lignes entières, H pour les parties de ligne (.application_d03g()).
+.MOTIFS_TRAITEMENT_UNIQUE <- c("D02a", "D03a", "D03c", "D03f")
+# Motifs dont le signalement (S) est un choix déclarable, alternative à H ou à X
+# (dictionnaire, § 9 ; D07 : sous-cas (a) et (c)) : liste explicite (réserve d'`actuary`),
+# non dérivée de defauts.csv$traitements, qui ne distingue pas un S alternatif (« H;S ») d'un
+# S cumulatif (« S + X », D02c, D10 (b)) ni d'un S réservé à une famille (D03a, D12).
+.MOTIFS_SIGNALEMENT <- c("D05", "D06", "D07", "D08", "D10f", "D13", "D14")
+# Traitements de chaque sous-cas de D10 (dictionnaire, § 9) : (a) et (h) R ; (b) S + X (S
+# automatique) ; (c) et (d) S ; (e) X ; (f) H ou S. Lus à la place de la liste de D10 pour
+# admettre une déclaration (réserve c3 de l'audit).
+.TRAITEMENTS_SOUS_CAS_D10 <- c(D10a = "R", D10b = "S;X", D10c = "S", D10d = "S", D10e = "X", D10f = "H;S",
+                               D10h = "R")
+# Motifs dont le refus porte sur une clé étrangère (lien) : cette colonne ne bloque pas
+# l'enjeu de son propre écart (.cause_enjeu(), réserve Q4).
+.MOTIFS_LIEN_ECART <- c("D04a", "D04b", "D10a", "D10h")
 # Tables de D03g (date_saisie, ou date_saisie_fin d'un contrat ou d'une affiliation) : noms
 # admis de seuils$d03g_delai_jours.
 .TABLES_D03G <- c("contrats", "affiliations", "famille", "sinistres", "beneficiaires", "rentes", "evenements",
@@ -212,8 +237,7 @@ controler_base <- function(donnees, arrete, declarations = NULL, conventions = N
   .regle_cles(ctx)
   .refus_induits(ctx)
   .refus_regle_b(ctx)
-  .visibilite_propre(ctx)
-  .regle_prealable(ctx)
+  .regle_p(ctx)
   .construire_vue(ctx)
   .regle_v(ctx)
   .bilan(ctx)
@@ -358,13 +382,15 @@ controler_base <- function(donnees, arrete, declarations = NULL, conventions = N
 # `exclusions` : motif d'un défaut admettant X (code du § 9, ou sous-cas D10a à D10h),
 # famille de FAMILLES_CALCUL, action de ACTIONS_EXCLUSION, une ligne par (motif, famille),
 # hors des couples traités S (.EXCEPTIONS_FAMILLE), D03g en `exclure` seulement ;
-# `hypotheses` : motif d'un défaut admettant H (ou S pour la valeur .VALEUR_SIGNALEMENT,
-# seule ligne de son (motif, referentiel)), référentiel de REFERENTIELS, poste (ou `tous`)
-# et valeur en chaînes, une ligne par (motif, referentiel, poste) ; D02b et D03g : poste
-# `tous`, même valeur pour les deux référentiels, sans signalement. D10 se déclare par
-# sous-cas. `seuils` : liste nommée ; seul d03g_delai_jours est lu (liste nommée par table
-# de D03g, jours entiers positifs ou nuls) ; `evaluations_gestion` : liste réduite à
-# `diagnostics` (logical), lue par les diagnostics (B2), jamais par le bilan.
+# `hypotheses` : motif d'un défaut admettant H (ou, pour la valeur .VALEUR_SIGNALEMENT, motif
+# de .MOTIFS_SIGNALEMENT, seule ligne de son (motif, referentiel)), référentiel de
+# REFERENTIELS, poste (ou `tous`) et valeur en chaînes, une ligne par (motif, referentiel,
+# poste) ; D02b et D03g : poste `tous`, même valeur pour les deux référentiels, sans
+# signalement. D10 se déclare par sous-cas (traitements du sous-cas). Un motif à traitement
+# unique (.MOTIFS_TRAITEMENT_UNIQUE) ne se déclare pas dans les deux rubriques (D8).
+# `seuils` : liste nommée ; seul d03g_delai_jours est lu (liste nommée par table de D03g,
+# jours entiers positifs ou nuls) ; `evaluations_gestion` : liste réduite à `diagnostics`
+# (logical), lue par les diagnostics (B2), jamais par le bilan.
 .lire_declarations <- function(declarations, dico) {
   if (is.null(declarations)) declarations <- list()
   nommee <- function(x) {
@@ -410,11 +436,12 @@ controler_base <- function(donnees, arrete, declarations = NULL, conventions = N
   }
   hy <- .table_declarations(declarations$hypotheses, c("motif", "referentiel", "poste", "valeur"), "hypotheses")
   signalement <- hy$valeur == .VALEUR_SIGNALEMENT
-  if (!all(.motif_admet(dico, hy$motif, "H") | signalement) || !all(.motif_admet(dico, hy$motif, "S") | !signalement) ||
+  if (!all(.motif_admet(dico, hy$motif, "H") | signalement) || !all(hy$motif %in% .MOTIFS_SIGNALEMENT | !signalement) ||
       any(hy$motif == "D10") || !all(hy$referentiel %in% REFERENTIELS) ||
       anyDuplicated(hy[, c("motif", "referentiel", "poste")])) {
-    .refus_plan(paste0("declarations$hypotheses : motif d'un d\u00e9faut trait\u00e9 H, ou S pour la valeur ",
-                       .VALEUR_SIGNALEMENT, " (D10 par sous-cas), r\u00e9f\u00e9rentiel (",
+    .refus_plan(paste0("declarations$hypotheses : motif d'un d\u00e9faut trait\u00e9 H, ou la valeur ",
+                       .VALEUR_SIGNALEMENT, " pour un motif dont S est un choix (",
+                       paste(.MOTIFS_SIGNALEMENT, collapse = ", "), ") (D10 par sous-cas), r\u00e9f\u00e9rentiel (",
                        paste(REFERENTIELS, collapse = ", "), "), une ligne par (motif, referentiel, poste)"))
   }
   # un signalement déclaré est la seule ligne de son (motif, referentiel)
@@ -431,6 +458,12 @@ controler_base <- function(donnees, arrete, declarations = NULL, conventions = N
     .refus_plan(paste0("declarations$hypotheses : D02b et D03g portent le poste tous, la m\u00eame valeur pour les deux ",
                        "r\u00e9f\u00e9rentiels, et ne se signalent pas (S \u00e0 l'extraction seulement)"))
   }
+  # motif à traitement unique déclaré à la fois en exclusion et en hypothèse (D8)
+  double <- intersect(intersect(ex$motif, hy$motif), .MOTIFS_TRAITEMENT_UNIQUE)
+  if (length(double) > 0L) {
+    .refus_plan(paste0("declarations : ", paste(double, collapse = ", "), " (traitement unique, dictionnaire, \u00a7 9) ",
+                       "d\u00e9clar\u00e9 \u00e0 la fois dans exclusions et dans hypotheses"))
+  }
   declarations$exclusions <- ex
   declarations$hypotheses <- hy
   declarations
@@ -440,26 +473,29 @@ controler_base <- function(donnees, arrete, declarations = NULL, conventions = N
 # (.EXCEPTIONS_FAMILLE).
 .familles_x <- function(motif) setdiff(FAMILLES_CALCUL, .EXCEPTIONS_FAMILLE$famille[.EXCEPTIONS_FAMILLE$motif == motif])
 
-# Application de D03g à la vue pour la table `table` (décision du mainteneur, D5) : "X" si
-# l'exclusion (exclure) est déclarée pour les quatre familles ; "H" si l'hypothèse est
-# déclarée pour les deux référentiels et le délai de la table dans
-# seuils$d03g_delai_jours ; NA sinon (déclaration incomplète : visibilité non déterminée).
-# L'exclusion l'emporte quand les deux sont complètes (.placer()).
-.application_d03g <- function(ctx, table) {
+# Application de D03g à la vue pour la table `table` (décisions du mainteneur, D5 et D9) :
+# "X" si l'exclusion (exclure) est déclarée pour les quatre familles, pour une ligne entière
+# seulement (`partie` NA) ; "H" si l'hypothèse est déclarée pour les deux référentiels et le
+# délai de la table dans seuils$d03g_delai_jours ; NA sinon (déclaration incomplète :
+# visibilité non déterminée). Une partie de ligne (fin d'un contrat ou d'une affiliation)
+# n'est résolue que par l'hypothèse (D9). Déclarées ensemble (D11, lecture (i)), l'exclusion
+# l'emporte pour toutes les lignes entières, l'hypothèse résout les parties de ligne.
+.application_d03g <- function(ctx, table, partie = NA_character_) {
   ex <- ctx$declarations$exclusions
   hy <- ctx$declarations$hypotheses
-  if (all(FAMILLES_CALCUL %in% ex$famille[ex$motif == "D03g"])) return("X")
+  if (is.na(partie) && all(FAMILLES_CALCUL %in% ex$famille[ex$motif == "D03g"])) return("X")
   if (all(REFERENTIELS %in% hy$referentiel[hy$motif == "D03g"]) &&
       !is.null(ctx$declarations$seuils[[.SEUIL_DELAI_D03G]][[table]])) return("H")
   NA_character_
 }
 
 # Motifs (codes du § 9, ou sous-cas D10a à D10h, la lettre g n'étant attribuée à aucun) dont
-# le traitement admet `t` (defauts.csv$traitements ; un sous-cas de D10 lit la liste de D10).
+# le traitement admet `t` (defauts.csv$traitements ; un sous-cas de D10 lit son propre
+# traitement, .TRAITEMENTS_SOUS_CAS_D10).
 .motif_admet <- function(dico, motif, t) {
-  code <- ifelse(motif %in% dico$defauts$code, motif, sub("[a-z]$", "", motif))
-  traitements <- dico$defauts$traitements[match(code, dico$defauts$code)]
-  connu <- motif %in% dico$defauts$code | (grepl("^D10[a-fh]$", motif) & code == "D10")
+  sous_cas <- motif %in% names(.TRAITEMENTS_SOUS_CAS_D10)
+  traitements <- ifelse(sous_cas, .TRAITEMENTS_SOUS_CAS_D10[motif], dico$defauts$traitements[match(motif, dico$defauts$code)])
+  connu <- motif %in% dico$defauts$code | sous_cas
   connu & !is.na(traitements) & vapply(traitements, function(x) t %in% .eclater_champ(x), NA, USE.NAMES = FALSE)
 }
 
@@ -549,9 +585,9 @@ controler_base <- function(donnees, arrete, declarations = NULL, conventions = N
   invisible(NULL)
 }
 
-.ajouter_non_execute <- function(ctx, code, table, colonne, cause) {
+.ajouter_non_execute <- function(ctx, code, table, colonne, cause, lu = NA_character_) {
   ctx$non_executes[[length(ctx$non_executes) + 1L]] <- list(code = code, table = table,
-                                                            colonne = colonne, cause = cause)
+                                                            colonne = colonne, cause = cause, lu = lu)
   invisible(NULL)
 }
 
@@ -568,7 +604,7 @@ controler_base <- function(donnees, arrete, declarations = NULL, conventions = N
     morceaux <- strsplit(tc, ".", fixed = TRUE)[[1L]]
     cause <- .cause(ctx, morceaux[1L], morceaux[2L])
     if (!is.na(cause)) {
-      .ajouter_non_execute(ctx, code, table, colonne, cause)
+      .ajouter_non_execute(ctx, code, table, colonne, cause, lu = tc)
       return(invisible(NULL))
     }
   }
@@ -1172,15 +1208,17 @@ controler_base <- function(donnees, arrete, declarations = NULL, conventions = N
     if (.portee_effective(ctx$dico, k$code, k$table, k$colonne) == "table") {
       if (is.null(tables[[k$table]])) tables[[k$table]] <- k$code
       if (k$code == "refus_induit") origines[[k$table]] <- .eclater_champ(k$origine)
-      else if (is.null(directs[[k$table]])) directs[[k$table]] <- k$code
+      else directs[[k$table]] <- rbind(directs[[k$table]], data.frame(code = k$code, colonne = k$colonne,
+                                                                       stringsAsFactors = FALSE))
     } else {
       c1 <- colonnes[[k$table]]
       if (is.null(c1[[k$colonne]])) c1[[k$colonne]] <- k$code
       colonnes[[k$table]] <- c1
     }
   }
-  # `directs` : premier refus de portée table autre qu'un refus induit ; `racines` : tables
-  # refusées directement dont procède le refus induit d'une table (lecture de l'enjeu, D7)
+  # `directs` : refus de portée table autres qu'un refus induit (code, colonne), dans l'ordre
+  # des constats ; `racines` : tables refusées directement dont procède le refus induit d'une
+  # table (lecture de l'enjeu, D7)
   racines <- list()
   racine <- function(t, vues = character(0)) {
     if (t %in% vues) return(character(0))
@@ -1192,22 +1230,40 @@ controler_base <- function(donnees, arrete, declarations = NULL, conventions = N
 }
 
 # Motif qui empêche une composante de l'enjeu de lire `table.colonne` pour l'écart `ecart`
-# (décision du mainteneur, D7, lecture d'E2.5), NA si elle se lit : une forme illisible, un
-# refus de la colonne, un refus de portée table de la table ; un refus induit ne l'empêche pas
-# quand il procède seulement de la table refusée par l'écart lui-même (refus de portée table) :
-# la cascade est chiffrée.
+# (décisions du mainteneur, D7 et D10, lecture d'E2.5), NA si elle se lit : une forme
+# illisible, un refus de la colonne, un autre refus direct de portée table de la table. Le
+# refus qui constitue l'écart (refus de portée table) ne bloque pas son propre enjeu (D10) :
+# il n'empêche que la lecture de sa propre colonne, hors D01a (doublon de clé : chiffré, une
+# composante n'étant sans valeur que pour un identifiant dont les lignes en double divergent
+# sur une colonne qu'elle lit, .divergences_d01a()) ; un refus induit ne l'empêche pas quand
+# il procède seulement du refus de l'écart (la table de l'écart ne porte aucun autre refus
+# direct) : la cascade est chiffrée.
 .cause_enjeu <- function(ctx, table, colonne, ecart) {
   forme <- .cause(ctx, table, colonne, forme_seule = TRUE)
   if (!is.na(forme)) return(forme)
   c1 <- ctx$refus_pv$colonnes[[table]]
   if (!is.null(c1) && colonne %in% names(c1)) return(c1[[colonne]])
+  propre <- !is.null(ecart) && identical(ecart$action, "refus") && !is.na(ecart$table) &&
+    .portee_effective(ctx$dico, ecart$motif, ecart$table, ecart$colonne) == "table"
   d <- ctx$refus_pv$directs[[table]]
-  if (!is.null(d)) return(d)
+  if (!is.null(d) && propre && identical(table, ecart$table)) {
+    # la clé étrangère refusée qui constitue l'écart (D04a, D04b, D10 (a) et (h)) se lit : le
+    # lien n'est pas résolu, la composante se calcule sur ce qui est connu sans la parente
+    # (réserve Q4) ; toute autre colonne de l'écart reste illisible
+    lien <- ecart$motif %in% .MOTIFS_LIEN_ECART &&
+      any(nzchar(ctx$dico$colonnes$reference[ctx$dico$colonnes$table == table & ctx$dico$colonnes$colonne %in% colonne]))
+    if (ecart$motif != "D01a" && identical(colonne, ecart$colonne) && !lien) return(ecart$motif)
+    d <- d[!(d$code == ecart$motif & d$colonne %in% ecart$colonne), , drop = FALSE]
+  }
+  if (!is.null(d) && nrow(d) > 0L) return(d$code[1L])
   r <- ctx$refus_pv$racines[[table]]
   if (is.null(r)) return(NA_character_)
-  propre <- !is.null(ecart) && identical(ecart$action, "refus") && !is.na(ecart$table) &&
-    .portee_effective(ctx$dico, ecart$motif, ecart$table, ecart$colonne) == "table" && identical(r, ecart$table)
-  if (propre) NA_character_ else "refus_induit"
+  # cascade chiffrée si elle ne procède que du refus de l'écart : la racine est la table de
+  # l'écart et n'y porte aucun autre refus direct (réserve Q-b)
+  if (!propre || !identical(r, ecart$table)) return("refus_induit")
+  dr <- ctx$refus_pv$directs[[r]]
+  autre <- !is.null(dr) && any(!(dr$code == ecart$motif & dr$colonne %in% ecart$colonne))
+  if (autre) "refus_induit" else NA_character_
 }
 
 # --- Règle P et vue à une date ---------------------------------------------------------
@@ -1244,6 +1300,71 @@ controler_base <- function(donnees, arrete, declarations = NULL, conventions = N
 
 .vue_totale <- function(ctx) as.numeric(ctx$arrete) == as.numeric(ctx$date_extraction)
 
+# Règle P et visibilité propre, jusqu'au point fixe des refus qu'elle induit (décision du
+# mainteneur, D12) : à un arrêté antérieur à l'extraction, une règle P empêchée sur une table
+# lue par la vue (colonne lue refusée ou illisible : .regle()) rend la visibilité de toutes
+# ses lignes inconnue ; la table reçoit un refus induit de portée table (`refus_induit`,
+# origine : la colonne « table.colonne » qui empêche la règle), propagé à ses filles par
+# les clés étrangères comme les refus induits de la règle B (origine : la table visée).
+# Les règles P sont alors rejouées sur la base des refus complétés (les constats et
+# contrôles non exécutés du passage précédent sont retirés, hors les règles P empêchées,
+# qui gardent leur cause) ; la vue reste provisoire (`p_refusees` : tables refusées par une
+# règle P empêchée).
+.regle_p <- function(ctx) {
+  constats <- ctx$constats
+  non_executes <- ctx$non_executes
+  ctx$p_refusees <- character(0)
+  repeat {
+    .visibilite_propre(ctx)
+    .regle_prealable(ctx)
+    if (length(ctx$p_empechees) == 0L) break
+    empechees <- ctx$p_empechees
+    ctx$constats <- constats
+    # la règle P empêchée garde sa cause d'origine dans controles_non_executes (premier
+    # contrôle non exécuté de même clé retenu par .bilan())
+    ctx$non_executes <- c(non_executes, ctx$p_entrees)
+    non_executes <- ctx$non_executes
+    .refus_p_empechee(ctx, empechees)
+    constats <- ctx$constats
+    .refus_regle_b(ctx)
+  }
+  invisible(NULL)
+}
+
+# Refus induits d'une règle P empêchée (D12, .regle_p()) : `empechees`, liste nommée par
+# table des colonnes « table.colonne » en cause ; propagation aux tables qui visent une
+# table ainsi refusée par une clé étrangère, hors tables déjà refusées en portée table.
+.refus_p_empechee <- function(ctx, empechees) {
+  dico <- ctx$dico
+  col <- dico$colonnes
+  liens <- col[nzchar(col$reference), c("table", "reference")]
+  liens$cible <- sub("\\..*$", "", liens$reference)
+  deja <- names(ctx$refus_pv$tables)
+  origines <- empechees
+  refusees <- names(empechees)
+  repeat {
+    ajout <- FALSE
+    for (i in seq_len(nrow(liens))) {
+      t <- liens$table[i]
+      u <- liens$cible[i]
+      if (t %in% ctx$tables && !(t %in% deja) && u %in% refusees && !(u %in% origines[[t]])) {
+        origines[[t]] <- c(origines[[t]], u)
+        if (!(t %in% refusees)) refusees <- c(refusees, t)
+        ajout <- TRUE
+      }
+    }
+    if (!ajout) break
+  }
+  for (t in intersect(dico$tables$table, names(origines))) {
+    o <- origines[[t]]
+    o <- c(sort(o[grepl(".", o, fixed = TRUE)], method = "radix"), dico$tables$table[dico$tables$table %in% o])
+    .ajouter_constat(ctx, "refus_induit", t, NA_character_, seq_len(nrow(ctx$base[[t]])),
+                     .traitement_code_controle(dico, "refus_induit"), "exacte", origine = paste(o, collapse = ";"))
+  }
+  ctx$p_refusees <- unique(c(ctx$p_refusees, names(empechees)))
+  invisible(NULL)
+}
+
 # Visibilité propre de chaque ligne à l'arrêté (sans la règle 1), et colonnes lues pour
 # l'établir (`lit_propre`, vide à l'arrêté égal à l'extraction, où tout est visible :
 # règle 3 du § 6). Appelée avant la règle P.
@@ -1275,6 +1396,8 @@ controler_base <- function(donnees, arrete, declarations = NULL, conventions = N
   }
   ctx$date_g <- list()
   ctx$partie_h <- list()
+  ctx$reste_g <- list()
+  ctx$parente_g <- list()
   invisible(NULL)
 }
 
@@ -1298,8 +1421,9 @@ controler_base <- function(donnees, arrete, declarations = NULL, conventions = N
 # pour chaque référentiel est appliquée : la ligne entre dans la vue à sa date de visibilité
 # (max de la saisie, de la date d'effet et de la visibilité de la parente). Le délai et
 # l'exclusion de D03g sont appliqués quand ils sont complets (.application_d03g() ; D5) :
-# l'exclusion sort la ligne de la vue, l'hypothèse lui donne une date de saisie
-# (.appliquer_h_d03g()) ; sinon la ligne reste de visibilité non déterminée.
+# l'exclusion sort la ligne entière de la vue (une partie de ligne n'admet que l'hypothèse,
+# D9), l'hypothèse lui donne une date de saisie (.appliquer_h_d03g()) ; sinon la ligne
+# reste de visibilité non déterminée.
 .regle_prealable <- function(ctx) {
   totale <- .vue_totale(ctx)
   t_b <- if (totale) "S" else "H"
@@ -1317,8 +1441,14 @@ controler_base <- function(donnees, arrete, declarations = NULL, conventions = N
     if (totale) return(invisible(NULL))
     if (is.null(lignes)) {
       # une règle P empêchée ne rend la vue provisoire que sur une table lue par la vue
-      # (une table refusée en portée table n'est pas lue : .refus_regle_b())
-      if (is.null(ctx$refus_pv$tables[[table]])) ctx$p_non_executee <- TRUE
+      # (une table refusée en portée table n'est pas lue : .refus_regle_b()) ; elle y induit
+      # un refus de portée table (D12, .regle_p())
+      if (is.null(ctx$refus_pv$tables[[table]])) {
+        ctx$p_non_executee <- TRUE
+        ne <- ctx$non_executes[[length(ctx$non_executes)]]
+        ctx$p_empechees[[table]] <- unique(c(ctx$p_empechees[[table]], ne$lu))
+        ctx$p_entrees[[length(ctx$p_entrees) + 1L]] <- ne
+      }
       return(invisible(NULL))
     }
     if (length(lignes) == 0L) return(invisible(NULL))
@@ -1334,10 +1464,10 @@ controler_base <- function(donnees, arrete, declarations = NULL, conventions = N
       return(invisible(NULL))
     }
     if (motif == "D03g") {
-      application <- .application_d03g(ctx, table)
+      application <- .application_d03g(ctx, table, partie)
       if (identical(application, "X")) {
-        # exclusion déclarée pour les quatre familles : la ligne sort de la vue (une fin de
-        # contrat ou d'affiliation emporte sa ligne)
+        # exclusion déclarée pour les quatre familles : la ligne entière sort de la vue (une
+        # partie de ligne n'est résolue que par l'hypothèse, D9)
         ctx$exclu_g[[table]][lignes] <- TRUE
         ctx$propre[[table]][lignes] <- FALSE
         return(invisible(NULL))
@@ -1356,6 +1486,8 @@ controler_base <- function(donnees, arrete, declarations = NULL, conventions = N
   }
   ctx$lignes_nd <- list()
   ctx$p_non_executee <- FALSE
+  ctx$p_empechees <- list()
+  ctx$p_entrees <- list()
   ctx$h_g <- list()
   avant <- function(x, y) { x <- as.numeric(x); y <- as.numeric(y); !is.na(x) & !is.na(y) & x < y }
 
@@ -1399,8 +1531,9 @@ controler_base <- function(donnees, arrete, declarations = NULL, conventions = N
     marquer(table, "D03g", .regle(ctx, "D03g", table, "date_saisie", character(0), t_g, "exacte",
                                   function() is.na(v(table, "date_saisie"))))
   }
+  # partie de ligne : l'hypothèse seule la résout (D9) ; traitement H à un arrêté antérieur
   for (table in c("contrats", "affiliations")) {
-    marquer(table, "D03g", .regle(ctx, "D03g", table, "date_saisie_fin", paste0(table, ".date_fin"), t_g, "exacte",
+    marquer(table, "D03g", .regle(ctx, "D03g", table, "date_saisie_fin", paste0(table, ".date_fin"), t_b, "exacte",
       function() is.na(v(table, "date_saisie_fin")) & !is.na(v(table, "date_fin"))), "date_saisie_fin")
   }
   .appliquer_h_d03g(ctx, nd)
@@ -1412,12 +1545,15 @@ controler_base <- function(donnees, arrete, declarations = NULL, conventions = N
 # visibilité de la parente), la date d'effet étant celle que compare D02b (evenements :
 # date_effet ; sinistres : date_declaration ; table fille : visibilité de la parente, d'où
 # visibilité de la parente + délai) ; délai de seuils$d03g_delai_jours pour la table. Fin
-# d'un contrat ou d'une affiliation (partie de ligne) : connue à date_fin + délai (choix
-# signalé à `actuary`). Visibilité d'une parente : max des dates de .DATES_VISIBILITE de la
+# d'un contrat ou d'une affiliation (partie de ligne) : connue à date_fin + délai (erratum
+# de D5, D9). Visibilité d'une parente : max des dates de .DATES_VISIBILITE de la
 # ligne et de ses ascendantes (règle 1), NA si l'une est inconnue ; versions de famille : la
 # plus ancienne. Une date qui ne se calcule pas laisse la ligne de visibilité non
-# déterminée (`nd`, motif D03g). Rend `ctx$date_g` (date de saisie retenue, par table) et
-# `ctx$partie_h` (date de connaissance de la fin retenue).
+# déterminée (`nd`, motif D03g ; `ctx$reste_g` : ces lignes, par table, hors de l'hypothèse
+# placée et attendues en exclusion, réserve Q5), sauf si seule sa parente est non
+# déterminée (motif parente_non_determinee, sans exigence propre, réserve Q2 (b)). Rend
+# `ctx$date_g` (date de saisie retenue, par table) et `ctx$partie_h` (date de connaissance
+# de la fin retenue).
 .appliquer_h_d03g <- function(ctx, nd) {
   if (length(ctx$h_g) == 0L) return(invisible(NULL))
   a <- as.numeric(ctx$arrete)
@@ -1479,7 +1615,16 @@ controler_base <- function(donnees, arrete, declarations = NULL, conventions = N
     t <- h$table
     if (is.na(h$partie)) {
       g <- ctx$date_g[[t]][h$lignes]
-      reste <- h$lignes[is.na(g)]
+      # ligne dont la date ne se calcule qu'à cause de sa parente, de visibilité non
+      # déterminée (date propre lisible, parente existante) : aucune exigence propre, elle
+      # suit sa parente (parente_non_determinee, réserve Q2 (b))
+      propre_manque <- if (!is.null(effet[[t]])) is.na(lire(t, effet[[t]])[h$lignes]) else rep(FALSE, length(g))
+      par_parente <- is.na(g) & is.na(date_parente(vd, t)[h$lignes]) & !propre_manque
+      if (any(par_parente)) {
+        nd(t, NA_character_, "parente_non_determinee", h$lignes[par_parente])
+        ctx$parente_g[[t]] <- sort(unique(c(ctx$parente_g[[t]], h$lignes[par_parente])))
+      }
+      reste <- h$lignes[is.na(g) & !par_parente]
       ok <- h$lignes[!is.na(g)]
       # visibilité propre recalculée avec la date de saisie retenue
       vis <- rep(TRUE, length(ok))
@@ -1495,7 +1640,11 @@ controler_base <- function(donnees, arrete, declarations = NULL, conventions = N
       ctx$partie_h[[t]][h$lignes] <- g
       reste <- h$lignes[is.na(g)]
     }
-    if (length(reste) > 0L) nd(t, h$partie, "D03g", reste)
+    if (length(reste) > 0L) {
+      nd(t, h$partie, "D03g", reste)
+      # ligne entière dont la date ne se calcule pas : seule l'exclusion la résout (réserve Q5)
+      if (is.na(h$partie)) ctx$reste_g[[t]] <- sort(unique(c(ctx$reste_g[[t]], reste)))
+    }
   }
   invisible(NULL)
 }
@@ -1685,11 +1834,15 @@ controler_base <- function(donnees, arrete, declarations = NULL, conventions = N
 # D03d (situation de famille requise par un poste) dépend des postes du plan : B2.
 .regle_v_manquants <- function(ctx) {
   vv <- function(table, colonne) .valeurs_vue(ctx, table, colonne)
-  # D03a : date de naissance manquante (famille : hors enfant à naître)
-  .regle_vue(ctx, "D03a", "assures", "date_naissance", character(0), "X;H;S", "exacte",
-             function() is.na(vv("assures", "date_naissance")))
-  .regle_vue(ctx, "D03a", "famille", "date_naissance", "famille.situation", "X;H;S", "exacte",
-             function() is.na(vv("famille", "date_naissance")) & !(vv("famille", "situation") %in% "a_naitre"))
+  # D03a : date de naissance manquante (famille : hors enfant à naître) ; X ou H pour les
+  # familles qui lisent la colonne, S pour la famille triangle (.EXCEPTIONS_FAMILLE) : deux
+  # constats de même clé, le signalement écrit dès la détection, comme D01b (réserve Q2)
+  for (t in c("S", "X;H")) {
+    .regle_vue(ctx, "D03a", "assures", "date_naissance", character(0), t, "exacte",
+               function() is.na(vv("assures", "date_naissance")))
+    .regle_vue(ctx, "D03a", "famille", "date_naissance", "famille.situation", t, "exacte",
+               function() is.na(vv("famille", "date_naissance")) & !(vv("famille", "situation") %in% "a_naitre"))
+  }
   # D03b : sexe manquant
   for (table in c("assures", "famille")) {
     .regle_vue(ctx, "D03b", table, "sexe", character(0), "H", "exacte", function() is.na(vv(table, "sexe")))
@@ -1946,19 +2099,27 @@ controler_base <- function(donnees, arrete, declarations = NULL, conventions = N
 # s'ils sont référencés par une ligne visible. Deux écarts à la vue, pour compter sans
 # corriger : les refus R ne l'empêchent pas (spécification, § 2.3, point 2 : une ligne
 # refusée invisible à l'arrêté), seule une colonne illisible par sa forme rend la visibilité
-# non déterminée ; une ligne que l'exclusion déclarée de D03g sort de la vue garde sa
-# visibilité sans sa date de saisie (son enjeu est chiffré, D5). Toutes les versions de
-# famille sont comptées (la dernière saisie n'est retenue que pour la validité). À l'arrêté
-# égal à l'extraction, tout est visible (règle 3 du § 6). Calculé une fois par appel.
-.connus <- function(ctx, table) {
+# non déterminée ; une ligne que l'exclusion déclarée de D03g sort de la vue a pour
+# visibilité celle que lui donnerait l'hypothèse avec un délai nul : la date que compare D02b
+# (evenements.date_effet, sinistres.date_declaration ; aucune pour une fille, que borne la
+# visibilité de sa parente) tient lieu de date de saisie, borne basse de sa connaissance
+# (son enjeu est chiffré sans regard en avant, D5 ; réserve Q4). `d03g` : variante qui
+# applique la même règle aux lignes entières de D03g de visibilité non déterminée (et à
+# leurs filles), lue par l'enjeu des écarts de D03g seulement (réserve Q8). Seule la version
+# valable de famille à l'arrêté est comptée (dernière saisie visible de chaque membre,
+# réserve Q9 ; non déterminée si une version plus récente l'est). À l'arrêté égal à
+# l'extraction, tout est visible (règle 3 du § 6). Calculé une fois par appel et par variante.
+.connus <- function(ctx, table, d03g = FALSE) {
   df <- ctx$base[[table]]
   n <- if (is.null(df)) 0L else nrow(df)
   if (.vue_totale(ctx)) return(rep(TRUE, n))
-  if (is.null(ctx$vue_comptes)) ctx$vue_comptes <- .vue_comptes(ctx)
-  x <- ctx$vue_comptes[[table]]
+  nom <- if (d03g) "vue_comptes_g" else "vue_comptes"
+  if (is.null(ctx[[nom]])) assign(nom, .vue_comptes(ctx, d03g), envir = ctx)
+  x <- ctx[[nom]][[table]]
   if (is.null(x)) rep(NA, n) else x
 }
-.vue_comptes <- function(ctx) {
+.EFFET_D03G <- list(evenements = "date_effet", sinistres = "date_declaration")
+.vue_comptes <- function(ctx, d03g = FALSE) {
   a <- as.numeric(ctx$arrete)
   lisible <- function(t, c1) is.na(.cause(ctx, t, c1, forme_seule = TRUE))
   tables <- setdiff(ctx$tables, "extraction")
@@ -1966,34 +2127,64 @@ controler_base <- function(donnees, arrete, declarations = NULL, conventions = N
   for (t in tables) {
     n <- nrow(ctx$base[[t]])
     v <- rep(TRUE, n)
+    # lignes entières de D03g sans date de saisie : exclues (D5), ou non déterminées (variante)
+    g_lignes <- ctx$exclu_g[[t]]
+    if (is.null(g_lignes)) g_lignes <- rep(FALSE, n)
+    if (d03g) {
+      for (k in ctx$lignes_nd) if (k$table == t && is.na(k$colonne) && k$motif == "D03g") g_lignes[k$lignes] <- TRUE
+      g_lignes[ctx$parente_g[[t]]] <- TRUE   # lignes de D03g qui suivent leur parente (Q2 (b))
+    }
     for (c1 in .DATES_VISIBILITE[[t]]) {
       d <- if (lisible(t, c1)) as.numeric(.valeurs(ctx, t, c1)) else rep(NA_real_, n)
       if (c1 == "date_saisie") {
         g <- ctx$date_g[[t]]
         if (!is.null(g)) d <- ifelse(is.na(g), d, g)
-        ok <- d <= a
-        if (!is.null(ctx$exclu_g[[t]])) ok[ctx$exclu_g[[t]]] <- TRUE
-      } else {
-        ok <- d <= a
+        if (any(g_lignes)) {
+          e <- .EFFET_D03G[[t]]
+          d[g_lignes] <- if (is.null(e)) -Inf else if (lisible(t, e)) as.numeric(.valeurs(ctx, t, e))[g_lignes] else NA_real_
+        }
       }
-      v <- v & ok
+      v <- v & d <= a
     }
     dh <- ctx$date_h[[t]]
     if (!is.null(dh)) v <- v & (is.na(dh) | dh <= a)
     vis[[t]] <- v
   }
-  # lignes de visibilité non déterminée (ligne entière)
+  # lignes de visibilité non déterminée (ligne entière) ; variante : hors D03g et hors filles
+  # recensées (la règle 1 ci-dessous propage les autres causes)
   for (k in ctx$lignes_nd) {
+    if (d03g && k$motif %in% c("D03g", "parente_non_determinee")) next
     if (is.na(k$colonne) && !is.null(vis[[k$table]])) {
       x <- vis[[k$table]]
       x[k$lignes[x[k$lignes] %in% TRUE]] <- NA
       vis[[k$table]] <- x
     }
   }
-  # règle 1, jusqu'au point fixe ; une clé de lien illisible par sa forme : non déterminée
+  # famille : seule la dernière saisie visible de chaque membre est valable (réserve Q9) ;
+  # une version plus récente de visibilité non déterminée rend la validité non déterminée
+  valables <- function(x) x
+  if ("famille" %in% tables && lisible("famille", "id_membre")) {
+    membre <- as.character(.valeurs(ctx, "famille", "id_membre"))
+    membre[is.na(membre)] <- paste0("\r", which(is.na(membre)))   # un manquant : un membre à part
+    saisie <- if (lisible("famille", "date_saisie")) as.numeric(.valeurs(ctx, "famille", "date_saisie")) else
+      rep(NA_real_, length(membre))
+    g <- ctx$date_g$famille
+    if (!is.null(g)) saisie <- ifelse(is.na(g), saisie, g)
+    max_de <- function(z) if (all(is.na(z))) NA_real_ else max(z, na.rm = TRUE)
+    valables <- function(x) {
+      derniere <- stats::ave(ifelse(x %in% TRUE, saisie, NA_real_), membre, FUN = max_de)
+      recente_nd <- stats::ave(ifelse(is.na(x), ifelse(is.na(saisie), Inf, saisie), NA_real_), membre, FUN = max_de)
+      x[x %in% TRUE & !is.na(derniere) & (is.na(saisie) | saisie < derniere)] <- FALSE
+      x[x %in% TRUE & !is.na(recente_nd) & (is.na(saisie) | recente_nd > saisie)] <- NA
+      x
+    }
+  }
+  # règle 1, jusqu'au point fixe ; une clé de lien illisible par sa forme : non déterminée ;
+  # la version valable de famille est retenue une fois famille établie, puis la règle 1 est
+  # reprise pour ses filles
   liens <- .liens_visibilite(ctx$dico)
   liens <- liens[liens$table %in% tables & liens$table_cible %in% tables, , drop = FALSE]
-  repeat {
+  regle_1 <- function(vis) repeat {
     change <- FALSE
     for (i in seq_len(nrow(liens))) {
       t <- liens$table[i]
@@ -2014,7 +2205,12 @@ controler_base <- function(donnees, arrete, declarations = NULL, conventions = N
         change <- TRUE
       }
     }
-    if (!change) break
+    if (!change) return(vis)
+  }
+  vis <- regle_1(vis)
+  if ("famille" %in% tables) {
+    vis$famille <- valables(vis$famille)
+    vis <- regle_1(vis)
   }
   # adherents et assures : visibles s'ils sont référencés par une ligne visible
   references <- list(adherents = list(c("contrats", "id_adherent")),
@@ -2050,21 +2246,29 @@ controler_base <- function(donnees, arrete, declarations = NULL, conventions = N
   NULL
 }
 
-# Paires (i, j) telles que x[i] == y[j], valeurs manquantes exclues (jointure un à plusieurs) ;
-# composition de deux relations (i -> k, k -> j).
+# Paires (i, j) telles que x[i] == y[j], valeurs manquantes exclues (jointure un à plusieurs),
+# triées par i puis j ; composition de deux relations (i -> k, k -> j). Par correspondance
+# (match) sur les clés distinctes de y : coût proportionnel au nombre de paires rendues.
 .paires <- function(x, y) {
   x <- as.character(x)
   y <- as.character(y)
   i <- which(!is.na(x))
   j <- which(!is.na(y))
   if (length(i) == 0L || length(j) == 0L) return(data.frame(i = integer(0), j = integer(0)))
-  m <- merge(data.frame(i = i, k = x[i], stringsAsFactors = FALSE),
-             data.frame(j = j, k = y[j], stringsAsFactors = FALSE), by = "k")
-  data.frame(i = m$i, j = m$j)
+  cles <- unique(y[j])
+  g <- match(y[j], cles)
+  j <- j[order(g, j, method = "radix")]
+  nb <- tabulate(g, length(cles))
+  debut <- cumsum(c(1L, nb))[seq_along(cles)]
+  m <- match(x[i], cles)
+  i <- i[!is.na(m)]
+  m <- m[!is.na(m)]
+  n <- nb[m]
+  data.frame(i = rep(i, n), j = j[rep(debut[m], n) + sequence(n) - 1L])
 }
 .composer <- function(p, q) {
-  m <- merge(data.frame(i = p$i, k = p$j), data.frame(k = q$i, j = q$j), by = "k")
-  data.frame(i = m$i, j = m$j)
+  m <- .paires(p$j, q$i)
+  data.frame(i = p$i[m$i], j = q$j[m$j])
 }
 
 # Rattachement des lignes d'une table aux dossiers (spécification, § 4.4), par chemins de clés
@@ -2121,7 +2325,10 @@ controler_base <- function(donnees, arrete, declarations = NULL, conventions = N
         p <- data.frame(i = depart, j = depart)
         courante <- table
         for (h in chemins[[k]]) {
-          p <- .composer(p, .paires(.valeurs(ctx, courante, h[1L]), .valeurs(ctx, h[2L], h[3L])))
+          # clés des seules lignes atteintes (pas de jointure de toute la table)
+          x <- .valeurs(ctx, courante, h[1L])
+          x[!(seq_along(x) %in% p$j)] <- NA
+          p <- .composer(p, .paires(x, .valeurs(ctx, h[2L], h[3L])))
           courante <- h[2L]
         }
         p
@@ -2171,8 +2378,9 @@ controler_base <- function(donnees, arrete, declarations = NULL, conventions = N
 # la valeur n'est pas calculée). Les montants sont pris tels quels (aucune correction,
 # dictionnaire, § 1.10) ; sommes en ordre trié des montants, indépendantes de l'ordre des
 # lignes (réserve m3). Calculé une fois par appel.
-.composantes_dossiers <- function(ctx) {
-  if (!is.null(ctx$composantes)) return(ctx$composantes)
+.composantes_dossiers <- function(ctx, d03g = FALSE) {
+  nom <- if (d03g) "composantes_g" else "composantes"
+  if (!is.null(ctx[[nom]])) return(ctx[[nom]])
   v <- function(t, c1) .valeurs(ctx, t, c1)
   nd <- nrow(ctx$base$dossiers)
   a <- as.numeric(ctx$arrete)
@@ -2203,11 +2411,22 @@ controler_base <- function(donnees, arrete, declarations = NULL, conventions = N
     x[as.integer(rownames(s))] <- s[, 1L]
     x
   }
+  # paires (ligne, dossier) d'une somme par dossier, un identifiant (clé primaire) compté une
+  # fois par dossier : les lignes en double d'un identifiant (D01a) qui concordent ne
+  # comptent qu'une fois (D10, réserve M1) ; celles qui divergent rendent la composante sans
+  # valeur (.divergences_d01a()) ; un identifiant manquant n'est pas regroupé
+  distinctes <- function(table, l, p) {
+    cle <- .eclater_champ(ctx$dico$tables$cle_primaire[ctx$dico$tables$table == table])
+    vc <- lapply(cle, function(c1) as.character(.valeurs(ctx, table, c1))[l][p$i])
+    id <- do.call(paste, c(vc, list(p$j), sep = "\r"))
+    manque <- Reduce(`|`, lapply(vc, is.na))
+    p[manque | !duplicated(id), , drop = FALSE]
+  }
   dossiers_de <- function(cle, cle_dossier) unique(.paires(cle, v("dossiers", cle_dossier))$j)
   if (is.null(forme$paiements_cumules)) {
-    cp <- .connus(ctx, "prestations")
+    cp <- .connus(ctx, "prestations", d03g)
     k <- which(cp %in% TRUE)
-    p <- .paires(v("prestations", "id_dossier")[k], v("dossiers", "id_dossier"))
+    p <- distinctes("prestations", k, .paires(v("prestations", "id_dossier")[k], v("dossiers", "id_dossier")))
     if (nrow(p) > 0L) valeurs$paiements_cumules <- somme_par(v("prestations", "montant")[k][p$i], p$j)
     indetermine$paiements_cumules[dossiers_de(v("prestations", "id_dossier")[is.na(cp)], "id_dossier")] <- TRUE
   }
@@ -2216,7 +2435,7 @@ controler_base <- function(donnees, arrete, declarations = NULL, conventions = N
   if (is.null(forme$capital_fixe) || is.null(forme$rente_annuelle_en_vigueur) || is.null(forme$ij_en_vigueur)) {
     type <- v("evenements", "type_evenement")
     effet <- as.numeric(v("evenements", "date_effet"))
-    ce <- .connus(ctx, "evenements")
+    ce <- .connus(ctx, "evenements", d03g)
     dans_a <- !is.na(effet) & effet <= a
     retenu_ev <- ce %in% TRUE & dans_a
     indet_ev <- is.na(ce) & (dans_a | is.na(effet))
@@ -2233,17 +2452,19 @@ controler_base <- function(donnees, arrete, declarations = NULL, conventions = N
   }
   if (is.null(forme$rente_annuelle_en_vigueur)) {
     nr <- nrow(ctx$base$rentes)
-    cr <- .connus(ctx, "rentes")
+    cr <- .connus(ctx, "rentes", d03g)
     kr <- cr %in% TRUE
     id_rente <- v("rentes", "id_rente")
-    k <- which(retenu_ev & type %in% service)
+    # dernier événement de service ou de fin_service de la rente dans l'ordre du § 4.2 : en
+    # service au montant du dernier service, éteinte sinon (une réouverture après fin_service
+    # rallume la rente ; même règle que l'indemnité journalière, réserve Q13)
+    k <- which(retenu_ev & type %in% c(service, "fin_service"))
     p <- .paires(v("evenements", "id_rente")[k], id_rente)
     p <- p[kr[p$j], , drop = FALSE]
     dernier <- .dernier_evenement(ctx, data.frame(i = k[p$i], j = p$j), nr)
-    kf <- which(retenu_ev & type %in% "fin_service")
-    finie <- seq_len(nr) %in% .paires(v("evenements", "id_rente")[kf], id_rente)$j
-    par_rente <- ifelse(kr & !finie, montant_ev[dernier], NA_real_)
+    par_rente <- ifelse(kr & !is.na(dernier) & type[dernier] %in% service, montant_ev[dernier], NA_real_)
     q <- .paires(v("rentes", "id_dossier"), v("dossiers", "id_dossier"))
+    q <- distinctes("rentes", seq_len(nr), q)
     # rente de visibilité non déterminée, ou événement de service ou de fin non déterminé
     ki <- which(indet_ev & type %in% c(service, "fin_service"))
     rente_indet <- is.na(cr) | seq_len(nr) %in% .paires(v("evenements", "id_rente")[ki], id_rente)$j
@@ -2272,9 +2493,9 @@ controler_base <- function(donnees, arrete, declarations = NULL, conventions = N
                                 dossiers_de(v("evenements", "id_sinistre")[kj], "id_sinistre"))] <- TRUE
   }
   for (k in names(forme)) if (!is.null(forme[[k]])) valeurs[[k]] <- rep(NA_real_, nd)
-  ctx$composantes <- list(garantie = garantie, connu = .connus(ctx, "dossiers"), valeurs = valeurs,
-                          indetermine = indetermine, lus = lus, lus_g = lus_g)
-  ctx$composantes
+  assign(nom, list(garantie = garantie, connu = .connus(ctx, "dossiers", d03g), valeurs = valeurs,
+                   indetermine = indetermine, lus = lus, lus_g = lus_g), envir = ctx)
+  ctx[[nom]]
 }
 
 # Placement des constats selon leur traitement et les déclarations (spécification, § 3 ; ADR
@@ -2283,16 +2504,20 @@ controler_base <- function(donnees, arrete, declarations = NULL, conventions = N
 # couples traités S, .EXCEPTIONS_FAMILLE) et H ou S par référentiel (S : valeur
 # .VALEUR_SIGNALEMENT de `hypotheses`, pour un constat qui admet S). Il est couvert si
 # l'exclusion est déclarée pour chaque famille, ou H ou S pour chaque référentiel ; couvert,
-# il n'est placé que sur un axe (réserve M1), l'exclusion l'emportant si les deux sont
-# complets : `exclusions` par famille, ou `hypotheses_defaut` par référentiel en H et
-# `signalements` (une fois) si un référentiel est en S. Non couvert, chaque déclaration est
-# placée et chaque famille et chaque référentiel sans déclaration va dans
-# `declarations_requises` (traitements admis : ceux du constat). Motifs de la règle P (D02b,
-# D03g), appliqués à la vue : une déclaration n'est placée que si elle est appliquée
-# (D02b : hypothèse pour les deux référentiels ; D03g : .application_d03g()), et le délai de
-# D03g manquant va dans `declarations_requises` (rubrique `seuils`, clé
-# d03g_delai_jours$<table>) tant que l'exclusion ne couvre pas le constat. Une orpheline
-# traitée X (D04a, D04b) ne compte que ses lignes dont la visibilité tient à l'arrêté
+# il n'est placé que sur un axe (réserve M1 ; un motif à traitement unique n'est jamais
+# déclaré sur les deux, D8 ; ailleurs l'exclusion l'emporte, dont D03g, D11) : `exclusions`
+# par famille, ou `hypotheses_defaut` par référentiel en H et `signalements` (une fois) si
+# un référentiel est en S. Non couvert, chaque déclaration est placée et chaque famille et
+# chaque référentiel sans déclaration va dans `declarations_requises` (traitements admis :
+# ceux du constat). Motifs de la règle P (D02b, D03g), appliqués à la vue : une déclaration
+# n'est placée que si elle est appliquée (D02b : hypothèse pour les deux référentiels ;
+# D03g : .application_d03g()), et le délai de D03g manquant va dans `declarations_requises`
+# (rubrique `seuils`, clé d03g_delai_jours$<table>) tant que l'exclusion ne couvre pas le
+# constat ; une partie de ligne de D03g n'admet que l'hypothèse (D9) ; sous l'hypothèse de
+# D03g, une ligne dont la date ne se calcule pas par elle-même reste hors de
+# hypotheses_defaut et attend l'exclusion (X, Q5), une ligne dont seule la parente est non
+# déterminée n'attend rien en propre (parente_non_determinee, Q2 (b)). Une orpheline traitée
+# X (D04a, D04b) ne compte que ses lignes dont la visibilité tient à l'arrêté
 # (spécification, § 2.4 ; indéterminée : comptée). Rend les lignes brutes (avec table et
 # lignes), `signales` (constats placés en S par déclaration) et les écarts de l'enjeu : refus
 # R (hors refus induit, sans enjeu propre) et exclusions, déclarées ou non (`non_declaree`).
@@ -2328,7 +2553,7 @@ controler_base <- function(donnees, arrete, declarations = NULL, conventions = N
     axe_r <- "H" %in% t || "S" %in% t
     regle_p <- k$code %in% .MOTIFS_REGLE_P
     if (k$code == "D03g") {
-      application <- .application_d03g(ctx, k$table)
+      application <- .application_d03g(ctx, k$table, if (identical(k$colonne, "date_saisie_fin")) k$colonne else NA_character_)
       x_ok <- identical(application, "X")
       r_ok <- identical(application, "H")
     } else {
@@ -2338,7 +2563,8 @@ controler_base <- function(donnees, arrete, declarations = NULL, conventions = N
     familles_declarees <- e_k$famille
     referentiels_declares <- c(h_k$referentiel, s_k$referentiel)
     # une déclaration de la règle P qui n'est pas appliquée à la vue n'est pas placée ; un
-    # constat couvert n'est placé que sur un axe, l'exclusion l'emportant
+    # constat couvert n'est placé que sur un axe (un motif à traitement unique n'est jamais
+    # déclaré sur les deux, D8 ; ailleurs, l'exclusion l'emporte, dont D03g, D11)
     if (regle_p && !x_ok) e_k <- e_k[0L, ]
     if (regle_p && !r_ok) { h_k <- h_k[0L, ]; s_k <- s_k[0L, ] }
     if (x_ok) { h_k <- h_k[0L, ]; s_k <- s_k[0L, ] }
@@ -2356,9 +2582,24 @@ controler_base <- function(donnees, arrete, declarations = NULL, conventions = N
         ecarts <- ajouter(ecarts, c(base_ecart, list(famille = f, action = "non_declaree", lignes = lignes)))
       }
     }
+    # hypothèse de D03g appliquée : les lignes dont la date ne se calcule pas restent de
+    # visibilité non déterminée, hors de l'hypothèse placée ; celles qui ne se calculent pas
+    # par elles-mêmes attendent l'exclusion (Q5), non celles qui suivent leur parente (Q2 (b))
+    lignes_h <- lignes
+    if (k$code == "D03g" && r_ok && identical(k$colonne, "date_saisie")) {
+      reste <- intersect(lignes, ctx$reste_g[[k$table]])
+      lignes_h <- setdiff(lignes, c(reste, ctx$parente_g[[k$table]]))
+      for (f in familles) {
+        if (length(reste) > 0L) {
+          requises <- ajouter(requises, list(rubrique = "exclusions", motif = k$code, cle = f, traitements_admis = "X",
+                                             table = k$table, lignes = reste))
+        }
+      }
+      if (length(lignes_h) == 0L) h_k <- h_k[0L, ]
+    }
     for (i in seq_len(nrow(h_k))) {
       hypotheses <- ajouter(hypotheses, list(motif = k$code, referentiel = h_k$referentiel[i], poste = h_k$poste[i],
-                                             valeur = h_k$valeur[i], table = k$table, lignes = lignes))
+                                             valeur = h_k$valeur[i], table = k$table, lignes = lignes_h))
     }
     if (nrow(s_k) > 0L) signales[n] <- TRUE
     if (axe_r && !x_ok && !r_ok) {
@@ -2425,11 +2666,14 @@ controler_base <- function(donnees, arrete, declarations = NULL, conventions = N
 # figure, réserve Q10), `garantie`, `connu`, `composante`, `unite`, `valeur` (NA : aucune
 # valeur), `cause` (motif d'un refus ou forme illisible, .cause_enjeu() ; ou
 # `visibilite_non_determinee` pour un porteur dont la visibilité, ou celle d'une ligne qui
-# entre dans sa valeur, n'est pas déterminée, réserve Q8 (b)), `cause_table`,
-# `cause_colonne`), `dossiers` (dossiers rattachés : `dossier`, `garantie`, `connu`,
-# `famille` : famille de composantes pour laquelle le dossier est compté), `familles_cause`
-# (familles dont le rattachement est illisible) et `familles` (dossier, evenement,
-# prestation, cotisation : composantes que la table de l'écart porte, § 4.4).
+# entre dans sa valeur, n'est pas déterminée, réserve Q8 (b) ; `D01a` pour un porteur
+# touché par un identifiant de l'écart D01a dont les doubles divergent sur une colonne lue,
+# D10), `cause_table`, `cause_colonne`), `dossiers` (dossiers rattachés : `dossier`,
+# `garantie`, `connu`, `famille` : famille de composantes pour laquelle le dossier est
+# compté), `familles_cause` (familles dont le rattachement est illisible) et `familles`
+# (dossier, evenement, prestation, cotisation : composantes que la table de l'écart porte,
+# § 4.4). Un écart de D03g lit la visibilité de ses lignes par la variante `d03g` de
+# .connus() (réserves Q4, Q8).
 .TABLES_DOSSIER <- c("adherents", "contrats", "garanties_souscrites", "parametres", "assures", "affiliations",
                      "famille", "sinistres", "dossiers", "beneficiaires", "rentes", "evenements", "catastrophes",
                      "victimes")
@@ -2437,10 +2681,18 @@ controler_base <- function(donnees, arrete, declarations = NULL, conventions = N
 # de visibilité non déterminée.
 .FAMILLE_COUPLE <- c(rep("dossier", 4L), "prestation", "cotisation", "cotisation", rep("evenement", 3L))
 .CAUSE_VISIBILITE <- "visibilite_non_determinee"
+# Colonnes lues par la composante portée par une ligne de evenements (montant_evenement),
+# prestations (prestations_ecartees) ou cotisations (composantes 6 et 7).
+.LUS_LIGNE_ENJEU <- list(evenements = c("montant", "type_evenement", "date_saisie", "id_rente", "id_dossier"),
+                         prestations = c("montant", "date_saisie", "date_reglement", "id_dossier"),
+                         cotisations = c("montant", "nature_mouvement", "date_mouvement", "id_garantie_souscrite"))
 .enjeu_elementaire <- function(ctx, ecart) {
   v <- function(t, c1) .valeurs(ctx, t, c1)
   table <- ecart$table
   lignes <- ecart$lignes
+  # écart de D03g : visibilité de ses lignes bornée par la date que compare D02b (réserves Q4
+  # et Q8, .connus())
+  d03g <- identical(ecart$motif, "D03g")
   elements <- list()
   ajouter <- function(porteur, indice, garantie, connu, composante, unite, valeur, cause = NA_character_,
                       cause_table = NA_character_, cause_colonne = NA_character_) {
@@ -2475,10 +2727,14 @@ controler_base <- function(donnees, arrete, declarations = NULL, conventions = N
     tags <- if (table == "prestations") "prestation" else c("dossier", if (table == "evenements") "evenement")
     if (!is.null(r$cause)) familles_cause <- tags
     if (is.null(r$cause) && !is.null(ctx$base$dossiers)) {
-      cd <- .composantes_dossiers(ctx)
+      cd <- .composantes_dossiers(ctx, d03g)
       d <- sort(unique(r$paires$dossier[r$paires$ligne %in% lignes]))
       d <- d[!(cd$connu[d] %in% FALSE)]   # dossiers invisibles à l'arrêté : non rattachés
-      garantie <- if (is.null(cause_de(cd$lus_g))) cd$garantie[d] else rep("non_rattache", length(d))
+      # garantie lue sur la clé étrangère refusée de l'écart (D10 (a), D04b) : lien non résolu,
+      # dossier non rattaché (réserve Q4)
+      lien_g <- identical(ecart$action, "refus") && ecart$motif %in% .MOTIFS_LIEN_ECART &&
+        paste(ecart$table, ecart$colonne, sep = ".") %in% cd$lus_g
+      garantie <- if (is.null(cause_de(cd$lus_g)) && !lien_g) cd$garantie[d] else rep("non_rattache", length(d))
       dossiers <- do.call(rbind, lapply(tags, function(f) {
         data.frame(dossier = d, garantie = garantie, connu = cd$connu[d], famille = rep(f, length(d)), stringsAsFactors = FALSE)
       }))
@@ -2489,7 +2745,7 @@ controler_base <- function(donnees, arrete, declarations = NULL, conventions = N
     if (!is.null(cause_rattachement)) {
       for (k in 1:4) empecher("dossiers", COMPOSANTES_ENJEU$composante[k], COMPOSANTES_ENJEU$unite[k], cause_rattachement)
     } else if (!is.null(ctx$base$dossiers)) {
-      cd <- .composantes_dossiers(ctx)
+      cd <- .composantes_dossiers(ctx, d03g)
       dd <- dossiers[dossiers$famille == "dossier", , drop = FALSE]
       applicable <- list(paiements_cumules = rep(TRUE, nrow(dd)),
                          capital_fixe = dd$garantie %in% .GARANTIES_CAPITAL,
@@ -2519,25 +2775,25 @@ controler_base <- function(donnees, arrete, declarations = NULL, conventions = N
                   .joindre(ctx, "dossiers", "id_dossier", "id_garantie_souscrite", id))
     ifelse(is.na(g), "non_rattache", g)
   }
-  connus <- .connus(ctx, table)
+  connus <- .connus(ctx, table, d03g)
   vus <- lignes[connus[lignes] %in% TRUE]
   indet <- lignes[is.na(connus[lignes])]
   if (table == "evenements") {
     familles <- c(familles, "evenement")
-    cause <- cause_de(paste0("evenements.", c("montant", "type_evenement", "date_saisie", "id_rente", "id_dossier")))
+    cause <- cause_de(paste0("evenements.", .LUS_LIGNE_ENJEU$evenements))
     if (!is.null(cause)) {
       for (k in 8:10) empecher("evenements", "montant_evenement", COMPOSANTES_ENJEU$unite[k], cause)
     } else {
-      # unité de l'événement : euro (fixation_capital), euro_par_an (service d'une rente),
-      # euro_par_jour (service d'un dossier incapacite) ; garantie illisible ou refusée : les
-      # unités d'un service ne se déterminent pas (composante empêchée, réserve Q10)
+      # unité de l'événement, lue sur l'événement seul (dictionnaire, :490 et :606 ; réserve
+      # Q11) : euro (fixation_capital), euro_par_an (service d'une rente : id_rente renseigné),
+      # euro_par_jour (service d'un dossier incapacite : id_rente manquant) ; la garantie ne sert
+      # qu'à la rangée par garantie (non_rattache si elle est illisible ou refusée)
       unite_de <- function(l) {
         type <- v("evenements", "type_evenement")[l]
         g <- garantie_dossier(v("evenements", "id_dossier")[l])
         unite <- ifelse(type %in% "fixation_capital", "euro",
                  ifelse(type %in% c("ouverture_service", "modification_montant"),
-                        ifelse(!is.na(v("evenements", "id_rente")[l]) | g %in% .GARANTIES_RENTE, "euro_par_an",
-                               ifelse(g %in% "incapacite", "euro_par_jour", NA_character_)), NA_character_))
+                        ifelse(!is.na(v("evenements", "id_rente")[l]), "euro_par_an", "euro_par_jour"), NA_character_))
         list(g = g, unite = unite)
       }
       x <- unite_de(vus)
@@ -2547,10 +2803,6 @@ controler_base <- function(donnees, arrete, declarations = NULL, conventions = N
       si <- !is.na(y$unite) & !is.na(v("evenements", "montant")[indet])
       for (k in 8:10) {
         u <- COMPOSANTES_ENJEU$unite[k]
-        if (u != "euro" && !is.null(cause_gd)) {
-          empecher("evenements", "montant_evenement", u, cause_gd)
-          next
-        }
         su <- s & x$unite == u
         ajouter("evenements", vus[su], x$g[su], rep(TRUE, sum(su)), "montant_evenement", u, montant[su])
         si_u <- si & y$unite == u
@@ -2561,7 +2813,7 @@ controler_base <- function(donnees, arrete, declarations = NULL, conventions = N
   }
   if (table == "prestations") {
     familles <- "prestation"
-    cause <- cause_de(paste0("prestations.", c("montant", "date_saisie", "date_reglement", "id_dossier")))
+    cause <- cause_de(paste0("prestations.", .LUS_LIGNE_ENJEU$prestations))
     if (!is.null(cause)) {
       empecher("prestations", "prestations_ecartees", "euro", cause)
     } else {
@@ -2573,7 +2825,7 @@ controler_base <- function(donnees, arrete, declarations = NULL, conventions = N
   }
   if (table == "cotisations") {
     familles <- "cotisation"
-    cause <- cause_de(paste0("cotisations.", c("montant", "nature_mouvement", "date_mouvement", "id_garantie_souscrite")))
+    cause <- cause_de(paste0("cotisations.", .LUS_LIGNE_ENJEU$cotisations))
     lus_gc <- c("garanties_souscrites.id_garantie_souscrite", "garanties_souscrites.code_garantie")
     garantie_cotisation <- function(l) {
       if (!is.null(cause_de(lus_gc)) || !is.null(.cause_lecture(ctx, lus_gc, forme_seule = TRUE))) {
@@ -2597,7 +2849,79 @@ controler_base <- function(donnees, arrete, declarations = NULL, conventions = N
     }
   }
   el <- if (length(elements)) do.call(rbind, elements) else NULL
+  # D01a de l'écart (D10) : un porteur est sans valeur, cause D01a, pour une composante dont
+  # une colonne lue diverge entre les lignes en double d'un identifiant qui le touche ; un
+  # dossier ainsi touché porte la cause aussi pour une composante qu'il ne porte pas (sa
+  # garantie, lue sur une colonne divergente, n'est pas déterminée)
+  if (identical(ecart$action, "refus") && identical(ecart$motif, "D01a") && length(familles) > 0L) {
+    marquer <- function(porteur, composante, unite, lus, touches_de) {
+      lus_t <- sub("^[^.]*\\.", "", lus[startsWith(lus, paste0(table, "."))])
+      for (c1 in lus_t) {
+        rangs <- .divergences_d01a(ctx, table, lignes, c1)
+        if (length(rangs) == 0L) next
+        touches <- touches_de(rangs)
+        sel <- if (is.null(el)) logical(0) else el$porteur == porteur & el$composante == composante & el$unite == unite &
+          el$indice %in% touches & is.na(el$cause)
+        if (any(sel)) {
+          el$cause[sel] <<- "D01a"
+          el$cause_table[sel] <<- table
+          el$cause_colonne[sel] <<- c1
+        }
+        porte <- if (is.null(el)) integer(0) else el$indice[el$porteur == porteur & el$composante == composante & el$unite == unite]
+        manque <- setdiff(touches, porte)
+        if (porteur == "dossiers" && length(manque) > 0L) {
+          dd <- dossiers[dossiers$famille == "dossier", , drop = FALSE]
+          el <<- rbind(el, data.frame(porteur = porteur, indice = manque, garantie = dd$garantie[match(manque, dd$dossier)],
+                                      connu = dd$connu[match(manque, dd$dossier)], composante = composante, unite = unite,
+                                      valeur = NA_real_, cause = "D01a", cause_table = table, cause_colonne = c1,
+                                      stringsAsFactors = FALSE))
+        }
+        # ligne de l'écart sans élément pour ce couple alors qu'une colonne qui le classe
+        # diverge (type, rente, nature, montant d'un événement) : couple empêché pour toute
+        # garantie
+        manque <- intersect(manque, lignes[!(connus[lignes] %in% FALSE)])
+        if (porteur != "dossiers" && length(manque) > 0L && c1 %in% .CLASSE_D01A[[porteur]]) {
+          el <<- rbind(el, data.frame(porteur = porteur, indice = NA_integer_, garantie = "non_rattache", connu = NA,
+                                      composante = composante, unite = unite, valeur = NA_real_, cause = "D01a",
+                                      cause_table = table, cause_colonne = c1, stringsAsFactors = FALSE))
+        }
+      }
+    }
+    if ("dossier" %in% familles && is.null(cause_rattachement) && !is.null(ctx$base$dossiers)) {
+      cd <- .composantes_dossiers(ctx, d03g)
+      paires <- .rattacher(ctx, table)$paires
+      touches_d <- function(rangs) intersect(paires$dossier[paires$ligne %in% rangs], dossiers$dossier[dossiers$famille == "dossier"])
+      for (k in 1:4) marquer("dossiers", COMPOSANTES_ENJEU$composante[k], COMPOSANTES_ENJEU$unite[k],
+                             cd$lus[[COMPOSANTES_ENJEU$composante[k]]], touches_d)
+    }
+    if (table %in% names(.LUS_LIGNE_ENJEU)) {
+      famille_t <- c(prestations = "prestation", cotisations = "cotisation", evenements = "evenement")[[table]]
+      for (k in which(.FAMILLE_COUPLE == famille_t)) {
+        marquer(table, COMPOSANTES_ENJEU$composante[k], COMPOSANTES_ENJEU$unite[k], paste(table, .LUS_LIGNE_ENJEU[[table]], sep = "."),
+                function(rangs) rangs)
+      }
+    }
+  }
   list(elements = el, dossiers = dossiers, familles_cause = familles_cause, familles = familles)
+}
+
+# Colonnes qui rangent une ligne de evenements, prestations ou cotisations dans un couple
+# (composante, unite) (.enjeu_elementaire(), D01a de l'écart).
+.CLASSE_D01A <- list(evenements = c("type_evenement", "id_rente", "montant"), prestations = character(0),
+                     cotisations = "nature_mouvement")
+
+# Lignes de `table` dont l'identifiant (clé primaire), doublé par les lignes `lignes` d'un
+# écart D01a, porte des valeurs différentes de `colonne` entre ses lignes en double (D10) ;
+# integer(0) si toutes concordent (doublons à l'identique : chiffrés).
+.divergences_d01a <- function(ctx, table, lignes, colonne) {
+  cle <- .eclater_champ(ctx$dico$tables$cle_primaire[ctx$dico$tables$table == table])
+  if (colonne %in% cle) return(integer(0))
+  k <- do.call(paste, c(lapply(cle, function(c1) as.character(.valeurs(ctx, table, c1))), sep = "\r"))
+  grp <- which(k %in% k[lignes])
+  if (length(grp) == 0L) return(integer(0))
+  x <- .valeurs(ctx, table, colonne)[grp]
+  diverge <- tapply(seq_along(grp), k[grp], function(i) length(unique(x[i])) > 1L)
+  grp[k[grp] %in% names(diverge)[diverge]]
 }
 
 # Rangées de l'enjeu d'un groupe d'éléments (spécification, § 4.5) : une ligne par garantie
@@ -2871,7 +3195,8 @@ controler_base <- function(donnees, arrete, declarations = NULL, conventions = N
                                                       requises$cle, requises$traitements_admis)),
     enjeu = enjeu$enjeu,
     vue = list(date_arrete = ctx$arrete, date_extraction = ctx$date_extraction,
-               visibilite_non_determinee = nd, provisoire = nrow(nd) > 0L || isTRUE(ctx$p_non_executee)),
+               visibilite_non_determinee = nd, provisoire = nrow(nd) > 0L || isTRUE(ctx$p_non_executee) ||
+                 length(ctx$p_refusees) > 0L),
     segments = data.frame(id_dossier = character(0), id_sinistre = character(0), id_contrat = character(0),
                           segmentation = character(0), segment = character(0), stringsAsFactors = FALSE),
     tables_absentes = absentes
