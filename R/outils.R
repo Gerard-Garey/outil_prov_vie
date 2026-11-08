@@ -12,7 +12,7 @@
 # --- Constantes ------------------------------------------------------------------
 
 VERSION_FICHE <- 1L                              # ADR 0007, point 3
-VERSION_DICTIONNAIRE_ATTENDUE <- "1.3"           # ADR 0010, point 23 ; M97, M103
+VERSION_DICTIONNAIRE_ATTENDUE <- "1.3"           # ADR 0010, point 23 ; M117
 REPRESENTATION_CANONIQUE <- "provie-resultat-1"  # ADR 0010, point 22
 VERSION_LISTE <- 1L                              # format du serialiseur (ADR 0010, point 18)
 
@@ -29,7 +29,7 @@ MOTIFS_REFUS <- c(
 
 # Lève un refus d'appel : condition classée c("refus_provie", "error", "condition"),
 # interrompt l'appel sans rendre d'objet. `identifiants` est tronqué à dix éléments ;
-# `nombre` est repris tel quel (NA par défaut) : c'est à l'appelant d'y porter le total.
+# `nombre` est converti en entier (NA par défaut) : c'est à l'appelant d'y porter le total.
 refuser <- function(message, motif, module = NA_character_, table = NA_character_,
                     colonne = NA_character_, usage = NA_character_,
                     nombre = NA_integer_, identifiants = character(0),
@@ -46,8 +46,10 @@ refuser <- function(message, motif, module = NA_character_, table = NA_character
            call. = FALSE)
     }
   }
-  if (!is.numeric(nombre) || length(nombre) != 1L ||
-      (!is.na(nombre) && (nombre != trunc(nombre) || abs(nombre) > .Machine$integer.max))) {
+  # NA de tout type atomique accepté ; NaN, infini, non entier et hors bornes refusés
+  nombre_na <- is.atomic(nombre) && length(nombre) == 1L && is.na(nombre) && !is.nan(nombre)
+  if (!nombre_na && (!is.numeric(nombre) || length(nombre) != 1L || is.nan(nombre) ||
+                     nombre != trunc(nombre) || abs(nombre) > .Machine$integer.max)) {
     stop("refuser() : `nombre` doit \u00eatre un entier unique (ou NA)", call. = FALSE)
   }
   if (!is.atomic(attendu) || length(attendu) != 1L || !is.atomic(recu) || length(recu) != 1L) {
@@ -199,7 +201,7 @@ ecrire_valeurs <- function(x, forme = "texte") {
             "liste_invalide", module = "outils")
   }
   fini <- is.finite(x)
-  if (any(!fini & !is.na(x)) || any(x[fini] != trunc(x[fini]))) {
+  if (any(!fini & !is.na(x)) || any(is.nan(x)) || any(x[fini] != trunc(x[fini]))) {
     refuser("ecrire_valeurs() : une Date doit \u00eatre finie et enti\u00e8re (jours)",
             "liste_invalide", module = "outils")
   }
