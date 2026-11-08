@@ -238,3 +238,13 @@ Issues : #17 (ADR de forme et socle), #18 (module `donnees`, et par cet ADR `dic
 - **Branche de #18 et #19** : l'annotation précédente du 8 novembre 2026 renvoie à « la branche qui porte #18 / #19 », B2 par défaut. Cette branche est la **branche de données propre `claude/donnees-simulation`**, intercalée entre B1 et B2 (M134 ; écart à la lettre de M66 assumé par le mainteneur). La forme décidée par le présent ADR ne change pas.
 
 **Effet sur les résultats** : aucun. Issues : #17, #18, #19.
+
+## Annotation du 8 novembre 2026 (troisième série) — `futur_admis` à trois valeurs
+
+*Rédigée par `architect` le 8 novembre 2026 (branche `claude/donnees-simulation`, PR #29, tête `68a30e1`), sur la décision du mainteneur du même jour (M137 de `docs/feuille-de-route.md`, § 4), prise sur demande d'`actuary` pendant le premier lot de #18. Le texte ci-dessus et les annotations précédentes ne sont pas réécrits.*
+
+- **Point 23, colonne `futur_admis` de `colonnes.csv`** : là où le point 23 écrit « `futur_admis` (logical) », lire « `futur_admis` (texte, trois valeurs : `TRUE`, `FALSE`, `programmable`) ». `TRUE` : date future admise ; `FALSE` : date future refusée ; `programmable` : date future admise pour un type d'événement programmable seulement (§ 1.4 du dictionnaire, « dates d'effet des événements programmables »), valeur réservée à la seule colonne `evenements.date_effet`. `dictionnaire()` rend la colonne en texte ; les valeurs admises sont la constante `FUTUR_ADMIS_VALEURS` de `R/dictionnaire.R`, et la validation refuse par `dictionnaire_invalide` une autre valeur, une valeur autre que `FALSE` sur une colonne non `Date` et `programmable` hors de la table `evenements` (`ff9626f`). Le module `donnees` lit la règle dans le dictionnaire et croise `programmable` avec `types_evenements$programmable` ; il ne la code pas en dur.
+- **Option écartée** : garder `futur_admis` logique (`TRUE` sur `evenements.date_effet`) et renvoyer à `types_evenements$programmable` dans le module `donnees`. Motif : la restriction aux événements programmables ne serait plus lisible dans la forme lisible par machine, et la règle du § 1.4 serait cachée dans le code, hors de portée du contrôle de concordance.
+- **Contrat partagé touché** : forme lisible par machine du dictionnaire (point 23 ; « Conséquences », contrats partagés). Le changement est fait dans le lot qui crée cette forme, avant tout lecteur autre que `dictionnaire` ; aucun appelant n'est à adapter.
+
+**Effet sur les résultats** : aucun (aucune provision calculée en Bd). Issues : #18.
