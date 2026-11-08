@@ -35,6 +35,12 @@ FUTUR_ADMIS_VALEURS <- c("TRUE", "FALSE", "programmable")
 # colonne_table (colonne, ou table pour une colonne de clé), ligne (signalement).
 PORTEES_CONTROLES <- c("colonne", "table", "colonne_table", "ligne")
 
+# Points de code tenus pour des blancs (objet absent de controles.csv) : tabulation à retour
+# chariot, espace, U+0085, U+00A0, U+1680, U+2000 à U+200B, U+2028, U+2029, U+202F, U+205F,
+# U+3000, U+FEFF.
+.BLANCS_UNICODE <- c(9:13, 32L, 0x85L, 0xA0L, 0x1680L, 0x2000:0x200B, 0x2028L, 0x2029L,
+                     0x202FL, 0x205FL, 0x3000L, 0xFEFFL)
+
 FICHIERS_DICTIONNAIRE <- c("tables.csv", "colonnes.csv", "types_evenements.csv",
                            "parametres.csv", "defauts.csv", "filiation.csv", "controles.csv")
 
@@ -337,7 +343,7 @@ dictionnaire <- function() {
 
   # controles.csv (version 1.5, section 1.10) : au moins un code ; codes distincts et bien
   # formés (minuscules et soulignés, donc disjoints des codes D.. de defauts.csv) ; objet
-  # renseigné (pas seulement des espaces, tabulations ou fins de ligne) ; détection sans
+  # renseigné (pas seulement des blancs, Unicode compris) ; détection sans
   # valeur répétée ; motif de refus d'appel vide ou élément de MOTIFS_REFUS. Lien de même nom entre un code et le refus
   # d'appel (ADR 0010, sixième série, (a) ; réserve m2 de l'audit de #31) : un code qui est
   # aussi un élément de MOTIFS_REFUS porte ce motif en motif_refus_appel, et un motif de
@@ -349,7 +355,12 @@ dictionnaire <- function() {
     .refus_dictionnaire("controles.csv : codes distincts, en minuscules et soulign\u00e9s, attendus")
   }
   for (i in seq_len(nrow(ctl))) {
-    if (grepl("^[ \t\r\n]*$", ctl$objet[i], useBytes = TRUE)) echec("controles.csv", i, "objet absent")
+    # blancs Unicode compris (BLANCS_UNICODE : séparateurs Zs, Zl, Zp, contrôles d'espacement,
+    # espace sans chasse U+200B et marque U+FEFF), par points de code, indépendamment de la
+    # locale : réserve m-b de l'audit
+    if (all(utf8ToInt(enc2utf8(ctl$objet[i])) %in% .BLANCS_UNICODE)) {
+      echec("controles.csv", i, "objet absent")
+    }
     d <- .eclater(ctl$detection[i])
     if (length(d) == 0L || !all(d %in% c("exacte", "presomptive")) || anyDuplicated(d)) {
       echec("controles.csv", i, "d\u00e9tection : exacte ou presomptive, sans r\u00e9p\u00e9tition")
@@ -618,7 +629,8 @@ controler_version_extraction <- function(donnee) {
   ecarts <- which(is.na(versions) | versions != VERSION_DICTIONNAIRE_ATTENDUE)
   if (length(ecarts) > 0L) {
     version <- versions[ecarts[1L]]
-    refuser(paste0("table extraction : version du dictionnaire ", if (is.na(version)) "manquante" else version,
+    cite <- if (is.na(version)) "manquante" else paste0("\u00ab ", version, " \u00bb")   # "" compris (m-a)
+    refuser(paste0("table extraction : version du dictionnaire ", cite,
                    " ; version attendue : ", VERSION_DICTIONNAIRE_ATTENDUE),
             "extraction_invalide", module = "dictionnaire", table = "extraction",
             colonne = "version_dictionnaire", attendu = VERSION_DICTIONNAIRE_ATTENDUE, recu = version)

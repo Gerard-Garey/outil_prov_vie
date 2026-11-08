@@ -29,7 +29,7 @@
 # fichier (M141, M144) : dossier introuvable ou qui n'est pas un dossier ; tout autre
 # fichier ou dossier que <table>.csv ; fichier mal formé (vide, marque d'ordre, UTF-8
 # invalide, octet nul, fin de ligne finale absente, retour chariot isolé hors guillemets,
-# guillemet au milieu d'un champ, champs en nombre variable, première ligne vide, en-tête
+# guillemet au milieu d'un champ ou non fermé, champs en nombre variable, première ligne vide, en-tête
 # illisible, nom de colonne vide ou en double) ; retour chariot dans un champ entre
 # guillemets, que read.csv() lit comme un saut de ligne (« A\r\nB » et « A\rB » sont relus
 # « A\nB », mesure du 8 novembre 2026, R 4.3.3), en nommant table, colonne et lignes de
@@ -122,6 +122,7 @@ lire_base <- function(dossier) {
   # colonne sans nom des noms de lignes, ou une colonne « row.names », quand l'en-tête a
   # un champ de moins que les données, et retire les espaces autour des noms (mesure du
   # 8 novembre 2026, R 4.3.3) ; les noms rendus sont ceux-ci, texte exact de l'en-tête.
+  .guillemet_non_ferme(octets, texte, mal_forme)
   premiere <- sub("\r$", "", substr(texte, 1L, regexpr("\n", texte, fixed = TRUE) - 1L))
   if (!nzchar(premiere)) mal_forme("premi\u00e8re ligne vide ; l'en-t\u00eate est attendu en premi\u00e8re ligne")
   entete <- tryCatch(
@@ -142,9 +143,13 @@ lire_base <- function(dossier) {
   if (length(brut) != length(entete)) {
     mal_forme("l'en-t\u00eate a un champ de moins que les lignes de donn\u00e9es")
   }
+  # Assertion (réserve m-c de l'audit de la première partie) : aucun cas connu où read.csv()
+  # lit un autre nombre de lignes que de fins de ligne hors guillemets une fois la structure
+  # du fichier contrôlée ; la localisation des champs qui suit en dépend. Un écart serait
+  # une erreur de programmation, non un fichier mal formé.
   if (!is.na(champs$lignes) && nrow(brut) != champs$lignes) {
-    mal_forme(paste0(nrow(brut), " ligne(s) de donn\u00e9es lues pour ", champs$lignes,
-                     " fin(s) de ligne hors guillemets apr\u00e8s l'en-t\u00eate"))
+    stop(paste0("lire_base() : assertion : ", nrow(brut), " ligne(s) lues pour ", champs$lignes,
+                " fin(s) de ligne hors guillemets (aucun cas connu)"), call. = FALSE)
   }
   vides <- which(!nzchar(entete))
   if (length(vides) > 0L) mal_forme(paste0("en-t\u00eate : nom de colonne vide (champ ", vides[1L], ")"))
@@ -235,6 +240,29 @@ lire_base <- function(dossier) {
   }
   list(lignes = length(fins_ligne) - 1L, vides = vides, retours = retours[dedans[retours]],
        situer = situer)
+}
+
+# Guillemet non fermé : un guillemet qui n'appartient à aucun champ entre guillemets bien
+# formé ("...", guillemet intérieur doublé) est refusé avant toute lecture par read.csv(),
+# dont le message citerait le chemin d'un fichier temporaire (« incomplete final line found
+# by readTableHeader on '<chemin>' », relevé de l'audit) ; le refus nomme la ligne du
+# premier guillemet sans fermeture (en-tête, ou rang de la ligne de données, les fins de
+# ligne à l'intérieur d'un champ entre guillemets n'étant pas comptées).
+.guillemet_non_ferme <- function(octets, texte, mal_forme) {
+  positions <- which(octets == as.raw(0x22))
+  if (length(positions) == 0L) return(invisible(NULL))
+  guillemets <- gregexpr("\"(?:[^\"]++|\"\")*+\"", texte, perl = TRUE, useBytes = TRUE)[[1L]]
+  debut <- if (guillemets[1L] == -1L) integer(0) else as.integer(guillemets)
+  fin <- debut + attr(guillemets, "match.length")[seq_along(debut)] - 1L
+  rang <- findInterval(positions, debut)
+  isoles <- positions[rang == 0L | positions > fin[pmax(rang, 1L)]]
+  if (length(isoles) == 0L) return(invisible(NULL))
+  fins_ligne <- which(octets == as.raw(0x0a))
+  r <- findInterval(fins_ligne, debut)
+  fins_ligne <- fins_ligne[r == 0L | fins_ligne > fin[pmax(r, 1L)]]
+  ligne <- findInterval(isoles[1L], fins_ligne)
+  mal_forme(paste0("guillemet non ferm\u00e9, ",
+                   if (ligne == 0L) "en-t\u00eate" else paste0("ligne de donn\u00e9es ", ligne)))
 }
 
 # --- Écriture --------------------------------------------------------------------

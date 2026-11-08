@@ -12,3 +12,9 @@ export(controler_types)
 # tests (aller-retour) (ADR 0010, points 2 et 13).
 export(lire_base)
 export(ecrire_base)
+# Module `donnees` (#18) : controler_base(), appelée hors du package par l'application (bilan de
+# la base à l'arrêté avant le calcul, onglet Données) et par l'utilisateur sans Shiny ; puis,
+# en B2, par l'orchestration (ADR 0010, points 9 et 13 ; M147, M153).
+# Bilan partiel tant que le lot (c) n'est pas fini : les contrôles non encore écrits figurent
+# dans controles_non_executes, cause non_implemente (CONTROLES_NON_IMPLEMENTES).
+export(controler_base)
