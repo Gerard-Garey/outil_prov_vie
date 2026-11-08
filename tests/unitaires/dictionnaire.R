@@ -31,10 +31,10 @@ ecrire_csv_test <- function(df, chemin) {
 }
 octets <- function(chemin) readBin(chemin, "raw", n = file.info(chemin)$size)
 # Réécrit dictionnaire.txt avec les empreintes des CSV présents.
-reecrire_entete <- function(dossier, version = "1.3") {
+reecrire_entete <- function(dossier, version = "1.4") {
   empreintes <- lapply(fichiers_csv, function(f) ns$empreinte(octets(file.path(dossier, f))))
   names(empreintes) <- fichiers_csv
-  writeBin(ns$ecrire_liste(list(version = version, date_visa = as.Date("2026-11-07"),
+  writeBin(ns$ecrire_liste(list(version = version, date_visa = as.Date("2026-11-08"),
                                 empreintes = empreintes)),
            file.path(dossier, "dictionnaire.txt"))
 }
@@ -68,9 +68,9 @@ d <- dictionnaire()
 verifier_egal("champs de l'objet, dans l'ordre", names(d),
               c("version", "date_visa", "tables", "colonnes", "types_evenements", "parametres",
                 "defauts", "filiation"))
-verifier_egal("version 1.3", d$version, "1.3")
+verifier_egal("version 1.4", d$version, "1.4")
 verifier_egal("version égale à VERSION_DICTIONNAIRE_ATTENDUE", d$version, ns$VERSION_DICTIONNAIRE_ATTENDUE)
-verifier_egal("date de visa", d$date_visa, as.Date("2026-11-07"))
+verifier_egal("date de visa", d$date_visa, as.Date("2026-11-08"))
 verifier_egal("décomptes des six CSV", vapply(d[3:8], nrow, 0L),
               c(tables = 20L, colonnes = 171L, types_evenements = 17L, parametres = 26L,
                 defauts = 25L, filiation = 109L))
@@ -99,13 +99,17 @@ verifier_egal("D07 : table evenements (types d'événements cités)", d$defauts$
 verifier_egal("D09 : traitements R, X, H, S (R en gras dans la colonne Détection)",
               d$defauts$traitements[d$defauts$code == "D09"], "R;X;H;S")
 verifier_egal("ordre des types d'événements entier", d$types_evenements$ordre, 1:17)
-verifier("chaque référence désigne une colonne décrite", {
-  refs <- d$colonnes$reference[d$colonnes$reference != ""]
+verifier("chaque référence désigne une colonne décrite (référence composite comprise)", {
+  refs <- unlist(strsplit(d$colonnes$reference[d$colonnes$reference != ""], ";", fixed = TRUE))
   all(refs %in% paste(d$colonnes$table, d$colonnes$colonne, sep = "."))
 })
-verifier_egal("extraction.version_dictionnaire : seule modalité 1.3",
+verifier_egal("affiliations.college : clé étrangère composite (id_contrat, college) vers garanties_souscrites",
+              d$colonnes$reference[d$colonnes$table == "affiliations" & d$colonnes$colonne == "college"],
+              "garanties_souscrites.id_contrat;garanties_souscrites.college")
+verifier_egal("une seule référence composite", sum(grepl(";", d$colonnes$reference, fixed = TRUE)), 1L)
+verifier_egal("extraction.version_dictionnaire : seule modalité 1.4",
               d$colonnes$modalites[d$colonnes$table == "extraction" & d$colonnes$colonne == "version_dictionnaire"],
-              "1.3")
+              "1.4")
 verifier_egal("automate : événements d'entrée",
               d$types_evenements$type_evenement[d$types_evenements$etat_depuis == "depart"],
               c("entree_incapacite", "entree_invalidite"))
@@ -123,11 +127,11 @@ x <- copie_dico(); unlink(file.path(x, "dictionnaire.txt"))
 verifier_refus("dictionnaire.txt absent", lire_dictionnaire(x), "dictionnaire_invalide")
 x <- copie_dico(); writeBin(charToRaw("version 1.3\n"), file.path(x, "dictionnaire.txt"))
 verifier_refus("dictionnaire.txt illisible par lire_liste()", lire_dictionnaire(x), "dictionnaire_invalide")
-x <- copie_dico(); reecrire_entete(x, version = "1.2")
+x <- copie_dico(); reecrire_entete(x, version = "1.3")
 e <- refus_de(lire_dictionnaire(x))
-verifier("version 1.2 dans dictionnaire.txt : refus, attendu 1.3, reçu 1.2",
-         !is.null(e) && e$motif == "dictionnaire_invalide" && identical(e$attendu, "1.3") &&
-           identical(e$recu, "1.2"))
+verifier("version 1.3 dans dictionnaire.txt : refus, attendu 1.4, reçu 1.3",
+         !is.null(e) && e$motif == "dictionnaire_invalide" && identical(e$attendu, "1.4") &&
+           identical(e$recu, "1.3"))
 x <- copie_dico(); unlink(file.path(x, "parametres.csv"))
 verifier_refus("CSV absent", lire_dictionnaire(x), "dictionnaire_invalide")
 x <- copie_alteree("colonnes.csv", function(df) { df$domaine[1L] <- "autre"; df }, entete = FALSE)
@@ -136,6 +140,35 @@ x <- copie_alteree("colonnes.csv", function(df) { df$type[df$colonne == "sexe"][
 verifier_refus("type hors des cinq (factor)", lire_dictionnaire(x), "dictionnaire_invalide")
 x <- copie_alteree("colonnes.csv", function(df) { df$reference[df$reference != ""][1L] <- "adherents.inconnue"; df })
 verifier_refus("référence vers une colonne inconnue", lire_dictionnaire(x), "dictionnaire_invalide")
+avec_reference_college <- function(ref) {
+  copie_alteree("colonnes.csv", function(df) {
+    df$reference[df$table == "affiliations" & df$colonne == "college"] <- ref
+    df
+  })
+}
+motif_reference <- function(ref) {
+  e <- refus_de(lire_dictionnaire(avec_reference_college(ref)))
+  if (is.null(e)) "aucun" else paste(e$motif, conditionMessage(e))
+}
+verifier("référence composite vers deux tables : refus",
+         grepl("^dictionnaire_invalide .*composite vers plusieurs tables",
+               motif_reference("garanties_souscrites.id_contrat;contrats.id_contrat")))
+verifier("référence composite dont une colonne locale manque (code_garantie absente d'affiliations) : refus",
+         grepl("^dictionnaire_invalide .*colonne locale manque",
+               motif_reference("garanties_souscrites.code_garantie;garanties_souscrites.college")))
+verifier("référence composite qui vise une colonne inconnue : refus",
+         grepl("^dictionnaire_invalide .*colonne inconnue",
+               motif_reference("garanties_souscrites.id_contrat;garanties_souscrites.inconnue")))
+verifier("référence composite qui cite deux fois une colonne : refus",
+         grepl("^dictionnaire_invalide .*cite deux fois une colonne",
+               motif_reference("garanties_souscrites.college;garanties_souscrites.college")))
+for (ref in c("garanties_souscrites.id_contrat;", ";garanties_souscrites.college",
+              "garanties_souscrites.id_contrat;;garanties_souscrites.college")) {
+  verifier(paste0("référence mal formée « ", ref, " » : refus"),
+           startsWith(motif_reference(ref), "dictionnaire_invalide"))
+}
+verifier_egal("référence simple (garanties_souscrites.college) : forme admise par le module, l'écart au texte relève de la concordance",
+              motif_reference("garanties_souscrites.college"), "aucun")
 x <- copie_alteree("colonnes.csv", function(df) { df$defauts[df$defauts == "D01a"][1L] <- "D99"; df })
 verifier_refus("code de défaut inconnu", lire_dictionnaire(x), "dictionnaire_invalide")
 x <- copie_alteree("colonnes.csv", function(df) { df$colonne_saisie[df$saisie == "P"][1L] <- "date_effet"; df })
@@ -169,7 +202,7 @@ base <- lapply(d$tables$table, function(t) {
 names(base) <- d$tables$table
 base$extraction <- data.frame(date_extraction = as.Date("2026-12-31"),
                               debut_historique = as.Date("2017-01-01"),
-                              type_organisme = "mutuelle", version_dictionnaire = "1.3",
+                              type_organisme = "mutuelle", version_dictionnaire = "1.4",
                               devise = "EUR", stringsAsFactors = FALSE)
 avec <- function(table, colonne, valeur) {
   b <- base
@@ -249,10 +282,10 @@ verifier_refus("noms de colonnes dupliqués", controler_types(b), "liste_invalid
 
 section("controler_types : table extraction")
 e <- refus_de(controler_types(avec("extraction", "version_dictionnaire", "1.2")))
-verifier("version 1.2 : extraction_invalide, attendu 1.3, reçu 1.2",
+verifier("version 1.2 : extraction_invalide, attendu 1.4, reçu 1.2",
          !is.null(e) && e$motif == "extraction_invalide" && e$colonne == "version_dictionnaire" &&
-           identical(e$attendu, "1.3") && identical(e$recu, "1.2"))
-for (v in c("1.0", "1.1", "1.2", "1.30", " 1.3", "")) {
+           identical(e$attendu, "1.4") && identical(e$recu, "1.2"))
+for (v in c("1.0", "1.1", "1.2", "1.3", "1.40", " 1.4", "")) {
   verifier_refus(paste0("version « ", v, " » refusée"),
                  controler_types(avec("extraction", "version_dictionnaire", v)), "extraction_invalide")
 }
@@ -268,7 +301,7 @@ verifier_egal("version lue avant les autres colonnes d'extraction : extraction_i
               motif_de(controler_types(b)), "extraction_invalide")
 b <- avec("extraction", "version_dictionnaire", "1.2"); b$extraction$devise <- NULL
 verifier_egal("version lue avant les colonnes absentes d'extraction", motif_de(controler_types(b)), "extraction_invalide")
-b <- base; b$extraction$version_dictionnaire <- 1.3
+b <- base; b$extraction$version_dictionnaire <- 1.4
 verifier_egal("version de type numeric : type_incompatible (non lue)", motif_de(controler_types(b)), "type_incompatible")
 b <- base; b$extraction <- rbind(base$extraction, base$extraction); b$extraction$version_dictionnaire[2L] <- "1.2"
 verifier_egal("deux lignes dont une d'une autre version : extraction_invalide sur la version",
@@ -364,6 +397,16 @@ temoin("sous-paramètres permutés (D07)", "defauts.csv", function(df) {
   df$sous_parametres[df$code == "D07"] <- "fin_de_charge;deces_connu_ailleurs"
   df
 }, "ordre")
+temoin("sous-paramètre ajouté qui porte le nom d'une table (D04b : evenements, réserve R1, M138)", "defauts.csv",
+       function(df) { df$sous_parametres[df$code == "D04b"] <- "evenements"; df }, "D04b : .*nom d'une table")
+temoin("sous-paramètre ajouté qui porte le nom d'une modalité (D03a : concubin)", "defauts.csv",
+       function(df) { df$sous_parametres[df$code == "D03a"] <- "part_non_au_hasard;concubin"; df },
+       "D03a : .*nom d'une table ou d'une modalit")
+temoin("référence composite de affiliations.college restée à la forme de la version 1.3", "colonnes.csv",
+       function(df) {
+         df$reference[df$table == "affiliations" & df$colonne == "college"] <- "garanties_souscrites.college"
+         df
+       }, "colonnes\\.csv:62 .*champ `reference`")
 r <- racine_copie(); alterer(r, "parametres.csv", function(df) { df$unite[1L] <- "x"; df }, entete = FALSE)
 verifier("CSV modifié sans mise à jour de l'empreinte : ECHEC", echoue_sur(lancer_controle(r), "empreinte de parametres\\.csv"))
 r <- racine_copie()
@@ -374,6 +417,6 @@ alterer(r, "defauts.csv", function(df) { df$sous_parametres[df$code == "D09"] <-
 verifier("sous-paramètre oublié (part_signe_inverse) : ECHEC", echoue_sur(lancer_controle(r), "part_signe_inverse"))
 r <- racine_copie()
 outils_r <- file.path(r, "R", "outils.R")
-writeBin(charToRaw(sub("VERSION_DICTIONNAIRE_ATTENDUE <- \"1.3\"", "VERSION_DICTIONNAIRE_ATTENDUE <- \"1.4\"",
+writeBin(charToRaw(sub("VERSION_DICTIONNAIRE_ATTENDUE <- \"1.4\"", "VERSION_DICTIONNAIRE_ATTENDUE <- \"1.5\"",
                        rawToChar(octets(outils_r)), fixed = TRUE, useBytes = TRUE)), outils_r)
 verifier("constante du moteur différente de la version du texte : ECHEC", echoue_sur(lancer_controle(r), "version"))

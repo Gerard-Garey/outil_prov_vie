@@ -19,16 +19,16 @@
 #     l'automate (etat_depuis : puces de la section 4, dans leur ordre ; etat_vers : effet)
 #     et la table v1 d'une colonne renommee (designee par la cible), sauf :
 #   - les sous-parametres des defauts, transcrits a la main : chacun doit etre cite entre
-#     accents graves dans la cellule d'intensite, dans l'ordre de la cellule, et tout autre
-#     jeton de la cellule (hors le parametre d'intensite) doit etre une table ou une
-#     modalite.
+#     accents graves dans la cellule d'intensite, dans l'ordre de la cellule, sans porter le
+#     nom d'une table ni d'une modalite, et tout autre jeton de la cellule (hors le
+#     parametre d'intensite) doit etre une table ou une modalite.
 # Garde-fou des regles : dans le domaine d'une colonne character, tout jeton qui n'est pas
 # une modalite de la colonne doit avoir un autre sens connu (table, colonne, reference,
 # code de garantie, nature de sinistre, type d'evenement, modalite d'une autre colonne) ou
 # figurer dans JETONS_ADMIS, chacun motive.
 # Limites (mutations que le script ne peut pas detecter) :
 #   - un sous-parametre oublie dont le nom est aussi une table ou une modalite ;
-#   - les regles de derivation decrivent le texte de la version 1.3 : une version nouvelle
+#   - les regles de derivation decrivent le texte de la version 1.4 : une version nouvelle
 #     peut demander de les etendre (le script echoue alors sur la forme non reconnue ou sur
 #     l'ecart, il ne valide pas en silence ce qu'il ne lit pas) ;
 #   - le sens des cellules transcrites mot pour mot (domaine, effet, objet...) n'est pas
@@ -326,6 +326,9 @@ derive_colonnes <- function(lignes, tables, types, parametres) {
     domaine <- t$c3
     reference <- vapply(seq_along(domaine), function(i) {
       d <- domaine[i]
+      # Cle etrangere composite (version 1.4) : \u00ab -> (`t.c1`, `t.c2`) \u00bb donne t.c1;t.c2.
+      composite <- regmatches(d, regexec(paste0(FLECHE, " \\((`[a-z_]+\\.[a-z_]+`(, `[a-z_]+\\.[a-z_]+`)+)\\)"), d))[[1L]]
+      if (length(composite)) return(joindre(jetons(composite[2L])))
       vers <- regmatches(d, regexec(paste0(FLECHE, " `([a-z_]+)`"), d))[[1L]]
       if (length(vers) == 2L) return(paste0(vers[2L], ".", pk1[[vers[2L]]]))
       dans <- regmatches(d, regexec("existe dans `([a-z_]+)`", d))[[1L]]
@@ -741,12 +744,20 @@ for (i in seq_len(nrow(de))) {
   } else if (!identical(sp, j[j %in% sp][!duplicated(j[j %in% sp])])) {
     echec(sprintf("%s : sous-param\u00e8tres hors de l'ordre de la cellule d'intensit\u00e9", de$code[i]), chemin("defauts.csv"), i + 1L)
   }
+  # Un sous-parametre ne porte pas le nom d'une table ni d'une modalite : sans cette regle,
+  # un jeton de la cellule qui designe une table (tables tirees de D04b) ou une modalite
+  # pourrait etre ajoute aux sous-parametres sans ecart (reserve R1 de l'audit, M138).
+  confondus <- sp[sp %in% c(noms_tables, toutes_modalites)]
+  if (length(confondus)) {
+    echec(sprintf("%s : sous-param\u00e8tres qui portent le nom d'une table ou d'une modalit\u00e9 : %s", de$code[i],
+                  paste(confondus, collapse = ", ")), chemin("defauts.csv"), i + 1L)
+  }
   autres <- setdiff(j[-1L], c(sp, noms_tables, toutes_modalites))
   if (length(autres)) {
     echec(sprintf("%s : jetons de la cellule d'intensit\u00e9 non retenus : %s", de$code[i], paste(autres, collapse = ", ")),
           chemin("defauts.csv"), i + 1L)
   }
 }
-if (.n_echec == avant) ok("defauts.csv : sous-param\u00e8tres nomm\u00e9s dans la cellule d'intensit\u00e9, dans son ordre, aucun jeton oubli\u00e9")
+if (.n_echec == avant) ok("defauts.csv : sous-param\u00e8tres nomm\u00e9s dans la cellule d'intensit\u00e9, dans son ordre, aucun jeton oubli\u00e9, aucun nom de table ni de modalit\u00e9")
 
 fin()
