@@ -270,10 +270,10 @@ verifier("CONTROLES_NON_IMPLEMENTES : codes connus, tables et colonnes du dictio
          })
 verifier("D02c (âge) : écrit, plus déclaré ; D02b, D03g, D04a, D04b, somme_parts : écrits, plus déclarés",
          !any(c("D02c", "D02b", "D03g", "D04a", "D04b", "somme_parts") %in% ni$code))
-# Report déclaré à la fermeture de #18 (décision du mainteneur ; issue de report à créer, #18) :
+# Report déclaré à la fermeture de #18 (décision du mainteneur ; #34, #18) :
 # CONTROLES_NON_IMPLEMENTES ne contient que les contrôles reportés, liste figée : D03d, D07 (a)
 # et (b) (evenements, colonne NA), D08, D09 aux seuils, D10 (d) à (f), D11, D12, D14.
-verifier_egal("CONTROLES_NON_IMPLEMENTES : seuls les contrôles reportés (issue de report à créer, #18)",
+verifier_egal("CONTROLES_NON_IMPLEMENTES : seuls les contrôles reportés (#34, #18)",
               cle3(ni), c("D03d assures situation_familiale", "D07 evenements NA", "D08 sinistres NA",
                           "D09 parametres NA", "D09 affiliations NA", "D09 evenements NA", "D09 prestations NA",
                           "D09 cotisations NA", "D10d evenements NA", "D10e beneficiaires qualite", "D10f evenements NA",
@@ -1633,6 +1633,35 @@ verifier_egal("D07 (c) : age_limite absent (RE1), à deux valeurs par palier (RE
                    nd_d07(cb(deux_etudes_do4, conventions = cv("atteinte")))),
               list(character(0), "rentes NA parametre_non_defini", character(0), "rentes NA parametre_non_defini",
                    "dossiers NA parametre_non_defini", "dossiers NA parametre_non_defini"))
+# avis d'actuary après l'audit de (iii) : sur un dossier double_effet à plusieurs enfants, la
+# limite non déterminable n'est notée que si elle peut décider de la détection. DO4 : ME1
+# (situation autre, age_limite 26 déterminée) et ME2 (apprenti de 27 ans, age_limite_etudes à
+# deux valeurs) ; ME1 de 16 ans, non éteint de façon déterminée, écarte le dossier quel que soit
+# ME2 ; ME1 de 27 ans, éteint, laisse la détection suspendue à ME2
+deux_enfants_do4 <- function(dn1) {
+  b <- deux_etudes_do4
+  b$famille <- rbind(transform(b$famille, date_naissance = D(dn1), situation = "autre"),
+                     transform(b$famille, id_membre = "ME2", date_naissance = D("1999-03-01"), situation = "apprenti"))
+  b
+}
+r_jeune <- cb(deux_enfants_do4("2010-03-01"), conventions = cv("atteinte"))
+r_eteint <- cb(deux_enfants_do4("1999-03-01"), conventions = cv("atteinte"))
+verifier_egal("D07 (c) : DO4 à deux enfants, ME1 jeune (limite déterminée non atteinte) et ME2 au paramètre ambigu : aucune ligne parametre_non_defini, aucune détection ; ME1 éteint et ME2 ambigu : ligne maintenue (dossiers, colonne NA), aucune détection de DO4",
+              list(nd_d07(r_jeune), d07(r_jeune), nd_d07(r_eteint), d07(r_eteint)),
+              list(character(0), character(0), "dossiers NA parametre_non_defini", "rentes RE1"))
+# avis d'actuary (réserve m1 de l'audit) : un enfant jamais éteint (handicapé sous
+# prolongation_handicap, ou de naissance manquante, D03a) écarte lui aussi le dossier quel que
+# soit l'enfant ambigu ; témoin : ME1 handicapé sans prolongation, éteint à 27 ans
+b1 <- deux_enfants_do4("1999-03-01"); b1$famille$situation[b1$famille$id_membre != "ME2"] <- "handicape"
+b1$garanties_souscrites$prolongation_handicap[b1$garanties_souscrites$id_garantie_souscrite == "GS5"] <- TRUE
+b1b <- b1; b1b$garanties_souscrites$prolongation_handicap[b1b$garanties_souscrites$id_garantie_souscrite == "GS5"] <- FALSE
+b2 <- deux_enfants_do4("1999-03-01"); b2$famille$date_naissance[b2$famille$id_membre != "ME2"] <- NA
+r_b2 <- cb(b2, conventions = cv("atteinte"))
+verifier_egal("D07 (c) : DO4, ME1 handicapé sous prolongation_handicap et ME2 ambigu : aucune ligne parametre_non_defini ; sans prolongation (témoin) : ligne maintenue ; ME1 de naissance manquante (D03a émis) et ME2 ambigu : aucune ligne",
+              list(nd_d07(cb(b1, conventions = cv("atteinte"))), nd_d07(cb(b1b, conventions = cv("atteinte"))), nd_d07(r_b2),
+                   unique(paste(ligne(r_b2$controles, "D03a")$table, ligne(r_b2$controles, "D03a")$colonne,
+                                ligne(r_b2$controles, "D03a")$identifiants))),
+              list(character(0), "dossiers NA parametre_non_defini", character(0), "famille date_naissance ME1|2025-02-01"))
 # constat M2 de l'audit : aucune conversion d'une colonne refusée avant le contrôle des causes
 # (la batterie tourne sous options(warn = 2))
 op <- options(warn = 2)
