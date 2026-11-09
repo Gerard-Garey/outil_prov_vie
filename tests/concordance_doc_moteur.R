@@ -14,6 +14,39 @@
 #     \end{longtable} ou \end{tabularx} ;
 #   - les fonctions recensées sont celles de premier niveau de R/<module>.R dont le nom ne
 #     commence pas par un point ; chaque export() du NAMESPACE doit figurer dans un tableau.
+#
+# Valeurs des constantes (issue #37). Un tableau de constantes est un tableau dont la
+# première cellule d'en-tête est « Constante » ; son module est celui du dernier marqueur
+# `% concordance-fonctions` rencontré plus haut dans le document. Chaque ligne cite la
+# constante dans sa première cellule par \code{NOM} ; la valeur se lit dans la deuxième
+# cellule et, pour un tableau à trois colonnes, dans la troisième. Quatre formes littérales
+# sont comparées à la constante de R/<module>.R, les autres cellules n'étant pas lues :
+#   - chaîne : deuxième cellule seulement, qui commence par \code{"texte"} ;
+#   - entier : deuxième cellule seulement, qui commence par « entier \code{N} » (la
+#     constante doit être de type integer) ;
+#   - décompte : « <nombre> motifs | chaînes | lignes | CSV », hors des \code{}, le nombre
+#     étant en lettres jusqu'à vingt ou en chiffres ; comparé à la longueur de la constante
+#     (au nombre de lignes d'un data.frame) ; un nombre composé en lettres (vingt-deux) est
+#     un écart, faute d'être lu ;
+#   - liste de valeurs : suite de \code{valeur} séparés par « , », sans guillemets, au début
+#     de la deuxième cellule ou juste après « ~: » (deuxième et troisième cellules) ;
+#     comparée à la constante (vecteur atomique), dans l'ordre.
+# Règle des \code{"..."} : tout \code{"..."} d'une cellule de valeur qu'aucune forme n'a
+# consommé est un écart, où qu'il se trouve (« version \code{"1.3"} », « \code{"1.5"}
+# (anciennement \code{"1.3"}) », une chaîne en troisième cellule, une liste écrite avec
+# guillemets) ; seule la forme « chaîne » en consomme un. Une cellule sans \code{"..."} dont
+# aucune forme n'est reconnue reste non lue (la constante est alors nommée « sans valeur
+# littérale lue »).
+# Rangées : une rangée peut tenir sur plusieurs lignes du source ; elle est lue du « & » de
+# sa première ligne au « \\ » final, qui peut être suivi de « [...] » et de filets (\hline,
+# \midrule, \toprule, \bottomrule). Sont des écarts une rangée sans « \\ » final avant la fin
+# du tableau, et une rangée qui a plus de cellules que l'en-tête « Constante » (rangées
+# fusionnées par un « \\ » manquant).
+# Sont aussi des écarts : une constante citée mais absente du module ou non évaluable, une
+# constante citée deux fois, un tableau avant tout marqueur de module. La valeur d'une
+# constante s'obtient sans charger le package, en évaluant les affectations de premier
+# niveau de R/<module>.R qui sont des fonctions ou dont le nom est en majuscules (modules
+# pris dans l'ordre de MODULES).
 
 options(warn = 2)
 args <- commandArgs(TRUE)
@@ -93,6 +126,185 @@ exports_du_namespace <- function(chemin) {
   noms
 }
 
+# --- Valeurs des constantes (issue #37) ---------------------------------------------------
+
+NOMBRES <- c(zero = 0L, un = 1L, une = 1L, deux = 2L, trois = 3L, quatre = 4L, cinq = 5L,
+             six = 6L, sept = 7L, huit = 8L, neuf = 9L, dix = 10L, onze = 11L, douze = 12L,
+             treize = 13L, quatorze = 14L, quinze = 15L, seize = 16L, "dix-sept" = 17L,
+             "dix-huit" = 18L, "dix-neuf" = 19L, vingt = 20L)
+MOTS_NOMBRES <- c(names(NOMBRES), "trente", "quarante", "cinquante", "soixante", "cent",
+                  "vingts", "cents", "et")
+MOTIF_DECOMPTE <- paste0("(?<![[:alpha:]-])([[:alpha:]]+(?:-[[:alpha:]]+)*|[0-9]+) ",
+                         "(motifs|cha[^ ]{1,2}nes|lignes|CSV)(?![[:alpha:]])")
+MOTIF_SUITE_CODE <- "^\\\\code\\{[^{}\"]*\\}(?:, \\\\code\\{[^{}\"]*\\})*"
+
+# Affectations de premier niveau évaluables : fonctions (toutes) et constantes (nom en
+# majuscules), évaluées sans le package, modules dans l'ordre de MODULES. Rend, par nom de
+# constante, list(module, valeur, erreur).
+constantes_du_code <- function(racine) {
+  env <- new.env(parent = baseenv())
+  constantes <- list()
+  for (module in MODULES) {
+    chemin <- file.path(racine, "R", paste0(module, ".R"))
+    if (!file.exists(chemin)) next
+    for (expr in parse(chemin, keep.source = FALSE)) {
+      if (!(is.call(expr) && as.character(expr[[1L]])[1L] %in% c("<-", "=") && is.name(expr[[2L]]))) next
+      nom <- as.character(expr[[2L]])
+      if (is.call(expr[[3L]]) && identical(expr[[3L]][[1L]], as.name("function"))) {
+        assign(nom, eval(expr[[3L]], env), envir = env)
+      } else if (grepl("^[A-Z][A-Z0-9_]*$", nom)) {
+        r <- tryCatch(list(valeur = eval(expr[[3L]], env), erreur = NA_character_),
+                      error = function(e) list(valeur = NULL, erreur = conditionMessage(e)))
+        if (is.na(r$erreur)) assign(nom, r$valeur, envir = env)
+        constantes[[nom]] <- list(module = module, valeur = r$valeur, erreur = r$erreur)
+      }
+    }
+  }
+  constantes
+}
+
+# Fin de rangée : « \\ », suivi au plus d'un « [...] » puis de filets (\hline, \midrule...).
+FIN_RANGEE <- "\\\\\\\\(\\[[^]]*\\])?(\\s*\\\\(hline|midrule|toprule|bottomrule))*\\s*$"
+cellules_ligne <- function(l) {
+  l <- sub(paste0("\\s*", FIN_RANGEE), "", l)
+  trimws(strsplit(paste0(l, "&"), "(?<!\\\\)&", perl = TRUE)[[1L]])
+}
+a_cellules <- function(l) grepl("(?<!\\\\)&", l, perl = TRUE)
+sans_echappement <- function(x) gsub("-{}-", "--", gsub("\\_", "_", x, fixed = TRUE), fixed = TRUE)
+
+# Tableaux de constantes du document : lignes (nom, module, cellules 2 et 3, ligne du
+# source) et anomalies de lecture.
+lire_constantes <- function(chemin) {
+  # Octets du source sans marque d'encodage, comme les chaînes que rend parse() : la
+  # comparaison à la constante du code et l'affichage valent quelle que soit la locale.
+  lignes <- readLines(chemin, warn = FALSE)
+  rangees <- list()
+  anomalies <- character(0)
+  module <- NA_character_
+  dedans <- FALSE
+  # Une rangée peut tenir sur plusieurs lignes du source : on réunit les lignes depuis
+  # celle qui porte la première « & » jusqu'à celle qui finit par « \\ ».
+  tampon <- ""
+  debut <- NA_integer_
+  ncol <- NA_integer_  # nombre de cellules de l'en-tête « Constante » du tableau courant
+  sans_fin <- function(texte) {
+    if (nzchar(tampon)) {
+      anomalies <<- c(anomalies, sprintf("ligne %d : rangée sans \\\\ final %s", debut, texte))
+    }
+    tampon <<- ""
+  }
+  for (i in seq_along(lignes)) {
+    l <- lignes[i]
+    marque <- regmatches(l, regexec("^\\s*%\\s*concordance-fonctions\\s*:\\s*(\\S+)\\s*$", l))[[1L]]
+    if (length(marque) == 2L) {
+      sans_fin("avant un nouveau marqueur de module")
+      module <- marque[2L]
+      dedans <- FALSE
+    } else if (dedans) {
+      if (grepl("\\\\end\\{(tabular|longtable|tabularx)\\}", l)) {
+        sans_fin("avant la fin du tableau")
+        dedans <- FALSE
+      } else if (!grepl("^\\s*%", l) && (nzchar(tampon) || a_cellules(l))) {
+        if (!nzchar(tampon)) debut <- i
+        tampon <- if (nzchar(tampon)) paste(tampon, l) else l
+        if (grepl(FIN_RANGEE, l)) {
+          cel <- cellules_ligne(tampon)
+          nom <- regmatches(cel[1L], regexec("^\\\\code\\{([^{}]*)\\}$", cel[1L]))[[1L]]
+          if (length(cel) > ncol) {
+            anomalies <- c(anomalies, sprintf(
+              "ligne %d : rangée fusionnée ou \\\\ manquant (%d cellules, l'en-tête en a %d)", debut, length(cel), ncol))
+          } else if (length(nom) != 2L) {
+            anomalies <- c(anomalies, sprintf("ligne %d : première cellule sans \\code{NOM} seul", debut))
+          } else {
+            rangees[[length(rangees) + 1L]] <- list(nom = sans_echappement(nom[2L]), module = module,
+                                                    c2 = cel[2L], c3 = if (length(cel) >= 3L) cel[3L] else "",
+                                                    ligne = debut)
+          }
+          tampon <- ""
+        }
+      }
+    } else if (a_cellules(l) && grepl("\\\\textbf\\{Constante\\}", cellules_ligne(l)[1L])) {
+      dedans <- TRUE
+      ncol <- length(cellules_ligne(l))
+      if (is.na(module)) {
+        anomalies <- c(anomalies, sprintf("ligne %d : tableau de constantes avant tout marqueur de module", i))
+      }
+    }
+  }
+  sans_fin("avant la fin du document")
+  list(rangees = rangees, anomalies = anomalies)
+}
+
+abrege <- function(x) {
+  if (is.data.frame(x)) return(sprintf("data.frame de %d ligne(s)", nrow(x)))
+  t <- paste(deparse(x, width.cutoff = 500L), collapse = " ")
+  if (nchar(t) > 70L) paste0(substr(t, 1L, 67L), "...") else t
+}
+
+# Une ligne de tableau de constantes face à la valeur `v` : rend `verifs` (liste de
+# list(forme, doc, ok)), `lecture` (formes reconnues mais non lues) et `inconnues` (un
+# message par cellule lue, deuxième ou troisième, où des \code{"..."} restent non consommés).
+comparer_ligne <- function(v, c2, c3) {
+  verifs <- list()
+  ajouter <- function(forme, doc, ok) verifs[[length(verifs) + 1L]] <<- list(forme = forme, doc = doc, ok = isTRUE(ok))
+  lecture <- character(0)
+  chaine_lue <- 0L  # nombre de \code{"..."} que la forme « chaîne » consomme (au plus un, en c2)
+  m <- regmatches(c2, regexec("^\\\\code\\{\"([^\"]*)\"\\}", c2))[[1L]]
+  if (length(m) == 2L) {
+    doc <- sans_echappement(m[2L])
+    ajouter("chaîne", abrege(doc), is.character(v) && length(v) == 1L && identical(v, doc))
+    chaine_lue <- 1L
+  }
+  m <- regmatches(c2, regexec("^[Ee]ntier \\\\code\\{([0-9]+)\\}", c2))[[1L]]
+  if (length(m) == 2L) {
+    ajouter("entier", m[2L], is.integer(v) && length(v) == 1L && identical(v, as.integer(m[2L])))
+  }
+  cellules <- c(c2, c3)
+  for (k in 1:2) {
+    texte <- gsub("\\\\code\\{[^{}]*\\}", "X", cellules[k])
+    for (trouve in regmatches(texte, gregexpr(MOTIF_DECOMPTE, texte, perl = TRUE))[[1L]]) {
+      mot <- tolower(sub(" [^ ]+$", "", trouve))
+      n <- if (grepl("^[0-9]+$", mot)) as.integer(mot) else unname(NOMBRES[mot])
+      if (is.na(n)) {
+        if (grepl("-", mot, fixed = TRUE) && all(strsplit(mot, "-", fixed = TRUE)[[1L]] %in% MOTS_NOMBRES)) {
+          lecture <- c(lecture, sprintf("décompte en lettres non lu : %s", trouve))
+        }
+        next
+      }
+      ajouter("décompte", trouve, (if (is.data.frame(v)) nrow(v) else length(v)) == n)
+    }
+  }
+  # Listes de valeurs : début de la deuxième cellule, et segment qui suit chaque « ~: ».
+  decouper <- function(x) trimws(strsplit(paste0(x, "~:"), "~:", fixed = TRUE)[[1L]])
+  for (k in 1:2) {
+    segments <- if (k == 1L) decouper(c2) else decouper(c3)[-1L]
+    for (seg in segments) {
+      suite <- regmatches(seg, regexpr(MOTIF_SUITE_CODE, seg, perl = TRUE))
+      if (length(suite) == 1L) {
+        jetons <- regmatches(suite, gregexpr("\\\\code\\{[^{}\"]*\\}", suite))[[1L]]
+        valeurs <- sans_echappement(sub("^\\\\code\\{(.*)\\}$", "\\1", jetons))
+        ajouter("liste", paste(valeurs, collapse = ", "),
+                is.atomic(v) && is.null(dim(v)) && identical(as.character(v), valeurs))
+      }
+    }
+  }
+  # Tout \code{"..."} qu'aucune forme n'a consommé est un écart : seule la forme « chaîne »
+  # en consomme un (les valeurs d'une liste s'écrivent sans guillemets).
+  inconnues <- character(0)
+  for (k in 1:2) {
+    restants <- lengths(regmatches(cellules[k], gregexpr("\\code{\"", cellules[k], fixed = TRUE))) -
+      (if (k == 1L) chaine_lue else 0L)
+    if (restants > 0L) {
+      liste_guillemets <- grepl("(^|~:)\\s*\\\\code\\{\"[^{}]*\"\\}, \\\\code\\{\"", cellules[k])
+      inconnues <- c(inconnues, sprintf(
+        "la cellule %d contient %d \\code{\"...\"} non lu(s)%s", k + 1L, restants,
+        if (liste_guillemets) " (liste de valeurs écrite avec guillemets : écrire les valeurs sans guillemets)" else
+          " (aucune forme reconnue ne le consomme)"))
+    }
+  }
+  list(verifs = verifs, lecture = lecture, inconnues = inconnues)
+}
+
 section("concordance documentation <-> code")
 document <- file.path(racine, "docs", "latex", "doc_outil_prov_vie.tex")
 if (!file.exists(document)) {
@@ -139,6 +351,51 @@ if (!file.exists(document)) {
     ecart("exports du NAMESPACE", paste("non cités dans le document :", paste(non_cites, collapse = ", ")))
   } else {
     accord(sprintf("exports du NAMESPACE : %d, tous cités", length(exports)))
+  }
+
+  # Valeurs des constantes (issue #37).
+  cl <- lire_constantes(document)
+  for (a in cl$anomalies) ecart("tableaux de constantes", a)
+  code_constantes <- constantes_du_code(racine)
+  modules_cl <- unique(vapply(cl$rangees, function(r) if (is.na(r$module)) "" else r$module, ""))
+  for (module in modules_cl[modules_cl != ""]) {
+    rangees <- Filter(function(r) identical(r$module, module), cl$rangees)
+    echecs <- 0L
+    signaler <- function(nom, detail) {
+      echecs <<- echecs + 1L
+      ecart(paste0("constante ", nom, " (module ", module, ")"), detail)
+    }
+    noms <- vapply(rangees, function(r) r$nom, "")
+    for (nom in unique(noms[duplicated(noms)])) signaler(nom, "citée deux fois dans le tableau")
+    comparees <- 0L
+    sans_litteral <- character(0)
+    for (r in rangees) {
+      c <- code_constantes[[r$nom]]
+      if (is.null(c) || !identical(c$module, module)) {
+        signaler(r$nom, sprintf("ligne %d : absente de R/%s.R (constante en majuscules attendue)", r$ligne, module))
+        next
+      }
+      if (!is.na(c$erreur)) {
+        signaler(r$nom, sprintf("ligne %d : non évaluable sans le package (%s)", r$ligne, c$erreur))
+        next
+      }
+      cmp <- comparer_ligne(c$valeur, r$c2, r$c3)
+      for (msg in cmp$lecture) signaler(r$nom, sprintf("ligne %d : %s", r$ligne, msg))
+      for (msg in cmp$inconnues) signaler(r$nom, sprintf("ligne %d : %s", r$ligne, msg))
+      if (length(cmp$verifs) == 0L) sans_litteral <- c(sans_litteral, r$nom)
+      for (v in cmp$verifs) {
+        comparees <- comparees + 1L
+        if (!v$ok) {
+          signaler(r$nom, sprintf("ligne %d : %s du document « %s », code %s", r$ligne, v$forme, v$doc,
+                                  abrege(c$valeur)))
+        }
+      }
+    }
+    if (echecs == 0L) {
+      accord(sprintf("constantes du module %s : %d citée(s), %d valeur(s) littérale(s) concordante(s)%s",
+                     module, length(rangees), comparees,
+                     if (length(sans_litteral)) paste0(" ; sans valeur littérale lue : ", paste(sans_litteral, collapse = ", ")) else ""))
+    }
   }
 }
 
