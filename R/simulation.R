@@ -49,7 +49,11 @@ VERSION_LOI_VRAIE <- 1L
 # VERSION_SIMULATEUR, et son commit est un changement de résultat sur les jeux (tableau avant /
 # après des volumétries et du registre) ; un refactorage sans effet garde la version. Un jeu
 # d'une version antérieure est retiré par un commit donnees: et remplacé par un jeu <nn+1>
-# (M189).
+# (M189). La version garantit la sortie pour les jeux versionnés et pour toute entrée admise par la
+# version courante : les corrections de la revue finale (refus d'entrées autrefois admises par
+# les contrôles d'entrée ; D01b restreint aux encaissements antérieurs à l'extraction) ont été
+# faites avant tout jeu publié hors de la branche, sans changer les jeux versionnés, et n'ont
+# pas incrémenté la version (décision du mainteneur, 9 novembre 2026).
 VERSION_SIMULATEUR <- 1L
 
 # Catalogue des défauts que le simulateur sait injecter (dictionnaire, § 9), dans l'ordre de
@@ -83,7 +87,7 @@ DEFAUTS_SIMULES <- data.frame(
   table = c("cotisations", "prestations", "evenements", "assures", "assures", "affiliations", "prestations",
             "cotisations", "evenements", "evenements", "prestations", "sinistres"),
   eligibles = c(
-    "encaissements (copie sous un nouvel identifiant, mouvement dat\u00e9 apr\u00e8s l'original)",
+    "encaissements ant\u00e9rieurs \u00e0 l'extraction (copie sous un nouvel identifiant, mouvement dat\u00e9 apr\u00e8s l'original, au plus \u00e0 l'extraction)",
     "indemnit\u00e9s journali\u00e8res \u00e0 p\u00e9riode non r\u00e9duite \u00e0 un jour (d\u00e9but et fin permut\u00e9s)",
     "\u00e9v\u00e9nements d'un type non programmable (saisie avant la date d'effet)",
     "assur\u00e9s (date de naissance effac\u00e9e)",

@@ -403,10 +403,14 @@ ecrire_base <- function(donnees, dossier) {
 # déclarations), puis empreintes.md5 : une ligne « <md5>  <chemin relatif> » par fichier, triés
 # (tri radix), au format de `md5sum -c` lancé depuis `dossier`. Refuse, avant toute écriture
 # (création du dossier comprise) : un objet qui n'a pas la forme d'un jeu simulé, ou que
-# lire_jeu() ne relirait pas identique -- tables de la base hors de l'ordre du dictionnaire,
-# manifeste$volumetrie différente des nombres de lignes de la base, champ declarations NULL
-# (jeu_invalide) ; les refus d'ecrire_base() et d'ecrire_liste() (pour une table de vérité, au
-# nom d'ecrire_jeu() et de verite/<nom>). Rend `dossier`, invisible.
+# lire_jeu() ne relirait pas identique -- classe autre que jeu_simule seule, attribut du jeu,
+# de base ou de verite hors names (et class pour le jeu), tables de la base hors de l'ordre du
+# dictionnaire, manifeste$volumetrie différente des nombres de lignes de la base, champ
+# declarations NULL, table (base ou verite) à noms de lignes non automatiques ou à attribut de
+# table ou de colonne que le CSV ne conserve pas (jeu_invalide ; le message nomme l'élément, et
+# la colonne) ; les refus d'ecrire_base() et d'ecrire_liste() (qui refuse tout attribut de
+# loi_vraie, manifeste et declarations), pour une table de vérité au nom d'ecrire_jeu() et de
+# verite/<nom>. Rend `dossier`, invisible.
 ecrire_jeu <- function(jeu, dossier) {
   .controler_dossier(dossier, "ecrire_jeu")
   .controler_jeu(jeu)
@@ -525,7 +529,15 @@ lire_jeu <- function(dossier) {
 # data.frame ; manifeste$colonnes_verite qui décrit exactement les colonnes de verite.
 .controler_jeu <- function(jeu) {
   refus <- function(raison) .refus_lecture(paste0("ecrire_jeu() : ", raison), motif = "jeu_invalide")
-  if (!inherits(jeu, "jeu_simule") || !is.list(jeu)) refus("objet de classe jeu_simule attendu")
+  if (!identical(class(jeu), "jeu_simule") || !is.list(jeu)) refus("objet de classe jeu_simule seule attendu")
+  # lire_jeu() rend un jeu qui ne porte que names et class, des listes base et verite qui ne
+  # portent que names (audit, m1)
+  if (!setequal(names(attributes(jeu)), c("names", "class"))) refus("attribut du jeu autre que names et class")
+  for (champ in c("base", "verite")) {
+    if (length(setdiff(names(attributes(jeu[[champ]])), "names")) > 0L) {
+      refus(paste0("attribut de la liste ", champ, " autre que names (lire_jeu() ne le relit pas)"))
+    }
+  }
   noms <- names(jeu)
   if (!(identical(noms, .CHAMPS_JEU) || identical(noms, c(.CHAMPS_JEU, "declarations")))) {
     refus("champs base, loi_vraie, verite, manifeste (et declarations) attendus, dans cet ordre")
@@ -548,9 +560,10 @@ lire_jeu <- function(dossier) {
   invisible(NULL)
 }
 
-# Conditions de relecture identique propres à la base (revue finale, m5) : lire_base() rend les
-# tables dans l'ordre du dictionnaire et lire_jeu() compare manifeste$volumetrie aux nombres de
-# lignes relus. Appelée après .contenus_base() (base de types contrôlés).
+# Conditions de relecture identique (revue finale, m5) : lire_base() rend les tables dans
+# l'ordre du dictionnaire, lire_jeu() compare manifeste$volumetrie aux nombres de lignes relus,
+# et une table relue ne porte ni noms de lignes ni attribut que le CSV ne conserve pas (n2).
+# Appelée après .contenus_base() (base de types contrôlés).
 .controler_relecture_jeu <- function(jeu) {
   refus <- function(raison) .refus_lecture(paste0("ecrire_jeu() : ", raison), motif = "jeu_invalide")
   dico <- dictionnaire()
@@ -561,7 +574,27 @@ lire_jeu <- function(dossier) {
   if (!identical(jeu$manifeste$volumetrie, lapply(jeu$base, nrow))) {
     refus("manifeste$volumetrie diff\u00e8re des nombres de lignes de la base (liste nomm\u00e9e d'entiers, ordre des tables)")
   }
+  for (nom in names(jeu$base)) .controler_forme_table(jeu$base[[nom]], paste0("base/", nom), refus)
+  for (nom in names(jeu$verite)) .controler_forme_table(jeu$verite[[nom]], paste0("verite/", nom), refus)
   invisible(NULL)
+}
+
+# Une table relue d'un CSV a des noms de lignes automatiques (1..n), les seuls attributs d'un
+# data.frame (names, class, row.names) et des colonnes sans attribut, hors la classe Date des
+# dates ; toute autre table est refusée, au nom de la table (et de la colonne).
+.controler_forme_table <- function(t, nom, refus) {
+  if (!identical(class(t), "data.frame") || !setequal(names(attributes(t)), c("names", "class", "row.names"))) {
+    refus(paste0("table ", nom, " : attribut de table autre que names, class et row.names (non relu par lire_jeu())"))
+  }
+  if (!identical(attr(t, "row.names"), seq_len(nrow(t)))) {
+    refus(paste0("table ", nom, " : noms de lignes non automatiques (lire_jeu() relit les noms 1..n)"))
+  }
+  for (colonne in names(t)) {
+    attrs <- attributes(t[[colonne]])
+    if (!(is.null(attrs) || (inherits(t[[colonne]], "Date") && identical(attrs, list(class = "Date"))))) {
+      refus(paste0("table ", nom, ", colonne ", colonne, " : attribut de colonne que le CSV ne conserve pas (lire_jeu() ne le relit pas)"))
+    }
+  }
 }
 
 .chaine_type <- function(x) is.character(x) && length(x) == 1L && !is.na(x) && x %in% TYPES_DICTIONNAIRE
