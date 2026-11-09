@@ -175,7 +175,14 @@ lire_base <- function(dossier) {
   }
   if (length(champs$vides) > 0L) {
     ou <- champs$situer(champs$vides)   # "" dans l'en-tête : nom de colonne vide, refusé plus haut
-    for (k in seq_along(ou$ligne)) brut[[ou$champ[k]]][ou$ligne[k]] <- ""
+    # Une affectation par colonne, non par champ : `[[<-.data.frame` recopie la colonne à
+    # chaque appel (temps quadratique au nombre de champs "", revue finale, M3).
+    lignes_vides <- split(ou$ligne, ou$champ)
+    for (j in names(lignes_vides)) {
+      texte <- brut[[as.integer(j)]]
+      texte[lignes_vides[[j]]] <- ""
+      brut[[as.integer(j)]] <- texte
+    }
   }
   if (table == "extraction") controler_version_extraction(brut)
   for (j in seq_along(brut)) {
@@ -286,10 +293,7 @@ lire_base <- function(dossier) {
 # des noms de lignes automatiques.
 ecrire_base <- function(donnees, dossier) {
   .controler_dossier(dossier, "ecrire_base")
-  controler_types(donnees)
-  dico <- dictionnaire()
-  tables <- dico$tables$table[dico$tables$table %in% names(donnees)]
-  contenus <- lapply(tables, function(table) .texte_table_csv(donnees[[table]], table))
+  contenus <- .contenus_base(donnees)
   if (file.exists(dossier)) {
     if (!dir.exists(dossier)) {
       .refus_lecture(paste0("ecrire_base() : ", dossier, " existe et n'est pas un dossier"))
@@ -301,10 +305,20 @@ ecrire_base <- function(donnees, dossier) {
   } else if (!dir.create(dossier, showWarnings = FALSE)) {
     .refus_lecture(paste0("ecrire_base() : dossier ", dossier, " impossible \u00e0 cr\u00e9er"))
   }
-  for (k in seq_along(tables)) {
-    writeBin(contenus[[k]], file.path(dossier, paste0(tables[k], ".csv")))
-  }
+  for (f in names(contenus)) writeBin(contenus[[f]], file.path(dossier, f))
   invisible(dossier)
+}
+
+# Octets des fichiers <table>.csv d'une base, tables dans l'ordre du dictionnaire, après
+# controler_types() et les refus de .champs_colonne() : tous les refus d'ecrire_base() avant
+# la moindre écriture (employée aussi par ecrire_jeu(), revue finale, m4).
+.contenus_base <- function(donnees) {
+  controler_types(donnees)
+  dico <- dictionnaire()
+  tables <- dico$tables$table[dico$tables$table %in% names(donnees)]
+  contenus <- lapply(tables, function(table) .texte_table_csv(donnees[[table]], table))
+  names(contenus) <- sprintf("%s.csv", tables)   # paste0() rendrait ".csv" sans table
+  contenus
 }
 
 # Octets du CSV d'une table.
@@ -387,10 +401,12 @@ ecrire_base <- function(donnees, dossier) {
 # (ecrire_liste()), verite/<nom>.csv (même format CSV que la base ; types des colonnes portés
 # par manifeste$colonnes_verite), declarations.txt (ecrire_liste(), si le jeu porte des
 # déclarations), puis empreintes.md5 : une ligne « <md5>  <chemin relatif> » par fichier, triés
-# (tri radix), au format de `md5sum -c` lancé depuis `dossier`. Refuse un
-# objet qui n'a pas la forme d'un jeu simulé (jeu_invalide), avant toute écriture ; les refus
-# d'ecrire_base() et d'ecrire_liste() s'appliquent (pour une table de vérité, au nom
-# d'ecrire_jeu() et de verite/<nom>). Rend `dossier`, invisible.
+# (tri radix), au format de `md5sum -c` lancé depuis `dossier`. Refuse, avant toute écriture
+# (création du dossier comprise) : un objet qui n'a pas la forme d'un jeu simulé, ou que
+# lire_jeu() ne relirait pas identique -- tables de la base hors de l'ordre du dictionnaire,
+# manifeste$volumetrie différente des nombres de lignes de la base, champ declarations NULL
+# (jeu_invalide) ; les refus d'ecrire_base() et d'ecrire_liste() (pour une table de vérité, au
+# nom d'ecrire_jeu() et de verite/<nom>). Rend `dossier`, invisible.
 ecrire_jeu <- function(jeu, dossier) {
   .controler_dossier(dossier, "ecrire_jeu")
   .controler_jeu(jeu)
@@ -404,7 +420,8 @@ ecrire_jeu <- function(jeu, dossier) {
                      motif = e$motif, table = nom, colonne = e$colonne, nombre = e$nombre)
     })
   })
-  controler_types(jeu$base)
+  base <- .contenus_base(jeu$base)
+  .controler_relecture_jeu(jeu)
   if (file.exists(dossier)) {
     if (!dir.exists(dossier)) .refus_lecture(paste0("ecrire_jeu() : ", dossier, " existe et n'est pas un dossier"))
     if (length(list.files(dossier, all.files = TRUE, no.. = TRUE)) > 0L) {
@@ -413,7 +430,8 @@ ecrire_jeu <- function(jeu, dossier) {
   } else if (!dir.create(dossier, showWarnings = FALSE)) {
     .refus_lecture(paste0("ecrire_jeu() : dossier ", dossier, " impossible \u00e0 cr\u00e9er"))
   }
-  ecrire_base(jeu$base, file.path(dossier, "base"))
+  dir.create(file.path(dossier, "base"))
+  for (f in names(base)) writeBin(base[[f]], file.path(dossier, "base", f))
   dir.create(file.path(dossier, "verite"))
   for (k in seq_along(verite)) writeBin(verite[[k]], file.path(dossier, "verite", paste0(names(jeu$verite)[k], ".csv")))
   for (f in names(octets)) writeBin(octets[[f]], file.path(dossier, f))
@@ -474,9 +492,11 @@ lire_jeu <- function(dossier) {
                           "manifeste$volumetrie"))
   }
   types <- manifeste$colonnes_verite
-  presents <- sub("\\.csv$", "", list.files(file.path(dossier, "verite")))
+  # fichiers cachés compris, comme dans base/ (revue finale, m3)
+  dans_verite <- list.files(file.path(dossier, "verite"), all.files = TRUE, no.. = TRUE)
+  presents <- sub("\\.csv$", "", dans_verite)
   if (!is.list(types) || is.null(names(types)) || !setequal(names(types), presents) ||
-      !all(grepl("\\.csv$", list.files(file.path(dossier, "verite"))))) {
+      !all(grepl("^[a-z0-9_]+\\.csv$", dans_verite))) {
     .refus_lecture("lire_jeu() : manifeste$colonnes_verite ne d\u00e9crit pas exactement les fichiers de verite/")
   }
   verite <- lapply(names(types), function(nom) {
@@ -510,6 +530,8 @@ lire_jeu <- function(dossier) {
   if (!(identical(noms, .CHAMPS_JEU) || identical(noms, c(.CHAMPS_JEU, "declarations")))) {
     refus("champs base, loi_vraie, verite, manifeste (et declarations) attendus, dans cet ordre")
   }
+  # un champ declarations NULL ne s'écrit pas : la relecture rendrait un jeu sans ce champ
+  if ("declarations" %in% noms && is.null(jeu$declarations)) refus("champ declarations NULL (l'omettre)")
   v <- jeu$verite
   if (!is.list(v) || is.data.frame(v) || is.null(names(v)) || anyNA(names(v)) || anyDuplicated(names(v)) ||
       !all(grepl("^[a-z0-9_]+$", names(v))) || !all(vapply(v, is.data.frame, NA))) {
@@ -523,6 +545,22 @@ lire_jeu <- function(dossier) {
         all(vapply(seq_along(t), function(j) .chaine_type(t[[j]]) && .type_conforme(v[[nom]][[j]], t[[j]]), NA))
     }, NA))
   if (!decrit) refus("manifeste$colonnes_verite doit d\u00e9crire exactement les colonnes et les types de verite")
+  invisible(NULL)
+}
+
+# Conditions de relecture identique propres à la base (revue finale, m5) : lire_base() rend les
+# tables dans l'ordre du dictionnaire et lire_jeu() compare manifeste$volumetrie aux nombres de
+# lignes relus. Appelée après .contenus_base() (base de types contrôlés).
+.controler_relecture_jeu <- function(jeu) {
+  refus <- function(raison) .refus_lecture(paste0("ecrire_jeu() : ", raison), motif = "jeu_invalide")
+  dico <- dictionnaire()
+  noms <- names(jeu$base)
+  if (!identical(noms, dico$tables$table[dico$tables$table %in% noms])) {
+    refus("tables de la base hors de l'ordre du dictionnaire (lire_jeu() les relirait dans cet ordre)")
+  }
+  if (!identical(jeu$manifeste$volumetrie, lapply(jeu$base, nrow))) {
+    refus("manifeste$volumetrie diff\u00e8re des nombres de lignes de la base (liste nomm\u00e9e d'entiers, ordre des tables)")
+  }
   invisible(NULL)
 }
 

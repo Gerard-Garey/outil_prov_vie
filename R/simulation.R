@@ -164,8 +164,13 @@ SCHEMA_VERITE <- list(
 #     lire_jeu()) ;
 #   declarations : l'argument (absent si NULL).
 # Refus d'appel (jeu_invalide) : argument mal formé ou incomplet, loi vraie d'une autre
-# version, paramètre de défaut inconnu ou hors de [0 ; 1], date d'extraction antérieure au
-# début de l'historique.
+# version, clé inconnue de la loi vraie, valeur hors de son domaine (probabilité hors de
+# [0 ; 1], taux, cadence ou âge négatif, nombre de contrats ou d'assurés par contrat inférieur
+# à 1, âge d'entrée minimal supérieur au maximal ou maximal non inférieur à l'âge de retraite,
+# arrondi du salaire nul, valeur non finie), paramètre de défaut inconnu ou hors de [0 ; 1],
+# date d'extraction non entière ou non finie, antérieure ou égale au début de l'historique ou
+# antérieure à l'effet du dernier contrat possible, horizon d'invalidité plus long que les
+# uniformes tirées (.taille_invalidite()).
 simuler_base <- function(loi_vraie, graines, date_extraction, nom, description, declarations = NULL,
                          date_visa = NULL) {
   if (missing(loi_vraie) || missing(graines) || missing(date_extraction) || missing(nom) || missing(description)) {
@@ -173,8 +178,10 @@ simuler_base <- function(loi_vraie, graines, date_extraction, nom, description, 
   }
   .controler_loi_vraie(loi_vraie)
   graines <- .controler_graines(graines)
-  if (!identical(class(date_extraction), "Date") || length(date_extraction) != 1L || is.na(date_extraction)) {
-    .refus_simulation("simuler_base() : `date_extraction` doit \u00eatre une Date renseign\u00e9e de longueur 1")
+  if (!identical(class(date_extraction), "Date") || length(date_extraction) != 1L || !is.finite(date_extraction) ||
+      as.numeric(date_extraction) != floor(as.numeric(date_extraction))) {
+    .refus_simulation(paste0("simuler_base() : `date_extraction` doit \u00eatre une Date renseign\u00e9e de longueur 1, ",
+                             "enti\u00e8re et finie"))
   }
   if (!.chaine(nom) || !grepl("^[a-z0-9]+-[a-z0-9]+-[0-9]{2}$", nom)) {
     .refus_simulation("simuler_base() : `nom` doit suivre la forme <jalon>-<volumetrie>-<nn> (ADR 0010, point 20)")
@@ -194,6 +201,16 @@ simuler_base <- function(loi_vraie, graines, date_extraction, nom, description, 
   ext <- as.numeric(date_extraction)
   if (ext <= as.numeric(loi_vraie$portefeuille$debut_historique)) {
     .refus_simulation("simuler_base() : date d'extraction ant\u00e9rieure ou \u00e9gale au d\u00e9but de l'historique")
+  }
+  # Effet du dernier contrat possible (dernier décalage tiré) au plus tard à l'extraction :
+  # sinon un contrat, ses affiliations et ses entrées seraient datés après l'extraction (revue
+  # finale, C6). Précondition contrôlée plutôt que borne de l'effet : les tirages des jeux
+  # admis ne changent pas.
+  p <- loi_vraie$portefeuille
+  if (.debut_mois(as.numeric(p$debut_historique), p$decalage_effet_mois_max) > ext) {
+    .refus_simulation(paste0("simuler_base() : effet de contrat possible apr\u00e8s l'extraction (d\u00e9but de ",
+                             "l'historique d\u00e9cal\u00e9 de decalage_effet_mois_max mois post\u00e9rieur \u00e0 la date ",
+                             "d'extraction)"))
   }
   dico <- dictionnaire()
 
@@ -347,12 +364,39 @@ print.jeu_simule <- function(x, ...) {
     ok <- !is.null(x) && is.atomic(x) &&
       (if (s[2L] == "Date") identical(names(attributes(x)), "class") && identical(class(x), "Date") && is.double(x)
        else typeof(x) == s[2L] && is.null(attributes(x))) &&
-      length(x) > 0L && (is.na(s[3L]) || length(x) == as.integer(s[3L])) && !anyNA(x)
+      length(x) > 0L && (is.na(s[3L]) || length(x) == as.integer(s[3L])) && !anyNA(x) &&
+      (!(s[2L] %in% c("double", "Date")) || all(is.finite(x))) && (s[2L] != "Date" || all(as.numeric(x) == floor(as.numeric(x))))
     if (!ok) {
       .refus_simulation(paste0("simuler_base() : loi vraie, `", s[1L], "` absent ou mal form\u00e9 (", s[2L],
                                if (!is.na(s[3L])) paste0(" de longueur ", s[3L]) else ", vecteur non vide",
-                               ", sans manquant)"))
+                               ", sans manquant ni valeur non finie)"))
     }
+  }
+  # Domaine des valeurs numériques (revue finale, m6) : taux, cadences, âges, durées et
+  # montants positifs ou nuls, sauf la moyenne du logarithme du salaire ; volumétrie d'au moins
+  # un contrat de un assuré ; arrondi du salaire strictement positif ; âges d'entrée ordonnés.
+  for (s in .SCHEMA_LOI_VRAIE) {
+    if (!(s[2L] %in% c("double", "integer")) || s[1L] == "portefeuille/salaire_log_moyenne") next
+    if (any(.feuille(lv, s[1L]) < 0)) .refus_simulation(paste0("simuler_base() : loi vraie, `", s[1L], "` n\u00e9gatif"))
+  }
+  pf <- lv$portefeuille
+  if (pf$nombre_contrats < 1L || pf$assures_par_contrat < 1L) {
+    .refus_simulation("simuler_base() : loi vraie, nombre_contrats et assures_par_contrat : au moins 1")
+  }
+  if (pf$salaire_arrondi <= 0) .refus_simulation("simuler_base() : loi vraie, `portefeuille/salaire_arrondi` nul")
+  if (pf$age_entree_min > pf$age_entree_max || pf$age_entree_max >= pf$age_retraite) {
+    .refus_simulation(paste0("simuler_base() : loi vraie, \u00e2ges d'entr\u00e9e : age_entree_min <= age_entree_max ",
+                             "< age_retraite"))
+  }
+  # Uniformes d'invalidité (revue finale, C7) : .taille_invalidite() pas de 30 jours doivent
+  # couvrir le plus long séjour possible en invalidité, de l'entrée au plus jeune âge à la
+  # retraite (au plus (age_retraite - age_entree_min) * 365,25 + 2 jours : années civiles et
+  # arrondis des dates) ; sinon la trajectoire s'arrêterait faute d'uniformes, sans transition
+  # jusqu'à la retraite. Taille gardée (elle fixe les tirages des jeux versionnés) ; vrai tant
+  # que age_retraite - age_entree_min <= 68 ans environ.
+  if ((pf$age_retraite - pf$age_entree_min) * .AN_JOURS + 2 > .taille_invalidite(pf) * .PAS_JOURS) {
+    .refus_simulation(paste0("simuler_base() : loi vraie, \u00e9cart entre age_retraite et age_entree_min trop grand ",
+                             "pour les uniformes d'invalidit\u00e9 du simulateur"))
   }
   probas <- c("portefeuille/part_affilies_effet", "portefeuille/part_femmes", "portefeuille/part_conjoint",
               "tables/maintien_incapacite/passage_au_terme", "tables/invalidite/reprise_mensuelle",
@@ -388,8 +432,31 @@ print.jeu_simule <- function(x, ...) {
     .refus_simulation(paste0("simuler_base() : loi vraie, `defauts` : une intensit\u00e9 dans [0 ; 1] par d\u00e9faut simul\u00e9, ",
                              "sans valeur par d\u00e9faut (", paste(DEFAUTS_SIMULES$parametre, collapse = ", "), ")"))
   }
+  # Clés inconnues (revue finale, m6) : toute feuille de la loi vraie est lue par le simulateur.
+  admises <- c(vapply(.SCHEMA_LOI_VRAIE, `[`, "", 1L), paste0("defauts/", DEFAUTS_SIMULES$parametre))
+  inconnues <- setdiff(.chemins_feuilles(lv), admises)
+  if (length(inconnues) > 0L) {
+    .refus_simulation(paste0("simuler_base() : loi vraie, cl\u00e9(s) inconnue(s) ou mal nomm\u00e9e(s) : ",
+                             paste(inconnues, collapse = ", ")))
+  }
   invisible(NULL)
 }
+
+# Chemins des feuilles d'une liste nommée (`a/b/c`) ; une liste vide, non nommée ou aux noms
+# vides, manquants ou en double rend un chemin terminé par `?`, jamais admis.
+.chemins_feuilles <- function(x, chemin = character(0)) {
+  if (!is.list(x) || is.data.frame(x)) return(paste(chemin, collapse = "/"))
+  noms <- names(x)
+  if (length(x) == 0L || is.null(noms) || anyNA(noms) || any(!nzchar(noms)) || anyDuplicated(noms)) {
+    return(paste(c(chemin, "?"), collapse = "/"))
+  }
+  unlist(lapply(noms, function(nm) .chemins_feuilles(x[[nm]], c(chemin, nm))), use.names = FALSE)
+}
+
+# Nombre d'uniformes d'invalidité par arrêt (pas de 30 jours) : taille fixée par le format des
+# tirages des jeux versionnés (une par mois, sur l'écart entre l'âge de retraite et l'âge
+# d'entrée minimal, plus un an) ; sa suffisance est contrôlée par .controler_loi_vraie().
+.taille_invalidite <- function(p) ceiling((p$age_retraite - p$age_entree_min + 1) * 12)
 
 # --- Outils de dates et de tirage -----------------------------------------------------
 
@@ -471,7 +538,7 @@ print.jeu_simule <- function(x, ...) {
   n_pas <- ceiling((ext - min(pop$entree)) / .PAS_JOURS) + p$arrets_max_par_assure + 2L
   u_act <- array(runif(pop$n * n_pas * 2L), dim = c(2L, n_pas, pop$n))
   m_inc <- length(t$maintien_incapacite$mois)
-  m_inv <- ceiling((p$age_retraite - p$age_entree_min + 1) * 12)
+  m_inv <- .taille_invalidite(p)
   largeur <- 4L + m_inc + m_inv
   k_max <- p$arrets_max_par_assure
   u_arr <- array(runif(pop$n * k_max * largeur), dim = c(largeur, k_max, pop$n))
@@ -500,7 +567,9 @@ print.jeu_simule <- function(x, ...) {
       m_a <- mu_i[a]
       la <- if (k < k_max) incidence[a] else 0
       p_tot <- 1 - exp(-(m_a + la) * duree / .AN_JOURS)
-      p_dc <- if (m_a + la > 0) p_tot * m_a / (m_a + la) else 0
+      # qx = 1 (mu infini) : décès certain dans le pas, limite de m_a / (m_a + la) (revue
+      # finale, C5 ; Inf / Inf rendrait NaN)
+      p_dc <- if (is.infinite(m_a)) p_tot else if (m_a + la > 0) p_tot * m_a / (m_a + la) else 0
       u1 <- u_act[1L, j, i]
       jour <- tps + floor(u_act[2L, j, i] * duree)
       if (u1 < p_dc) {
@@ -642,10 +711,20 @@ print.jeu_simule <- function(x, ...) {
   df
 }
 
-.rbind_listes <- function(l) {
-  if (length(l) == 0L) return(NULL)
+# Colonnes d'une liste de lignes (listes nommées de même forme) ; liste vide : colonnes vides
+# des types `vide` (vecteur nommé de types, dates en numeric), et non NULL (revue finale, M2).
+.rbind_listes <- function(l, vide) {
+  if (length(l) == 0L) return(lapply(vide, vector, length = 0L))
   noms <- names(l[[1L]])
   stats::setNames(lapply(noms, function(nm) do.call(c, lapply(l, `[[`, nm))), noms)
+}
+
+# `oui` là où `test` est vrai, NA sinon, toujours en texte (ifelse() rend un logique sur un
+# vecteur vide ; revue finale, C2 et C3).
+.si_texte <- function(test, oui) {
+  x <- rep(NA_character_, length(test))
+  x[test] <- oui[test]
+  x
 }
 
 .ids <- function(prefixe, n, chiffres) sprintf(paste0("%s%0", chiffres, "d"), prefixe, seq_len(n))
@@ -815,8 +894,18 @@ print.jeu_simule <- function(x, ...) {
   }
 
   # --- tables vraies en colonnes
-  D <- .rbind_listes(dos); R <- .rbind_listes(ren); E <- .rbind_listes(eve); P <- .rbind_listes(pre)
-  Fm <- .rbind_listes(fml); B <- .rbind_listes(ben); Et <- .rbind_listes(etats)
+  ch <- "character"
+  nu <- "numeric"
+  D <- .rbind_listes(dos, c(id_dossier = ch, id_sinistre = ch, id_garantie_souscrite = ch, date_ouverture = nu))
+  R <- .rbind_listes(ren, c(id_rente = ch, id_dossier = ch, date_saisie = nu))
+  E <- .rbind_listes(eve, c(id_sinistre = ch, id_dossier = ch, id_rente = ch, type_evenement = ch, date_effet = nu,
+                            date_saisie = nu, montant = nu, motif = ch, justificatif = ch, categorie_invalidite = ch))
+  P <- .rbind_listes(pre, c(id_dossier = ch, id_rente = ch, type_prestation = ch, date_reglement = nu,
+                            debut_periode = nu, fin_periode = nu, montant = nu))
+  Fm <- .rbind_listes(fml, c(id_membre = ch, id_assure = ch, lien = ch, sexe = ch, date_naissance = nu,
+                             id_sinistre = ch, date_saisie = nu))
+  B <- .rbind_listes(ben, c(id_dossier = ch, id_membre = ch, qualite = ch, part = nu, date_saisie = nu))
+  Et <- .rbind_listes(etats, c(id_sinistre = ch, etat = ch, categorie_invalidite = ch, date_debut = nu, date_fin = nu))
   vis <- function(x) !is.na(x) & x <= ext
   # sinistres et dossiers connus ; un enfant n'est saisi qu'après sa parente (construction)
   s_vis <- vis(s_saisie)
@@ -842,8 +931,7 @@ print.jeu_simule <- function(x, ...) {
                             type_prestation = P$type_prestation[futur], date_reglement = .date(P$date_reglement[futur]),
                             debut_periode = .date(P$debut_periode[futur]), fin_periode = .date(P$fin_periode[futur]),
                             montant = P$montant[futur],
-                            id_sinistre_origine = ifelse(s_surv[k_futur] > ext, id_sin[s_origine[k_futur]],
-                                                         NA_character_),
+                            id_sinistre_origine = .si_texte(s_surv[k_futur] > ext, id_sin[s_origine[k_futur]]),
                             sinistre_connu = s_vis[k_futur], stringsAsFactors = FALSE)
   nd_ <- !s_vis & s_surv <= ext
   o_nd <- order(id_sin[nd_], method = "radix")
@@ -859,8 +947,9 @@ print.jeu_simule <- function(x, ...) {
                             stringsAsFactors = FALSE)
   familles_vraies <- data.frame(id_assure = id_assure[fam$conjoint], lien = rep("conjoint", sum(fam$conjoint)),
                                 sexe = fam$sexe[fam$conjoint], date_naissance = .date(fam$naissance[fam$conjoint]),
-                                id_membre = ifelse(sprintf("ME%04d", which(fam$conjoint)) %in% Fm$id_membre[vis(Fm$date_saisie)],
-                                                   sprintf("ME%04d", which(fam$conjoint)), NA_character_),
+                                id_membre = .si_texte(sprintf("ME%04d", which(fam$conjoint)) %in%
+                                                        Fm$id_membre[vis(Fm$date_saisie)],
+                                                      sprintf("ME%04d", which(fam$conjoint))),
                                 stringsAsFactors = FALSE)
 
   # --- base connue à l'extraction
@@ -912,7 +1001,8 @@ print.jeu_simule <- function(x, ...) {
                                   categorie_invalidite = if (length(x) == 3L) x[3L] else NA_character_,
                                   valeur = as.numeric(x[2L]))
   }
-  lp <- .rbind_listes(lp)
+  lp <- .rbind_listes(lp, c(id_garantie_souscrite = "character", parametre = "character",
+                           categorie_invalidite = "character", valeur = "numeric"))
   parametres <- .table(dico, "parametres", lp, length(lp$valeur))
   assures <- .table(dico, "assures", list(
     id_assure = id_assure[sel_as], sexe = pop$sexe[sel_as], date_naissance = pop$naissance[sel_as],
@@ -938,11 +1028,11 @@ print.jeu_simule <- function(x, ...) {
   sel <- function(L, garder) lapply(L, `[`, which(garder))
   Dv <- sel(D, vis(D$date_ouverture))
   dossiers <- .table(dico, "dossiers", Dv, length(Dv$id_dossier))
-  Fv <- sel(Fm, if (is.null(Fm)) logical(0) else vis(Fm$date_saisie))
+  Fv <- sel(Fm, vis(Fm$date_saisie))
   famille <- .table(dico, "famille", Fv, length(Fv$id_membre))
   Bv <- sel(B, vis(B$date_saisie))
   beneficiaires <- .table(dico, "beneficiaires", Bv, length(Bv$id_dossier))
-  Rv <- sel(R, if (is.null(R)) logical(0) else vis(R$date_saisie))
+  Rv <- sel(R, vis(R$date_saisie))
   rentes <- .table(dico, "rentes", Rv, length(Rv$id_rente))
   Ev <- sel(E, vis(E$date_saisie) & vis(E$date_effet))
   evenements <- .table(dico, "evenements", Ev, length(Ev$id_evenement))
@@ -994,7 +1084,9 @@ print.jeu_simule <- function(x, ...) {
       }
     }
   }
-  l <- .rbind_listes(l)
+  l <- .rbind_listes(l, c(id_garantie_souscrite = "character", nature_mouvement = "character",
+                         debut_periode = "numeric", fin_periode = "numeric", date_mouvement = "numeric",
+                         montant = "numeric"))
   o <- order(l$date_mouvement, l$id_garantie_souscrite, l$nature_mouvement, method = "radix")
   l <- lapply(l, `[`, o)
   l$id_cotisation <- .ids("CO", length(o), 4L)
@@ -1021,7 +1113,7 @@ print.jeu_simule <- function(x, ...) {
     t <- propre[[def$table]]
     n <- nrow(t)
     u <- avec_graine(graine + def$rang, list(choix = runif(n), valeur = runif(n)))
-    res <- .defaut(def$code, propre, which(.eligibles(def$code, propre, te) & u$choix < intensite), u$valeur, ext)
+    res <- .defaut(def$code, propre, which(.eligibles(def$code, propre, te, ext) & u$choix < intensite), u$valeur, ext)
     for (m in res$cellules) {
       registre[[length(registre) + 1L]] <- list(code = def$code, parametre = def$parametre, rang = def$rang,
                                                 table = def$table, cle = t[[1L]][m$ligne], colonne = m$colonne,
@@ -1043,8 +1135,7 @@ print.jeu_simule <- function(x, ...) {
     base[[a$table]] <- rbind(base[[a$table]], a$ligne)
     rownames(base[[a$table]]) <- NULL
   }
-  reg <- .rbind_listes(registre)
-  if (is.null(reg)) reg <- stats::setNames(rep(list(character(0)), length(COLONNES_REGISTRE)), COLONNES_REGISTRE)
+  reg <- .rbind_listes(registre, stats::setNames(rep("character", length(COLONNES_REGISTRE)), COLONNES_REGISTRE))
   reg$rang <- as.integer(reg$rang)
   registre <- as.data.frame(reg[COLONNES_REGISTRE], stringsAsFactors = FALSE)
   list(base = base, registre = registre)
@@ -1054,14 +1145,16 @@ print.jeu_simule <- function(x, ...) {
 .texte_valeur <- function(x) if (is.na(x)) NA_character_ else ecrire_valeurs(x, "texte")
 
 # Lignes éligibles d'un défaut dans le jeu propre (catalogue DEFAUTS_SIMULES, colonne
-# `eligibles`) ; `te` : types d'événements du dictionnaire.
-.eligibles <- function(code, b, te) {
+# `eligibles`) ; `te` : types d'événements du dictionnaire ; `ext` : date d'extraction.
+# D01b : un encaissement daté de l'extraction n'est pas éligible, sa copie (bornée à
+# l'extraction) aurait sa date (revue finale, C10).
+.eligibles <- function(code, b, te, ext) {
   ev <- b$evenements
   switch(code,
-    D01b = b$cotisations$nature_mouvement == "encaissement",
+    D01b = b$cotisations$nature_mouvement == "encaissement" & as.numeric(b$cotisations$date_mouvement) < ext,
     D02a = b$prestations$type_prestation == "indemnite_journaliere" &
       as.numeric(b$prestations$debut_periode) < as.numeric(b$prestations$fin_periode),
-    D02b = {
+    D02b = if (nrow(ev) == 0L) logical(0) else {
       prog <- te$programmable[match(ev$type_evenement, te$type_evenement)]
       motifs_prog <- ifelse(startsWith(prog, "oui:"), substring(prog, 5L), "")
       !(prog == "oui" | mapply(function(m, l) !is.na(m) && m %in% strsplit(l, ";", fixed = TRUE)[[1L]],
@@ -1093,6 +1186,7 @@ print.jeu_simule <- function(x, ...) {
     list(ligne = lignes[j], colonne = colonne, valeur = valeurs[[j]])
   })
   na_de <- function(x) x[NA_integer_]
+  if (length(lignes) == 0L) return(list(cellules = list(), ajouts = list()))   # table vide (revue finale, M2)
   switch(code,
     D01b = {
       t <- b$cotisations
