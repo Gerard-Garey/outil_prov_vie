@@ -218,6 +218,99 @@ verifier("declarations réduites aux conventions : admises (A1)",
                    list(conventions = list(age = "revolu"))))
 verifier_egal("extraction avant le début de l'historique : jeu_invalide",
               motif_de(sim(date = as.Date("2017-12-31"))), "jeu_invalide")
+# revue finale, m6 : contrôles d'entrée (erreurs non classées ou acceptation silencieuse avant) ;
+# appels différés (fonctions), évalués un à un sous motif_de()
+modifier <- function(chemin, valeur) {
+  l <- lv
+  l[[chemin]] <- valeur
+  l
+}
+cas_m6 <- list(
+  list("date d'extraction infinie", function() sim(date = structure(Inf, class = "Date"))),
+  list("date d'extraction non entière", function() sim(date = A + 0.5)),
+  list("cadence négative", function() sim(loi = modifier(c("cadences", "saisie_sinistre"), -30))),
+  list("taux d'incidence négatif", function() sim(loi = modifier(c("tables", "incidence_arret", "taux"),
+                                                                  -lv$tables$incidence_arret$taux))),
+  list("taux de cotisation infini", function() sim(loi = modifier(c("garanties", "deces", "taux_cotisation"), Inf))),
+  list("aucun contrat", function() sim(loi = modifier(c("portefeuille", "nombre_contrats"), 0L))),
+  list("aucun assuré par contrat", function() sim(loi = modifier(c("portefeuille", "assures_par_contrat"), 0L))),
+  list("âge d'entrée minimal supérieur au maximal",
+       function() sim(loi = modifier(c("portefeuille", "age_entree_min"), 59))),
+  list("âge d'entrée maximal non inférieur à l'âge de retraite",
+       function() sim(loi = modifier(c("portefeuille", "age_entree_max"), 62))),
+  list("arrondi du salaire nul", function() sim(loi = modifier(c("portefeuille", "salaire_arrondi"), 0))),
+  list("clé inconnue dans la loi vraie", function() sim(loi = modifier(c("portefeuille", "coquille"), 1))),
+  list("sous-liste vide inconnue dans la loi vraie", function() sim(loi = modifier("annexe", list()))))
+for (k in cas_m6) verifier_egal(paste0(k[[1L]], " : jeu_invalide (revue finale, m6)"), motif_de(k[[2L]]()), "jeu_invalide")
+# revue finale, C6 : effet du dernier contrat possible (début de l'historique + 23 mois, le
+# 1er décembre 2019) postérieur à l'extraction : refus ; extraction à cette date : admise
+verifier_egal("extraction avant l'effet du dernier contrat possible : jeu_invalide (revue finale, C6)",
+              motif_de(sim(date = as.Date("2019-11-30"))), "jeu_invalide")
+verifier("extraction à l'effet du dernier contrat possible : admise, aucun contrat d'effet postérieur",
+         { j <- sim(date = as.Date("2019-12-01")); all(j$base$contrats$date_effet <= as.Date("2019-12-01")) })
+# revue finale, C7 : uniformes d'invalidité (une par mois sur l'écart des âges plus un an) qui
+# ne couvrent pas l'horizon en pas de 30 jours : refus (écart de 70 ans) ; 68 ans : admis
+verifier_egal("écart de 70 ans entre âge d'entrée minimal et retraite : jeu_invalide (revue finale, C7)",
+              motif_de(sim(loi = { l <- modifier(c("portefeuille", "age_entree_min"), 0)
+                                   l$portefeuille$age_retraite <- 70L; l })), "jeu_invalide")
+verifier("écart de 68 ans : admis",
+         inherits(sim(loi = { l <- modifier(c("portefeuille", "age_entree_min"), 0)
+                              l$portefeuille$age_retraite <- 68L; l }), "jeu_simule"))
+
+section("simulation : tables vides et cas limites (revue finale, M2, C2 à C5, C10)")
+# Types de la vérité conformes à SCHEMA_VERITE (simuler_base() le contrôle aussi) et de la base
+# au dictionnaire, pour un jeu aux tables éventuellement vides.
+types_ok <- function(j) {
+  controler_types(j$base)
+  all(vapply(names(ns$SCHEMA_VERITE), function(t) {
+    identical(vapply(j$verite[[t]], ns$.type_colonne, ""), ns$SCHEMA_VERITE[[t]])
+  }, NA))
+}
+debut <- lv$portefeuille$debut_historique
+sans_decalage <- modifier(c("portefeuille", "decalage_effet_mois_max"), 0L)
+for (k in c(1, 30, 180)) {
+  j <- sim(loi = sans_decalage, date = debut + k)
+  verifier(paste0("extraction au début de l'historique + ", k, " jours (effets au début) : jeu rendu, types conformes"),
+           inherits(j, "jeu_simule") && types_ok(j))
+}
+j <- sim(loi = sans_decalage, date = debut + 1)
+verifier("début de l'historique + 1 jour : aucun sinistre, événement, prestation ni cotisation (tables vides typées)",
+         all(vapply(j$base[c("sinistres", "dossiers", "evenements", "prestations", "cotisations")], nrow, 0L) == 0L) &&
+           nrow(j$verite$flux_futurs) == 0L && is.character(j$verite$flux_futurs$id_sinistre_origine))
+nuls <- lv
+nuls$tables$incidence_arret$taux[] <- 0
+nuls$tables$mortalite$qx_femmes[] <- 0
+nuls$tables$mortalite$qx_hommes[] <- 0
+j <- sim(loi = nuls)
+verifier("incidence et mortalité nulles : aucun sinistre, jeu rendu, types conformes (aucun flux futur)",
+         nrow(j$base$sinistres) == 0L && nrow(j$verite$flux_futurs) == 0L && types_ok(j))
+sans_cot <- lv
+for (g in c("deces", "incapacite", "invalidite")) sans_cot$garanties[[g]]$taux_cotisation <- 0
+j <- sim(loi = sans_cot)
+verifier("taux de cotisation nuls : aucune cotisation émise, table vide typée",
+         nrow(j$base$cotisations) == 0L && types_ok(j))
+j <- sim(loi = modifier(c("portefeuille", "part_conjoint"), 0))
+verifier("part_conjoint nulle : familles_vraies vide, id_membre en texte (revue finale, C3)",
+         nrow(j$verite$familles_vraies) == 0L && is.character(j$verite$familles_vraies$id_membre) && types_ok(j))
+certain <- lv
+certain$tables$mortalite$qx_femmes[] <- 1
+certain$tables$mortalite$qx_hommes[] <- 1
+j <- sim(loi = certain)
+verifier("qx = 1 : décès certain au premier pas d'activité, jeu rendu (revue finale, C5)",
+         inherits(j, "jeu_simule") && all(j$base$sinistres$nature_sinistre == "deces") && types_ok(j))
+# revue finale, C10 : encaissements datés de l'extraction (le 14 février : émission au 14e jour
+# de la période annuelle, encaissement 30 jours après) non éligibles à D01b ; chaque copie est
+# datée après son original
+doublons <- lv
+doublons$defauts$doublon_contenu <- 1
+j <- sim(loi = doublons, date = as.Date("2021-02-14"))
+co <- j$base$cotisations
+reg <- j$verite$defauts[j$verite$defauts$code == "D01b", , drop = FALSE]
+verifier("D01b : encaissements datés de l'extraction non copiés, chaque copie datée après l'original (revue finale, C10)",
+         any(co$nature_mouvement == "encaissement" & co$date_mouvement == as.Date("2021-02-14")) && nrow(reg) > 0L &&
+           !any(reg$valeur_injectee %in% co$id_cotisation[co$date_mouvement == as.Date("2021-02-14")]) &&
+           all(co$date_mouvement[match(reg$cle, co$id_cotisation)] >
+                 co$date_mouvement[match(reg$valeur_injectee, co$id_cotisation)]))
 
 section("simulation : controler_base() accepte chaque jeu (critère 8)")
 bilan_de <- function(j, arrete) {
@@ -351,3 +444,43 @@ verifier_egal("volumétrie de type double dans le manifeste : fichier_invalide, 
               motif_de(lire_jeu(vol_reel)), "fichier_invalide")
 verifier("témoin : empreintes recalculées sur un jeu intact, relu identique",
          { intact <- copie(dossier); reecrire_md5(intact); identical(lire_jeu(intact), j2) })
+# revue finale, m3 : fichier caché dans verite/, listé dans empreintes.md5 : refusé, comme dans base/
+reecrire_md5_tous <- function(dossier) {
+  f <- sort(c(intersect(list.files(dossier), c("declarations.txt", "loi_vraie.txt", "manifeste.txt")),
+              file.path("base", list.files(file.path(dossier, "base"), all.files = TRUE, no.. = TRUE)),
+              file.path("verite", list.files(file.path(dossier, "verite"), all.files = TRUE, no.. = TRUE))),
+            method = "radix")
+  writeLines(paste0(unname(as.character(tools::md5sum(file.path(dossier, f)))), "  ", f), file.path(dossier, "empreintes.md5"))
+}
+for (cache in c(".cache.csv", ".cache")) {
+  cache_verite <- copie(dossier)
+  writeLines("x", file.path(cache_verite, "verite", cache))
+  reecrire_md5_tous(cache_verite)
+  verifier_egal(paste0("fichier caché verite/", cache, " (empreintes recalculées) : fichier_invalide (revue finale, m3)"),
+                motif_de(lire_jeu(cache_verite)), "fichier_invalide")
+}
+cache_base <- copie(dossier)
+writeLines("x", file.path(cache_base, "base", ".cache"))
+reecrire_md5_tous(cache_base)
+verifier_egal("témoin : fichier caché base/.cache (empreintes recalculées) : fichier_invalide",
+              motif_de(lire_jeu(cache_base)), "fichier_invalide")
+# revue finale, m4 : refus d'ecrire_base() (chaîne vide) avant la création du dossier
+chaine_vide <- j1
+chaine_vide$base$contrats$gestionnaire[1L] <- ""
+d4 <- tempfile("jeu-")
+verifier("chaîne vide dans la base : refusée, aucun dossier créé (revue finale, m4)",
+         motif_de(ecrire_jeu(chaine_vide, d4)) == "liste_invalide" && !file.exists(d4))
+# revue finale, m5 : jeux que lire_jeu() ne relirait pas identiques, refusés avant écriture
+vol_faux <- j1
+vol_faux$manifeste$volumetrie$contrats <- 99L
+ordre_faux <- j1
+ordre_faux$base <- rev(ordre_faux$base)
+dec_null <- unclass(j1)
+dec_null["declarations"] <- list(NULL)
+class(dec_null) <- "jeu_simule"
+for (k in list(list("volumétrie incohérente", vol_faux), list("tables hors de l'ordre du dictionnaire", ordre_faux),
+               list("declarations NULL explicite", dec_null))) {
+  d5 <- tempfile("jeu-")
+  verifier(paste0("ecrire_jeu() : ", k[[1L]], " : jeu_invalide, aucun dossier créé (revue finale, m5)"),
+           motif_de(ecrire_jeu(k[[2L]], d5)) == "jeu_invalide" && !file.exists(d5))
+}

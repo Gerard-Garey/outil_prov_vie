@@ -249,6 +249,29 @@ r <- lire_avec("contrats", list(id_contrat = "\"\"\"\"", nature_contrat = "\"a\"
 verifier("non-régression : \"\"\"\" (un guillemet) et \"a\"\"b\" admis, champ vide lu NA",
          identical(r$contrats$id_contrat, "\"") && identical(r$contrats$nature_contrat, "a\"b") &&
            identical(r$contrats$gestionnaire, NA_character_))
+# Revue finale, M3 : le rétablissement des "" est linéaire au nombre de champs "" (une
+# affectation par colonne). Croissance et rapport plutôt que durée seule (même forme que #25) :
+# fichier de deux colonnes, "" sur chaque ligne, meilleure de deux mesures. De 10 000 à 80 000
+# lignes, durée multipliée par 4 à 5 (linéaire : 8 au plus), 21 à 29 avant la correction ; à
+# 80 000 lignes, rapport à la même lecture sans "" de 1,2 à 1,8, 54 à 66 avant ; 80 000 lignes
+# en 0,2 s, 9,8 s avant (mesures du 9 novembre 2026, R 4.3.3). Bornes 16, 10 et 20 s.
+assures_vides <- function(n, valeur = "\"\"") {
+  dossier_avec(list(assures.csv = paste0("\"id_assure\",\"sexe\"\n",
+                                         paste0("\"A", seq_len(n), "\",", valeur, "\n", collapse = ""))))
+}
+duree_lecture <- function(dossier) min(vapply(1:2, function(i) system.time(lire_base(dossier))[["elapsed"]], 0))
+d_10k <- assures_vides(10000L)
+d_80k <- assures_vides(80000L)
+t_10k <- duree_lecture(d_10k)
+t_80k <- duree_lecture(d_80k)
+t_80k_sans <- duree_lecture(assures_vides(80000L, "\"F\""))
+r <- lire_base(d_80k)
+verifier("80 000 \"\" d'une colonne : tous rendus \"\"", identical(r$assures$sexe, rep("", 80000L)))
+verifier("lire_base : durée de 10 000 à 80 000 lignes à \"\" multipliée par moins de 16 (rétablissement linéaire)",
+         t_80k / max(t_10k, 0.05) < 16)
+verifier("lire_base : 80 000 lignes à \"\" lues en moins de 10 fois la durée des mêmes lignes sans \"\"",
+         t_80k / max(t_80k_sans, 0.05) < 10)
+verifier("lire_base : 80 000 lignes à \"\" lues en moins de 20 s", t_80k < 20)
 crlf <- function(texte) gsub("\n", "\r\n", texte, fixed = TRUE)
 r <- lire_base(dossier_avec(list(contrats.csv = crlf(csv_de("contrats", list(id_contrat = "\"\"", gestionnaire = "\"\""))))))
 verifier("\"\" dans un fichier CRLF, en début et en fin de ligne : rendu \"\"",
