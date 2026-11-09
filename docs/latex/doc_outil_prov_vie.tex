@@ -1727,8 +1727,9 @@ l'arrêté, une ligne de date de saisie refusée ne l'est que sous la date de
 saisie. (2)~Refus de valeur et D03g sur la même ligne, la date de saisie
 étant connue absente~: le verdict de D02b est faux\fsp; sans déclaration,
 la ligne est non déterminée sous D03g\fsp; sous l'hypothèse de D03g, sa
-date de visibilité n'est pas déterminée (date d'effet refusée, ou autre
-colonne refusée que la date de saisie retenue ne détermine pas) et la
+date de visibilité n'est pas déterminée (date d'effet refusée, ou date de
+visibilité refusée, que la date de saisie retenue ne suffit pas à
+déterminer, par exemple \code{prestations.date\_reglement}) et la
 ligne reste non déterminée sous le motif du refus, les déclarations
 attendues étant celles de D03g\fsp; sous l'exclusion de D03g, elle sort de
 la vue et le refus reste dans \code{refus\_tables}. Ce cas vaut pour
@@ -1738,8 +1739,10 @@ en portée table et refus de valeur dans cette table~: la portée table
 l'emporte, que le refus de portée table vienne d'un défaut de forme de la
 table, d'une propagation (\code{refus\_induit}) ou d'un autre refus de
 portée table (clé, D01a, D04b traité en refus). Une règle~P, ou une
-règle~V qui ne lit la colonne que pour la vue, a pour cause le refus de
-portée table\fsp; pour une règle~P empêchée par un défaut de forme,
+règle~V qui ne lit la colonne que pour la vue, a pour cause un refus de
+portée table, choisi selon la priorité des causes (ci-dessous)~: ce peut
+être le refus de portée table d'une autre table qu'elle lit, comme sa
+parente\fsp; pour une règle~P empêchée par un défaut de forme,
 l'origine du refus induit est la colonne de forme. Une colonne refusée
 pour sa valeur n'est alors ni la cause ni l'origine, et aucune ligne de
 la table n'est inscrite sous un refus de valeur. Une règle qui lit la
