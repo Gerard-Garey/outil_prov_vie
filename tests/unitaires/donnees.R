@@ -569,6 +569,41 @@ r <- cb(avec(function(b) { b$garanties_souscrites <- rbind(b$garanties_souscrite
 verifier("versions successives sans recouvrement : aucun chevauchement", nrow(refus(r, "chevauchement", NULL)) == 0L)
 r <- cb(avec(function(b) { b$parametres$age_min[5L] <- 17L; b }))
 verifier("paliers d'un même paramètre qui se chevauchent : chevauchement de parametres", refus(r, "chevauchement", "parametres")$nombre == 2L)
+# #35 : .chevauchements, comparée à une énumération des paires sur des intervalles tirés
+# (groupes, bornes manquantes, fin infinie, intervalles renversés, bornes égales : intervalle
+# fermé) ; puis croissance de controler_base avec le nombre de garanties portant 3 paramètres
+# (chacune sous un collège propre : un groupe par garantie), durée de 2 000 à 8 000 garanties
+# multipliée par moins de 10 (borne large : seule une croissance quadratique, facteur 16
+# attendu, la franchit).
+chev_paires <- function(groupe, debut, fin) {
+  n <- length(groupe)
+  ok <- !is.na(groupe) & !is.na(debut) & !is.na(fin) & debut <= fin
+  vapply(seq_len(n), function(a) ok[a] && any(ok & groupe %in% groupe[a] & seq_len(n) != a & debut <= fin[a] & debut[a] <= fin), TRUE)
+}
+set.seed(35)
+ecarts_chev <- vapply(1:300, function(k) {
+  n <- sample(0:25, 1L)
+  g <- sample(c("a", "b", "c", NA), n, TRUE)
+  d <- sample(c(0:10, NA, Inf, -Inf), n, TRUE)
+  f <- ifelse(runif(n) < 0.3, Inf, d + sample(c(-3:8, NA), n, TRUE))
+  !identical(ns$.chevauchements(g, d, f), chev_paires(g, d, f))
+}, TRUE)
+verifier("chevauchements : identique à l'énumération des paires sur 300 tirages (groupes, manquants, fin infinie, renversés)", !any(ecarts_chev))
+perf_garanties <- function(n) {
+  b <- base_ref
+  gs <- b$garanties_souscrites[rep(3L, n), ]
+  gs$id_garantie_souscrite <- sprintf("GX%06d", seq_len(n)); gs$college <- sprintf("C%06d", seq_len(n))
+  pa <- b$parametres[rep(4:6, n), ]
+  pa$id_garantie_souscrite <- rep(gs$id_garantie_souscrite, each = 3L)
+  b$garanties_souscrites <- rbind(b$garanties_souscrites, gs); b$parametres <- rbind(b$parametres, pa)
+  b
+}
+duree_garanties <- function(n) {
+  b <- perf_garanties(n)
+  min(vapply(1:2, function(i) system.time(cb(b))[["elapsed"]], 0))
+}
+verifier("performance : 2 000 à 8 000 garanties de 3 paramètres chacune, durée de controler_base multipliée par moins de 10 (#35)",
+         duree_garanties(8000L) / max(duree_garanties(2000L), 0.01) < 10)
 
 section("donnees : traitement des codes de contrôle, portée effective, partition, tri, invariance")
 verifier("règle provisoire : un code de portée ligne est un signalement (S), tout autre un refus (R)",
@@ -1699,8 +1734,8 @@ verifier_egal("D07 (c) sous options(warn = 2), famille.date_deces ou evenements.
 # déclarés) : n dossiers double effet non clos de l'assuré de ME1 (n paires enfant, dossier)
 # et n conjoints en famille (D02c) ; même borne large que le test de croissance précédent
 # (mesuré : 0,25 s à 2 000, 0,74 s à 8 000). Les garanties y sont peu nombreuses : la
-# croissance en nombre de garanties portant un paramètre (constat M3) est mesurée hors
-# batterie (.chevauchements, hors de D07 (c), y est quadratique).
+# croissance en nombre de garanties portant un paramètre (constat M3) est testée à la
+# section règle B (#35 ; .chevauchements, hors de D07 (c), y était quadratique).
 perf_decl <- function(n) {
   b <- de("1999-03-01")
   dz <- b$dossiers[rep(nrow(b$dossiers), n), ]; dz$id_dossier <- sprintf("DX%06d", seq_len(n)); b$dossiers <- rbind(b$dossiers, dz)

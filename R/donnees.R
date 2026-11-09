@@ -1184,18 +1184,27 @@ controler_base <- function(donnees, arrete, declarations = NULL, conventions = N
 }
 
 # Lignes dont l'intervalle fermé [debut, fin] en recouvre un autre de même groupe (bornes
-# manquantes : ligne hors du contrôle).
+# manquantes ou intervalle renversé (début > fin) : ligne hors du contrôle). Tri par groupe
+# puis début : une ligne en recouvre une autre si la plus grande fin des lignes qui la
+# précèdent dans son groupe atteint son début, ou si le début de la suivante est au plus
+# sa fin ; en O(n log n), non en nombre de paires par groupe (#35).
 .chevauchements <- function(groupe, debut, fin) {
   res <- rep(FALSE, length(groupe))
-  ok <- which(!is.na(groupe) & !is.na(debut) & !is.na(fin))
-  for (g in unique(groupe[ok])) {
-    i <- ok[groupe[ok] == g]
-    if (length(i) < 2L) next
-    for (a in seq_along(i)) for (b in seq_along(i)) {
-      if (a != b && debut[i[a]] <= fin[i[b]] && debut[i[b]] <= fin[i[a]] &&
-          debut[i[a]] <= fin[i[a]] && debut[i[b]] <= fin[i[b]]) res[i[a]] <- TRUE
-    }
-  }
+  ok <- which(!is.na(groupe) & !is.na(debut) & !is.na(fin) & debut <= fin)
+  if (length(ok) < 2L) return(res)
+  g <- match(groupe[ok], unique(groupe[ok]))
+  o <- order(g, debut[ok], method = "radix")
+  i <- ok[o]
+  g <- g[o]
+  d <- debut[i]
+  f <- fin[i]
+  n <- length(i)
+  debut_groupe <- c(TRUE, g[-1L] != g[-n])
+  fin_groupe <- c(g[-1L] != g[-n], TRUE)
+  fin_max <- stats::ave(f, g, FUN = cummax)
+  avant <- c(-Inf, fin_max[-n])
+  apres <- c(d[-1L], Inf)
+  res[i] <- (!debut_groupe & avant >= d) | (!fin_groupe & apres <= f)
   res
 }
 
