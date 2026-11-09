@@ -452,7 +452,7 @@ Avec `revolu`, pour une naissance le 2000-02-29 : âge 0 le 2001-02-28 et 1 le 2
 - « à charge » = lien `enfant`, non décédé à A ;
 - détection si **chaque** enfant à charge a atteint sa limite ;
 - prolongation pour études pour `situation` ∈ {`scolarise`, `apprenti`} (décision du mainteneur, jugement d'expert) ; `age_limite_etudes` absent : pas de prolongation ;
-- limite non déterminable (paramètre absent ou à plusieurs valeurs, palier compris) pour un enfant dont elle décide : non exécuté, cause `parametre_non_defini` ;
+- limite non déterminable (paramètre absent ou à plusieurs valeurs, palier compris) pour un enfant dont elle décide : non exécuté, cause `parametre_non_defini` ; sur `dossiers`, la ligne n'est émise que si l'indétermination peut changer le résultat, c'est-à-dire si aucun enfant à charge du dossier n'est non éteint de façon déterminée (limite déterminée non atteinte, prolongation pour handicap, naissance manquante relevée par D03a) (M187, avis d'`actuary` du 9 novembre 2026) ;
 - sans `conventions$limite_age` : non exécuté (`declaration_absente`), et deux lignes requises, `limite_age$regle` et `limite_age$age`.
 
 ### 5.4 Emplois dans `donnees`
