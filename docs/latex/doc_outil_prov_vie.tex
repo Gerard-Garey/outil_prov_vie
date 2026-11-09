@@ -987,7 +987,7 @@ documentera avec eux.
 \code{catalogue\_invalide} & Aucune fonction. \\
 \code{dictionnaire\_invalide} & \code{dictionnaire()}, et par elle toute fonction qui lit le dictionnaire~: dictionnaire embarqué incohérent (par exemple d'une autre version, d'une empreinte discordante ou d'une référence interne invalide). \\
 \code{format\_table\_inconnu} & Aucune fonction. \\
-\code{jeu\_invalide} & \code{simuler\_base()}~: argument qui ne définit pas un jeu simulé (loi vraie, graines, date d'extraction, nom, description, date de visa, déclarations)\fsp; \code{ecrire\_jeu()}~: objet qui n'a pas la forme d'un jeu simulé. \\
+\code{jeu\_invalide} & \code{simuler\_base()}~: argument qui ne définit pas un jeu simulé (loi vraie, graines, date d'extraction, nom, description, date de visa, déclarations) ou contraire aux contrôles d'entrée (section~\ref{sec:simulation-tirage})\fsp; \code{ecrire\_jeu()}~: objet qui n'a pas la forme d'un jeu simulé ou que \code{lire\_jeu()} ne relirait pas identique. \\
 \end{tabular}
 \end{center}
 
@@ -1233,7 +1233,7 @@ Statuts~: les quatre définitions sont celles de la spécification du module
 \code{donnees} visée par le mainteneur (décisions M151 et M154)\fsp; la convention
 \code{naissance\_31\_decembre} est retenue \textbf{par analogie}, jugement
 d'expert, et n'est pas présentée comme exigée par un texte pour les
-contrôles de la base. Pour la fin de charge d'un enfant (D07~(c)), seules
+contrôles de la base~; la spécification la déconseille pour D02c. Pour la fin de charge d'un enfant (D07~(c)), seules
 \code{revolu} et \code{millesime} sont admises, une clause de limite d'âge
 se lisant sur la date de naissance réelle (section~\ref{sec:donnees-bilan}).
 L'aller-retour entre les deux fonctions est vérifié par la batterie
@@ -1404,7 +1404,7 @@ Ses quatre fonctions sont exportées.
 \textcolor{financeblue}{\textbf{Fonction}} & \textcolor{financeblue}{\textbf{Arguments}} & \textcolor{financeblue}{\textbf{Rôle}} \\
 \code{lire\_base()} & \code{dossier} & Lit une base écrite en CSV (un fichier \code{<table>.csv} par table, toutes facultatives) et la rend en liste de \code{data.frame}, dans l'ordre des tables du dictionnaire\fsp; chaque colonne connue est lue dans son type si toutes ses valeurs s'y lisent, sinon rendue entière en texte exact, sans conversion ni refus\fsp; ne s'interrompt (\code{fichier\_invalide}) que si elle ne peut pas rendre le texte exact d'un fichier\fsp; contrôle strictement la seule table \code{extraction} (section~\ref{sec:lecture-base}). \\
 \code{ecrire\_base()} & \code{donnees}, \code{dossier} & Écrit une base contrôlée par \code{controler\_types()} en CSV UTF-8, un fichier par table, dans un dossier neuf ou vide, au format que relit \code{lire\_base()}\fsp; refuse (\code{liste\_invalide}) avant toute écriture la chaîne vide, hors domaine, et ce que le CSV ne relirait pas à l'identique (retour chariot, réel non fini, date non entière ou hors de quatre chiffres d'année, chaîne d'encodage inconnu ou non UTF-8)\fsp; refuse (\code{fichier\_invalide}) un dossier non vide\fsp; rend le dossier. \\
-\code{ecrire\_jeu()} & \code{jeu}, \code{dossier} & Écrit un jeu simulé dans un dossier neuf ou vide, selon la disposition d'un jeu versionné~: \code{base/} (une table par fichier, par \code{ecrire\_base()}), \code{loi\_vraie.txt} et \code{manifeste.txt} (par \code{ecrire\_liste()}), \code{verite/} (une table de vérité par fichier CSV), \code{declarations.txt} si le jeu en porte, puis \code{empreintes.md5} au format de \code{md5sum -c}\fsp; refuse (\code{jeu\_invalide}) avant toute écriture un objet qui n'a pas la forme d'un jeu simulé\fsp; rend le dossier. \\
+\code{ecrire\_jeu()} & \code{jeu}, \code{dossier} & Écrit un jeu simulé dans un dossier neuf ou vide, selon la disposition d'un jeu versionné~: \code{base/} (une table par fichier, au format et aux octets d'\code{ecrire\_base()}), \code{loi\_vraie.txt} et \code{manifeste.txt} (par \code{ecrire\_liste()}), \code{verite/} (une table de vérité par fichier CSV), \code{declarations.txt} si le jeu en porte, puis \code{empreintes.md5} au format de \code{md5sum -c}\fsp; refuse (\code{jeu\_invalide}) avant toute écriture, création du dossier comprise, un objet qui n'a pas la forme d'un jeu simulé ou que \code{lire\_jeu()} ne relirait pas identique, et applique avant elle aussi les refus d'\code{ecrire\_base()} et d'\code{ecrire\_liste()} (section~\ref{sec:lecture-jeu})\fsp; rend le dossier. \\
 \code{lire\_jeu()} & \code{dossier} & Relit un jeu écrit par \code{ecrire\_jeu()} et le rend identique\fsp; contrôle d'abord la disposition du dossier (\code{fichier\_invalide}) et chaque empreinte de \code{empreintes.md5} (\code{empreinte\_discordante}), puis lit la base par \code{lire\_base()} (tables et nombres de lignes égaux à la volumétrie du manifeste, sinon \code{fichier\_invalide}) et les tables de vérité dans les types que décrit le manifeste. \\
 \end{tabular}
 \end{center}
@@ -1452,8 +1452,11 @@ se lit pas dans son type (en texte exact), chaîne vide entre guillemets. Le
 résultat d'un appel isolé n'est donc pas forcément conforme~:
 \code{controler\_types()} le refuse, et le contrôle de la base entière
 l'enregistre au bilan (section~\ref{sec:donnees-bilan}). Tolérances
-admises, jugées admissibles par l'agent \code{actuary} du projet (les guillemets
-délimitent le champ, ils ne portent pas le type)~: toute valeur entre
+admises, par jugement de mise en œuvre (les guillemets délimitent le champ,
+ils ne portent pas le type\fsp; aucune tolérance ne change la valeur lue
+d'une colonne de type caractère, et les 47~colonnes d'identifiant
+\code{id\_*} du dictionnaire sont toutes de ce type, de sorte que des zéros
+de tête ne peuvent confondre deux clés)~: toute valeur entre
 guillemets ou non, quel que soit son type\fsp; zéros de tête d'un entier ou
 d'un réel\fsp; chaîne sans guillemets, espaces conservées, \code{NA} nu lu
 comme la chaîne \code{"NA"}\fsp; fins de ligne CRLF hors des champs entre
@@ -1488,7 +1491,8 @@ disposition d'un jeu versionné~:
 
 \begin{itemize}[itemsep=2pt]
 \item \code{base/}~: une table de la base par fichier \code{<table>.csv},
-  écrite par \code{ecrire\_base()}\fsp;
+  aux octets qu'écrirait \code{ecrire\_base()}, dont \code{ecrire\_jeu()}
+  emploie le code interne\fsp;
 \item \code{verite/}~: une table de vérité par fichier \code{<nom>.csv}, au
   même format CSV, les types des colonnes étant portés par le manifeste\fsp;
 \item \code{loi\_vraie.txt} et \code{manifeste.txt}, écrits par
@@ -1501,13 +1505,41 @@ disposition d'un jeu versionné~:
   dossier du jeu.
 \end{itemize}
 
-Avant toute écriture, \code{ecrire\_jeu()} refuse (\code{jeu\_invalide}) un
-objet qui n'a pas la forme d'un jeu simulé~: classe, champs \code{base},
-\code{loi\_vraie}, \code{verite}, \code{manifeste} dans cet ordre, puis
-\code{declarations} facultatif, tables de vérité en liste nommée de
-\code{data.frame}, colonnes et types de ces tables exactement décrits par le
-manifeste. Les refus d'\code{ecrire\_base()} et d'\code{ecrire\_liste()}
-s'appliquent aussi.
+Avant toute écriture, création du dossier comprise, \code{ecrire\_jeu()}
+refuse (\code{jeu\_invalide}, par un message qui nomme l'élément en cause,
+table et colonne comprises) un objet qui n'a pas la forme d'un jeu simulé ou
+que \code{lire\_jeu()} ne relirait pas identique~:
+
+\begin{itemize}[itemsep=2pt]
+\item classe autre que \code{jeu\_simule} seule, ou attribut du jeu autre
+  que ses noms et sa classe\fsp;
+\item champs autres que \code{base}, \code{loi\_vraie}, \code{verite},
+  \code{manifeste} dans cet ordre, puis \code{declarations} facultatif, ou
+  champ \code{declarations} présent mais \code{NULL} (il ne s'écrit pas, et
+  le jeu relu en serait privé)\fsp;
+\item liste \code{base} ou \code{verite} qui porte un attribut autre que
+  ses noms\fsp;
+\item tables de vérité qui ne forment pas une liste nommée de
+  \code{data.frame}, ou dont les colonnes et les types ne sont pas
+  exactement ceux que décrit le manifeste\fsp;
+\item tables de la base hors de l'ordre du dictionnaire (\code{lire\_base()}
+  les rend dans cet ordre), ou volumétrie du manifeste différente des
+  nombres de lignes de la base\fsp;
+\item table de la base ou de vérité de classe autre que \code{data.frame}
+  seule, dont les noms de lignes ne sont pas les noms automatiques
+  \code{1..n}, qui porte un attribut de table autre que
+  ses noms, sa classe et ses noms de lignes, ou dont une colonne porte un
+  attribut, hors de la classe \code{Date} d'une colonne de dates~: le CSV
+  ne les conserve pas.
+\end{itemize}
+
+\noindent Les refus d'\code{ecrire\_base()} s'appliquent à la base, et ses
+refus de valeurs (ce que le CSV ne relirait pas à l'identique) aux tables
+de vérité, au nom d'\code{ecrire\_jeu()} et de \code{verite/<nom>}\fsp; ceux
+d'\code{ecrire\_liste()} (\code{liste\_invalide}, qui refuse notamment, sur
+une liste, tout attribut autre que les noms) s'appliquent à la loi vraie,
+au manifeste et aux déclarations. Tous sont levés avant la création du
+dossier.
 
 \code{lire\_jeu(dossier)} relit un jeu écrit par \code{ecrire\_jeu()}. Elle
 contrôle d'abord la disposition (les fichiers et dossiers attendus, rien
@@ -1517,7 +1549,10 @@ fichier (\code{empreinte\_discordante} au premier qui diffère). Elle lit
 ensuite la base par \code{lire\_base()}, dont les tables et les nombres de
 lignes doivent être ceux de la volumétrie du manifeste, les listes par
 \code{lire\_liste()}, et les tables de vérité dans les types que décrit le
-manifeste~; tout écart est refusé par \code{fichier\_invalide}. Elle
+manifeste~; tout écart est refusé par \code{fichier\_invalide}. Un
+fichier caché est refusé comme tout fichier non attendu, à la racine du jeu,
+dans \code{base/} (contrôle des empreintes, puis \code{lire\_base()}) et
+dans \code{verite/}. Elle
 n'évalue aucun code. Que \code{lire\_jeu(ecrire\_jeu(j, d))} rende un objet
 identique à \code{j} est un constat des batteries, non une démonstration.
 
@@ -1645,17 +1680,20 @@ dont la visibilité à l'arrêté n'est pas déterminée n'y figure pas~: sa
 cause, \code{visibilite\_non\_determinee}, se lit dans l'élément
 \code{enjeu}. Une clé (code, table, colonne) présente à la fois dans
 \code{controles} et dans \code{controles\_non\_executes} est une détection
-partielle, dont le nombre est un minorant. \textbf{Priorité des causes}
-(décision du mainteneur du 8~novembre~2026, M185)~: un contrôle non
-implémenté porte \code{non\_implemente} avant toute autre cause\fsp; une
-cause directe passe avant tout refus induit, règle~B comprise, de sorte
-qu'un refus induit n'est la cause que d'un contrôle autrement exécutable.
-Dans le code, les causes qui ne sont ni directes ni un refus induit sont
-énumérées par une constante interne, \code{.CAUSES\_NON\_DIRECTES}, à tenir
-à jour~: une cause nouvelle qui n'y serait pas ajoutée serait prise pour
-une cause directe. Un test de la batterie unitaire vérifie, sur les appels
-qu'elle fait, que toute cause émise qui n'est pas un motif de refus y
-figure, et que les cinq causes non directes ci-dessus sont émises.
+partielle, dont le nombre est un minorant. \textbf{Priorité des causes.} Un contrôle non implémenté, reporté par
+décision du mainteneur (M181, ci-dessous), porte \code{non\_implemente}
+avant toute autre cause. Une cause directe passe avant tout refus induit,
+règle~B comprise (décision du mainteneur du 8~novembre~2026, M185), de
+sorte qu'un refus induit n'est la cause que d'un contrôle sans cause
+directe. Dans le code, les causes qui ne sont ni directes ni un refus
+induit sont énumérées par une constante interne,
+\code{.CAUSES\_NON\_DIRECTES}, à tenir à jour~: une cause nouvelle qui n'y
+serait pas ajoutée serait prise pour une cause directe. Elle compte six
+causes~: les cinq causes non directes ci-dessus et
+\code{visibilite\_non\_determinee}. Un test de la batterie unitaire
+vérifie, sur les appels qu'elle fait, que toute cause émise qui n'est pas
+un motif de refus y figure, et que les cinq causes non directes ci-dessus
+sont émises.
 
 \textbf{Âge invraisemblable et fin de charge.} Le défaut D02c, pour un
 âge, se détecte sur la vue, pour cinq emplois (assuré au sinistre, assuré
@@ -1675,13 +1713,13 @@ exécuté (\code{declaration\_absente}) et la déclaration manquante figure
 dans \code{declarations\_requises}.
 
 \textbf{État partiel déclaré.} Le bilan dit lui-même qu'il est partiel~:
-les contrôles prévus par la spécification et reportés, par décision du
-mainteneur, à l'issue~34 du dépôt figurent, pour chaque table présente,
-dans les contrôles non exécutés, avec la cause \code{non\_implemente}. La
-constante \code{CONTROLES\_NON\_IMPLEMENTES} les énumère en quatorze lignes (code, table,
-colonne) sur dix codes~: D03d\fsp; D07 sur \code{evenements} (sous-cas~(a)
-et~(b))\fsp; D08\fsp; D09 aux seuils, sur cinq tables\fsp; D10, sous-cas~(d),
-(e) et~(f)\fsp; D11\fsp; D12\fsp; D14. Aucun seuil de ces contrôles n'est
+les contrôles prévus par la spécification et reportés à l'issue~34 du
+dépôt par décision du mainteneur (M181) figurent, pour chaque table
+présente, dans les contrôles non exécutés, avec la cause
+\code{non\_implemente}. Ils sont énumérés en quatorze lignes (code, table,
+colonne) sur dix codes par la constante \code{CONTROLES\_NON\_IMPLEMENTES}~: D03d\fsp; D07 sur \code{evenements} (sous-cas~(a)
+et~(b))\fsp; D08\fsp; D09 aux seuils, sur cinq tables\fsp; D10d\fsp; D10e\fsp;
+D10f\fsp; D11\fsp; D12\fsp; D14. Aucun seuil de ces contrôles n'est
 attendu dans \code{declarations\_requises}.
 
 Les constantes du module sont citées d'après le code (\code{R/donnees.R})~:
@@ -1961,7 +1999,7 @@ les deux méthodes de la classe \code{jeu\_simule} sont exportées.
 \begin{tabular}{@{}p{3.9cm}>{\raggedright\arraybackslash}p{3.0cm}p{8.2cm}@{}}
 \rowcolor{tableheader}
 \textcolor{financeblue}{\textbf{Fonction}} & \textcolor{financeblue}{\textbf{Arguments}} & \textcolor{financeblue}{\textbf{Rôle}} \\
-\code{simuler\_base()} & \code{loi\_vraie}, \code{graines}, \code{date\_extraction}, \code{nom}, \code{description}, \code{declarations = NULL}, \code{date\_visa = NULL} & Tire une base brute fictive sous la loi vraie, en flux séparés (population, famille, sinistres, information), chacun sous sa graine, puis injecte chaque défaut de données paramétré sous la graine des défauts augmentée de son rang\fsp; rend un objet \code{jeu\_simule} (base, loi vraie, tables de vérité dont le registre des défauts, manifeste avec la version du simulateur, déclarations facultatives) sans écrire de fichier\fsp; refuse (\code{jeu\_invalide}) une loi vraie, des graines ou des arguments mal formés. \\
+\code{simuler\_base()} & \code{loi\_vraie}, \code{graines}, \code{date\_extraction}, \code{nom}, \code{description}, \code{declarations = NULL}, \code{date\_visa = NULL} & Tire une base brute fictive sous la loi vraie, en flux séparés (population, famille, sinistres, information), chacun sous sa graine, puis injecte chaque défaut de données paramétré sous la graine des défauts augmentée de son rang\fsp; rend un objet \code{jeu\_simule} (base, loi vraie, tables de vérité dont le registre des défauts, manifeste avec la version du simulateur, déclarations facultatives) sans écrire de fichier\fsp; refuse (\code{jeu\_invalide}), avant tout tirage, une loi vraie, des graines ou des arguments mal formés, une loi vraie à clé inconnue ou à valeur hors de son domaine, et une entrée qui ne satisfait pas les deux préconditions du tirage (section~\ref{sec:simulation-tirage}). \\
 \code{format.jeu\_simule()} & \code{x}, \code{...} & Décrit un jeu simulé en lignes de texte, par des décomptes seuls~: nom, date d'extraction, versions du dictionnaire, du simulateur et du package, date de visa, lignes par table, lignes du registre des défauts par code, déclarations. \\
 \code{print.jeu\_simule()} & \code{x}, \code{...} & Imprime \code{format(x)} et rend le jeu, invisible. \\
 \end{tabular}
@@ -1980,12 +2018,48 @@ suit un modèle mensuel par ancienneté (reprise, décès, passage en
 invalidité)\fsp; il passe en invalidité ou s'éteint par fin de droits au
 terme de la durée maximale d'indemnisation, et prend fin à l'âge de fin de
 service. L'invalidité suit des taux mensuels constants (reprise, décès). Le
-décès d'un assuré en activité ou en arrêt ouvre un sinistre décès
+décès d'un assuré en activité, en arrêt ou en invalidité ouvre un sinistre décès
 (maintien de la garantie décès pendant l'arrêt)\fsp; un arrêt peut être
 classé sans suite. Chaque paramètre est lu dans la \textbf{loi vraie},
 liste nommée de version \code{VERSION\_LOI\_VRAIE}, où il est un jugement
 d'expert déclaré~: le simulateur n'a aucune valeur par défaut, et une loi
-vraie à laquelle manque une feuille est refusée (\code{jeu\_invalide}).
+vraie à laquelle manque une feuille est refusée (\code{jeu\_invalide}). Une
+probabilité annuelle de décès $q_x = 1$ est admise~: le décès est alors certain
+dans le pas, où il prime sur l'arrêt de travail (limite du partage entre les
+deux risques concurrents quand l'intensité de décès devient infinie).
+
+\textbf{Contrôles d'entrée.} \code{simuler\_base()} refuse
+(\code{jeu\_invalide}), avant tout tirage~: une loi vraie d'une autre
+version, à clé inconnue ou mal nommée, ou dont une valeur sort de son
+domaine (probabilité hors de l'intervalle $[0,1]$, taux, cadence, âge, durée ou montant
+négatif, nombre de contrats ou d'assurés par contrat inférieur à~1, âge
+d'entrée minimal supérieur au maximal ou maximal au moins égal à l'âge de
+retraite, arrondi du salaire nul, valeur non finie), ou dont les tables
+sont incohérentes (table de maintien en incapacité dont les mois ne sont
+pas 0, 1, 2… ou dont les probabilités d'un mois ont une somme supérieure
+à~1, ou plus courte que la durée maximale d'indemnisation\fsp; tables de
+mortalité ou d'incidence d'arrêt à âges non consécutifs ou à colonnes de
+longueurs différentes\fsp; probabilités des catégories d'invalidité de
+somme différente de~1\fsp; intensités de défauts qui ne donnent pas
+exactement une valeur de $[0,1]$ par défaut simulé)\fsp; une date
+d'extraction non entière ou non finie, ou qui ne suit pas strictement le
+début de l'historique. S'y ajoutent deux préconditions du tirage, contrôlées
+plutôt qu'imposées par une borne, pour que les tirages des jeux admis ne
+changent pas~: (i)~l'effet du dernier contrat possible (premier jour
+du mois situé, après celui du début de l'historique, au nombre maximal de
+mois de décalage d'effet, \code{decalage\_effet\_mois\_max}) ne suit pas la
+date d'extraction, faute de quoi un contrat, ses affiliations et ses
+entrées seraient datés après elle\fsp; (ii)~les uniformes d'invalidité,
+en nombre fixe par arrêt, couvrent le plus long séjour possible en
+invalidité, de l'âge d'entrée minimal à l'âge de retraite, ce qui garantit
+tout écart d'au plus 68~ans entre ces deux âges. Pour un écart entier~$d$, la
+condition $365{,}25\,d + 2 \le 360\,(d+1)$ équivaut à
+$d \le 358/5{,}25 \approx 68{,}19$~: 68~ans est admis et 69~refusé (calcul
+exact, vérifié par \code{simuler\_base()} sur la loi vraie du jeu
+\code{v1-modeste-01} aux seuls âges modifiés). L'âge d'entrée minimal étant
+réel, au-delà de 68,24~ans un écart non entier est admis ou refusé selon sa
+partie fractionnaire, le nombre d'uniformes étant arrondi au mois
+supérieur.
 
 \textbf{Flux séparés.} Le jeu propre est tiré en quatre flux, dans cet
 ordre~: \code{population} (contrats, assurés, affiliations),
@@ -2023,7 +2097,7 @@ refusé dans la loi vraie.
 \begin{tabular}{@{}p{0.8cm}p{1.1cm}p{4.8cm}p{2.3cm}>{\raggedright\arraybackslash}p{4.7cm}@{}}
 \rowcolor{tableheader}
 \textcolor{financeblue}{\textbf{Rang}} & \textcolor{financeblue}{\textbf{Code}} & \textcolor{financeblue}{\textbf{Paramètre}} & \textcolor{financeblue}{\textbf{Table}} & \textcolor{financeblue}{\textbf{Lignes éligibles et effet}} \\
-1 & D01b & \code{doublon\_contenu} & \code{cotisations} & Encaissements~: copie sous un nouvel identifiant, datée après l'original. \\
+1 & D01b & \code{doublon\_contenu} & \code{cotisations} & Encaissements antérieurs à l'extraction~: copie sous un nouvel identifiant, datée après l'original, au plus à l'extraction. \\
 2 & D02a & \code{date\_ordre} & \code{prestations} & Indemnités journalières~: début et fin de période permutés. \\
 3 & D02b & \code{saisie\_anterieure} & \code{evenements} & Événements d'un type non programmable~: saisie avant la date d'effet. \\
 4 & D03a & \code{manquant\_date\_naissance} & \code{assures} & Date de naissance effacée. \\
@@ -2081,7 +2155,17 @@ au manifeste. Toute modification du module qui change la sortie de
 \code{simuler\_base()} pour une entrée admise, fût-ce sur un seul jeu,
 l'incrémente, et son commit est un changement de résultat sur les jeux,
 avec son tableau avant~/ après\fsp; un refactorage sans effet garde la
-version. La sémantique des intensités de défauts de la loi vraie de
+version. La version garantit la sortie des jeux versionnés et de toute
+entrée admise par la version courante. Les corrections de la revue finale
+de la branche qui a introduit le simulateur font \textbf{exception
+délibérée} à cette règle d'incrément~: les contrôles d'entrée refusent des
+entrées autrefois admises, et la restriction des lignes éligibles à D01b
+aux encaissements antérieurs à l'extraction change la sortie des entrées
+encore admises dont un encaissement est daté de l'extraction (sa copie
+n'est plus tirée). La décision du mainteneur du 9~novembre~2026 (M190)
+admet ce changement sans incrément, aucun jeu n'ayant été publié hors de
+cette branche, et les jeux versionnés n'étant pas changés (la batterie de
+reproductibilité les rejoue à l'identique)~: la version reste~1. La sémantique des intensités de défauts de la loi vraie de
 version~1 est figée~: ajouter un sous-cas demande une nouvelle version de
 la loi vraie et du simulateur.
 
