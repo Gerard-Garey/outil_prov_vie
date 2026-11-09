@@ -484,3 +484,63 @@ for (k in list(list("volumétrie incohérente", vol_faux), list("tables hors de 
   verifier(paste0("ecrire_jeu() : ", k[[1L]], " : jeu_invalide, aucun dossier créé (revue finale, m5)"),
            motif_de(ecrire_jeu(k[[2L]], d5)) == "jeu_invalide" && !file.exists(d5))
 }
+# audit des corrections finales, n2 : table (base ou verite) à noms de lignes non automatiques ou
+# à attribut que lire_jeu() ne relit pas : jeu_invalide avant toute écriture, message qui nomme
+# la table (et la colonne) ; le dossier de destination, existant et vide, le reste
+rn_base <- j2
+rownames(rn_base$base$contrats) <- paste0("r", seq_len(nrow(rn_base$base$contrats)))
+rn_verite <- j2
+rn_verite$verite$etats_vrais <- rn_verite$verite$etats_vrais[rev(seq_len(nrow(rn_verite$verite$etats_vrais))), ]
+at_base <- j2
+attr(at_base$base$contrats$id_contrat, "note") <- "a"
+at_verite <- j2
+attr(at_verite$verite$etats_vrais$etat, "note") <- "a"
+at_table <- j2
+attr(at_table$base$contrats, "note") <- "a"
+for (k in list(list("noms de lignes de la base", rn_base, "base/contrats"),
+               list("noms de lignes de la vérité", rn_verite, "verite/etats_vrais"),
+               list("attribut de colonne de la base", at_base, "base/contrats, colonne id_contrat"),
+               list("attribut de colonne de la vérité", at_verite, "verite/etats_vrais, colonne etat"),
+               list("attribut de table de la base", at_table, "base/contrats"))) {
+  d6 <- tempfile("jeu-")
+  dir.create(d6)
+  e <- tryCatch({ ecrire_jeu(k[[2L]], d6); NULL }, refus_provie = function(e) e)
+  verifier(paste0("ecrire_jeu() : ", k[[1L]], " : jeu_invalide nommant la table, aucun fichier écrit (audit n2)"),
+           !is.null(e) && identical(e$motif, "jeu_invalide") && grepl(paste0("table ", k[[3L]]), conditionMessage(e), fixed = TRUE) &&
+             length(list.files(d6, all.files = TRUE, no.. = TRUE)) == 0L)
+}
+sans_nom <- j2
+attr(sans_nom$base$contrats, "row.names") <- seq_len(nrow(sans_nom$base$contrats))
+d7 <- tempfile("jeu-")
+verifier("témoin : noms de lignes 1..n posés explicitement (identiques à la relecture) : écrit, relu identique",
+         { ecrire_jeu(sans_nom, d7); identical(lire_jeu(d7), j2) })
+# audit des corrections finales, m1 : attribut du jeu, de la liste base ou de la liste verite, ou
+# classe étendue : jeu_invalide avant toute écriture, message qui nomme l'élément, dossier
+# existant resté vide
+at_liste_base <- j2
+attr(at_liste_base$base, "note") <- "x"
+at_liste_verite <- j2
+attr(at_liste_verite$verite, "note") <- "x"
+at_jeu <- j2
+attr(at_jeu, "note") <- "x"
+classe_etendue <- j2
+class(classe_etendue) <- c("autre", "jeu_simule")
+for (k in list(list("attribut de la liste base", at_liste_base, "liste base"),
+               list("attribut de la liste verite", at_liste_verite, "liste verite"),
+               list("attribut du jeu", at_jeu, "attribut du jeu"),
+               list("classe du jeu étendue", classe_etendue, "classe jeu_simule seule"))) {
+  d8 <- tempfile("jeu-")
+  dir.create(d8)
+  e <- tryCatch({ ecrire_jeu(k[[2L]], d8); NULL }, refus_provie = function(e) e)
+  verifier(paste0("ecrire_jeu() : ", k[[1L]], " : jeu_invalide nommant l'élément, aucun fichier écrit (audit m1)"),
+           !is.null(e) && identical(e$motif, "jeu_invalide") && grepl(k[[3L]], conditionMessage(e), fixed = TRUE) &&
+             length(list.files(d8, all.files = TRUE, no.. = TRUE)) == 0L)
+}
+# attribut de loi_vraie, de manifeste ou de declarations : déjà refusé par ecrire_liste(), avant écriture
+for (champ in c("loi_vraie", "manifeste", "declarations")) {
+  porte <- j2
+  attr(porte[[champ]], "note") <- "x"
+  d9 <- tempfile("jeu-")
+  verifier(paste0("ecrire_jeu() : attribut de ", champ, " : liste_invalide (ecrire_liste()), aucun dossier créé (audit m1)"),
+           motif_de(ecrire_jeu(porte, d9)) == "liste_invalide" && !file.exists(d9))
+}
