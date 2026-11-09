@@ -1,4 +1,33 @@
 # NAMESPACE écrit à la main (ADR 0006, point 5 ; ADR 0010, point 13) : un export() par
-# ligne, sans exportPattern. Aucun export en T1 : le module `outils` est interne, les
-# tests l'atteignent par provie::: (ADR 0010, point 1). Les premiers exports viendront avec
-# les modules `dictionnaire`, `lecture`, `donnees` et `simulation` (#18, #19).
+# ligne, sans exportPattern. Le module `outils` est interne, les tests l'atteignent par
+# provie::: (ADR 0010, point 1).
+# Module `dictionnaire` (#18) : dictionnaire() et controler_types(), appelés hors du package
+# par l'application (contrôle d'une feuille lue en data.frame avant le calcul, ADR 0010,
+# point 2) et par l'utilisateur sans Shiny.
+export(dictionnaire)
+export(controler_types)
+# Module `lecture` (#18) : lire_base() et ecrire_base(), appelés hors du package par
+# l'utilisateur sans Shiny (lecture d'une base CSV en liste de data.frame à passer au moteur,
+# qui ne reçoit jamais un fichier ; écriture d'une base construite à la main) et par les
+# tests (aller-retour) (ADR 0010, points 2 et 13).
+export(lire_base)
+export(ecrire_base)
+# Module `donnees` (#18) : controler_base(), appelée hors du package par l'application (bilan de
+# la base à l'arrêté avant le calcul, onglet Données) et par l'utilisateur sans Shiny ; puis,
+# en B2, par l'orchestration (ADR 0010, points 9 et 13 ; M147, M153).
+# Bilan partiel par report déclaré (#18 fermée avec ce report, #34 ; M181) : les contrôles
+# prévus et reportés figurent dans controles_non_executes, cause non_implemente
+# (CONTROLES_NON_IMPLEMENTES).
+export(controler_base)
+# Module `lecture` (#19) : lire_jeu() et ecrire_jeu(), appelés hors du package par les tests
+# (reproductibilité des jeux versionnés), par la session qui écrit un jeu versionné (commit
+# donnees:) et par l'utilisateur sans Shiny (relecture d'un jeu sous inst/extdata/jeux/)
+# (ADR 0010, points 13, 19 et 20).
+export(lire_jeu)
+export(ecrire_jeu)
+# Module `simulation` (#19) : simuler_base(), appelée hors du package par les tests et par la
+# session qui tire un jeu versionné ; hors de la chaîne du moteur (ADR 0010, points 1, 13 et 19).
+export(simuler_base)
+# Méthodes de la classe jeu_simule (ADR 0010, point 13) : décomptes seuls.
+S3method(format, jeu_simule)
+S3method(print, jeu_simule)

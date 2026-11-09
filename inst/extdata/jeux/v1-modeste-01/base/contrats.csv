@@ -1,0 +1,6 @@
+id_contrat,nature_contrat,id_adherent,id_assure,date_effet,date_terme,date_fin,motif_fin,date_saisie_fin,mois_echeance,jour_echeance,preavis_mois,tacite_reconduction,gestionnaire,date_debut_gestion
+"CT01","collectif_obligatoire","AD01",,2019-04-01,,,,,1,1,2,TRUE,"interne",2019-04-01
+"CT02","collectif_obligatoire","AD02",,2018-02-01,,,,,1,1,2,TRUE,"interne",2018-02-01
+"CT03","collectif_obligatoire","AD03",,2019-04-01,,,,,1,1,2,TRUE,"interne",2019-04-01
+"CT04","collectif_obligatoire","AD04",,2019-02-01,,,,,1,1,2,TRUE,"interne",2019-02-01
+"CT05","collectif_obligatoire","AD05",,2018-09-01,,,,,1,1,2,TRUE,"interne",2018-09-01

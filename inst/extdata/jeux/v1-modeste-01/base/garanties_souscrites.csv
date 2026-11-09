@@ -1,0 +1,16 @@
+id_garantie_souscrite,id_contrat,code_garantie,college,date_effet,date_fin,type_assiette,type_franchise,regle_complement,type_rente_conjoint,option_iad,periodicite_prestation,terme_prestation,periodicite_cotisation,taux_technique_tarif,table_tarif,conjoint_vise,versement_double_effet,non_remariage,prolongation_handicap,maintien_double_effet,clause_type_beneficiaire
+"GS001","CT01","deces","ensemble",2019-04-01,,"salaire_reference",,,,FALSE,,,"annuelle",,,,,,,,"conjoint_enfants_heritiers"
+"GS002","CT01","incapacite","ensemble",2019-04-01,,"salaire_reference","continue","forfaitaire",,,"mensuelle","echu","annuelle",,,,,,,,
+"GS003","CT01","invalidite","ensemble",2019-04-01,,"salaire_reference",,"forfaitaire",,,"trimestrielle","echu","annuelle",,,,,,,,
+"GS004","CT02","deces","ensemble",2018-02-01,,"salaire_reference",,,,FALSE,,,"annuelle",,,,,,,,"conjoint_enfants_heritiers"
+"GS005","CT02","incapacite","ensemble",2018-02-01,,"salaire_reference","continue","forfaitaire",,,"mensuelle","echu","annuelle",,,,,,,,
+"GS006","CT02","invalidite","ensemble",2018-02-01,,"salaire_reference",,"forfaitaire",,,"trimestrielle","echu","annuelle",,,,,,,,
+"GS007","CT03","deces","ensemble",2019-04-01,,"salaire_reference",,,,FALSE,,,"annuelle",,,,,,,,"conjoint_enfants_heritiers"
+"GS008","CT03","incapacite","ensemble",2019-04-01,,"salaire_reference","continue","forfaitaire",,,"mensuelle","echu","annuelle",,,,,,,,
+"GS009","CT03","invalidite","ensemble",2019-04-01,,"salaire_reference",,"forfaitaire",,,"trimestrielle","echu","annuelle",,,,,,,,
+"GS010","CT04","deces","ensemble",2019-02-01,,"salaire_reference",,,,FALSE,,,"annuelle",,,,,,,,"conjoint_enfants_heritiers"
+"GS011","CT04","incapacite","ensemble",2019-02-01,,"salaire_reference","continue","forfaitaire",,,"mensuelle","echu","annuelle",,,,,,,,
+"GS012","CT04","invalidite","ensemble",2019-02-01,,"salaire_reference",,"forfaitaire",,,"trimestrielle","echu","annuelle",,,,,,,,
+"GS013","CT05","deces","ensemble",2018-09-01,,"salaire_reference",,,,FALSE,,,"annuelle",,,,,,,,"conjoint_enfants_heritiers"
+"GS014","CT05","incapacite","ensemble",2018-09-01,,"salaire_reference","continue","forfaitaire",,,"mensuelle","echu","annuelle",,,,,,,,
+"GS015","CT05","invalidite","ensemble",2018-09-01,,"salaire_reference",,"forfaitaire",,,"trimestrielle","echu","annuelle",,,,,,,,

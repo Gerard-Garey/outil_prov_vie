@@ -23,19 +23,19 @@ motif_de <- function(expr) {
 
 section("outils : constantes")
 verifier_egal("VERSION_FICHE", outils$VERSION_FICHE, 1L)
-verifier_egal("VERSION_DICTIONNAIRE_ATTENDUE", outils$VERSION_DICTIONNAIRE_ATTENDUE, "1.3")
+verifier_egal("VERSION_DICTIONNAIRE_ATTENDUE", outils$VERSION_DICTIONNAIRE_ATTENDUE, "1.5")
 verifier_egal("REPRESENTATION_CANONIQUE", outils$REPRESENTATION_CANONIQUE, "provie-resultat-1")
 verifier_egal("VERSION_LISTE", outils$VERSION_LISTE, 1L)
-verifier("MOTIFS_REFUS : dix-sept motifs distincts en minuscules et soulignés",
-         length(outils$MOTIFS_REFUS) == 17L && !anyDuplicated(outils$MOTIFS_REFUS) &&
+verifier("MOTIFS_REFUS : dix-neuf motifs distincts en minuscules et soulignés",
+         length(outils$MOTIFS_REFUS) == 19L && !anyDuplicated(outils$MOTIFS_REFUS) &&
            all(grepl("^[a-z_]+$", outils$MOTIFS_REFUS)))
-verifier("MOTIFS_REFUS contient les motifs de l'ADR 0010, point 11",
-         all(c("plan_incomplet", "plan_invalide", "liste_invalide", "table_base_absente",
+verifier("MOTIFS_REFUS contient les motifs de l'ADR 0010, point 11, fichier_invalide (M141) et jeu_invalide (onzième série, (f))",
+         all(c("plan_incomplet", "plan_invalide", "liste_invalide", "fichier_invalide", "table_base_absente",
                "colonne_absente", "colonne_inconnue", "type_incompatible",
                "extraction_invalide", "arrete_posterieur_extraction",
                "declaration_manquante", "table_absente", "empreinte_discordante",
                "version_discordante", "lien_non_declare", "catalogue_invalide",
-               "dictionnaire_invalide", "format_table_inconnu") %in% outils$MOTIFS_REFUS))
+               "dictionnaire_invalide", "format_table_inconnu", "jeu_invalide") %in% outils$MOTIFS_REFUS))
 
 section("outils : refuser")
 verifier_refus("refuser lève un refus de motif donné", refuser("message", "plan_invalide"),
@@ -370,6 +370,28 @@ verifier("ecrire_liste(lire_liste(o)) == o sur plusieurs textes canoniques",
          all(vapply(list(liste_riche, list(a = 1L), list(), list(x = list(y = NULL))),
                     function(l) identical(ecrire_liste(lire_liste(ecrire_liste(l))), ecrire_liste(l)), NA)))
 
+# #25 : la relecture d'une liste plate de n feuilles est linéaire. Croissance plutôt que
+# durée seule (une durée dépend de la machine) : rapport des durées à 40 000 et 10 000
+# feuilles, meilleure de deux mesures ; linéaire, il vaut environ 4, quadratique (insertion
+# feuille par feuille d'avant #25), environ 15 (mesure du 9 novembre 2026, R 4.3.3). Borne 10 ;
+# durée de 40 000 feuilles bornée à 20 s (environ 3 s mesurées ; 37 s avant #25).
+liste_plate <- function(n) stats::setNames(as.list(seq_len(n) / 7), paste0("f", seq_len(n)))
+duree_relecture <- function(o) min(vapply(1:2, function(i) system.time(lire_liste(o))[["elapsed"]], 0))
+o_10k <- ecrire_liste(liste_plate(10000L))
+o_40k <- ecrire_liste(liste_plate(40000L))
+t_10k <- duree_relecture(o_10k)
+t_40k <- duree_relecture(o_40k)
+verifier("lire_liste : 40 000 feuilles plates, aller-retour identical", identical(lire_liste(o_40k), liste_plate(40000L)))
+verifier("lire_liste : durée de 10 000 à 40 000 feuilles multipliée par moins de 10 (relecture linéaire)",
+         t_40k / max(t_10k, 0.05) < 10)
+verifier("lire_liste : 40 000 feuilles relues en moins de 20 s", t_40k < 20)
+# structure profonde et large : mêmes noeuds, même ordre, feuilles de tous types
+liste_arbre <- list(
+  a = list(b = list(c = list(d = 1:3, e = NULL, f = list()), g = "x"), h = c(TRUE, NA)),
+  z = as.Date("2026-11-09"),
+  m = stats::setNames(lapply(1:300, function(i) list(v = i, w = list(u = as.character(i)))), paste0("k", 1:300)))
+verifier_egal("lire_liste : arbre profond et large, aller-retour identical", lire_liste(ecrire_liste(liste_arbre)), liste_arbre)
+
 section("outils : avec_graine")
 verifier_egal("valeurs sous la graine 42 (Mersenne-Twister, Inversion, Rejection)",
               avec_graine(42L, runif(3)),
@@ -512,3 +534,66 @@ verifier_egal("version de R", plateforme$r, R.version.string)
 verifier("aucun champ de date ni d'horodatage",
          !any(grepl("date|heure|temps|time", names(plateforme), ignore.case = TRUE)))
 verifier_egal("deux appels identiques", decrire_plateforme(), plateforme)
+
+section("outils : conventions d'âge (M154)")
+calculer_age <- outils$calculer_age
+date_atteinte_age <- outils$date_atteinte_age
+verifier_egal("CONVENTIONS_AGE : liste fermée de quatre conventions", outils$CONVENTIONS_AGE,
+              c("revolu", "millesime", "plus_proche", "naissance_31_decembre"))
+dt <- function(x) as.Date(x)
+naiss7 <- dt(c("1970-03-15", "1970-06-30", "1970-07-01", "1970-07-02", "1972-07-01", "1972-07-02",
+               "1970-10-15"))
+verifier_egal("naissance_31_decembre : les sept dates de la spécification au 31/12/2026",
+              calculer_age(naiss7, dt("2026-12-31"), "naissance_31_decembre"),
+              c(57L, 57L, 57L, 56L, 55L, 54L, 56L))
+verifier_egal("égalité du 1er juillet 1972 (bissextile) : report au 31/12/1971",
+              calculer_age(dt("1972-07-01"), dt(c("1972-12-30", "1972-12-31")), "naissance_31_decembre"),
+              c(0L, 1L))
+verifier_egal("1er juillet 1970 (non bissextile) au 31 décembre précédent, 2 juillet à l'année même",
+              calculer_age(dt(c("1970-07-01", "1970-07-02")), dt("1970-12-31"), "naissance_31_decembre"),
+              c(1L, 0L))
+verifier_egal("naissance_31_decembre : 0 entre la naissance et un 31 décembre reporté postérieur",
+              calculer_age(dt("1970-10-15"), dt(c("1970-10-15", "1970-12-30", "1970-12-31")),
+                           "naissance_31_decembre"), c(0L, 0L, 0L))
+verifier_egal("revolu, né un 29 février : 0 le 28/02/2001, 1 le 01/03/2001, 4 le 29/02/2004",
+              calculer_age(dt("2000-02-29"), dt(c("2001-02-28", "2001-03-01", "2004-02-28", "2004-02-29")),
+                           "revolu"), c(0L, 1L, 3L, 4L))
+verifier_egal("date_atteinte_age, né un 29 février : 1er mars en année non bissextile",
+              date_atteinte_age(dt("2000-02-29"), c(1, 4), "revolu"), dt(c("2001-03-01", "2004-02-29")))
+verifier_egal("millesime : année(D) - année(N)",
+              calculer_age(dt("1970-12-31"), dt(c("1970-12-31", "1971-01-01")), "millesime"), c(0L, 1L))
+verifier_egal("plus_proche : à égalité, l'âge supérieur (366 jours, milieu au 183e)",
+              calculer_age(dt("2000-01-01"), dt(c("2000-07-01", "2000-07-02")), "plus_proche"),
+              c(0L, 1L))
+verifier_egal("plus_proche : 365 jours, 182 jours après l'anniversaire, âge inférieur ; 183, supérieur",
+              calculer_age(dt("2001-01-01"), dt(c("2001-07-02", "2001-07-03")), "plus_proche"), c(0L, 1L))
+verifier_egal("date antérieure à la naissance ou manquante : NA",
+              calculer_age(dt(c("2000-01-01", NA)), dt(c("1999-12-31", "2001-01-01")), "revolu"),
+              c(NA_integer_, NA_integer_))
+verifier_egal("convention hors liste : plan_invalide", motif_de(calculer_age(dt("2000-01-01"),
+              dt("2001-01-01"), "revolue")), "plan_invalide")
+verifier_egal("convention hors liste pour date_atteinte_age : plan_invalide",
+              motif_de(date_atteinte_age(dt("2000-01-01"), 1, "exact")), "plan_invalide")
+verifier_egal("date qui n'est pas une Date : erreur de programmation",
+              motif_de(calculer_age("2000-01-01", dt("2001-01-01"), "revolu")), "autre")
+verifier_egal("longueurs incompatibles : erreur", motif_de(calculer_age(dt(c("2000-01-01", "2000-01-02")),
+              dt(c("2001-01-01", "2001-01-02", "2001-01-03")), "revolu")), "autre")
+verifier("date_atteinte_age rend une Date stockée en double",
+         is.double(date_atteinte_age(dt("2000-01-01"), 1L, "revolu")) &&
+           identical(class(date_atteinte_age(dt("2000-01-01"), 1L, "revolu")), "Date"))
+naiss <- c(dt("1940-01-01") + 0:400 * 73L, dt(c("1944-02-29", "1972-02-29", "1996-02-29", "2000-02-29")))
+ages <- rep_len(0:85, length(naiss))
+for (convention in outils$CONVENTIONS_AGE) {
+  atteinte <- date_atteinte_age(naiss, ages, convention)
+  verifier(paste0("aller-retour calculer_age(n, date_atteinte_age(n, a, c), c) == a : ", convention),
+           identical(calculer_age(naiss, atteinte, convention), ages))
+  verifier(paste0("date_atteinte_age est la première date : la veille l'âge est inférieur : ", convention),
+           all(atteinte == naiss | calculer_age(naiss, atteinte - 1, convention) < ages))
+}
+verifier_egal("date_atteinte_age : âge NA (logique) rend NA",
+              date_atteinte_age(dt(c("2000-01-01", "2000-01-01")), c(NA, 1), "revolu"), dt(c(NA, "2001-01-01")))
+verifier_egal("date_atteinte_age : NA logique seul admis", date_atteinte_age(dt("2000-01-01"), NA, "revolu"), dt(NA))
+verifier_egal("date_atteinte_age : âge de AGE_MAXIMUM (200) admis",
+              date_atteinte_age(dt("2000-01-01"), 200L, "revolu"), dt("2200-01-01"))
+verifier_egal("date_atteinte_age : âge au-delà de AGE_MAXIMUM refusé (erreur), jamais un NA silencieux",
+              motif_de(date_atteinte_age(dt("2000-01-01"), 201L, "revolu")), "autre")
