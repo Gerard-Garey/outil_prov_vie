@@ -851,7 +851,7 @@ colonne «~Peut appeler~» (section~\ref{sec:controles}).
 \endfoot
 \bottomrule
 \endlastfoot
-\code{outils} & Services sans contenu métier~: refus, graine locale, empreinte, écriture canonique, sérialisation, plateforme, constantes & Aucun module \\
+\code{outils} & Services sans contenu métier~: refus, graine locale, empreinte, écriture canonique, sérialisation, plateforme, conventions d'âge, constantes & Aucun module \\
 \code{dictionnaire} & Lecture et validation du dictionnaire lisible par machine\fsp; accès par table et par colonne & \code{outils} \\
 \code{lecture} & Lecture et écriture des fichiers, types imposés par le dictionnaire\fsp; hors de la chaîne du moteur & \code{dictionnaire}, \code{outils} \\
 \code{donnees} & Contrôles de la base, traitements déclarés des défauts, vue à une date, segments & \code{dictionnaire}, \code{outils} \\
@@ -880,7 +880,8 @@ colonne «~Peut appeler~» (section~\ref{sec:controles}).
 Le module \code{outils} (\code{R/outils.R}) rend des services sans contenu
 métier aux autres modules~: refus classés, graine locale, empreinte,
 écriture canonique des valeurs, sérialisation d'une liste nommée en texte,
-description de la plateforme. Il n'appelle aucun autre module. Toute source
+description de la plateforme, calcul de l'âge selon une convention
+déclarée. Il n'appelle aucun autre module. Toute source
 d'aléa du package passe par \code{avec\_graine()}~: aucun autre fichier de
 \code{R/} ne règle le générateur pseudo-aléatoire, ce que vérifie un script
 de contrôle (section~\ref{sec:controles}). Aucune fonction du module n'est
@@ -905,8 +906,8 @@ exportée.
 \end{tabular}
 \end{center}
 
-Le module porte aussi les cinq constantes partagées du package
-(section~\ref{sec:outils-constantes}).
+Le module porte aussi sept constantes (section~\ref{sec:outils-constantes}).
+Les deux fonctions d'âge sont décrites à la section~\ref{sec:age}.
 
 % =============================================================================
 \section{Constantes et motifs de refus}
@@ -922,10 +923,12 @@ Les constantes sont citées d'après le code (\code{R/outils.R}).
 \rowcolor{tableheader}
 \textcolor{financeblue}{\textbf{Constante}} & \textcolor{financeblue}{\textbf{Valeur}} & \textcolor{financeblue}{\textbf{Objet}} \\
 \code{VERSION\_FICHE} & entier \code{1} & Version du format de la fiche de calcul. Aucune fonction ne la lit encore. \\
-\code{VERSION\_DICTIONNAIRE\_ATTENDUE} & \code{"1.3"} & Version du dictionnaire de la base attendue par le moteur (dictionnaire de la base, version~1.3). Aucune fonction ne la lit encore~: le contrôle de la table \code{extraction} viendra avec le module \code{donnees}. \\
+\code{VERSION\_DICTIONNAIRE\_ATTENDUE} & \code{"1.5"} & Version du dictionnaire de la base attendue par le moteur (dictionnaire de la base, version~1.5). Lue par \code{dictionnaire()}, qui refuse un dictionnaire embarqué d'une autre version, et par \code{controler\_version\_extraction()}, qui refuse une base d'une autre version (section~\ref{sec:dictionnaire}). \\
 \code{REPRESENTATION\_CANONIQUE} & \code{"provie-resultat-1"} & Identifiant de la représentation canonique du résultat. Aucune fonction ne la lit encore. \\
 \code{VERSION\_LISTE} & entier \code{1} & Version du format de sérialisation des listes (section~\ref{sec:format-liste}). \\
-\code{MOTIFS\_REFUS} & dix-sept motifs & Liste fermée des motifs de refus d'appel (ci-dessous). \\
+\code{MOTIFS\_REFUS} & dix-huit motifs & Liste fermée des motifs de refus d'appel (ci-dessous). \\
+\code{CONVENTIONS\_AGE} & quatre chaînes & Liste fermée des conventions de calcul de l'âge~: \code{revolu}, \code{millesime}, \code{plus\_proche}, \code{naissance\_31\_decembre} (section~\ref{sec:age}). \\
+\code{AGE\_MAXIMUM} & entier \code{200} & Âge le plus élevé admis par \code{date\_atteinte\_age()}~; au-delà, la fonction lève une erreur R ordinaire (section~\ref{sec:age}). \\
 \end{tabular}
 \end{center}
 
@@ -944,10 +947,12 @@ ordinaire, qui n'est pas un refus d'appel. Les \code{identifiants} sont
 tronqués aux dix premiers\fsp; \code{nombre}, converti en entier, porte
 le total quand l'appelant le renseigne.
 
-La liste fermée compte dix-sept motifs. Dans l'état du code, seules les
-fonctions du module \code{outils} lèvent des refus, avec deux motifs~;
-les quinze autres sont réservés aux modules qui les lèveront, et leur sens
-se documentera avec eux.
+La liste fermée compte dix-huit motifs. Le tableau ci-dessous dit, pour
+chacun, quelles fonctions le lèvent dans l'état du code, directement ou par
+une fonction qu'elles appellent (ainsi, toute fonction qui lit le
+dictionnaire peut lever \code{dictionnaire\_invalide})\fsp; un motif levé
+par aucune fonction est réservé aux modules qui le lèveront, et son sens se
+documentera avec eux.
 
 \begin{center}
 \small
@@ -955,22 +960,23 @@ se documentera avec eux.
 \begin{tabular}{@{}p{5.6cm}p{9.5cm}@{}}
 \rowcolor{tableheader}
 \textcolor{financeblue}{\textbf{Motif}} & \textcolor{financeblue}{\textbf{Levé, dans l'état du code, par}} \\
-\code{plan\_incomplet} & Aucune fonction. \\
-\code{plan\_invalide} & Aucune fonction. \\
-\code{liste\_invalide} & \code{ecrire\_valeurs()}, \code{ecrire\_liste()} et \code{lire\_liste()}~: valeur, liste ou texte que l'écriture canonique ou le format de liste n'admet pas (sections~\ref{sec:ecriture} et~\ref{sec:format-liste}). \\
-\code{table\_base\_absente} & Aucune fonction. \\
-\code{colonne\_absente} & Aucune fonction. \\
-\code{colonne\_inconnue} & Aucune fonction. \\
-\code{type\_incompatible} & Aucune fonction. \\
-\code{extraction\_invalide} & Aucune fonction. \\
-\code{arrete\_posterieur\_extraction} & Aucune fonction. \\
+\code{plan\_incomplet} & \code{controler\_base()}~: date d'arrêté absente. \\
+\code{plan\_invalide} & \code{controler\_base()}~: date d'arrêté mal formée, déclaration ou convention mal formée ou hors de sa liste fermée\fsp; \code{calculer\_age()} et \code{date\_atteinte\_age()}~: convention hors de \code{CONVENTIONS\_AGE}. \\
+\code{liste\_invalide} & \code{ecrire\_valeurs()}, \code{ecrire\_liste()} et \code{lire\_liste()}~: valeur, liste ou texte que l'écriture canonique ou le format de liste n'admet pas (sections~\ref{sec:ecriture} et~\ref{sec:format-liste})\fsp; \code{controler\_types()}, \code{constater\_forme()} et \code{controler\_base()}~: base qui n'est pas une liste nommée de \code{data.frame} aux tables connues\fsp; \code{ecrire\_base()}~: valeur que le CSV ne relirait pas à l'identique. \\
+\code{fichier\_invalide} & \code{lire\_base()} et \code{ecrire\_base()}~: chemin qui n'est pas une chaîne unique, dossier introuvable, non vide ou impossible à créer, fichier inconnu du dictionnaire, fichier dont la lecture ne rendrait pas le texte exact (section~\ref{sec:lecture}). \\
+\code{table\_base\_absente} & \code{controler\_base()}~: table obligatoire absente. \\
+\code{colonne\_absente} & \code{controler\_types()}, et par elle \code{ecrire\_base()}~: colonne obligatoire ou conditionnelle absente\fsp; \code{lire\_base()} et \code{controler\_base()}, pour la seule table \code{extraction}. \\
+\code{colonne\_inconnue} & Mêmes fonctions que \code{colonne\_absente}~: colonne inconnue du dictionnaire. \\
+\code{type\_incompatible} & Mêmes fonctions que \code{colonne\_absente}~: colonne d'un autre type que son type déclaré. \\
+\code{extraction\_invalide} & \code{controler\_version\_extraction()}, et par elle \code{controler\_types()}, \code{ecrire\_base()}, \code{lire\_base()} et \code{controler\_base()}~: version du dictionnaire autre que \code{VERSION\_DICTIONNAIRE\_ATTENDUE}\fsp; \code{controler\_types()} et \code{controler\_base()}~: table \code{extraction} qui n'a pas exactement une ligne, et, pour \code{controler\_base()} seule, valeur manquante ou hors domaine, date antérieure au 1er~janvier~1901 ou début d'historique qui ne précède pas la date d'extraction. \\
+\code{arrete\_posterieur\_extraction} & \code{controler\_base()}~: date d'arrêté postérieure à la date d'extraction. \\
 \code{declaration\_manquante} & Aucune fonction. \\
 \code{table\_absente} & Aucune fonction. \\
 \code{empreinte\_discordante} & Aucune fonction. \\
 \code{version\_discordante} & \code{lire\_liste()}~: en-tête d'une autre version du format de liste, avec la version attendue (\code{attendu}) et la version reçue (\code{recu}). \\
 \code{lien\_non\_declare} & Aucune fonction. \\
 \code{catalogue\_invalide} & Aucune fonction. \\
-\code{dictionnaire\_invalide} & Aucune fonction. \\
+\code{dictionnaire\_invalide} & \code{dictionnaire()}, et par elle toute fonction qui lit le dictionnaire~: dictionnaire embarqué incohérent (par exemple d'une autre version, d'une empreinte discordante ou d'une référence interne invalide). \\
 \code{format\_table\_inconnu} & Aucune fonction. \\
 \end{tabular}
 \end{center}
@@ -1168,6 +1174,61 @@ ignore la marque d'encodage des chaînes~: un zéro négatif est relu
 \code{0} (section~\ref{sec:ecriture}), et une chaîne marquée Latin-1 est
 relue marquée UTF-8.
 
+% =============================================================================
+\section{Conventions d'âge}
+\label{sec:age}
+% =============================================================================
+
+\code{calculer\_age(date\_naissance, date, convention)} est la seule
+fonction de calcul de l'âge du package~: le module \code{donnees} l'emploie
+pour l'âge invraisemblable (défaut D02c) et pour la fin de charge d'un
+enfant (défaut D07, sous-cas~(c)), et le simulateur emploie sa fonction
+inverse. Elle est placée dans \code{outils} parce qu'elle ne fait que de
+l'arithmétique de calendrier~: le choix métier, la convention, reste une
+déclaration du plan (\code{conventions\$age}), sans valeur par défaut. Elle
+rend un âge entier, en années, selon l'une des quatre conventions de la
+liste fermée \code{CONVENTIONS\_AGE}~:
+
+\begin{itemize}[itemsep=2pt]
+\item \code{revolu}~: nombre d'anniversaires atteints au plus tard à la
+  date\fsp;
+\item \code{millesime}~: année de la date moins année de naissance\fsp;
+\item \code{plus\_proche}~: âge révolu, augmenté d'un an si l'anniversaire
+  suivant est plus proche de la date, en jours, que le précédent\fsp; à
+  égalité, l'âge supérieur\fsp;
+\item \code{naissance\_31\_decembre}~: âge révolu calculé sur la naissance
+  reportée au 31~décembre le plus voisin, celui de l'année précédente si la
+  naissance tombe au plus tard le 1er~juillet (1er~juillet d'une année
+  bissextile compris), celui de l'année de naissance sinon\fsp; entre la
+  naissance et un 31~décembre reporté qui lui est postérieur, l'âge vaut~0.
+\end{itemize}
+
+Pour une personne née un 29~février, l'anniversaire d'une année non
+bissextile est le 1er~mars. L'âge est manquant (\code{NA}) si l'une des
+dates manque ou si la date précède la naissance. Une convention hors de la
+liste est refusée par le motif \code{plan\_invalide}\fsp; une date qui
+n'est pas de classe \code{Date}, ou qui n'est pas entière et finie, est une
+erreur de programmation (erreur R ordinaire). Les deux vecteurs de dates
+ont la même longueur, ou l'un est de longueur~1.
+
+\code{date\_atteinte\_age(date\_naissance, age, convention)} est la
+fonction inverse~: elle rend la première date, au plus tôt la naissance, à
+laquelle l'âge selon la convention vaut \code{age}, de sorte que
+\code{calculer\_age(n, date\_atteinte\_age(n, a, c), c)} vaut~\code{a}.
+L'âge demandé est un entier de~0 à \code{AGE\_MAXIMUM}, ou \code{NA}\fsp;
+au-delà, la fonction lève une erreur R ordinaire plutôt que de rendre une
+valeur manquante sans le dire.
+
+Statuts~: les quatre définitions sont celles de la spécification du module
+\code{donnees} visée par le mainteneur (décisions M151 et M154)\fsp; la convention
+\code{naissance\_31\_decembre} est retenue \textbf{par analogie}, jugement
+d'expert, et n'est pas présentée comme exigée par un texte pour les
+contrôles de la base. Pour la fin de charge d'un enfant (D07~(c)), seules
+\code{revolu} et \code{millesime} sont admises, une clause de limite d'âge
+se lisant sur la date de naissance réelle (section~\ref{sec:donnees-bilan}).
+L'aller-retour entre les deux fonctions est vérifié par la batterie
+unitaire\fsp; c'est un constat sur les cas testés, non une démonstration.
+
 
 \partie{Partie IV}{Module dictionnaire}
 
@@ -1180,8 +1241,11 @@ Le module \code{dictionnaire} lit et valide le dictionnaire lisible par
 machine, transcription du dictionnaire de la base, et donne accès, par table
 et par colonne, aux types, domaines, obligations, modes de saisie et défauts
 de données. Il porte aussi l'automate des événements, la liste des
-paramètres et la liste des défauts. Il ne peut appeler que \code{outils}.
-Ses deux fonctions sont exportées.
+paramètres, la liste des défauts et celle des codes de contrôle de
+structure. Il ne peut appeler que \code{outils}. Deux de ses cinq
+fonctions sont exportées, \code{dictionnaire()} et
+\code{controler\_types()}\fsp; les trois autres servent les modules
+\code{lecture} et \code{donnees}.
 
 \begin{center}
 \small
@@ -1190,11 +1254,113 @@ Ses deux fonctions sont exportées.
 \begin{tabular}{@{}p{5.6cm}>{\raggedright\arraybackslash}p{3.0cm}p{6.5cm}@{}}
 \rowcolor{tableheader}
 \textcolor{financeblue}{\textbf{Fonction}} & \textcolor{financeblue}{\textbf{Arguments}} & \textcolor{financeblue}{\textbf{Rôle}} \\
-\code{dictionnaire()} & Aucun & Lit et valide le dictionnaire lisible par machine embarqué sous \code{inst/extdata/dictionnaire/}, et le rend en liste de \code{data.frame}\fsp; refuse par \code{dictionnaire\_invalide} un dictionnaire incohérent. \\
-\code{controler\_types()} & \code{donnees} & Contrôle, sans rien convertir, les tables, les colonnes et leurs types R contre le dictionnaire, et la version de \code{extraction}\fsp; rend la base inchangée ou la refuse. \\
-\code{constater\_forme()} & \code{donnee}, \code{table}, \code{dico} & Relève, sans s'interrompre ni rien convertir, les écarts de forme d'une table (colonne inconnue, colonne obligatoire ou conditionnelle absente, type R) et les rend en \code{data.frame}, une ligne par écart, avec son code de \code{controles.csv} et les lignes concernées\fsp; non exportée, appelée par \code{controler\_types()}. \\
+\code{dictionnaire()} & Aucun & Lit et valide, à chaque appel, le dictionnaire lisible par machine embarqué sous \code{inst/extdata/dictionnaire/} (sept CSV et \code{dictionnaire.txt}), et le rend en liste nommée~: version, date de visa, puis un \code{data.frame} par CSV, dont \code{controles}\fsp; refuse par \code{dictionnaire\_invalide} un dictionnaire incohérent (section~\ref{sec:dictionnaire-csv}). \\
+\code{controler\_types()} & \code{donnees} & Contrôle, sans rien convertir, en trois temps~: la structure de la liste, la table \code{extraction} (version, une ligne), puis les écarts de forme de toutes les tables, tous relevés et comptés avant le refus\fsp; rend la base inchangée ou la refuse (section~\ref{sec:dictionnaire-csv}). \\
+\code{constater\_forme()} & \code{donnee}, \code{table}, \code{dico} & Relève, sans s'interrompre ni rien convertir, les écarts de forme d'une table (colonne inconnue, colonne obligatoire ou conditionnelle absente, type R) et les rend en \code{data.frame}, une ligne par écart, avec son code de \code{controles.csv} et les lignes concernées\fsp; non exportée, appelée par \code{controler\_types()} et \code{controler\_base()}. \\
 \code{lire\_texte\_type()} & \code{x}, \code{type} & Lit une colonne de texte dans un type du dictionnaire par la grammaire stricte, sans convertir ce qui n'est pas exactement l'écriture du type\fsp; rend la colonne typée si toutes ses valeurs se lisent, et les numéros des valeurs illisibles\fsp; non exportée, appelée par \code{lire\_base()} et \code{constater\_forme()}. \\
-\code{controler\_version\_extraction()} & \code{donnee} & Refuse (\code{extraction\_invalide}) une table \code{extraction} d'une autre version du dictionnaire que celle qu'attend le moteur\fsp; non exportée, appelée par \code{controler\_types()} et \code{lire\_base()}. \\
+\code{controler\_version\_extraction()} & \code{donnee} & Refuse (\code{extraction\_invalide}) une table \code{extraction} d'une autre version du dictionnaire que celle qu'attend le moteur\fsp; non exportée, appelée par \code{controler\_types()}, \code{lire\_base()} et \code{controler\_base()}. \\
+\end{tabular}
+\end{center}
+
+% =============================================================================
+\section{Dictionnaire lisible par machine}
+\label{sec:dictionnaire-csv}
+% =============================================================================
+
+Le dictionnaire lisible par machine est la transcription, sous
+\code{inst/extdata/dictionnaire/}, du dictionnaire de la base visé par le
+mainteneur (\code{docs/specifications/dictionnaire-base-v1.md}, version~1.5,
+visée le 8~novembre~2026). Un script de contrôle du dépôt compare la
+transcription au texte (section~\ref{sec:controles}). Il compte sept
+fichiers CSV et un en-tête~:
+
+\begin{center}
+\small
+\rowcolors{2}{tablerow}{white}
+\begin{tabular}{@{}p{3.9cm}p{11.2cm}@{}}
+\rowcolor{tableheader}
+\textcolor{financeblue}{\textbf{Fichier}} & \textcolor{financeblue}{\textbf{Contenu}} \\
+\code{dictionnaire.txt} & Version du dictionnaire, date de visa et empreinte MD5 de chacun des sept CSV, au format \code{provie-liste 1} (section~\ref{sec:format-liste}). \\
+\code{tables.csv} & Une ligne par table de la base~: numéro, nom, objet, clé primaire, obligation (\code{O}, \code{F}, ou \code{F\_si:<table>}), visibilité. \\
+\code{colonnes.csv} & Une ligne par colonne~: table, nom, type, modalités, domaine, unité, obligation (\code{O}, \code{C}, \code{F}) et condition, mode de saisie et colonne de saisie, date future admise (\code{futur\_admis}), référence, défauts de données qui la concernent. \\
+\code{types\_evenements.csv} & Une ligne par type d'événement, dans l'ordre~: niveau, garanties, effet, colonnes requises, caractère programmable, automate du sinistre d'arrêt de travail (état de départ et d'arrivée), motifs. \\
+\code{parametres.csv} & Paramètres de garantie~: code de garantie, paramètre, unité, dimension, obligation et condition. \\
+\code{defauts.csv} & Défauts de données (codes \code{D..})~: libellé, tables et colonnes, détection (\code{exacte}, \code{presomptive}), traitements admis (\code{R}, \code{X}, \code{H}, \code{S}), paramètre d'intensité et sous-paramètres. \\
+\code{filiation.csv} & Correspondance avec la version~1 de la base~: table et colonne, statut (\code{reprise}, \code{renommee}, \code{non\_reprise}), motif. \\
+\code{controles.csv} & Codes de contrôle de structure (ci-dessous)~: code, objet, détection, portée, motif de refus d'appel. \\
+\end{tabular}
+\end{center}
+
+\textbf{Champs.} Un champ à plusieurs valeurs les joint par «~;~». La
+colonne \code{futur\_admis} de \code{colonnes.csv} prend l'une des trois
+valeurs de \code{FUTUR\_ADMIS\_VALEURS}~: \code{TRUE} (date future
+admise), \code{FALSE} (la date d'extraction est une borne haute) et
+\code{programmable} (date future admise pour un type d'événement
+programmable seulement, valeur réservée à la table \code{evenements}). La
+colonne \code{reference} désigne une clé étrangère, simple
+(\code{table.colonne}) ou \textbf{composite}
+(\code{table.c1;table.c2}, pour la colonne \code{college} de la table
+\code{affiliations}). Une référence composite vise une seule table, autre
+que celle de la ligne\fsp; elle contient la colonne de la ligne, ne cite
+aucune colonne deux fois, et chacune de ses colonnes existe aussi dans la
+table de la ligne, sous le même nom. C'est une contrainte d'existence du
+n-uplet dans la table visée, qui n'en fait pas une clé de cette table. Une
+référence simple ne vise pas la colonne qui la porte.
+
+\textbf{Codes de contrôle de structure.} \code{controles.csv} compte dix
+codes, tous à détection exacte~: \code{colonne\_absente},
+\code{colonne\_inconnue}, \code{type\_incompatible},
+\code{manquant\_obligatoire}, \code{hors\_domaine}, \code{chaine\_vide},
+\code{chevauchement}, \code{table\_conditionnelle\_absente},
+\code{refus\_induit} et \code{somme\_parts}. Leur portée prend l'une des
+quatre valeurs de \code{PORTEES\_CONTROLES}~: \code{colonne}, \code{table},
+\code{colonne\_table} (la colonne, ou la table pour une colonne de clé
+primaire ou qui porte une référence) et \code{ligne} (signalement). Les
+trois premiers codes sont aussi des motifs de refus d'appel, qu'ils portent
+dans la colonne \code{motif\_refus\_appel}~: un code qui est un motif de
+\code{MOTIFS\_REFUS} porte ce motif, et lui seul.
+
+\textbf{Validation.} \code{dictionnaire()} refuse
+(\code{dictionnaire\_invalide}) un en-tête qui ne porte pas, dans cet ordre,
+la version, la date de visa et les sept empreintes\fsp; une version autre
+que celle qu'attend le moteur (\code{VERSION\_DICTIONNAIRE\_ATTENDUE})\fsp;
+un CSV absent, d'une empreinte
+discordante, qui n'est pas de l'UTF-8 ou dont les colonnes ne sont pas
+celles attendues, et toute référence interne invalide~: table, colonne,
+type, défaut, motif ou paramètre cité qui n'existe pas où il est cité,
+valeur hors de sa liste fermée, référence mal formée, code de contrôle
+répété ou sans objet.
+
+\textbf{Contrôle des types d'une base.} \code{controler\_types(donnees)}
+est la porte stricte~: elle ne convertit rien et lève un refus d'appel au
+premier des trois temps qui échoue. (1)~Structure (\code{liste\_invalide})~:
+liste nommée de \code{data.frame}, aux noms de tables connus, renseignés et
+distincts, et aux noms de colonnes renseignés et distincts. (2)~Table
+\code{extraction}~: version du dictionnaire, puis une ligne exactement
+(\code{extraction\_invalide}). (3)~Écarts de forme de toutes les tables
+présentes, relevés par \code{constater\_forme()}~: colonne inconnue,
+colonne obligatoire ou conditionnelle absente, type R autre que le type
+déclaré. Tous les écarts sont relevés avant le refus, nommés dans le
+message et comptés dans le champ \code{nombre}\fsp; le motif
+(\code{colonne\_inconnue}, \code{colonne\_absente} ou
+\code{type\_incompatible}) est celui du premier écart. Une table
+obligatoire absente n'est pas refusée ici~: c'est le contrôle de la base
+entière (section~\ref{sec:donnees}).
+
+Les constantes du module sont citées d'après le code
+(\code{R/dictionnaire.R})~:
+
+\begin{center}
+\small
+\rowcolors{2}{tablerow}{white}
+\begin{tabular}{@{}p{5.6cm}p{9.5cm}@{}}
+\rowcolor{tableheader}
+\textcolor{financeblue}{\textbf{Constante}} & \textcolor{financeblue}{\textbf{Valeur et objet}} \\
+\code{TYPES\_DICTIONNAIRE} & \code{character}, \code{integer}, \code{numeric}, \code{Date}, \code{logical}~: les cinq types d'une colonne. \\
+\code{FUTUR\_ADMIS\_VALEURS} & \code{TRUE}, \code{FALSE}, \code{programmable}~: valeurs de \code{colonnes.csv}, \code{futur\_admis}. \\
+\code{PORTEES\_CONTROLES} & \code{colonne}, \code{table}, \code{colonne\_table}, \code{ligne}~: valeurs de \code{controles.csv}, \code{portee}. \\
+\code{FICHIERS\_DICTIONNAIRE} & Les sept CSV, dans l'ordre du tableau ci-dessus, qui est celui des empreintes de \code{dictionnaire.txt}. \\
+\code{COLONNES\_DICTIONNAIRE} & Liste, par CSV, des noms de colonnes attendus, dans leur ordre. \\
 \end{tabular}
 \end{center}
 
@@ -1208,9 +1374,12 @@ Ses deux fonctions sont exportées.
 
 Le module \code{lecture} est la couche mince de lecture et d'écriture des
 fichiers~: base en CSV, jeux versionnés, tables importées. Les types sont
-imposés par le dictionnaire de la base\fsp; un type incompatible est refusé,
-jamais converti. Le module transmet des \code{data.frame} et la provenance
-des fichiers lus. Il est hors de la chaîne du moteur~: aucun module du
+imposés par le dictionnaire de la base\fsp; une valeur n'est jamais
+convertie dans un autre type que le sien. Le module transmet des
+\code{data.frame}. Dans l'état du code, il lit et écrit la base en CSV
+(section~\ref{sec:lecture-base}) et les jeux versionnés\fsp; la lecture des
+tables importées et la provenance des fichiers lus ne sont pas encore
+écrites. Il est hors de la chaîne du moteur~: aucun module du
 moteur ne l'appelle. Le format xlsx est lu par l'application, hors du
 package. Il ne peut appeler que \code{dictionnaire} et \code{outils}.
 Ses deux fonctions sont exportées.
@@ -1222,12 +1391,79 @@ Ses deux fonctions sont exportées.
 \begin{tabular}{@{}p{3.9cm}>{\raggedright\arraybackslash}p{3.0cm}p{8.2cm}@{}}
 \rowcolor{tableheader}
 \textcolor{financeblue}{\textbf{Fonction}} & \textcolor{financeblue}{\textbf{Arguments}} & \textcolor{financeblue}{\textbf{Rôle}} \\
-\code{lire\_base()} & \code{dossier} & Lit une base écrite en CSV (un fichier par table, nommé d'après la table) et la rend en liste de \code{data.frame}, chaque colonne lue dans le type du dictionnaire\fsp; refuse sans rien convertir une valeur illisible dans son type, une chaîne vide entre guillemets ou un retour chariot dans un champ entre guillemets (\code{type\_incompatible}), un fichier inconnu du dictionnaire ou mal formé (\code{liste\_invalide}), puis contrôle le résultat par \code{controler\_types()}. \\
-\code{ecrire\_base()} & \code{donnees}, \code{dossier} & Écrit une base contrôlée par \code{controler\_types()} en CSV UTF-8, un fichier par table, dans un dossier neuf ou vide, au format que relit \code{lire\_base()}\fsp; refuse avant toute écriture ce que le CSV ne relirait pas à l'identique (chaîne vide, retour chariot, réel non fini, date non entière ou hors de quatre chiffres d'année, chaîne d'encodage inconnu ou non UTF-8)\fsp; rend le dossier. \\
+\code{lire\_base()} & \code{dossier} & Lit une base écrite en CSV (un fichier \code{<table>.csv} par table, toutes facultatives) et la rend en liste de \code{data.frame}, dans l'ordre des tables du dictionnaire\fsp; chaque colonne connue est lue dans son type si toutes ses valeurs s'y lisent, sinon rendue entière en texte exact, sans conversion ni refus\fsp; ne s'interrompt (\code{fichier\_invalide}) que si elle ne peut pas rendre le texte exact d'un fichier\fsp; contrôle strictement la seule table \code{extraction} (section~\ref{sec:lecture-base}). \\
+\code{ecrire\_base()} & \code{donnees}, \code{dossier} & Écrit une base contrôlée par \code{controler\_types()} en CSV UTF-8, un fichier par table, dans un dossier neuf ou vide, au format que relit \code{lire\_base()}\fsp; refuse (\code{liste\_invalide}) avant toute écriture la chaîne vide, hors domaine, et ce que le CSV ne relirait pas à l'identique (retour chariot, réel non fini, date non entière ou hors de quatre chiffres d'année, chaîne d'encodage inconnu ou non UTF-8)\fsp; refuse (\code{fichier\_invalide}) un dossier non vide\fsp; rend le dossier. \\
 \code{ecrire\_jeu()} & \code{jeu}, \code{dossier} & Écrit un jeu simulé dans un dossier neuf ou vide, selon la disposition d'un jeu versionné~: \code{base/} (une table par fichier, par \code{ecrire\_base()}), \code{loi\_vraie.txt} et \code{manifeste.txt} (par \code{ecrire\_liste()}), \code{verite/} (une table de vérité par fichier CSV), \code{declarations.txt} si le jeu en porte, puis \code{empreintes.md5} au format de \code{md5sum -c}\fsp; refuse (\code{jeu\_invalide}) avant toute écriture un objet qui n'a pas la forme d'un jeu simulé\fsp; rend le dossier. \\
 \code{lire\_jeu()} & \code{dossier} & Relit un jeu écrit par \code{ecrire\_jeu()} et le rend identique\fsp; contrôle d'abord la disposition du dossier (\code{fichier\_invalide}) et chaque empreinte de \code{empreintes.md5} (\code{empreinte\_discordante}), puis lit la base par \code{lire\_base()} (tables et nombres de lignes égaux à la volumétrie du manifeste, sinon \code{fichier\_invalide}) et les tables de vérité dans les types que décrit le manifeste. \\
 \end{tabular}
 \end{center}
+
+% =============================================================================
+\section{Lecture et écriture d'une base}
+\label{sec:lecture-base}
+% =============================================================================
+
+\textbf{Format.} Celui du dictionnaire de la base~: un fichier
+\code{<table>.csv} par table, en UTF-8 sans marque d'ordre, séparateur
+virgule, point décimal, guillemets doubles, dates \code{AAAA-MM-JJ},
+logiques \code{TRUE} et \code{FALSE}\fsp; le champ vide est le seul
+marqueur de valeur manquante.
+
+\textbf{Lecture «~fidélité ou refus~».} \code{lire\_base(dossier)} lit
+chaque fichier en texte, sans conversion, rétablit à sa place la chaîne vide
+entre guillemets, puis lit chaque colonne connue du dictionnaire dans son
+type par la grammaire stricte de \code{lire\_texte\_type()}, si toutes ses
+valeurs s'y lisent\fsp; sinon la colonne est rendue entière en texte exact.
+La lecture typée directe de R n'est pas employée parce qu'elle convertit en
+silence~: sous R~4.3.3, elle lit \code{0x10} comme le nombre~16,
+\code{26-01-02} comme une date de l'an~26 et \code{T} comme la valeur
+logique vraie. Une colonne entièrement vide prend ainsi son type déclaré.
+
+\textbf{Interruptions.} \code{lire\_base()} ne s'interrompt, par le motif
+\code{fichier\_invalide}, que si elle ne peut pas rendre le texte exact
+d'un fichier~: dossier introuvable ou qui n'est pas un dossier\fsp; tout
+fichier ou dossier autre qu'un \code{<table>.csv} d'une table du
+dictionnaire\fsp; fichier mal formé (vide, marque d'ordre, UTF-8 invalide,
+octet nul, dernière fin de ligne absente, retour chariot isolé hors
+guillemets, guillemet au milieu d'un champ ou non fermé, nombre de champs
+variable, première ligne vide, en-tête illisible, nom de colonne vide ou en
+double)\fsp; retour chariot dans un champ entre guillemets, que la lecture
+de R relirait comme un saut de ligne, avec la table, la colonne et les
+lignes en cause. Pour la seule table \code{extraction}, qui donne lieu à un
+refus d'appel en toute hypothèse, la version du dictionnaire est contrôlée
+avant les autres colonnes (\code{extraction\_invalide}), puis la table
+entière par \code{controler\_types()}.
+
+\textbf{Ce qui est rendu sans refus.} Hors de la table \code{extraction},
+ce qui n'a pas la forme du dictionnaire est rendu tel quel~: colonne
+inconnue (en texte), colonne absente, colonne dont une valeur au moins ne
+se lit pas dans son type (en texte exact), chaîne vide entre guillemets. Le
+résultat d'un appel isolé n'est donc pas forcément conforme~:
+\code{controler\_types()} le refuse, et le contrôle de la base entière
+l'enregistre au bilan (section~\ref{sec:donnees-bilan}). Tolérances
+admises, jugées admissibles par l'agent \code{actuary} du projet (les guillemets
+délimitent le champ, ils ne portent pas le type)~: toute valeur entre
+guillemets ou non, quel que soit son type\fsp; zéros de tête d'un entier ou
+d'un réel\fsp; chaîne sans guillemets, espaces conservées, \code{NA} nu lu
+comme la chaîne \code{"NA"}\fsp; fins de ligne CRLF hors des champs entre
+guillemets. Les colonnes sont rendues dans l'ordre du fichier, sous le
+texte exact de l'en-tête, avec des noms de lignes automatiques.
+
+\textbf{Écriture.} \code{ecrire\_base(donnees, dossier)} contrôle la base
+par \code{controler\_types()}, puis écrit l'en-tête des noms de colonnes,
+les chaînes entre guillemets doubles (guillemet intérieur doublé), le
+manquant en champ vide, les entiers en décimal, les réels au plus court de
+15, 16 ou 17 chiffres significatifs qui se relit à l'identique (17
+suffisent toujours, section~\ref{sec:ecriture}), les dates
+\code{AAAA-MM-JJ}, les logiques \code{TRUE} et \code{FALSE}, et des fins
+de ligne \code{\textbackslash n}. Le dossier est créé s'il n'existe pas
+(son parent doit exister)\fsp; s'il existe, il doit être vide, faute de quoi
+un fichier ancien serait relu avec la base. La chaîne vide est refusée à
+l'écriture (\code{liste\_invalide}) alors qu'elle est rendue à la
+lecture~: une base écrite est conforme. \code{lire\_base(ecrire\_base(x,
+d))} rend \code{x} à l'identique quand \code{x} liste ses tables dans
+l'ordre du dictionnaire et porte des noms de lignes automatiques~; c'est un
+constat de la batterie unitaire sur les bases testées.
 
 
 \partie{Partie VI}{Module donnees}
@@ -1241,7 +1477,10 @@ Le module \code{donnees} contrôle la base~: détection des défauts de données
 et contrôles de structure, traitements déclarés (refus, exclusion,
 hypothèse par défaut, signalement), vue à une date, états des sinistres et
 des dossiers à une date, segments, enjeu des lignes écartées. Il ne corrige
-rien en silence. Il ne peut appeler que \code{dictionnaire} et
+rien en silence. Dans l'état du code, il contrôle la base entière et la vue
+à l'arrêté et chiffre l'enjeu (section~\ref{sec:donnees-bilan})\fsp; les
+états des sinistres et des dossiers à une date et les segments ne sont pas
+encore écrits. Il ne peut appeler que \code{dictionnaire} et
 \code{outils}. Sa fonction \code{controler\_base()} est exportée.
 
 \begin{center}
@@ -1251,7 +1490,163 @@ rien en silence. Il ne peut appeler que \code{dictionnaire} et
 \begin{tabular}{@{}p{3.9cm}>{\raggedright\arraybackslash}p{3.0cm}p{8.2cm}@{}}
 \rowcolor{tableheader}
 \textcolor{financeblue}{\textbf{Fonction}} & \textcolor{financeblue}{\textbf{Arguments}} & \textcolor{financeblue}{\textbf{Rôle}} \\
-\code{controler\_base()} & \code{donnees}, \code{arrete}, \code{declarations = NULL}, \code{conventions = NULL} & Contrôle la base entière à la date d'arrêté, sans rien modifier, et rend le bilan (contrôles, contrôles non exécutés, refus par table ou par colonne avec refus induits, exclusions, hypothèses par défaut, signalements, déclarations requises, enjeu, vue, segments, tables absentes)\fsp; dans l'état actuel du module, seules les interruptions et la règle~B sont écrites, et chaque contrôle prévu mais non encore écrit figure dans les contrôles non exécutés avec la cause \code{non\_implemente}\fsp; refuse l'appel pour un arrêté absent ou mal formé, une liste mal formée, une table inconnue ou obligatoire absente, une anomalie de la table \code{extraction}, un arrêté postérieur à l'extraction, une déclaration ou une convention mal formée. \\
+\code{controler\_base()} & \code{donnees}, \code{arrete}, \code{declarations = NULL}, \code{conventions = NULL} & Contrôle la base entière et la vue à la date d'arrêté, sans rien modifier, sous les déclarations du sous-schéma \code{donnees} du plan et la section \code{conventions} du plan, et rend le bilan en onze éléments (section~\ref{sec:donnees-bilan})\fsp; chaque contrôle prévu et reporté figure dans les contrôles non exécutés avec la cause \code{non\_implemente}\fsp; refuse l'appel pour un arrêté absent ou mal formé, une liste mal formée, une table inconnue ou obligatoire absente, une anomalie de la table \code{extraction}, un arrêté postérieur à l'extraction, une déclaration ou une convention mal formée ou hors de sa liste fermée. \\
+\end{tabular}
+\end{center}
+
+% =============================================================================
+\section{Bilan de la base}
+\label{sec:donnees-bilan}
+% =============================================================================
+
+\code{controler\_base(donnees, arrete, declarations, conventions)}
+applique la spécification du module \code{donnees} visée par le mainteneur
+(\code{docs/specifications/module-donnees-v1.md}, version~1.1), sous le
+dictionnaire de la base en version~1.5. La date d'arrêté est obligatoire,
+sans valeur par défaut. \code{declarations} est le sous-schéma
+\code{donnees} du plan (rubriques \code{exclusions}, \code{hypotheses},
+\code{seuils}, \code{evaluations\_gestion})\fsp; \code{conventions} est la
+section \code{conventions} du plan, dont seules les entrées \code{age} et
+\code{limite\_age} sont lues ici. L'une et l'autre peuvent être omises
+(\code{NULL})~: cela se lit «~aucune déclaration fournie~», et non comme
+une valeur par défaut.
+
+\textbf{Ordre d'exécution.} (1)~Interruptions (refus d'appel)\fsp; (2)~forme,
+(3)~domaine, (4)~clés et refus induits, qui forment la \textbf{règle~B}, sur
+la base entière et indépendante de l'arrêté\fsp; (5)~détection des défauts
+D02b et D03g sur la base entière (\textbf{règle~P}, préalables de la
+vue)\fsp; (6)~construction de la vue à l'arrêté\fsp; (7)~détection, sur la
+vue, des autres défauts traités par exclusion, hypothèse par défaut ou
+signalement (\textbf{règle~V})\fsp; (8)~enjeu des lignes écartées. Chaque
+étape suppose les précédentes~: une clé mal typée ne se joint pas, et la vue
+suppose des clés résolues. Les règles~P et~V et la vue ne lisent ni une
+table ni une colonne refusées en règle~B.
+
+\textbf{Traitements.} Chaque anomalie est enregistrée avec son traitement~:
+refus~(R) d'une table ou d'une colonne, exclusion~(X), hypothèse par
+défaut~(H) ou signalement~(S)\fsp; aucune donnée n'est modifiée. Un code
+de contrôle de structure de portée \code{ligne} est traité en
+signalement, tout autre en refus (règle provisoire, fixée par l'ADR~0010).
+Un constat qui admet un choix est placé selon les déclarations, dans un
+seul élément par famille de calcul ou par référentiel\fsp; sans déclaration,
+il va dans \code{declarations\_requises}.
+
+\textbf{Le bilan.} Il est rendu en liste nommée de onze éléments, dans cet
+ordre~:
+
+\begin{center}
+\small
+\rowcolors{2}{tablerow}{white}
+\begin{tabular}{@{}p{4.2cm}p{10.9cm}@{}}
+\rowcolor{tableheader}
+\textcolor{financeblue}{\textbf{Élément}} & \textcolor{financeblue}{\textbf{Contenu}} \\
+\code{controles} & Toute détection~: code, table, colonne, détection (exacte ou présomptive), nombre de lignes, identifiants. \\
+\code{controles\_non\_executes} & Contrôle empêché, une ligne par (code, table, colonne), avec sa cause (ci-dessous). \\
+\code{refus\_tables} & Refus~R~: table, colonne, motif, portée effective (\code{colonne} ou \code{table}), origine d'un refus induit, nombre de lignes, lignes visibles à l'arrêté (\code{NA} si indéterminé), identifiants, dossiers rattachés visibles, postes arrêtés (\code{NA} dans l'état du code). \\
+\code{exclusions} & Exclusions déclarées~: motif, famille de calcul, action (\code{exclure} ou \code{conserver}), nombre de lignes et de dossiers. \\
+\code{hypotheses\_defaut} & Hypothèses par défaut déclarées~: motif, référentiel, poste, valeur, nombre. \\
+\code{signalements} & Constats traités en signalement, ou dont le signalement est déclaré~: mêmes colonnes que \code{controles}. \\
+\code{declarations\_requises} & Déclaration attendue par un constat ou par un contrôle~: rubrique (\code{exclusions}, \code{hypotheses}, \code{seuils} ou \code{conventions}), motif, clé (famille, référentiel, seuil ou entrée de convention), traitements ou valeurs admis, nombre de lignes. \\
+\code{enjeu} & Enjeu des lignes refusées ou exclues, en table longue~: une ligne par table, colonne, motif, famille, action, garantie, poste et composante, avec son unité, son montant, ses nombres de dossiers et de valeurs, et la cause d'une composante empêchée. \\
+\code{vue} & Dates d'arrêté et d'extraction, lignes de visibilité non déterminée, et indicateur \code{provisoire}~: vrai s'il y en a, ou si une règle~P n'a pas pu s'exécuter sur une table que lit la vue (les comptes de la règle~V sont alors provisoires). \\
+\code{segments} & Vide dans l'état du code (les segmentations se déclarent avec le plan). \\
+\code{tables\_absentes} & Tables facultatives absentes de la base. \\
+\end{tabular}
+\end{center}
+
+Chaque \code{data.frame} du bilan est trié dans l'ordre des tables du
+dictionnaire, puis des colonnes (\code{NA} en tête), puis du code\fsp; les
+identifiants sont les dix premières valeurs de la clé primaire, triées
+indépendamment de la locale. Les composantes de l'enjeu forment une liste
+fermée, \code{COMPOSANTES\_ENJEU}~: huit composantes, dix couples
+(composante, unité), aucune agrégation ne mêlant deux couples.
+
+\textbf{Contrôles non exécutés et causes.} La colonne \code{cause} de
+\code{controles\_non\_executes} prend l'une des valeurs suivantes~:
+
+\begin{itemize}[itemsep=2pt]
+\item le motif d'un refus d'une colonne lue, code de contrôle ou code de
+  défaut (\textbf{cause directe})\fsp;
+\item \code{refus\_induit}~: table refusée parce qu'une de ses clés
+  étrangères vise une table refusée, ou, à un arrêté antérieur à
+  l'extraction, parce qu'une règle~P n'a pas pu s'exécuter sur une table
+  que lit la vue\fsp;
+\item \code{non\_implemente}~: contrôle prévu par la spécification et
+  reporté (ci-dessous)\fsp;
+\item \code{declaration\_absente}~: contrôle qui attend une convention ou un
+  seuil non déclarés\fsp;
+\item \code{non\_lisible}~: sous-cas qu'aucune colonne de la base ne permet
+  de lire\fsp;
+\item \code{age\_non\_defini}~: date de référence antérieure à la
+  naissance\fsp;
+\item \code{parametre\_non\_defini}~: limite d'âge non déterminable pour la
+  fin de charge d'un enfant.
+\end{itemize}
+
+Une composante de l'enjeu empêchée par un refus y figure aussi, sous le
+code de la composante, avec la table et la colonne lues. Une composante
+dont la visibilité à l'arrêté n'est pas déterminée n'y figure pas~: sa
+cause, \code{visibilite\_non\_determinee}, se lit dans l'élément
+\code{enjeu}. Une clé (code, table, colonne) présente à la fois dans
+\code{controles} et dans \code{controles\_non\_executes} est une détection
+partielle, dont le nombre est un minorant. \textbf{Priorité des causes}
+(décision du mainteneur du 8~novembre~2026, M185)~: un contrôle non
+implémenté porte \code{non\_implemente} avant toute autre cause\fsp; une
+cause directe passe avant tout refus induit, règle~B comprise, de sorte
+qu'un refus induit n'est la cause que d'un contrôle autrement exécutable.
+Dans le code, les causes qui ne sont ni directes ni un refus induit sont
+énumérées par une constante interne, \code{.CAUSES\_NON\_DIRECTES}, à tenir
+à jour~: une cause nouvelle qui n'y serait pas ajoutée serait prise pour
+une cause directe. Un test de la batterie unitaire vérifie, sur les appels
+qu'elle fait, que toute cause émise qui n'est pas un motif de refus y
+figure, et que les cinq causes non directes ci-dessus sont émises.
+
+\textbf{Âge invraisemblable et fin de charge.} Le défaut D02c, pour un
+âge, se détecte sur la vue, pour cinq emplois (assuré au sinistre, assuré
+à l'affiliation, membre de la famille, désigné, ayant droit), sous la
+convention \code{conventions\$age} et les bornes déclarées
+\code{seuils\$d02c\_age\_min} et \code{seuils\$d02c\_age\_max} de chaque
+emploi\fsp; traitement signalement et exclusion. Le défaut D07, sous-cas~(c)
+(fin de charge non enregistrée), vise une rente d'éducation en service ou
+un dossier de double effet ni clos ni de second décès retenu, dont chaque
+enfant à charge a atteint sa limite d'âge à l'arrêté. La limite se lit
+sous deux entrées déclarées~: la règle, \code{atteinte} ou
+\code{depassement} (entrée \code{conventions\$limite\_age\$regle}), et la
+convention d'âge, \code{revolu} ou \code{millesime} (entrée
+\code{conventions\$limite\_age\$age})\fsp; traitement hypothèse par défaut ou
+signalement. Sans la convention ou les bornes, le contrôle n'est pas
+exécuté (\code{declaration\_absente}) et la déclaration manquante figure
+dans \code{declarations\_requises}.
+
+\textbf{État partiel déclaré.} Le bilan dit lui-même qu'il est partiel~:
+les contrôles prévus par la spécification et reportés, par décision du
+mainteneur, à l'issue~34 du dépôt figurent, pour chaque table présente,
+dans les contrôles non exécutés, avec la cause \code{non\_implemente}. La
+constante \code{CONTROLES\_NON\_IMPLEMENTES} les énumère en quatorze lignes (code, table,
+colonne) sur dix codes~: D03d\fsp; D07 sur \code{evenements} (sous-cas~(a)
+et~(b))\fsp; D08\fsp; D09 aux seuils, sur cinq tables\fsp; D10, sous-cas~(d),
+(e) et~(f)\fsp; D11\fsp; D12\fsp; D14. Aucun seuil de ces contrôles n'est
+attendu dans \code{declarations\_requises}.
+
+Les constantes du module sont citées d'après le code (\code{R/donnees.R})~:
+
+\begin{center}
+\small
+\rowcolors{2}{tablerow}{white}
+\begin{tabular}{@{}p{5.6cm}p{9.5cm}@{}}
+\rowcolor{tableheader}
+\textcolor{financeblue}{\textbf{Constante}} & \textcolor{financeblue}{\textbf{Valeur et objet}} \\
+\code{FAMILLES\_CALCUL} & \code{engagement}, \code{triangle}, \code{risque\_en\_cours}, \code{regle\_comptable}~: familles d'une exclusion déclarée. \\
+\code{REFERENTIELS} & \code{comptes\_sociaux}, \code{solvabilite\_2}~: référentiels d'une hypothèse par défaut. \\
+\code{ACTIONS\_EXCLUSION} & \code{exclure}, \code{conserver}~: actions d'une exclusion déclarée. \\
+\code{RUBRIQUES\_DECLARATIONS} & \code{exclusions}, \code{hypotheses}, \code{seuils}, \code{evaluations\_gestion}~: rubriques admises de \code{declarations}. \\
+\code{ENTREES\_CONVENTIONS} & \code{age}, \code{instant\_date}, \code{repartition\_annee}, \code{fractionnement}, \code{limite\_age}~: entrées admises de \code{conventions}\fsp; seules \code{age} et \code{limite\_age} sont contrôlées et lues. \\
+\code{REGLES\_LIMITE\_AGE} & \code{atteinte}, \code{depassement}~: règle de limite d'âge du défaut D07~(c). \\
+\code{CONVENTIONS\_LIMITE\_AGE} & \code{revolu}, \code{millesime}~: conventions d'âge admises pour le défaut D07~(c). \\
+\code{COMPOSANTES\_ENJEU} & Tableau des composantes de l'enjeu (composante, unité, définition), dix lignes. \\
+\code{CAUSE\_NON\_IMPLEMENTE} & \code{"non\_implemente"}~: cause d'un contrôle reporté. \\
+\code{CAUSE\_NON\_LISIBLE} & \code{"non\_lisible"}~: cause d'un sous-cas illisible dans la base. \\
+\code{CONTROLES\_NON\_IMPLEMENTES} & Tableau des contrôles reportés (code, table, colonne), quatorze lignes. \\
 \end{tabular}
 \end{center}
 
@@ -1266,9 +1661,10 @@ rien en silence. Il ne peut appeler que \code{dictionnaire} et
 Le module \code{tables} traite les tables en entrée~: formats admis,
 conversion vers une représentation commune, catalogue des tables
 embarquées, courbes des taux sans risque de l'EIOPA, série de taux des
-plafonds réglementaires, plafonds réglementaires, calcul de l'âge selon la
-convention déclarée. Il ne peut appeler que \code{outils}. Ce module n'a
-pas encore de fonction.
+plafonds réglementaires, plafonds réglementaires. Le calcul de l'âge n'en
+fait pas partie~: il est dans le module \code{outils}, qui sert aussi
+\code{donnees} et le simulateur (section~\ref{sec:age}). Le module \code{tables} ne
+peut appeler que \code{outils}. Ce module n'a pas encore de fonction.
 
 \begin{center}
 \small
@@ -1611,7 +2007,7 @@ préambule. Aucun PDF n'est versionné.
 \label{sec:controles}
 % =============================================================================
 
-Cinq scripts de \code{tests/controles/} vérifient des règles du dépôt qui ne
+Six scripts de \code{tests/controles/} vérifient des règles du dépôt qui ne
 sont pas des tests du package. Chacun s'exécute seul, depuis la racine du
 dépôt (\code{Rscript tests/controles/<script>.R}), n'emploie que R de base,
 imprime une ligne par constat (\code{[OK]}, \code{[ECHEC]}, et
@@ -1630,6 +2026,7 @@ script refuse une copie du dépôt délibérément fautive (témoin négatif).
 \code{absence\_java.R} & Aucun package connu pour dépendre de Java n'est déclaré dans \code{DESCRIPTION}, ni présent dans la fermeture de ses dépendances parmi les packages installés\fsp; aucun fichier de \code{NAMESPACE}, \code{R/}, \code{app/}, \code{tests/} ou \code{.github/} ne charge un tel package ni n'installe un environnement Java. La liste des packages à Java est un jugement de mise en œuvre, écrit dans le script. \\
 \code{graphe\_modules.R} & Les fichiers de \code{R/} sont parmi les quinze modules\fsp; chaque module n'appelle que les modules de sa colonne «~Peut appeler~» (section~\ref{sec:modules})\fsp; aucun appel dynamique (fonction désignée par son nom, accès à un espace de noms)\fsp; un nom de premier niveau n'est défini que dans un seul fichier. \\
 \code{frontiere\_calcul\_affichage.R} & Aucun élément de Shiny dans \code{R/}\fsp; aucun réglage du générateur pseudo-aléatoire (\code{set.seed()}, \code{RNGkind()}, \code{RNGversion()}, \code{.Random.seed}) hors de \code{R/outils.R}\fsp; aucun appel de \code{warning()}, \code{message()}, \code{cat()}, \code{print()}, \code{writeLines()}, \code{writeChar()}, \code{packageStartupMessage()}, \code{Sys.time()}, \code{Sys.Date()} ni \code{date()}, hors du corps des fonctions de premier niveau nommées \code{print.*} et \code{format.*}\fsp; code ASCII hors commentaires\fsp; si \code{app/} existe, aucun appel aux fonctions internes du package ni à une liste de fonctions de calcul. \\
+\code{concordance\_dictionnaire.R} & Le dictionnaire lisible par machine (section~\ref{sec:dictionnaire-csv}) concorde avec le texte visé \code{docs/specifications/dictionnaire-base-v1.md}, qui fait foi~: le dossier contient exactement les sept CSV et \code{dictionnaire.txt}\fsp; la version de \code{dictionnaire.txt} est celle du texte et \code{VERSION\_DICTIONNAIRE\_ATTENDUE}, sa date de visa celle de l'historique du texte, ses empreintes celles des CSV\fsp; chaque CSV est égal, ligne à ligne, champ à champ et dans le même ordre, au tableau correspondant du texte\fsp; les codes de contrôle sont disjoints des codes de défaut, et ceux qui sont des motifs de refus d'appel sont exactement \code{colonne\_absente}, \code{colonne\_inconnue} et \code{type\_incompatible}. Les limites de détection sont écrites en tête du script. \\
 \code{preambule\_latex.R} & Le préambule de chaque document LaTeX de \code{docs/latex/} est identique à celui de la charte graphique, hors des blocs bornés par «~À ADAPTER~», dont le nombre, l'ordre et l'objet doivent être ceux de la charte. \\
 \end{tabular}
 \end{center}
