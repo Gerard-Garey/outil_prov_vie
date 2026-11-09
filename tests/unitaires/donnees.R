@@ -5,7 +5,7 @@
 
 ns <- asNamespace("provie")
 # Causes de controles_non_executes rendues par tous les appels de controler_base() du fichier,
-# relues par le test d'exhaustivité de .CAUSES_NON_DIRECTES (M185, fin du fichier).
+# relues par le test d'exhaustivité de .RANGS_CAUSES (M185, #36, fin du fichier).
 causes_vues <- character(0)
 controler_base <- function(...) {
   r <- provie::controler_base(...)
@@ -1791,9 +1791,9 @@ verifier_egal("M185, enjeu : montant_evenement lit evenements.montant (refus ind
 # assures_affiliation absent) ; (b) elle est age_non_defini (AS1 née après le début de son
 # affiliation, seuils complets). Ordre des causes décidé en M194 et M195 (age_non_defini au
 # rang 4, declaration_absente au rang 6, refus_induit au rang 7) : la cause visée est celle
-# de l'autre emploi, rendue à A0 comme à l'extraction. État actuel (mesuré) : la première
-# cause l'emporte, refus_induit ; défaut connu, échec attendu jusqu'à #36 (retirer alors la
-# marque).
+# de l'autre emploi, rendue à A0 comme à l'extraction (#36 ; avant #36, la première cause
+# émise, refus_induit). Le refus_induit naît d'un défaut de forme, non d'une valeur
+# manquante : le cas reste valable après #33.
 form_d12 <- avec(function(b) { b$sinistres$date_declaration <- as.character(b$sinistres$date_declaration); b })
 form_d12_age <- avec(function(b) { b$sinistres$date_declaration <- as.character(b$sinistres$date_declaration)
                                    b$assures$date_naissance[1L] <- D("2016-06-01"); b })
@@ -1813,8 +1813,8 @@ verifier_egal("#38 (a) : refus induit D12 (sinistres.date_declaration en texte, 
                    ligne(cb(form_d12, A, declarations = list(seuils = seuils_sans_affiliation), conventions = conv_age)$controles_non_executes,
                          "D02c", "assures", NA)$cause),
               list("type_incompatible", induits_attendus, "declaration_absente"))
-attendu_echec("#38 (a) : à A0, la ligne (D02c, assures, NA) porte declaration_absente (rang 6) et non refus_induit (rang 7, M195)", "#36",
-              identical(ligne(r_a$controles_non_executes, "D02c", "assures", NA)$cause, "declaration_absente"))
+verifier_egal("#36, X1 (#38 (a)) : à A0, une seule ligne (D02c, assures, NA), qui porte declaration_absente (rang 6) et non refus_induit (rang 7, M195)",
+              ligne(r_a$controles_non_executes, "D02c", "assures", NA)$cause, "declaration_absente")
 r_b <- cb(form_d12_age, A0, declarations = list(seuils = seuils_age(0, 120)), conventions = conv_age)
 verifier_egal("#38 (b) : refus induit D12 (sinistres.date_declaration en texte, A0) croisé avec age_non_defini (AS1 née le 2016-06-01, après le début de son affiliation, seuils complets) : sinistres.date_declaration type_incompatible, refus induits de proche en proche ; à l'extraction, la ligne (D02c, assures, NA) porte age_non_defini",
               list(ligne(r_b$controles_non_executes, "D02c", "sinistres", "date_declaration")$cause,
@@ -1822,8 +1822,53 @@ verifier_egal("#38 (b) : refus induit D12 (sinistres.date_declaration en texte, 
                    ligne(cb(form_d12_age, A, declarations = list(seuils = seuils_age(0, 120)), conventions = conv_age)$controles_non_executes,
                          "D02c", "assures", NA)$cause),
               list("type_incompatible", induits_attendus, "age_non_defini"))
-attendu_echec("#38 (b) : à A0, la ligne (D02c, assures, NA) porte age_non_defini (rang 4) et non refus_induit (rang 7, M195)", "#36",
-              identical(ligne(r_b$controles_non_executes, "D02c", "assures", NA)$cause, "age_non_defini"))
+verifier_egal("#36, X2 (#38 (b)) : à A0, une seule ligne (D02c, assures, NA), qui porte age_non_defini (rang 4) et non refus_induit (rang 7, M195)",
+              ligne(r_b$controles_non_executes, "D02c", "assures", NA)$cause, "age_non_defini")
+# #36, X3 : une cause directe (affiliations.date_debut manquante, manquant_obligatoire, lue par
+# l'emploi assures_affiliation) prime sur declaration_absente (seuil d02c_age_max de l'emploi
+# assures_sinistre absent), émise avant elle pour la même clé (D02c, assures, NA) ; avant #36,
+# la première émise, declaration_absente (mesuré)
+seuils_sans_sinistre <- seuils_age(0, 120)
+seuils_sans_sinistre$d02c_age_max$assures_sinistre <- NULL
+r <- cb(avec(function(b) { b$affiliations$date_debut[1L] <- NA; b }), A,
+        declarations = list(seuils = seuils_sans_sinistre), conventions = conv_age)
+verifier_egal("#36, X3 : affiliations.date_debut manquante (manquant_obligatoire, rang 3) et seuil assures_sinistre absent (declaration_absente, rang 6) : une seule ligne (D02c, assures, NA), qui porte manquant_obligatoire",
+              list(refus(r, "manquant_obligatoire", "affiliations")$colonne,
+                   ligne(r$controles_non_executes, "D02c", "assures", NA)$cause),
+              list("date_debut", "manquant_obligatoire"))
+# #36 : ordre des sept rangs (M195) sur .dedoublonner_non_executes(), une clé émise deux fois
+# (spécification, § 3.1). Un représentant par rang (rang 3 : type_incompatible, cause directe) ;
+# pour chacune des 21 paires de rangs, dans les deux ordres d'émission, la cause de plus petit
+# rang est retenue.
+causes_rangs <- c("non_implemente", "non_lisible", "type_incompatible", "age_non_defini",
+                  "parametre_non_defini", "declaration_absente", "refus_induit")
+ne_de <- function(causes) data.frame(code = "D02c", table = "assures", colonne = NA_character_, cause = causes,
+                                     stringsAsFactors = FALSE)
+dedoublonner <- function(causes) ns$.dedoublonner_non_executes(ne_de(causes), d)
+paires <- utils::combn(7L, 2L)
+retenues <- unlist(lapply(seq_len(ncol(paires)), function(k) {
+  i <- paires[1L, k]; j <- paires[2L, k]
+  c(dedoublonner(causes_rangs[c(i, j)])$cause, dedoublonner(causes_rangs[c(j, i)])$cause)
+}))
+verifier_egal("#36 : 21 paires des sept rangs, dans les deux ordres d'émission (42 cas) : une ligne, la cause de plus petit rang",
+              retenues, causes_rangs[rep(paires[1L, ], each = 2L)])
+verifier_egal("#36 : deux causes directes (rang 3), la première émise l'emporte, dans les deux ordres ; sous-cas lettré (D10a) direct",
+              list(dedoublonner(c("type_incompatible", "manquant_obligatoire"))$cause,
+                   dedoublonner(c("manquant_obligatoire", "type_incompatible"))$cause,
+                   dedoublonner(c("D10a", "type_incompatible"))$cause,
+                   dedoublonner(c("declaration_absente", "D10a"))$cause),
+              list("type_incompatible", "manquant_obligatoire", "D10a", "D10a"))
+x <- ns$.dedoublonner_non_executes(rbind(ne_de("refus_induit"),
+                                         data.frame(code = "D02a", table = "contrats", colonne = "date_fin",
+                                                    cause = c("declaration_absente", "refus_induit"), stringsAsFactors = FALSE)), d)
+verifier_egal("#36 : refus_induit seul sur sa clé retenu ; deux clés, une ligne chacune, dans l'ordre de première émission",
+              list(dedoublonner("refus_induit")$cause, paste(x$code, x$colonne, x$cause), rownames(x)),
+              list("refus_induit", c("D02c NA refus_induit", "D02a date_fin declaration_absente"), c("1", "2")))
+verifier_egal("#36 : une cause ni rangée ni motif de refus (inconnue, visibilite_non_determinee, lettre sur un code lettré D01ab ou D03hz, sous-cas non déclaré D05z) est une erreur interne ; D10a accepté",
+              vapply(list(c("refus_induit", "cause_inconnue"), "visibilite_non_determinee", "D01ab", "D03hz", "D05z", "D10a"),
+                     function(cz) tryCatch({ dedoublonner(cz); "aucune" }, error = function(e)
+                       if (startsWith(conditionMessage(e), "erreur interne de provie : ")) "erreur interne" else "autre"), ""),
+              c(rep("erreur interne", 5L), "aucune"))
 # point 5 d'actuary : D10 (a) sur dossiers.id_garantie_souscrite, garantie non rattachée
 q5 <- avec(function(b) { b$evenements <- b$evenements[-c(1L, 3L), ]; b$sinistres$nature_sinistre[2L] <- "deces"; b })
 r <- cb(q5)
@@ -1846,13 +1891,21 @@ verifier_egal("enjeu : evenements.id_rente de type incompatible (refus de colonn
 # lignes de composantes dans controles_non_executes, ne recoupent aucun code de contrôle ni de défaut
 verifier_egal("disjonction : composantes d'enjeu et codes de controles.csv et defauts.csv",
               intersect(unique(ns$COMPOSANTES_ENJEU$composante), c(d$controles$code, d$defauts$code)), character(0))
-# M185 : toute cause de controles_non_executes qui n'est pas un motif de refus (code de
-# controles.csv ou de defauts.csv, ou sous-cas lettré d'un code de defauts.csv : D10a, D10h ;
-# cause directe, ou refus_induit) figure dans .CAUSES_NON_DIRECTES, sur l'ensemble des appels
-# de controler_base() du fichier, qui couvrent les cinq causes non directes émises par le moteur
-motif_refus <- causes_vues %in% c(d$controles$code, d$defauts$code) | sub("[a-z]$", "", causes_vues) %in% d$defauts$code
-verifier_egal("M185 : causes de controles_non_executes hors motifs de refus toutes dans .CAUSES_NON_DIRECTES (appels du fichier, cinq causes couvertes)",
-              list(setdiff(causes_vues[!motif_refus], ns$.CAUSES_NON_DIRECTES),
+# M185, #36 : toute cause de controles_non_executes rangée (.RANGS_CAUSES) ou motif de refus
+# (cause directe : code de controles.csv ou de defauts.csv, ou sous-cas lettré déclaré de
+# .TRAITEMENTS_SOUS_CAS_D10 : D10a, D10h), le rang cherché d'abord (refus_induit
+# est aussi un code de controles.csv), sur l'ensemble des appels de controler_base() du
+# fichier, qui couvrent les cinq causes non directes émises par le moteur ; les rangs sont
+# ceux de M195 (refus_induit au rang 7, cause directe au rang 3)
+rangee <- causes_vues %in% names(ns$.RANGS_CAUSES)
+motif_refus <- !rangee & causes_vues %in% c(d$controles$code, d$defauts$code, names(ns$.TRAITEMENTS_SOUS_CAS_D10))
+verifier_egal("M185, #36 : causes de controles_non_executes toutes rangées ou motifs de refus (appels du fichier, cinq causes non directes couvertes) ; rangs 1 à 7 de M195",
+              list(causes_vues[!rangee & !motif_refus],
                    setdiff(c("non_implemente", "declaration_absente", "non_lisible", "age_non_defini", "parametre_non_defini"),
-                           causes_vues)),
-              list(character(0), character(0)))
+                           causes_vues),
+                   ns$.RANGS_CAUSES, ns$.RANG_CAUSE_DIRECTE),
+              list(character(0), character(0),
+                   c(non_implemente = 1L, non_lisible = 2L, age_non_defini = 4L, parametre_non_defini = 5L,
+                     declaration_absente = 6L, refus_induit = 7L), 3L))
+verifier("#36 : visibilite_non_determinee jamais cause de controles_non_executes (appels du fichier)",
+         !("visibilite_non_determinee" %in% causes_vues))

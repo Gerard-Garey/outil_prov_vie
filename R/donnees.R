@@ -3445,13 +3445,42 @@ controler_base <- function(donnees, arrete, declarations = NULL, conventions = N
   })
 }
 
-# Causes de controles_non_executes qui ne sont ni une cause directe (forme ou refus d'une
-# colonne lue) ni un refus induit (priorité des causes, M185, .bilan()). À tenir à jour :
-# toute nouvelle cause qui n'est pas un motif de refus (code de controles.csv ou de
-# defauts.csv, ou sous-cas lettré d'un code de defauts.csv) s'ajoute ici, sinon .bilan() la
-# prendrait pour une cause directe (test d'exhaustivité, tests/unitaires/donnees.R).
-.CAUSES_NON_DIRECTES <- c(CAUSE_NON_IMPLEMENTE, "declaration_absente", CAUSE_NON_LISIBLE, .CAUSE_AGE_NON_DEFINI,
-                          .CAUSE_PARAMETRE_NON_DEFINI, .CAUSE_VISIBILITE)
+# Rangs de la priorité des causes de controles_non_executes (spécification, § 3.1 ; M185,
+# M194, M195) : rang 3 pour toute cause directe (.RANG_CAUSE_DIRECTE, motif du refus d'une
+# colonne lue). À tenir à jour : toute nouvelle cause qui n'est pas un motif de refus (code de
+# controles.csv ou de defauts.csv, ou sous-cas lettré de .TRAITEMENTS_SOUS_CAS_D10)
+# reçoit un rang ici, sinon .dedoublonner_non_executes() s'arrête (test d'exhaustivité,
+# tests/unitaires/donnees.R). visibilite_non_determinee n'a pas de rang : elle n'est jamais
+# une cause de controles_non_executes (spécification, § 4.2).
+.RANG_CAUSE_DIRECTE <- 3L
+.RANGS_CAUSES <- c(stats::setNames(1:2, c(CAUSE_NON_IMPLEMENTE, CAUSE_NON_LISIBLE)),
+                   stats::setNames(4:7, c(.CAUSE_AGE_NON_DEFINI, .CAUSE_PARAMETRE_NON_DEFINI,
+                                          "declaration_absente", "refus_induit")))
+
+# Une ligne par clé (code, table, colonne) de `non_executes` (colonnes code, table, colonne,
+# cause, dans l'ordre d'émission), à la cause de plus petit rang (.RANGS_CAUSES ; cause
+# directe : motif de refus, code de controles.csv ou de defauts.csv, ou sous-cas lettré
+# déclaré d'un code non lettré de defauts.csv, D10a à D10h (.TRAITEMENTS_SOUS_CAS_D10, comme
+# .motif_admet()), rang 3) ; à rang égal, la première émise. Le rang est cherché avant le
+# caractère direct (refus_induit est aussi un code de controles.csv). Les autres colonnes
+# sont celles de la première ligne de la clé. Une cause ni rangée ni motif de refus est une
+# erreur interne : elle ne se range pas en silence.
+.dedoublonner_non_executes <- function(non_executes, dico) {
+  cz <- non_executes$cause
+  rang <- unname(.RANGS_CAUSES[cz])
+  directe <- is.na(rang) & cz %in% c(dico$controles$code, dico$defauts$code, names(.TRAITEMENTS_SOUS_CAS_D10))
+  rang[directe] <- .RANG_CAUSE_DIRECTE
+  if (anyNA(rang)) stop("erreur interne de provie : cause de contr\u00f4le non ex\u00e9cut\u00e9 inconnue : ",
+                        paste(unique(cz[is.na(rang)]), collapse = ", "), call. = FALSE)
+  cle <- paste(non_executes$code, non_executes$table, non_executes$colonne, sep = "\r")
+  cle <- factor(cle, levels = unique(cle))
+  # par clé, la ligne de plus petit rang, la première émise à rang égal (tri stable)
+  o <- order(as.integer(cle), rang, method = "radix")
+  retenue <- o[!duplicated(cle[o])]
+  premiere <- which(!duplicated(cle))
+  non_executes$cause[premiere] <- cz[retenue]
+  non_executes[premiere, , drop = FALSE]
+}
 .bilan <- function(ctx) {
   dico <- ctx$dico
   constats <- .fusionner_constats(ctx)
@@ -3479,22 +3508,11 @@ controler_base <- function(donnees, arrete, declarations = NULL, conventions = N
   # critère 4) : code = composante, table et colonne lues, cause = motif du refus
   non_executes <- rbind(data.frame(ni, cause = rep(CAUSE_NON_IMPLEMENTE, nrow(ni)), stringsAsFactors = FALSE),
                         non_executes, enjeu$non_executes)
-  # une ligne par (code, table, colonne), première cause dans l'ordre de priorité ; une
-  # règle empêchée reste toujours ici, même si une autre règle de même clé a détecté : la
-  # clé présente aussi dans controles est une détection partielle, dont le nombre est un
-  # minorant (ADR 0010, huitième série, (e))
-  # Une cause directe (forme, refus) prime sur un refus_induit de même clé (M185) : une clé
-  # dont la première cause est refus_induit prend la première cause directe qui la suit ; la
-  # place des autres causes (non_implemente, declaration_absente...) est inchangée.
-  cle_ne <- paste(non_executes$code, non_executes$table, non_executes$colonne, sep = "\r")
-  directe <- !(non_executes$cause %in% c("refus_induit", .CAUSES_NON_DIRECTES))
-  premiere <- match(cle_ne, cle_ne)
-  induite <- non_executes$cause[premiere] == "refus_induit"
-  cle_d <- cle_ne[directe]
-  remplace <- match(cle_ne, cle_d)
-  i <- which(!duplicated(cle_ne) & induite & !is.na(remplace))
-  non_executes$cause[i] <- non_executes$cause[directe][remplace[i]]
-  non_executes <- non_executes[!duplicated(cle_ne), , drop = FALSE]
+  # une ligne par (code, table, colonne), cause de plus petit rang dans l'ordre de priorité
+  # (M185, M194, M195 ; .dedoublonner_non_executes()) ; une règle empêchée reste toujours
+  # ici, même si une autre règle de même clé a détecté : la clé présente aussi dans controles
+  # est une détection partielle, dont le nombre est un minorant (ADR 0010, huitième série, (e))
+  non_executes <- .dedoublonner_non_executes(non_executes, dico)
 
   controles <- controles[ordre, , drop = FALSE]
   traitement <- traitement[ordre]
