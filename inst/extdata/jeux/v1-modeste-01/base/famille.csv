@@ -1,0 +1,3 @@
+id_membre,id_assure,lien,sexe,date_naissance,id_sinistre,id_assure_membre,situation,date_deces,date_saisie
+"ME0029","AS0029","conjoint","F",1962-08-25,"SI0018",,,,2021-05-07
+"ME0473","AS0473","conjoint","F",1979-05-07,"SI0023",,,,2021-06-10
