@@ -1656,8 +1656,10 @@ fermée, \code{COMPOSANTES\_ENJEU}~: huit composantes, dix couples
 \code{controles\_non\_executes} prend l'une des valeurs suivantes~:
 
 \begin{itemize}[itemsep=2pt]
-\item le motif d'un refus d'une colonne lue, code de contrôle ou code de
-  défaut (\textbf{cause directe})\fsp;
+\item le motif d'un refus d'une colonne lue (\textbf{cause directe})~:
+  code de contrôle (\code{controles.csv}), code de défaut
+  (\code{defauts.csv}) ou sous-cas lettré du défaut D10 (D10a à D10f et
+  D10h, la lettre~g n'étant attribuée à aucun sous-cas), liste fermée\fsp;
 \item \code{refus\_induit}~: table refusée parce qu'une de ses clés
   étrangères vise une table refusée, ou, à un arrêté antérieur à
   l'extraction, parce qu'une règle~P n'a pas pu s'exécuter sur une table
@@ -1680,20 +1682,61 @@ dont la visibilité à l'arrêté n'est pas déterminée n'y figure pas~: sa
 cause, \code{visibilite\_non\_determinee}, se lit dans l'élément
 \code{enjeu}. Une clé (code, table, colonne) présente à la fois dans
 \code{controles} et dans \code{controles\_non\_executes} est une détection
-partielle, dont le nombre est un minorant. \textbf{Priorité des causes.} Un contrôle non implémenté, reporté par
-décision du mainteneur (M181, ci-dessous), porte \code{non\_implemente}
-avant toute autre cause. Une cause directe passe avant tout refus induit,
-règle~B comprise (décision du mainteneur du 8~novembre~2026, M185), de
-sorte qu'un refus induit n'est la cause que d'un contrôle sans cause
-directe. Dans le code, les causes qui ne sont ni directes ni un refus
-induit sont énumérées par une constante interne,
-\code{.CAUSES\_NON\_DIRECTES}, à tenir à jour~: une cause nouvelle qui n'y
-serait pas ajoutée serait prise pour une cause directe. Elle compte six
-causes~: les cinq causes non directes ci-dessus et
-\code{visibilite\_non\_determinee}. Un test de la batterie unitaire
-vérifie, sur les appels qu'elle fait, que toute cause émise qui n'est pas
-un motif de refus y figure, et que les cinq causes non directes ci-dessus
-sont émises.
+partielle, dont le nombre est un minorant.
+
+\textbf{Priorité des causes.} Quand plusieurs causes visent une même clé
+(code, table, colonne), parce que plusieurs règles, emplois ou colonnes
+lues l'empêchent, \code{controles\_non\_executes} n'en garde qu'une ligne,
+qui porte la cause de plus petit rang (décisions du mainteneur du
+8~novembre~2026, M185, et du 9~novembre~2026, M194 et M195)~:
+
+\begin{enumerate}[itemsep=2pt]
+\item \code{non\_implemente}\fsp;
+\item \code{non\_lisible}\fsp;
+\item cause directe, quelle qu'elle soit\fsp;
+\item \code{age\_non\_defini}\fsp;
+\item \code{parametre\_non\_defini}\fsp;
+\item \code{declaration\_absente}\fsp;
+\item \code{refus\_induit}.
+\end{enumerate}
+
+À rang égal (deux causes directes distinctes), la première
+émise l'emporte. Un refus induit n'est donc retenu que si la clé n'a
+aucune autre cause, et la priorité de la cause directe sur tout refus
+induit, règle~B comprise (M185), est conservée. L'ordre est un jugement
+d'expert, motivé ainsi~: (a)~la cause retenue ne dépend pas de l'ordre
+d'exécution du code, de sorte que réordonner deux règles ou deux emplois
+ne change pas le bilan (l'alternative écartée, la première cause émise,
+faisait dépendre le bilan de cet agencement)\fsp; (b)~passent d'abord les
+causes que rien ne lève côté utilisateur (l'outil, puis le
+dictionnaire), puis le défaut de l'extraction, puis la grandeur que la
+base ne détermine pas\fsp; (c)~les deux derniers rangs vont aux causes
+dont l'information reste au bilan quand elles ne sont pas retenues~: une
+déclaration absente figure toujours dans \code{declarations\_requises},
+le refus d'origine d'un refus induit dans \code{refus\_tables}, alors
+qu'une cause directe, un âge non défini ou un paramètre non défini
+masqués seraient perdus.
+
+Dans le code, la fonction interne \code{.dedoublonner\_non\_executes()}
+applique cet ordre, lu dans deux constantes internes~:
+\code{.RANGS\_CAUSES}, qui donne les rangs des six causes nommées
+ci-dessus, et \code{.RANG\_CAUSE\_DIRECTE}, qui vaut~3. Le rang d'une
+cause est cherché dans \code{.RANGS\_CAUSES} avant de tester si elle est
+directe, parce que \code{refus\_induit} est aussi un code de
+\code{controles.csv}. Une cause qui n'est ni rangée ni dans la liste
+fermée des causes directes arrête le calcul, avec un message qui
+commence par «~erreur interne de provie~»~: elle n'est jamais rangée en
+silence, et toute cause nouvelle doit recevoir un rang dans
+\code{.RANGS\_CAUSES}. \code{visibilite\_non\_determinee} n'a pas de
+rang~: elle n'est jamais une cause de \code{controles\_non\_executes}, et
+la fonction s'arrête si on la lui présente. La batterie unitaire vérifie
+l'ordre sur chaque paire de rangs, dans les deux ordres d'émission, le
+départage à rang égal, l'arrêt sur une cause inconnue (dont une lettre
+ajoutée à un code déjà lettré, comme D01ab, et un sous-cas non déclaré,
+comme D05z), et, sur l'ensemble des appels qu'elle fait, que toute cause
+émise est rangée ou directe, que les cinq causes non directes autres que
+\code{refus\_induit} sont émises, et que
+\code{visibilite\_non\_determinee} ne l'est jamais.
 
 \textbf{Âge invraisemblable et fin de charge.} Le défaut D02c, pour un
 âge, se détecte sur la vue, pour cinq emplois (assuré au sinistre, assuré
