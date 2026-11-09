@@ -370,6 +370,28 @@ verifier("ecrire_liste(lire_liste(o)) == o sur plusieurs textes canoniques",
          all(vapply(list(liste_riche, list(a = 1L), list(), list(x = list(y = NULL))),
                     function(l) identical(ecrire_liste(lire_liste(ecrire_liste(l))), ecrire_liste(l)), NA)))
 
+# #25 : la relecture d'une liste plate de n feuilles est linéaire. Croissance plutôt que
+# durée seule (une durée dépend de la machine) : rapport des durées à 40 000 et 10 000
+# feuilles, meilleure de deux mesures ; linéaire, il vaut environ 4, quadratique (insertion
+# feuille par feuille d'avant #25), environ 15 (mesure du 9 novembre 2026, R 4.3.3). Borne 10 ;
+# durée de 40 000 feuilles bornée à 20 s (environ 3 s mesurées ; 37 s avant #25).
+liste_plate <- function(n) stats::setNames(as.list(seq_len(n) / 7), paste0("f", seq_len(n)))
+duree_relecture <- function(o) min(vapply(1:2, function(i) system.time(lire_liste(o))[["elapsed"]], 0))
+o_10k <- ecrire_liste(liste_plate(10000L))
+o_40k <- ecrire_liste(liste_plate(40000L))
+t_10k <- duree_relecture(o_10k)
+t_40k <- duree_relecture(o_40k)
+verifier("lire_liste : 40 000 feuilles plates, aller-retour identical", identical(lire_liste(o_40k), liste_plate(40000L)))
+verifier("lire_liste : durée de 10 000 à 40 000 feuilles multipliée par moins de 10 (relecture linéaire)",
+         t_40k / max(t_10k, 0.05) < 10)
+verifier("lire_liste : 40 000 feuilles relues en moins de 20 s", t_40k < 20)
+# structure profonde et large : mêmes noeuds, même ordre, feuilles de tous types
+liste_arbre <- list(
+  a = list(b = list(c = list(d = 1:3, e = NULL, f = list()), g = "x"), h = c(TRUE, NA)),
+  z = as.Date("2026-11-09"),
+  m = stats::setNames(lapply(1:300, function(i) list(v = i, w = list(u = as.character(i)))), paste0("k", 1:300)))
+verifier_egal("lire_liste : arbre profond et large, aller-retour identical", lire_liste(ecrire_liste(liste_arbre)), liste_arbre)
+
 section("outils : avec_graine")
 verifier_egal("valeurs sous la graine 42 (Mersenne-Twister, Inversion, Rejection)",
               avec_graine(42L, runif(3)),
