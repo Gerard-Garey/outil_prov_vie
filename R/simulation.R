@@ -30,8 +30,9 @@
 # arrêt suit un modèle mensuel par ancienneté (reprise, décès, passage en invalidité), passe
 # en invalidité ou s'éteint par fin de droits au terme de la durée maximale d'indemnisation,
 # et prend fin à l'âge de fin de service ; l'invalidité suit des taux mensuels constants
-# (reprise, décès) ; le décès d'un assuré en activité ou en arrêt ouvre un sinistre décès
-# (maintien de la garantie décès pendant l'arrêt) ; un arrêt peut être classé sans suite.
+# (reprise, décès) ; le décès d'un assuré en activité, en arrêt ou en invalidité ouvre un
+# sinistre décès (maintien de la garantie décès pendant l'arrêt) ; un arrêt peut être classé
+# sans suite.
 
 # --- Constantes ------------------------------------------------------------------
 
@@ -49,11 +50,13 @@ VERSION_LOI_VRAIE <- 1L
 # VERSION_SIMULATEUR, et son commit est un changement de résultat sur les jeux (tableau avant /
 # après des volumétries et du registre) ; un refactorage sans effet garde la version. Un jeu
 # d'une version antérieure est retiré par un commit donnees: et remplacé par un jeu <nn+1>
-# (M189). La version garantit la sortie pour les jeux versionnés et pour toute entrée admise par la
-# version courante : les corrections de la revue finale (refus d'entrées autrefois admises par
-# les contrôles d'entrée ; D01b restreint aux encaissements antérieurs à l'extraction) ont été
-# faites avant tout jeu publié hors de la branche, sans changer les jeux versionnés, et n'ont
-# pas incrémenté la version (décision du mainteneur, 9 novembre 2026).
+# (M189). La version garantit la sortie pour les jeux versionnés et pour toute entrée admise par
+# la version courante. Exception délibérée à la règle d'incrément (M190) : les corrections de la
+# revue finale ont refusé des entrées autrefois admises par les contrôles d'entrée, et la
+# restriction de D01b aux encaissements antérieurs à l'extraction change la sortie des entrées
+# encore admises dont un encaissement est daté de l'extraction ; elles sont admises sans
+# incrément, aucun jeu n'ayant été publié hors de la branche et les jeux versionnés étant
+# inchangés (décision du mainteneur, 9 novembre 2026).
 VERSION_SIMULATEUR <- 1L
 
 # Catalogue des défauts que le simulateur sait injecter (dictionnaire, § 9), dans l'ordre de

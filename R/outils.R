@@ -18,8 +18,10 @@ VERSION_LISTE <- 1L                              # format du serialiseur (ADR 00
 
 # Liste fermée des motifs de refus d'appel (ADR 0010, point 11) ; fichier_invalide (M141) :
 # refus de `lecture` qui tient au système de fichiers ou à la syntaxe d'un fichier ;
-# jeu_invalide (ADR 0010, onzième série, (f)) : argument de simuler_base() qui ne définit pas un
-# jeu simulé, ou objet passé à ecrire_jeu() qui n'a pas la forme d'un jeu_simule.
+# jeu_invalide (ADR 0010, onzième série, (f)) : entrée de simuler_base() contraire à ses
+# contrôles d'entrée ou à ses préconditions (argument qui ne définit pas un jeu simulé), ou
+# objet passé à ecrire_jeu() qui n'a pas la forme d'un jeu_simule ou que lire_jeu() ne
+# relirait pas identique.
 MOTIFS_REFUS <- c(
   "plan_incomplet", "plan_invalide", "liste_invalide", "fichier_invalide", "table_base_absente",
   "colonne_absente", "colonne_inconnue", "type_incompatible", "extraction_invalide",

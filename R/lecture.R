@@ -46,8 +46,10 @@
 # que character, la colonne reste en texte). Le résultat d'un appel isolé n'est donc pas
 # forcément conforme : controler_types() (porte stricte) le refuse, et le contrôle de la
 # base entière (module `donnees`) l'enregistre au bilan.
-# Tolérances admises (jugées admissibles par `actuary` : les guillemets délimitent le
-# champ, ils ne portent pas le type) :
+# Tolérances admises (jugement de mise en œuvre : les guillemets délimitent le champ, ils
+# ne portent pas le type ; aucune tolérance ne change la valeur lue d'une colonne de type
+# character, et les 47 colonnes d'identifiant `id_*` du dictionnaire sont toutes de ce
+# type) :
 #   - toute valeur, entre guillemets ou non, quel que soit son type (entier, réel, date,
 #     logique : "12" se lit 12L) ;
 #   - zéros de tête pour integer et numeric (007, 007.50) ;
