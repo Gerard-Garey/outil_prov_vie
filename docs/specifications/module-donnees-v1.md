@@ -19,6 +19,7 @@
 >   - *le report déclaré des contrôles non écrits à la fermeture de #18 (issue #34) ;*
 >   - *D02c pour un âge, D07 (c) et l'enjeu sous lien de garantie non résolu, écrits dans `000f7fc` ;*
 >   - *la priorité de la cause directe sur tout `refus_induit`, règle B comprise (décision du mainteneur du 8 novembre 2026).*
+> - *`1.2` : 9 novembre 2026, issue #36, sur les décisions du mainteneur du même jour (M194 : `refus_induit` en dernier ; M195 : ordre complet des causes). § 3.1, priorité des causes : ordre en sept rangs, `refus_induit` en dernier, priorité de la cause directe (M185) conservée, places de `non_lisible`, `age_non_defini`, `parametre_non_defini` et `declaration_absente` fixées, `visibilite_non_determinee` exclue. Texte rédigé par l'agent actuary-approfondi (IA), versé par la session principale.*
 >
 > *Les points du dictionnaire `1.6` relevés avec les errata (P6 à P17) ne sont pas intégrés (§ 7).*
 
@@ -226,10 +227,29 @@ Chaque étape suppose les précédentes : une clé mal typée ne se joint pas, e
   - Les couples D03a × `triangle` et D12 × `triangle` sont hors du critère de couverture (`S`).
   - Une exclusion des orphelines D04a et D04b ne compte que les lignes dont la visibilité propre tient à A (§ 2.4).
 - **`controles`** : toute détection. Chaque ligne se retrouve dans exactement un élément de traitement ou dans `declarations_requises` (invariant testé).
-- **`controles_non_executes`** : un contrôle empêché par un refus (`cause` = son motif) ou par une déclaration absente (`cause = "declaration_absente"`) ; ou pas encore écrit (`non_implemente`) ; ou illisible (`non_lisible`, D03h collectif) ; ou empêché par le refus induit d'une règle P empêchée (`refus_induit`), s'il n'a pas de cause directe (ADR 0010, huitième série, (a) et (e), et neuvième série, (c) ; M168, M178).
-  - Une composante de l'enjeu empêchée y figure aussi, sous le code de la composante (§ 4.3), avec la table et la colonne lues.
-  - Une clé (code, table, colonne) présente à la fois dans `controles` et ici est une détection partielle : son nombre est un minorant.
-  - **Priorité des causes** (décision du mainteneur du 8 novembre 2026) : la cause directe (refus d'une colonne lue) passe avant **tout** `refus_induit`, règle B comprise.
+- **`controles_non_executes`** : une ligne par clé (`code`, `table`, `colonne`) d'un contrôle non exécuté, ou exécuté en partie, avec sa cause (ADR 0010, huitième série, (a) et (e), et neuvième série, (c) ; M168, M178) :
+  - `non_implemente` : contrôle prévu et pas encore écrit (report déclaré, M181, issue #34) ;
+  - `non_lisible` : sous-cas qu'aucune colonne du dictionnaire ne permet de lire (D03h collectif, M168) ;
+  - **cause directe** : motif du refus d'une colonne lue (écart de forme ou refus `R` : code de `controles.csv` ou de `defauts.csv`, ou sous-cas lettré) (M169) ;
+  - `age_non_defini` : âge non défini (§ 5.2) ;
+  - `parametre_non_defini` : limite d'âge non déterminable (§ 5.3, M187) ;
+  - `declaration_absente` : convention ou seuil du plan absent ; la déclaration manquante figure aussi dans `declarations_requises` (§ 3.2) ;
+  - `refus_induit` : contrôle empêché par un refus induit (règle B, ou règle P empêchée, M178).
+  - Une composante de l'enjeu empêchée y figure aussi, sous le code de la composante (§ 4.3), avec la table et la colonne lues. `visibilite_non_determinee` n'est jamais une cause de cette table (§ 4.2).
+  - Une clé présente à la fois dans `controles` et ici est une détection partielle : son nombre est un minorant.
+  - **Priorité des causes** (M185 ; décisions du mainteneur du 9 novembre 2026, M194 et M195, issue #36). Quand plusieurs causes visent une même clé (plusieurs règles, emplois ou colonnes lues), la cause retenue est la première dans l'ordre suivant :
+    1. `non_implemente` ;
+    2. `non_lisible` ;
+    3. cause directe ;
+    4. `age_non_defini` ;
+    5. `parametre_non_defini` ;
+    6. `declaration_absente` ;
+    7. `refus_induit`.
+
+    À rang égal (deux causes directes), la première émise l'emporte : ordre d'exécution du § 2.2, puis, dans une règle, ordre des colonnes lues. `refus_induit` n'est donc retenu que si la clé n'a aucune autre cause. La priorité de la cause directe sur tout refus induit, règle B comprise (M185), est conservée.
+  - **Motif** (jugement d'expert) : (a) l'ordre ne dépend pas de l'ordre d'exécution du code : réordonner deux règles ou deux emplois ne change pas le bilan ; (b) passent d'abord les causes que rien ne lève côté utilisateur (outil, puis dictionnaire), puis le défaut de l'extraction (refus `R`), puis la grandeur que la base ne détermine pas ; (c) les deux derniers rangs vont aux causes dont l'information reste au bilan quand elles ne sont pas retenues : `declaration_absente` est toujours reprise dans `declarations_requises` (§ 3.2), le refus d'origine d'un `refus_induit` dans `refus_tables`. Une cause directe, `age_non_defini` ou `parametre_non_defini` masquée serait perdue.
+  - **Alternative écartée** : la première cause émise (ordre d'exécution), qui ferait dépendre une sortie du bilan de l'agencement du code.
+  - **Effet** : aucune ligne sur les bases des tests ni sur les jeux versionnés à `ca90614` (mesure d'`actuary-approfondi`, 309 appels de `.bilan()` et deux jeux aux deux arrêtés) ; seule la clé (`D02c`, `assures`, `NA`) est touchée, sur des bases à défauts multiples (cas « #38 (a) » et « #38 (b) » de `tests/unitaires/donnees.R`, `d4d3abd`, en échec attendu jusqu'à #36).
 
 ### 3.2 Bilan sans déclaration (M148)
 
