@@ -371,3 +371,159 @@ ecrire_base <- function(donnees, dossier) {
   }
   champs
 }
+
+# --- Jeux simulés ------------------------------------------------------------------
+
+# Fichiers d'un jeu versionné hors de base/ et de verite/ (ADR 0010, point 20) ;
+# declarations.txt est facultatif (déclarations et conventions de controler_base() qui
+# conviennent au jeu, versionnées avec lui).
+.FICHIERS_JEU <- c("loi_vraie.txt", "manifeste.txt", "empreintes.md5")
+.FICHIER_DECLARATIONS <- "declarations.txt"
+.CHAMPS_JEU <- c("base", "loi_vraie", "verite", "manifeste")
+
+# Écrit un jeu simulé (objet `jeu_simule` de simuler_base()) dans `dossier` (créé s'il
+# n'existe pas, son parent devant exister ; vide s'il existe), selon la disposition du point
+# 20 de l'ADR 0010 : base/<table>.csv (ecrire_base()), loi_vraie.txt et manifeste.txt
+# (ecrire_liste()), verite/<nom>.csv (même format CSV que la base ; types des colonnes portés
+# par manifeste$colonnes_verite), declarations.txt (ecrire_liste(), si le jeu porte des
+# déclarations), puis empreintes.md5 : une ligne « <md5>  <chemin relatif> » par fichier, triés
+# (tri radix), au format de `md5sum -c` lancé depuis `dossier`. Refuse un
+# objet qui n'a pas la forme d'un jeu simulé (jeu_invalide), avant toute écriture ; les refus
+# d'ecrire_base() et d'ecrire_liste() s'appliquent (pour une table de vérité, au nom
+# d'ecrire_jeu() et de verite/<nom>). Rend `dossier`, invisible.
+ecrire_jeu <- function(jeu, dossier) {
+  .controler_dossier(dossier, "ecrire_jeu")
+  .controler_jeu(jeu)
+  octets <- list(loi_vraie.txt = ecrire_liste(jeu$loi_vraie), manifeste.txt = ecrire_liste(jeu$manifeste))
+  if (!is.null(jeu$declarations)) octets[[.FICHIER_DECLARATIONS]] <- ecrire_liste(jeu$declarations)
+  # refus d'écriture d'une table de vérité (chaîne vide, retour chariot, réel non fini...) relevé
+  # au nom d'ecrire_jeu() et de verite/<nom> (réserve m2 de l'audit)
+  verite <- lapply(names(jeu$verite), function(nom) {
+    tryCatch(.texte_table_csv(jeu$verite[[nom]], nom), refus_provie = function(e) {
+      .refus_lecture(paste0("ecrire_jeu() : verite/", nom, " : ", sub("^ecrire_base\\(\\) : ", "", conditionMessage(e))),
+                     motif = e$motif, table = nom, colonne = e$colonne, nombre = e$nombre)
+    })
+  })
+  controler_types(jeu$base)
+  if (file.exists(dossier)) {
+    if (!dir.exists(dossier)) .refus_lecture(paste0("ecrire_jeu() : ", dossier, " existe et n'est pas un dossier"))
+    if (length(list.files(dossier, all.files = TRUE, no.. = TRUE)) > 0L) {
+      .refus_lecture(paste0("ecrire_jeu() : le dossier ", dossier, " n'est pas vide"))
+    }
+  } else if (!dir.create(dossier, showWarnings = FALSE)) {
+    .refus_lecture(paste0("ecrire_jeu() : dossier ", dossier, " impossible \u00e0 cr\u00e9er"))
+  }
+  ecrire_base(jeu$base, file.path(dossier, "base"))
+  dir.create(file.path(dossier, "verite"))
+  for (k in seq_along(verite)) writeBin(verite[[k]], file.path(dossier, "verite", paste0(names(jeu$verite)[k], ".csv")))
+  for (f in names(octets)) writeBin(octets[[f]], file.path(dossier, f))
+  fichiers <- sort(c(names(octets), file.path("base", list.files(file.path(dossier, "base"))),
+                     file.path("verite", list.files(file.path(dossier, "verite")))), method = "radix")
+  md5 <- vapply(fichiers, function(f) empreinte(.octets_fichier(file.path(dossier, f))), "", USE.NAMES = FALSE)
+  writeBin(charToRaw(paste0(paste0(md5, "  ", fichiers, "\n"), collapse = "")), file.path(dossier, "empreintes.md5"))
+  invisible(dossier)
+}
+
+# Relit un jeu écrit par ecrire_jeu() ; rend l'objet `jeu_simule` : lire_jeu(ecrire_jeu(j, d))
+# est identical à j. Contrôle d'abord la disposition (fichiers et dossiers attendus, rien
+# d'autre : fichier_invalide) et les empreintes de empreintes.md5 (une ligne par fichier,
+# chacun présent une fois ; empreinte_discordante au premier fichier dont le MD5 diffère),
+# puis lit base/ par lire_base() (tables et nombres de lignes égaux à manifeste$volumetrie,
+# sinon fichier_invalide), les listes par lire_liste() et verite/ selon les types de
+# manifeste$colonnes_verite (fichier_invalide si une colonne manque, est en trop ou ne se lit
+# pas dans son type).
+lire_jeu <- function(dossier) {
+  .controler_dossier(dossier, "lire_jeu")
+  if (!dir.exists(dossier)) .refus_lecture(paste0("lire_jeu() : dossier introuvable : ", dossier))
+  entrees <- sort(list.files(dossier, all.files = TRUE, no.. = TRUE), method = "radix")
+  attendus <- c("base", "verite", .FICHIERS_JEU)
+  if (!all(attendus %in% entrees) || !all(entrees %in% c(attendus, .FICHIER_DECLARATIONS)) ||
+      !dir.exists(file.path(dossier, "base")) || !dir.exists(file.path(dossier, "verite"))) {
+    .refus_lecture(paste0("lire_jeu() : disposition d'un jeu attendue dans ", dossier,
+                          " (base/, verite/, loi_vraie.txt, manifeste.txt, empreintes.md5, declarations.txt facultatif)"))
+  }
+  fichiers <- sort(c(intersect(entrees, c("loi_vraie.txt", "manifeste.txt", .FICHIER_DECLARATIONS)),
+                     file.path("base", list.files(file.path(dossier, "base"), all.files = TRUE, no.. = TRUE)),
+                     file.path("verite", list.files(file.path(dossier, "verite"), all.files = TRUE, no.. = TRUE))),
+                   method = "radix")
+  lignes <- strsplit(rawToChar(.octets_fichier(file.path(dossier, "empreintes.md5"))), "\n", fixed = TRUE)[[1L]]
+  forme <- grepl("^[0-9a-f]{32}  [^ ].*$", lignes)
+  noms <- substring(lignes, 35L)
+  if (!all(forme) || anyDuplicated(noms) || !setequal(noms, fichiers)) {
+    .refus_lecture(paste0("lire_jeu() : empreintes.md5 mal form\u00e9 ou qui ne liste pas exactement les fichiers du jeu"))
+  }
+  for (k in seq_along(lignes)) {
+    attendu <- substr(lignes[k], 1L, 32L)
+    recu <- empreinte(.octets_fichier(file.path(dossier, noms[k])))
+    if (!identical(recu, attendu)) {
+      refuser(paste0("lire_jeu() : empreinte discordante du fichier ", noms[k]), "empreinte_discordante",
+              module = "lecture", attendu = attendu, recu = recu)
+    }
+  }
+  base <- lire_base(file.path(dossier, "base"))
+  loi_vraie <- lire_liste(.octets_fichier(file.path(dossier, "loi_vraie.txt")))
+  manifeste <- lire_liste(.octets_fichier(file.path(dossier, "manifeste.txt")))
+  # tables de base/ et leurs nombres de lignes : ceux de manifeste$volumetrie (réserve m1 de
+  # l'audit : un jeu privé d'une table, aux empreintes recalculées, est refusé)
+  # forme contrôlée avant toute comparaison, sans coercition (réserve m3 : aucun avertissement,
+  # refus propre sous options(warn = 2))
+  vol <- manifeste$volumetrie
+  if (!is.list(vol) || !all(vapply(vol, function(x) is.integer(x) && length(x) == 1L && !is.na(x), NA)) ||
+      !identical(names(vol), names(base)) || !identical(unname(vol), unname(lapply(base, nrow)))) {
+    .refus_lecture(paste0("lire_jeu() : les tables de base/ ou leurs nombres de lignes diff\u00e8rent de ",
+                          "manifeste$volumetrie"))
+  }
+  types <- manifeste$colonnes_verite
+  presents <- sub("\\.csv$", "", list.files(file.path(dossier, "verite")))
+  if (!is.list(types) || is.null(names(types)) || !setequal(names(types), presents) ||
+      !all(grepl("\\.csv$", list.files(file.path(dossier, "verite"))))) {
+    .refus_lecture("lire_jeu() : manifeste$colonnes_verite ne d\u00e9crit pas exactement les fichiers de verite/")
+  }
+  verite <- lapply(names(types), function(nom) {
+    colonnes <- data.frame(colonne = names(types[[nom]]), type = unlist(types[[nom]], use.names = FALSE),
+                           stringsAsFactors = FALSE)
+    df <- .lire_table_csv(file.path(dossier, "verite", paste0(nom, ".csv")), nom, colonnes)
+    ok <- identical(names(df), colonnes$colonne) &&
+      all(vapply(seq_along(df), function(j) .type_conforme(df[[j]], colonnes$type[j]), NA))
+    if (!ok) {
+      .refus_lecture(paste0("lire_jeu() : verite/", nom, ".csv : colonnes ou types diff\u00e9rents de manifeste$colonnes_verite"))
+    }
+    df
+  })
+  names(verite) <- names(types)
+  jeu <- list(base = base, loi_vraie = loi_vraie, verite = verite, manifeste = manifeste)
+  if (.FICHIER_DECLARATIONS %in% entrees) {
+    jeu$declarations <- lire_liste(.octets_fichier(file.path(dossier, .FICHIER_DECLARATIONS)))
+  }
+  structure(jeu, class = "jeu_simule")
+}
+
+.octets_fichier <- function(chemin) readBin(chemin, "raw", n = file.info(chemin)$size)
+
+# Forme d'un jeu simulé (ADR 0010, point 19) : classe jeu_simule, champs base, loi_vraie,
+# verite, manifeste dans cet ordre, puis declarations facultatif ; verite : liste nommée de
+# data.frame ; manifeste$colonnes_verite qui décrit exactement les colonnes de verite.
+.controler_jeu <- function(jeu) {
+  refus <- function(raison) .refus_lecture(paste0("ecrire_jeu() : ", raison), motif = "jeu_invalide")
+  if (!inherits(jeu, "jeu_simule") || !is.list(jeu)) refus("objet de classe jeu_simule attendu")
+  noms <- names(jeu)
+  if (!(identical(noms, .CHAMPS_JEU) || identical(noms, c(.CHAMPS_JEU, "declarations")))) {
+    refus("champs base, loi_vraie, verite, manifeste (et declarations) attendus, dans cet ordre")
+  }
+  v <- jeu$verite
+  if (!is.list(v) || is.data.frame(v) || is.null(names(v)) || anyNA(names(v)) || anyDuplicated(names(v)) ||
+      !all(grepl("^[a-z0-9_]+$", names(v))) || !all(vapply(v, is.data.frame, NA))) {
+    refus("verite doit \u00eatre une liste nomm\u00e9e de data.frame (noms en minuscules ASCII)")
+  }
+  types <- jeu$manifeste$colonnes_verite
+  decrit <- is.list(types) && identical(names(types), names(v)) &&
+    all(vapply(names(v), function(nom) {
+      t <- types[[nom]]
+      is.list(t) && identical(names(t), names(v[[nom]])) &&
+        all(vapply(seq_along(t), function(j) .chaine_type(t[[j]]) && .type_conforme(v[[nom]][[j]], t[[j]]), NA))
+    }, NA))
+  if (!decrit) refus("manifeste$colonnes_verite doit d\u00e9crire exactement les colonnes et les types de verite")
+  invisible(NULL)
+}
+
+.chaine_type <- function(x) is.character(x) && length(x) == 1L && !is.na(x) && x %in% TYPES_DICTIONNAIRE
