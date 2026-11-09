@@ -281,7 +281,7 @@ Chaque étape suppose les précédentes : une clé mal typée ne se joint pas, e
 - **`controles_non_executes`** : une ligne par clé (`code`, `table`, `colonne`) d'un contrôle non exécuté, ou exécuté en partie, avec sa cause (ADR 0010, huitième série, (a) et (e), et neuvième série, (c) ; M168, M178) :
   - `non_implemente` : contrôle prévu et pas encore écrit (report déclaré, M181, issue #34) ;
   - `non_lisible` : sous-cas qu'aucune colonne du dictionnaire ne permet de lire (D03h collectif, M168) ;
-  - **cause directe** : motif du refus d'une colonne lue (écart de forme ou refus `R`) (M169). Liste fermée (v1.4) : codes de `controles.csv` et de `defauts.csv`, et sous-cas lettrés de D10 (`.TRAITEMENTS_SOUS_CAS_D10`, D10a à D10h). Une cause qui n'est ni rangée (ci-dessous) ni motif de refus provoque l'arrêt « erreur interne de provie » ;
+  - **cause directe** : motif du refus d'une colonne lue (écart de forme ou refus `R`) (M169). Liste fermée (v1.4) : codes de `controles.csv` et de `defauts.csv`, et sous-cas lettrés de D10 (`.TRAITEMENTS_SOUS_CAS_D10`, D10a à D10f et D10h ; la lettre g n'est attribuée à aucun sous-cas). Une cause qui n'est ni rangée (ci-dessous) ni motif de refus provoque l'arrêt « erreur interne de provie » ;
   - `age_non_defini` : âge non défini (§ 5.2) ;
   - `parametre_non_defini` : limite d'âge non déterminable (§ 5.3, M187) ;
   - `declaration_absente` : convention ou seuil du plan absent ; la déclaration manquante figure aussi dans `declarations_requises` (§ 3.2) ;
