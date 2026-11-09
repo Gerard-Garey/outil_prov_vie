@@ -13,7 +13,7 @@
 # (règle B, indépendante de l'arrêté) ; puis détection de D02b et D03g (règle P), vue,
 # règle V et enjeu. Les règles P et V et la vue ne lisent ni une table ni une colonne
 # refusées en règle B (.refus_regle_b()).
-# État de ce fichier (lot (c), deuxième partie, sous-partie (iii)) : interruptions, règle
+# État de ce fichier (#18 fermée avec un report déclaré, #34 ; M181) : interruptions, règle
 # B dont les orphelines traitées X (D04a, D04b), règle P (D02b, D03g), vue à une date
 # (visibilité non déterminée ; hypothèse déclarée de D02b, hypothèse ou exclusion déclarée
 # de D03g appliquées), en règle V
@@ -24,9 +24,10 @@
 # L'état partiel est porté par l'objet rendu : chaque contrôle prévu par la spécification et
 # reporté (CONTROLES_NON_IMPLEMENTES : report déclaré à la fermeture de #18) figure dans
 # controles_non_executes avec la cause `non_implemente` ; un sous-cas que la base ne permet
-# pas de lire, avec la cause `non_lisible` (CAUSE_NON_LISIBLE). D09 aux seuils et D07 (b)
-# restent `non_implemente` (décision du mainteneur, D6) : aucun de leurs seuils n'est attendu
-# dans declarations_requises.
+# pas de lire, avec la cause `non_lisible` (CAUSE_NON_LISIBLE). Contrôles reportés : D03d,
+# D07 (a) et (b), D08, D09, D10d à D10f, D11, D12 et D14. D09 aux seuils et D07 (b) restent
+# `non_implemente` (décision du mainteneur, D6) : aucun de leurs seuils n'est attendu dans
+# declarations_requises.
 
 # --- Constantes ------------------------------------------------------------------
 
@@ -835,7 +836,7 @@ controler_base <- function(donnees, arrete, declarations = NULL, conventions = N
   .regle(ctx, "hors_domaine", "contrats", "jour_echeance", "contrats.mois_echeance", "R", "exacte", function() {
     jour <- v("contrats", "jour_echeance")
     mois <- v("contrats", "mois_echeance")
-    maxi <- c(31L, 29L, 31L, 30L, 31L, 30L, 31L, 31L, 30L, 31L, 30L, 31L)[ifelse(mois %in% 1:12, mois, NA)]
+    maxi <- c(31L, 29L, 31L, 30L, 31L, 30L, 31L, 31L, 30L, 31L, 30L, 31L)[match(mois, 1:12)]
     !is.na(jour) & (jour < 1L | jour > ifelse(is.na(maxi), 31L, maxi))
   })
 

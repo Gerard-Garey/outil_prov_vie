@@ -619,9 +619,10 @@ lire_texte_type <- function(x, type) {
 # version_dictionnaire est présente et de type character : une base d'une autre version est
 # refusée pour sa version (extraction_invalide), non pour une colonne inconnue de la version
 # attendue ; absente ou d'un autre type, le contrôle des colonnes la refuse (colonne_absente,
-# type_incompatible). Sans point (ADR 0010, quatrième série, (c)) : appelée hors de son
-# module, par `lecture` (lire_base, avant la lecture typée des autres colonnes) ; rend
-# NULL, invisible.
+# type_incompatible). Sans point (ADR 0010, quatrième série, (c)) : appelée dans son module
+# par controler_types(), et hors de son module par `donnees` (.controler_extraction_base(),
+# pour controler_base()) et par `lecture` (.lire_table_csv(), pour lire_base(), avant la
+# lecture typée des autres colonnes) ; rend NULL, invisible.
 controler_version_extraction <- function(donnee) {
   if (!("version_dictionnaire" %in% names(donnee))) return(invisible(NULL))
   versions <- donnee[["version_dictionnaire"]]
