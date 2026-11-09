@@ -1596,9 +1596,10 @@ encore écrits. Il ne peut appeler que \code{dictionnaire} et
 % =============================================================================
 
 \code{controler\_base(donnees, arrete, declarations, conventions)}
-applique la spécification du module \code{donnees} visée par le mainteneur
-(\code{docs/specifications/module-donnees-v1.md}, version~1.1), sous le
-dictionnaire de la base en version~1.5. La date d'arrêté est obligatoire,
+applique la spécification du module \code{donnees}
+(\code{docs/specifications/module-donnees-v1.md}, version~1.4\fsp;
+versions~1.1 et~1.3 visées par le mainteneur, version~1.4 en attente de
+son visa), sous le dictionnaire de la base en version~1.5. La date d'arrêté est obligatoire,
 sans valeur par défaut. \code{declarations} est le sous-schéma
 \code{donnees} du plan (rubriques \code{exclusions}, \code{hypotheses},
 \code{seuils}, \code{evaluations\_gestion})\fsp; \code{conventions} est la
@@ -1616,7 +1617,10 @@ vue, des autres défauts traités par exclusion, hypothèse par défaut ou
 signalement (\textbf{règle~V})\fsp; (8)~enjeu des lignes écartées. Chaque
 étape suppose les précédentes~: une clé mal typée ne se joint pas, et la vue
 suppose des clés résolues. Les règles~P et~V et la vue ne lisent ni une
-table ni une colonne refusées en règle~B.
+table refusée en portée table, ni une colonne illisible par sa forme, ni
+une valeur refusée~: une valeur refusée est inconnue pour la règle~P et
+la vue, et bloque la règle~V qui la lit comme valeur (paragraphe
+«~Refus de valeur et vue~» ci-dessous).
 
 \textbf{Traitements.} Chaque anomalie est enregistrée avec son traitement~:
 refus~(R) d'une table ou d'une colonne, exclusion~(X), hypothèse par
@@ -1626,6 +1630,127 @@ signalement, tout autre en refus (règle provisoire, fixée par l'ADR~0010).
 Un constat qui admet un choix est placé selon les déclarations, dans un
 seul élément par famille de calcul ou par référentiel\fsp; sans déclaration,
 il va dans \code{declarations\_requises}.
+
+\textbf{Refus de valeur et vue.} Une \emph{colonne lue par la vue} est une
+colonne de visibilité d'une ligne ou d'une partie de ligne (dictionnaire de
+la base, §~6), ou une colonne que lit une règle~P (D02b, D03g), hors
+colonnes de clé, y compris une date qui entre dans une clé primaire
+composite comme \code{famille.date\_saisie}. Sur une telle colonne, un
+\textbf{refus de valeur}, refus de portée colonne qui désigne ses lignes
+(\code{manquant\_obligatoire}, \code{hors\_domaine}, \code{chaine\_vide},
+D02c pour une date hors bornes, ou tout autre refus de portée colonne hors
+défaut de forme), est de \textbf{portée ligne} pour la vue (décisions du
+mainteneur du 9~novembre~2026, M199 à M204). Un \textbf{défaut de forme}
+(\code{colonne\_absente}, \code{colonne\_inconnue},
+\code{type\_incompatible}) et un refus sur une colonne de clé gardent la
+portée table. Le mécanisme est le suivant~:
+
+\begin{itemize}[itemsep=2pt]
+\item \code{refus\_tables} garde la ligne du refus, de portée colonne,
+  telle que l'établit la règle~B\fsp; aucun refus induit ne naît d'un
+  refus de valeur, de sorte que les refus de valeur ne dépendent pas de
+  l'arrêté.
+\item La \textbf{règle~P} s'exécute en logique à trois valeurs (logique
+  de Kleene). Une valeur refusée est inconnue, y compris sa présence~; une
+  valeur manquante non refusée est connue absente. Le verdict d'une
+  règle~P sur une ligne vaut vrai, faux ou inconnu~: une conjonction est
+  fausse dès qu'un terme est faux, vraie si tous le sont, inconnue sinon.
+  Pour D02b sur \code{evenements}, le verdict est «~type non
+  programmable~» et «~saisie antérieure à la date d'effet~»\fsp; le
+  premier terme est inconnu si le type est inconnu, ou si le type est
+  programmable selon le motif et que le motif est inconnu. Une comparaison
+  de deux dates est fausse si l'une est connue absente, inconnue si l'une
+  est inconnue et l'autre présente ou inconnue\fsp; la date d'une parente
+  est inconnue si la ligne parente a une date inconnue. Pour D03g, une
+  date de saisie inconnue rend le verdict inconnu, et, pour une partie de
+  ligne, le verdict est «~date de saisie de la fin manquante~» et «~date
+  de fin présente~». Une ligne au verdict vrai est détectée, une ligne au
+  verdict faux ne l'est pas, une ligne au verdict inconnu est écartée de
+  la détection. La règle n'a une ligne dans
+  \code{controles\_non\_executes} (détection partielle, nombre minorant)
+  que si elle a écarté au moins une ligne~; sa cause est le motif du
+  premier refus de valeur qui touche une ligne écartée, dans l'ordre des
+  colonnes lues, d'abord celles de la table, puis celles d'une autre table
+  (date de la parente).
+\item \textbf{À un arrêté antérieur à l'extraction}, la visibilité d'une
+  ligne, ou d'une partie de ligne, se calcule dans la même logique. Elle
+  est \textbf{non déterminée} si les valeurs inconnues qu'elle lit,
+  directement ou par le verdict d'une règle~P, peuvent lui donner deux
+  statuts différents à l'arrêté (visible, invisible, ou non déterminée par
+  D02b ou D03g faute de déclaration)\fsp; une ligne qu'une date connue rend
+  invisible, ou dont la parente est invisible, est invisible de façon
+  déterminée. La ligne est inscrite sous chaque colonne refusée dont la
+  valeur peut changer son statut, les autres valeurs inconnues prenant
+  toute valeur admise\fsp; cette colonne, son \textbf{origine}, est
+  toujours une colonne de la table de la ligne. Il en résulte la règle par
+  colonne du tableau ci-dessous. Les filles écartées par la règle selon
+  laquelle une fille n'est visible que si sa parente l'est sont inscrites
+  sous \code{parente\_non\_determinee}\fsp; une partie de ligne non
+  déterminée est seule masquée, la ligne reste dans la vue.
+\item Les \textbf{règles~V} ne sont plus bloquées par un refus de valeur
+  sur une colonne qu'elles ne lisent que pour établir la vue~: les lignes
+  non déterminées sont hors de la vue. Une règle~V qui lit la colonne
+  comme valeur reste bloquée, avec le motif du refus pour cause (M169).
+\item Un refus de valeur n'appelle aucune déclaration dans
+  \code{declarations\_requises}~: c'est un refus, qu'aucune déclaration ne
+  lève (dictionnaire de la base, §~1.10)\fsp; l'exclusion déclarée de ces
+  lignes est reportée au dictionnaire en version~1.6 (M203).
+\item \textbf{À l'arrêté égal à l'extraction}, la vue est la base entière~:
+  aucune ligne n'est non déterminée, et seuls les deux premiers points
+  s'appliquent au bilan des contrôles.
+\end{itemize}
+
+\begin{center}
+\small
+\rowcolors{2}{tablerow}{white}
+\begin{tabular}{@{}p{5.6cm}p{9.5cm}@{}}
+\rowcolor{tableheader}
+\textcolor{financeblue}{\textbf{Colonne refusée pour sa valeur}} & \textcolor{financeblue}{\textbf{Ligne (ou partie) de visibilité non déterminée}} \\
+Colonne de visibilité de la ligne, \code{date\_saisie\_fin}, \code{sinistres.date\_instruction} & Toute ligne (ou partie) refusée. \\
+\code{evenements.type\_evenement}, \code{evenements.date\_effet} & Ligne dont le verdict de D02b est inconnu\fsp; sous l'hypothèse de D02b déclarée pour les deux référentiels (visibilité égale au maximum de la saisie, de l'effet et de la visibilité de la parente), seulement si en outre la date d'effet est postérieure à l'arrêté ou inconnue. \\
+\code{evenements.motif} & Comme la ligne précédente, et seulement si le type est inconnu ou programmable selon le motif. \\
+\code{contrats.date\_fin}, \code{affiliations.date\_fin} & Partie dont la date de saisie de la fin manque ou est inconnue\fsp; sinon la fin est connue, ou inconnue, à sa date de saisie. \\
+\code{sinistres.date\_declaration}, \code{catastrophes.date\_evenement} & Toute ligne refusée. \\
+\end{tabular}
+\end{center}
+
+\textbf{Cas limites.} (1)~Une ligne qui porte deux refus de valeur est
+inscrite sous chaque couple (motif, origine) dont la valeur peut changer
+son statut\fsp; sous l'hypothèse de D02b avec une date d'effet antérieure à
+l'arrêté, une ligne de date de saisie refusée ne l'est que sous la date de
+saisie. (2)~Refus de valeur et D03g sur la même ligne, la date de saisie
+étant connue absente~: le verdict de D02b est faux\fsp; sans déclaration,
+la ligne est non déterminée sous D03g\fsp; sous l'hypothèse de D03g, sa date
+n'est pas calculable et la ligne reste non déterminée sous le motif du
+refus, les déclarations attendues étant celles de D03g\fsp; sous
+l'exclusion de D03g, elle sort de la vue et le refus reste dans
+\code{refus\_tables}. (3)~Défaut de forme et refus de valeur dans la même
+table~: la portée table l'emporte\fsp; la règle~P empêchée a pour cause le
+défaut de forme, l'origine du refus induit est la colonne de forme, et
+aucune ligne de la table n'est inscrite sous un refus de valeur.
+
+\textbf{Motif et alternative écartée} (jugement d'expert, spécification,
+§~2.2). Un refus de valeur désigne ses lignes, unité de compte du refus
+(dictionnaire de la base, §~1.10)~: la vue se construit sur les autres
+lignes sans lire de valeur refusée, et le bilan des refus reste le même à
+tout arrêté. Un défaut de forme n'est lu sur aucune ligne~: aucune
+visibilité n'est déterminable, et la portée table le dit en une ligne,
+avec son origine. Une ligne dont le verdict ne dépend pas de la valeur
+refusée a un verdict déterminé~: l'écarter déclarerait partielle une
+détection exacte, et la logique de Kleene ne dépend pas de l'ordre
+d'évaluation des termes. Deux alternatives sont écartées. La première,
+la portée table pour tout refus (forme initiale de la décision M178,
+rouverte le 9~novembre~2026), rendait une table entière inutilisable, avec ses filles par les
+clés étrangères, pour une seule valeur refusée~; avec un taux de défaut
+$p$ par ligne, indépendant, la probabilité qu'une table de $n$ lignes en
+porte au moins un vaut $1-(1-p)^n$, soit, pour $p = 10^{-4}$ (valeur
+d'illustration), 0,6~\% à $n = 60$, 9,5~\% à $n = 1\,000$ et 86,5~\% à
+$n = 20\,000$ (résultat exact sous l'hypothèse d'indépendance). La
+seconde, écarter de la règle~P toute ligne dont une colonne lue porte une
+valeur refusée, laissait visible à l'arrêté, sans déclaration, un
+événement de type non programmable saisi avant une date d'effet
+postérieure à l'arrêté dès que son motif, qui ne joue pas pour ce type,
+était refusé.
 
 \textbf{Le bilan.} Il est rendu en liste nommée de onze éléments, dans cet
 ordre~:
@@ -1644,7 +1769,7 @@ ordre~:
 \code{signalements} & Constats traités en signalement, ou dont le signalement est déclaré~: mêmes colonnes que \code{controles}. \\
 \code{declarations\_requises} & Déclaration attendue par un constat ou par un contrôle~: rubrique (\code{exclusions}, \code{hypotheses}, \code{seuils} ou \code{conventions}), motif, clé (famille, référentiel, seuil ou entrée de convention), traitements ou valeurs admis, nombre de lignes. \\
 \code{enjeu} & Enjeu des lignes refusées ou exclues, en table longue~: une ligne par table, colonne, motif, famille, action, garantie, poste et composante, avec son unité, son montant, ses nombres de dossiers et de valeurs, et la cause d'une composante empêchée. \\
-\code{vue} & Dates d'arrêté et d'extraction, lignes de visibilité non déterminée, et indicateur \code{provisoire}~: vrai s'il y en a, ou si une règle~P n'a pas pu s'exécuter sur une table que lit la vue (les comptes de la règle~V sont alors provisoires). \\
+\code{vue} & Dates d'arrêté et d'extraction, lignes de visibilité non déterminée (\code{visibilite\_non\_determinee}, ci-dessous), et indicateur \code{provisoire}~: vrai s'il y en a, ou si une règle~P a été empêchée par un défaut de forme sur une table que lit la vue (les comptes de la règle~V sont alors provisoires). \\
 \code{segments} & Vide dans l'état du code (les segmentations se déclarent avec le plan). \\
 \code{tables\_absentes} & Tables facultatives absentes de la base. \\
 \end{tabular}
@@ -1657,6 +1782,32 @@ indépendamment de la locale. Les composantes de l'enjeu forment une liste
 fermée, \code{COMPOSANTES\_ENJEU}~: huit composantes, dix couples
 (composante, unité), aucune agrégation ne mêlant deux couples.
 
+\textbf{Lignes de visibilité non déterminée.} À un arrêté antérieur à
+l'extraction, les lignes tenues hors de la vue faute de visibilité
+déterminée sont recensées dans le sous-élément
+\code{visibilite\_non\_determinee} de l'élément \code{vue}, en six
+colonnes~: \code{table}\fsp; \code{colonne}, \code{NA} pour la ligne
+entière, sinon la colonne de la partie de ligne\fsp; \code{motif}, qui vaut
+D02b (hypothèse non déclarée), D03g (déclaration incomplète, ou date non
+calculable sous l'hypothèse), \code{parente\_non\_determinee} (fille d'une
+ligne non déterminée) ou le code d'un refus de valeur\fsp; \code{origine},
+«~table.colonne~» de la valeur refusée pour un motif de refus, toujours une
+colonne de la table de la ligne, et \code{NA} pour D02b, D03g et
+\code{parente\_non\_determinee}\fsp; \code{nombre}\fsp; \code{identifiants}.
+Une ligne par (\code{table}, \code{colonne}, \code{motif},
+\code{origine})\fsp; tri du bilan, puis par origine, \code{NA} en dernier.
+La batterie unitaire vérifie, sur ses bases, que \code{provisoire} est
+vrai si et seulement si ce recensement n'est pas vide ou qu'une règle~P a
+été empêchée par un défaut de forme, et que chaque ligne y a sa
+justification dans le bilan~: une ligne de
+\code{declarations\_requises} pour D02b et D03g, la ligne de
+\code{refus\_tables} de même table, colonne (celle de l'origine) et motif
+pour un refus de valeur, sa parente non déterminée pour
+\code{parente\_non\_determinee}. Dès qu'une ligne qui porte un refus est
+de visibilité non déterminée, ce refus a, dans \code{refus\_tables}, un
+nombre de lignes visibles et un nombre de dossiers visibles qui valent
+\code{NA}, quel qu'en soit le motif~: la valeur refusée n'est pas lue.
+
 \textbf{Contrôles non exécutés et causes.} La colonne \code{cause} de
 \code{controles\_non\_executes} prend l'une des valeurs suivantes~:
 
@@ -1667,8 +1818,9 @@ fermée, \code{COMPOSANTES\_ENJEU}~: huit composantes, dix couples
   D10h, la lettre~g n'étant attribuée à aucun sous-cas), liste fermée\fsp;
 \item \code{refus\_induit}~: table refusée parce qu'une de ses clés
   étrangères vise une table refusée, ou, à un arrêté antérieur à
-  l'extraction, parce qu'une règle~P n'a pas pu s'exécuter sur une table
-  que lit la vue\fsp;
+  l'extraction, parce qu'une règle~P a été empêchée par un défaut de forme
+  d'une colonne qu'elle lit, sur une table que lit la vue (jamais par un
+  refus de valeur)\fsp;
 \item \code{non\_implemente}~: contrôle prévu par la spécification et
   reporté (ci-dessous)\fsp;
 \item \code{declaration\_absente}~: contrôle qui attend une convention ou un
@@ -1685,7 +1837,27 @@ Une composante de l'enjeu empêchée par un refus y figure aussi, sous le
 code de la composante, avec la table et la colonne lues. Une composante
 dont la visibilité à l'arrêté n'est pas déterminée n'y figure pas~: sa
 cause, \code{visibilite\_non\_determinee}, se lit dans l'élément
-\code{enjeu}. Une clé (code, table, colonne) présente à la fois dans
+\code{enjeu}. Une ligne de visibilité non déterminée par un refus de
+valeur est un porteur de visibilité non déterminée~: à un arrêté
+antérieur à l'extraction, chaque composante dont elle est le porteur, ou
+dont elle entre dans la valeur, vaut \code{NA} avec cette cause (M201).
+\textbf{À l'arrêté égal à l'extraction} (décision du mainteneur du
+9~novembre~2026), aucune visibilité n'est à établir~: une composante qui
+ne lit une colonne de visibilité que pour la visibilité n'est pas
+empêchée par un refus de valeur de cette colonne, et la ligne refusée est
+chiffrée telle quelle. Une composante qui lit aussi la colonne comme
+valeur reste empêchée tout entière, cause égale au motif du refus (M169).
+La liste fermée de ces colonnes lues comme valeur est la constante interne
+\code{.LUS\_VALEUR\_ENJEU}, réduite à \code{evenements.date\_saisie}, que
+les composantes~2 à~4 lisent pour départager les derniers événements
+connus\fsp; les autres colonnes de visibilité (\code{dossiers.date\_ouverture},
+\code{rentes.date\_saisie}, \code{prestations.date\_saisie},
+\code{prestations.date\_reglement}, \code{cotisations.date\_mouvement}) ne
+servent qu'à la visibilité, et la composante~8 lit
+\code{evenements.date\_saisie} pour la visibilité seule. Motif (jugement
+d'expert)~: ne pas lire une colonne qui ne sert qu'à la visibilité aligne
+l'enjeu sur les règles~V, alors que le départage lit la valeur refusée,
+ce que le dictionnaire de la base interdit (§~1.10). Une clé (code, table, colonne) présente à la fois dans
 \code{controles} et dans \code{controles\_non\_executes} est une détection
 partielle, dont le nombre est un minorant.
 
