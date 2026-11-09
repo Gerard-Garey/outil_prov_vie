@@ -1147,7 +1147,12 @@ une autre (comparaison faite sur les noms décodés~: \code{a} et
 \code{\textbackslash x61} sont le même nom), un jeton qui n'est pas de son type, une date inexistante, une
 séquence d'échappement inconnue ou l'octet nul échappé. Un en-tête
 \code{provie-liste} d'une autre version est refusé par le motif
-\code{version\_discordante}. Enfin, la liste relue est réécrite, et la
+\code{version\_discordante}. La liste est ensuite reconstruite niveau par
+niveau~: les chemins sont regroupés selon leur premier nom, dans l'ordre de
+première apparition, et chaque groupe est construit de la même façon au
+niveau suivant. Le travail est ainsi proportionnel au nombre de feuilles
+multiplié par la profondeur, là où une insertion feuille par feuille
+recopierait le nœud parent à chaque feuille (issue~25 du dépôt). Enfin, la liste relue est réécrite, et la
 lecture est refusée si la réécriture diffère, ne serait-ce que d'un octet,
 du texte reçu (\code{1.50} au lieu de \code{1.5}, par exemple)~: seul le
 texte canonique est accepté, par décision du mainteneur du
