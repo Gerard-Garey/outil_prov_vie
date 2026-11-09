@@ -461,6 +461,22 @@ verifier("bornes écrites dans le domaine (mois, jour valide avec le mois) ; con
          nrow(refus(r, "hors_domaine", "contrats", "mois_echeance")) == 1L &&
            refus(r, "hors_domaine", "contrats", "jour_echeance")$identifiants == "CT2" &&
            nrow(refus(r, "manquant_obligatoire", "assures", "date_situation_familiale")) == 1L)
+# Revue finale, M1 : mois_echeance sans aucune valeur dans 1:12 (vecteur logique NA) ; le
+# maximum du jour se lit par match(), une valeur par ligne : ni ligne fantôme (n = 1, diviseur
+# de 12) ni avertissement de recyclage (n = 5, erreur sous warn = 2).
+for (n in c(1L, 5L)) {
+  r <- cb(avec(function(b) {
+    b$contrats <- b$contrats[rep_len(1L, n), , drop = FALSE]
+    b$contrats$id_contrat <- paste0("CT", c(1L, seq_len(n - 1L) + 2L))
+    rownames(b$contrats) <- NULL
+    b$contrats$mois_echeance <- NA_integer_
+    b$contrats$jour_echeance[1L] <- 0L
+    b
+  }))
+  x <- refus(r, "hors_domaine", "contrats", "jour_echeance")
+  verifier(paste0("jour_echeance hors domaine, mois_echeance tous manquants, ", n, " contrat(s) : une ligne, CT1"),
+           nrow(x) == 1L && x$nombre == 1L && x$identifiants == "CT1")
+}
 r <- cb(avec(function(b) { b$famille$situation <- "a_naitre"; b$evenements$montant[1L] <- 10; b$evenements$motif[2L] <- "age_limite"
                            b$evenements$motif[3L] <- "fin_etudes"; b$prestations$debut_periode[2L] <- as.Date("2025-01-01"); b }))
 verifier("naissance renseignée d'un enfant à naître ; montant hors type ; motif hors du type ; période d'un capital",
