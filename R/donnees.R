@@ -594,13 +594,13 @@ controler_base <- function(donnees, arrete, declarations = NULL, conventions = N
 # de forme rendent une colonne inutilisable ; après la règle B (règles P et V, vue), tout
 # refus R aussi (.refus_regle_b()) : une table refusée n'est plus lue, une colonne refusée
 # non plus (spécification, § 2.2 et § 4.2). `forme_seule` : écarts de forme seulement
-# (identifiants du bilan). `directe` : le refus induit d'une règle P empêchée (D12,
-# `tables_d12`) ne masque pas la cause propre de la colonne (refus ou forme), rendue seule
-# (NA sans elle).
+# (identifiants du bilan). `directe` : un refus induit (règle B, clé étrangère visant une
+# table refusée ; règle P empêchée, D12, `tables_d12`) ne masque pas la cause propre de la
+# colonne (refus ou forme), rendue seule (NA sans elle) ; priorité des causes, M185.
 .cause <- function(ctx, table, colonne, forme_seule = FALSE, directe = FALSE) {
   if (!forme_seule && !is.null(ctx$refus_pv)) {
     t <- ctx$refus_pv$tables[[table]]
-    if (!is.null(t) && !(directe && table %in% ctx$tables_d12)) return(t)
+    if (!is.null(t) && !(directe && (t == "refus_induit" || table %in% ctx$tables_d12))) return(t)
     c1 <- ctx$refus_pv$colonnes[[table]]
     if (!is.null(c1) && colonne %in% names(c1)) return(c1[[colonne]])
   }
@@ -626,9 +626,9 @@ controler_base <- function(donnees, arrete, declarations = NULL, conventions = N
 # « table.colonne », la colonne contrôlée comprise) est inutilisable, la règle va dans
 # controles_non_executes avec le motif du refus ; sinon `f()` rend un vecteur logique d'une
 # valeur par ligne de `table` (NA : non détecté) et les lignes vraies forment un constat.
-# Une cause directe (forme ou refus d'une colonne lue) prime sur le refus induit d'une
-# règle P empêchée (D12) : ce refus_induit n'est la cause que d'une règle autrement
-# exécutable (avis d'`actuary`, point 4). `colonne_ne` : colonne de la ligne non exécutée
+# Une cause directe (forme ou refus d'une colonne lue) prime sur tout refus induit (règle B
+# ou règle P empêchée, D12) : ce refus_induit n'est la cause que d'une règle autrement
+# exécutable (avis d'`actuary`, point 4 ; M185). `colonne_ne` : colonne de la ligne non exécutée
 # (NA pour un sous-cas qui ne doit pas se confondre avec la règle écrite sur la colonne,
 # ADR 0010, huitième série, (b)). Rend les numéros des lignes détectées (aucun pour une
 # table absente ; NULL si la règle n'est pas exécutée).
@@ -3005,13 +3005,18 @@ controler_base <- function(donnees, arrete, declarations = NULL, conventions = N
     ajouter(porteur, NA_integer_, "non_rattache", NA, composante, unite, NA_real_, cz[["cause"]], cz[["table"]],
             cz[["colonne"]])
   }
+  # première colonne lue empêchée ; une cause directe (forme, refus) d'une colonne prime sur
+  # le refus induit d'une autre (priorité des causes, M185)
   cause_de <- function(lus) {
+    induite <- NULL
     for (tc in lus) {
       m <- strsplit(tc, ".", fixed = TRUE)[[1L]]
       cz <- .cause_enjeu(ctx, m[1L], m[2L], ecart)
-      if (!is.na(cz)) return(c(table = m[1L], colonne = m[2L], cause = cz))
+      if (is.na(cz)) next
+      if (cz != "refus_induit") return(c(table = m[1L], colonne = m[2L], cause = cz))
+      if (is.null(induite)) induite <- c(table = m[1L], colonne = m[2L], cause = cz)
     }
-    NULL
+    induite
   }
   familles <- character(0)
   familles_cause <- character(0)
@@ -3431,6 +3436,13 @@ controler_base <- function(donnees, arrete, declarations = NULL, conventions = N
   })
 }
 
+# Causes de controles_non_executes qui ne sont ni une cause directe (forme ou refus d'une
+# colonne lue) ni un refus induit (priorité des causes, M185, .bilan()). À tenir à jour :
+# toute nouvelle cause qui n'est pas un motif de refus (code de controles.csv ou de
+# defauts.csv, ou sous-cas lettré d'un code de defauts.csv) s'ajoute ici, sinon .bilan() la
+# prendrait pour une cause directe (test d'exhaustivité, tests/unitaires/donnees.R).
+.CAUSES_NON_DIRECTES <- c(CAUSE_NON_IMPLEMENTE, "declaration_absente", CAUSE_NON_LISIBLE, .CAUSE_AGE_NON_DEFINI,
+                          .CAUSE_PARAMETRE_NON_DEFINI, .CAUSE_VISIBILITE)
 .bilan <- function(ctx) {
   dico <- ctx$dico
   constats <- .fusionner_constats(ctx)
@@ -3462,7 +3474,17 @@ controler_base <- function(donnees, arrete, declarations = NULL, conventions = N
   # règle empêchée reste toujours ici, même si une autre règle de même clé a détecté : la
   # clé présente aussi dans controles est une détection partielle, dont le nombre est un
   # minorant (ADR 0010, huitième série, (e))
+  # Une cause directe (forme, refus) prime sur un refus_induit de même clé (M185) : une clé
+  # dont la première cause est refus_induit prend la première cause directe qui la suit ; la
+  # place des autres causes (non_implemente, declaration_absente...) est inchangée.
   cle_ne <- paste(non_executes$code, non_executes$table, non_executes$colonne, sep = "\r")
+  directe <- !(non_executes$cause %in% c("refus_induit", .CAUSES_NON_DIRECTES))
+  premiere <- match(cle_ne, cle_ne)
+  induite <- non_executes$cause[premiere] == "refus_induit"
+  cle_d <- cle_ne[directe]
+  remplace <- match(cle_ne, cle_d)
+  i <- which(!duplicated(cle_ne) & induite & !is.na(remplace))
+  non_executes$cause[i] <- non_executes$cause[directe][remplace[i]]
   non_executes <- non_executes[!duplicated(cle_ne), , drop = FALSE]
 
   controles <- controles[ordre, , drop = FALSE]
