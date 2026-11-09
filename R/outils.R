@@ -424,10 +424,8 @@ lire_liste <- function(octets) {
     refuser("lire_liste() : chemins dupliqu\u00e9s ou feuille plac\u00e9e sous une autre feuille",
             "liste_invalide", module = "outils")
   }
-  resultat <- list()
-  for (i in seq_along(champs)) {
-    resultat <- .inserer(resultat, noms_chemins[[i]], .lire_feuille(champs[[i]], chemins[i]))
-  }
+  feuilles <- lapply(seq_along(champs), function(i) .lire_feuille(champs[[i]], chemins[i]))
+  resultat <- if (length(feuilles) == 0L) list() else .assembler(noms_chemins, feuilles, 1L)
   # lecture stricte : tout texte non canonique est refuse (1.50, \xe9 pour un caractere
   # imprimable, ordre ou entrelacement des chemins...) ; on a donc toujours
   # ecrire_liste(lire_liste(octets)) == octets
@@ -438,15 +436,28 @@ lire_liste <- function(octets) {
   resultat
 }
 
-.inserer <- function(noeud, noms, valeur) {
-  nom <- noms[1L]
-  if (length(noms) == 1L) {
-    noeud[nom] <- list(valeur)
-    return(noeud)
+# Assemble un niveau en une fois : les chemins (noms décodés) se regroupent par segment de
+# rang `niveau`, dans l'ordre de première apparition, puis chaque groupe se construit
+# récursivement. Temps proportionnel à (nombre de feuilles x profondeur) ; l'insertion
+# feuille par feuille recopiait le noeud parent à chaque appel (temps quadratique, #25).
+# Les contrôles amont garantissent qu'un segment désigne soit une feuille unique, soit un
+# noeud ; l'ordre d'apparition et l'entrelacement non canoniques sont refusés par la
+# réécriture de lire_liste().
+.assembler <- function(noms, feuilles, niveau) {
+  segments <- vapply(noms, function(s) s[niveau], "", USE.NAMES = FALSE)
+  ordre <- unique(segments)
+  groupes <- split(seq_along(noms), factor(segments, levels = ordre))
+  res <- vector("list", length(ordre))
+  for (k in seq_along(ordre)) {
+    indices <- groupes[[k]]
+    res[k] <- list(if (length(noms[[indices[1L]]]) == niveau) {
+      feuilles[[indices[1L]]]
+    } else {
+      .assembler(noms[indices], feuilles[indices], niveau + 1L)
+    })
   }
-  enfant <- if (nom %in% names(noeud)) noeud[[nom]] else list()
-  noeud[nom] <- list(.inserer(enfant, noms[-1L], valeur))
-  noeud
+  names(res) <- ordre
+  res
 }
 
 .lire_feuille <- function(f, chemin) {
