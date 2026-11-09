@@ -4,6 +4,14 @@
 # altération par cas, qui déclenche un code de contrôle ou un défaut.
 
 ns <- asNamespace("provie")
+# Causes de controles_non_executes rendues par tous les appels de controler_base() du fichier,
+# relues par le test d'exhaustivité de .CAUSES_NON_DIRECTES (M185, fin du fichier).
+causes_vues <- character(0)
+controler_base <- function(...) {
+  r <- provie::controler_base(...)
+  causes_vues <<- union(causes_vues, r$controles_non_executes$cause)
+  r
+}
 refus_de <- function(expr) tryCatch({ expr; NULL }, refus_provie = function(e) e)
 motif_de <- function(expr) tryCatch({ expr; "aucun" }, refus_provie = function(e) e$motif,
                                     error = function(e) "autre")
@@ -1704,6 +1712,24 @@ verifier_egal("D12 : une règle V empêchée par une cause directe (contrats.dat
                    ligne(r$controles_non_executes, "D03g", "contrats", "date_saisie_fin")$cause,
                    refus(r, "refus_induit", "contrats")$origine),
               list("type_incompatible", "type_incompatible", "refus_induit", "contrats.date_effet"))
+# M185 : la cause directe prime sur tout refus induit, celui de la règle B compris
+# (clé étrangère visant une table refusée) ; ordre : non_implemente, cause directe, refus_induit
+r <- cb(avec(function(b) { b$adherents$autre <- 1; b$contrats$date_terme <- as.character(b$contrats$date_terme); b }))
+verifier_egal("M185, règle B : contrats refusée par refus_induit (adherents refusée) et contrats.date_terme refusée pour son type : D02a garde la cause directe ; D02a sur date_fin (refus induit seul) garde refus_induit",
+              list(refus(r, "refus_induit", "contrats")$origine,
+                   ligne(r$controles_non_executes, "D02a", "contrats", "date_terme")$cause,
+                   ligne(r$controles_non_executes, "D02a", "contrats", "date_fin")$cause),
+              list("adherents", "type_incompatible", "refus_induit"))
+r <- cb(avec(function(b) { b$sinistres$autre <- 1; b }))
+verifier_egal("M185, règle B, deux règles de même clé : D02b sur evenements.date_saisie, empêchée par le refus induit de evenements (date d'effet) et par le refus direct de sinistres (lien de la fille), garde la cause directe",
+              list(refus(r, "refus_induit", "evenements")$origine,
+                   ligne(r$controles_non_executes, "D02b", "evenements", "date_saisie")$cause),
+              list("sinistres;dossiers;rentes", "colonne_inconnue"))
+r <- cb(avec(function(b) { b$adherents$autre <- 1; b$evenements$date_saisie <- as.character(b$evenements$date_saisie); b }))
+x <- r$enjeu[r$enjeu$composante == "montant_evenement", ]
+verifier_egal("M185, enjeu : montant_evenement lit evenements.montant (refus induit) puis evenements.date_saisie (type incompatible) : la composante porte la cause directe",
+              list(unique(x$cause), with(ligne(r$controles_non_executes, "montant_evenement", "evenements"), paste(colonne, cause))),
+              list("type_incompatible", "date_saisie type_incompatible"))
 # point 5 d'actuary : D10 (a) sur dossiers.id_garantie_souscrite, garantie non rattachée
 q5 <- avec(function(b) { b$evenements <- b$evenements[-c(1L, 3L), ]; b$sinistres$nature_sinistre[2L] <- "deces"; b })
 r <- cb(q5)
@@ -1726,3 +1752,13 @@ verifier_egal("enjeu : evenements.id_rente de type incompatible (refus de colonn
 # lignes de composantes dans controles_non_executes, ne recoupent aucun code de contrôle ni de défaut
 verifier_egal("disjonction : composantes d'enjeu et codes de controles.csv et defauts.csv",
               intersect(unique(ns$COMPOSANTES_ENJEU$composante), c(d$controles$code, d$defauts$code)), character(0))
+# M185 : toute cause de controles_non_executes qui n'est pas un motif de refus (code de
+# controles.csv ou de defauts.csv, ou sous-cas lettré d'un code de defauts.csv : D10a, D10h ;
+# cause directe, ou refus_induit) figure dans .CAUSES_NON_DIRECTES, sur l'ensemble des appels
+# de controler_base() du fichier, qui couvrent les cinq causes non directes émises par le moteur
+motif_refus <- causes_vues %in% c(d$controles$code, d$defauts$code) | sub("[a-z]$", "", causes_vues) %in% d$defauts$code
+verifier_egal("M185 : causes de controles_non_executes hors motifs de refus toutes dans .CAUSES_NON_DIRECTES (appels du fichier, cinq causes couvertes)",
+              list(setdiff(causes_vues[!motif_refus], ns$.CAUSES_NON_DIRECTES),
+                   setdiff(c("non_implemente", "declaration_absente", "non_lisible", "age_non_defini", "parametre_non_defini"),
+                           causes_vues)),
+              list(character(0), character(0)))
