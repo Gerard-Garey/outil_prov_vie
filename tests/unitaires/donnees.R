@@ -571,10 +571,14 @@ r <- cb(avec(function(b) { b$parametres$age_min[5L] <- 17L; b }))
 verifier("paliers d'un même paramètre qui se chevauchent : chevauchement de parametres", refus(r, "chevauchement", "parametres")$nombre == 2L)
 # #35 : .chevauchements, comparée à une énumération des paires sur des intervalles tirés
 # (groupes, bornes manquantes, fin infinie, intervalles renversés, bornes égales : intervalle
-# fermé) ; puis croissance de controler_base avec le nombre de garanties portant 3 paramètres
-# (chacune sous un collège propre : un groupe par garantie), durée de 2 000 à 8 000 garanties
-# multipliée par moins de 10 (borne large : seule une croissance quadratique, facteur 16
-# attendu, la franchit).
+# fermé) ; puis complexité, mesurée sans horloge (une durée dépend de la charge de la
+# machine) : (1) travail de .chevauchements, somme des longueurs des arguments de ses appels
+# aux opérations vectorielles de base (comparaisons, indexation, which, match, order...),
+# de 2 000 à 8 000 groupes de 3 intervalles : rapport 4 si linéaire, 16 pour la boucle par
+# groupe de 5c53ad4 (mesuré : 4,00 et 15,9) ; borne 6 ; (2) controler_base, sur 200 puis
+# 800 garanties de 3 paramètres chacune (chacune sous un collège propre : un groupe par
+# garantie), appelle .chevauchements le même nombre de fois, une fois par table sur toutes
+# ses lignes (aucune boucle par garantie autour du contrôle).
 chev_paires <- function(groupe, debut, fin) {
   n <- length(groupe)
   ok <- !is.na(groupe) & !is.na(debut) & !is.na(fin) & debut <= fin
@@ -589,6 +593,31 @@ ecarts_chev <- vapply(1:300, function(k) {
   !identical(ns$.chevauchements(g, d, f), chev_paires(g, d, f))
 }, TRUE)
 verifier("chevauchements : identique à l'énumération des paires sur 300 tirages (groupes, manquants, fin infinie, renversés)", !any(ecarts_chev))
+# travail de f(...) : les opérations de base qu'appelle f sont remplacées, dans une copie de
+# f, par des enveloppes qui cumulent la longueur de leurs arguments (`&&`, paresseux, n'est
+# pas enveloppé)
+travail_de <- function(f, ...) {
+  travail <- 0
+  env <- new.env(parent = environment(f))
+  for (nom in c("which", "match", "unique", "order", "rep", "c", "seq_along", "seq_len", "==", "!=", "<=", ">=",
+                "<", ">", "&", "|", "!", "is.na", "[", "[<-", "length")) {
+    local({
+      g <- get(nom, envir = baseenv())
+      assign(nom, function(...) {
+        travail <<- travail + sum(lengths(list(...)))
+        g(...)
+      }, envir = env)
+    })
+  }
+  environment(f) <- env
+  f(...)
+  travail
+}
+groupes_chev <- function(n) list(groupe = rep(sprintf("G%06d", seq_len(n)), each = 3L), debut = rep(c(0, 5, 20), n),
+                                 fin = rep(c(10, 15, 30), n))
+travail_chev <- vapply(c(2000L, 8000L), function(n) do.call(travail_de, c(list(ns$.chevauchements), groupes_chev(n))), 0)
+verifier("performance : travail de .chevauchements de 2 000 à 8 000 groupes de 3 intervalles multiplié par moins de 6 (linéaire : 4 ; boucle par groupe : 16 ; #35)",
+         travail_chev[2L] / travail_chev[1L] < 6)
 perf_garanties <- function(n) {
   b <- base_ref
   gs <- b$garanties_souscrites[rep(3L, n), ]
@@ -598,12 +627,18 @@ perf_garanties <- function(n) {
   b$garanties_souscrites <- rbind(b$garanties_souscrites, gs); b$parametres <- rbind(b$parametres, pa)
   b
 }
-duree_garanties <- function(n) {
-  b <- perf_garanties(n)
-  min(vapply(1:2, function(i) system.time(cb(b))[["elapsed"]], 0))
+# longueurs des appels de .chevauchements par controler_base (trace(), comme regles_tracees())
+appels_chev <- function(b) {
+  .GlobalEnv$.appels_chev <- integer(0)
+  suppressMessages(trace(".chevauchements", where = ns, print = FALSE, tracer = quote(
+    .GlobalEnv$.appels_chev <- c(.GlobalEnv$.appels_chev, length(groupe)))))
+  on.exit({ suppressMessages(untrace(".chevauchements", where = ns)); rm(".appels_chev", envir = .GlobalEnv) })
+  cb(b)
+  .GlobalEnv$.appels_chev
 }
-verifier("performance : 2 000 à 8 000 garanties de 3 paramètres chacune, durée de controler_base multipliée par moins de 10 (#35)",
-         duree_garanties(8000L) / max(duree_garanties(2000L), 0.01) < 10)
+verifier_egal("performance : controler_base appelle .chevauchements une fois par table (garanties_souscrites, parametres) sur toutes ses lignes, à 200 comme à 800 garanties (#35)",
+              lapply(c(200L, 800L), function(n) appels_chev(perf_garanties(n))),
+              list(c(4L + 200L, 8L + 3L * 200L), c(4L + 800L, 8L + 3L * 800L)))
 
 section("donnees : traitement des codes de contrôle, portée effective, partition, tri, invariance")
 verifier("règle provisoire : un code de portée ligne est un signalement (S), tout autre un refus (R)",
