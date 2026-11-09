@@ -214,9 +214,10 @@ CONVENTIONS_LIMITE_AGE <- c("revolu", "millesime")
 #     COMPOSANTES_ENJEU) ;
 #   vue : date d'arrêté et d'extraction, lignes de visibilité non déterminée (table,
 #     colonne : NA pour la ligne entière, sinon partie de ligne ; motif, dont
-#     parente_non_determinee ; nombre, identifiants) et `provisoire` (vrai s'il y en a, ou si
-#     une règle P n'a pas pu s'exécuter sur une table lue par la vue : comptes de la règle
-#     V provisoires) ;
+#     parente_non_determinee et le code d'un refus de valeur sur une colonne lue par la vue ;
+#     origine : « table.colonne » de la valeur refusée, NA sinon ; nombre, identifiants) et
+#     `provisoire` (vrai s'il y en a, ou si une règle P n'a pas pu s'exécuter sur une table
+#     lue par la vue : comptes de la règle V provisoires) ;
 #   segments : vide en Bd (segmentations déclarées en B2) ;
 #   tables_absentes : tables facultatives absentes.
 # Chaque data.frame est trié par ordre des tables du dictionnaire, puis des colonnes (NA en
@@ -610,6 +611,24 @@ controler_base <- function(donnees, arrete, declarations = NULL, conventions = N
   if (is.null(causes) || !(colonne %in% names(causes))) NA_character_ else causes[[colonne]]
 }
 
+# Refus de valeur de `table.colonne` (M199 ; spécification, § 2.2) : refus R de portée
+# colonne identifiés par ligne (manquant_obligatoire, hors_domaine, chaine_vide, D02c date
+# hors bornes, tout refus R de portée colonne autre qu'un écart de forme), après la règle B,
+# sur une table non refusée en portée table et une colonne lisible par sa forme (un défaut de
+# forme garde la portée table, M178). `.refus_valeur_de()` rend la liste (code, lignes) de ces
+# refus, dans l'ordre des constats, NULL sans refus de valeur ; `.lignes_refusees()` l'union
+# de leurs lignes, NULL sans refus de valeur.
+.CODES_FORME <- c("colonne_absente", "colonne_inconnue", "type_incompatible")
+.refus_valeur_de <- function(ctx, table, colonne) {
+  if (is.null(ctx$refus_pv) || !is.null(ctx$refus_pv$tables[[table]])) return(NULL)
+  if (!is.na(.cause(ctx, table, colonne, forme_seule = TRUE))) return(NULL)
+  ctx$refus_valeur[[table]][[colonne]]
+}
+.lignes_refusees <- function(ctx, table, colonne) {
+  r <- .refus_valeur_de(ctx, table, colonne)
+  if (is.null(r)) NULL else sort(unique(unlist(lapply(r, `[[`, "lignes"))))
+}
+
 .ajouter_constat <- function(ctx, code, table, colonne, lignes, traitement, detection,
                              portee = NA_character_, origine = NA_character_) {
   ctx$constats[[length(ctx$constats) + 1L]] <- list(
@@ -634,20 +653,67 @@ controler_base <- function(donnees, arrete, declarations = NULL, conventions = N
 # (NA pour un sous-cas qui ne doit pas se confondre avec la règle écrite sur la colonne,
 # ADR 0010, huitième série, (b)). Rend les numéros des lignes détectées (aucun pour une
 # table absente ; NULL si la règle n'est pas exécutée).
-.regle <- function(ctx, code, table, colonne, lit, traitement, detection, f, colonne_ne = colonne) {
+# Refus de valeur (refus R de portée colonne identifié par ligne, .lignes_refusees() ; M199,
+# M200, issue #33). `vue` : colonnes lues pour établir la vue seulement (règle V) ; leur refus
+# de valeur ne bloque pas la règle et n'en est pas une cause, les lignes refusées étant hors de
+# la vue (visibilité non déterminée) ; une colonne aussi lue comme valeur (`lit`, colonne
+# contrôlée) bloque toujours (M169). `partiel` (règle P) : `f()` rend un verdict à trois
+# valeurs, une valeur refusée étant inconnue (logique de Kleene, .avant3()) ; la règle
+# s'exécute sur les lignes au verdict déterminé et écarte celles au verdict inconnu (NA) ; si
+# elle en écarte une, elle garde sa ligne dans controles_non_executes, cause = motif du
+# premier refus de valeur qui touche une ligne écartée, dans l'ordre des colonnes lues
+# (détection partielle, nombre minorant). Toute autre cause (forme, refus de portée table) bloque la
+# règle ; la cause rendue est alors la première dans l'ordre des colonnes lues, hors colonnes
+# dont le refus de valeur ne bloque pas (`vue` seule ; toute colonne lue en mode `partiel`).
+.regle <- function(ctx, code, table, colonne, lit, traitement, detection, f, colonne_ne = colonne,
+                   partiel = FALSE, vue = character(0)) {
   if (is.null(ctx$base[[table]])) return(invisible(integer(0)))
-  lit <- unique(c(if (!is.na(colonne)) paste(table, colonne, sep = "."), lit))
-  for (directe in c(TRUE, FALSE)) {
-    for (tc in lit) {
-      morceaux <- strsplit(tc, ".", fixed = TRUE)[[1L]]
-      cause <- .cause(ctx, morceaux[1L], morceaux[2L], directe = directe)
-      if (!is.na(cause)) {
-        .ajouter_non_execute(ctx, code, table, colonne_ne, cause, lu = tc)
-        return(invisible(NULL))
+  valeur <- unique(c(if (!is.na(colonne)) paste(table, colonne, sep = "."), lit))
+  lit <- unique(c(valeur, vue))
+  morceaux <- strsplit(lit, ".", fixed = TRUE)
+  # lignes refusées pour leur valeur, par colonne lue dont le refus de valeur ne bloque pas
+  admet <- if (partiel) lit else setdiff(vue, valeur)
+  refusees <- list()
+  for (i in which(lit %in% admet)) {
+    l <- .lignes_refusees(ctx, morceaux[[i]][1L], morceaux[[i]][2L])
+    if (!is.null(l)) refusees[[lit[i]]] <- l
+  }
+  # une colonne refusée pour sa valeur n'est jamais la cause d'une règle bloquée : le défaut
+  # de forme ou le refus de portée table l'emporte (spécification, § 2.2, cas limite 3)
+  saute <- names(refusees)
+  bloquee <- any(vapply(seq_along(lit), function(i) {
+    !(lit[i] %in% names(refusees)) && !is.na(.cause(ctx, morceaux[[i]][1L], morceaux[[i]][2L]))
+  }, NA))
+  if (bloquee) {
+    for (directe in c(TRUE, FALSE)) {
+      for (i in seq_along(lit)) {
+        if (lit[i] %in% saute) next
+        cause <- .cause(ctx, morceaux[[i]][1L], morceaux[[i]][2L], directe = directe)
+        if (!is.na(cause)) {
+          .ajouter_non_execute(ctx, code, table, colonne_ne, cause, lu = lit[i])
+          return(invisible(NULL))
+        }
       }
     }
   }
-  lignes <- which(f())
+  detecte <- f()
+  if (partiel && length(refusees) > 0L) {
+    # verdict à trois valeurs (.avant3(), .manque3()) : seules les lignes au verdict inconnu
+    # (NA) sont écartées ; la ligne de controles_non_executes n'existe que s'il y en a une,
+    # cause = motif du premier refus de valeur, dans l'ordre des colonnes lues, qui explique
+    # une ligne écartée : colonne de la table refusée sur l'une d'elles, sinon colonne d'une
+    # autre table (date de la parente d'une fille, lue après les colonnes de la table). Un
+    # verdict inconnu procède toujours d'une valeur refusée d'une colonne lue (.inconnu()).
+    ecartees <- which(is.na(detecte))
+    if (length(ecartees) > 0L) {
+      propres <- names(refusees)[startsWith(names(refusees), paste0(table, "."))]
+      explique <- vapply(propres, function(x) length(intersect(refusees[[x]], ecartees)) > 0L, NA)
+      tc <- c(propres[explique], setdiff(names(refusees), propres))[1L]
+      m <- strsplit(tc, ".", fixed = TRUE)[[1L]]
+      .ajouter_non_execute(ctx, code, table, colonne_ne, .cause(ctx, m[1L], m[2L]), lu = tc)
+    }
+  }
+  lignes <- which(detecte)
   if (length(lignes) > 0L) .ajouter_constat(ctx, code, table, colonne, lignes, traitement, detection)
   invisible(lignes)
 }
@@ -1245,12 +1311,14 @@ controler_base <- function(donnees, arrete, declarations = NULL, conventions = N
 # Refus R de la règle B, retenus pour les règles P et V et la vue (.cause()) : une table
 # refusée (portée table : clé, D01a, D04b R, refus induit...) n'est pas lue, une colonne
 # refusée (portée colonne) non plus ; la cause est le motif du premier refus, dans l'ordre
-# des constats.
+# des constats. `refus_valeur` : refus de portée colonne hors écart de forme, avec leurs
+# lignes, par table et colonne (.refus_valeur_de() ; portée ligne pour la vue, M199).
 .refus_regle_b <- function(ctx) {
   tables <- list()
   colonnes <- list()
   directs <- list()
   origines <- list()
+  valeurs <- list()
   for (k in ctx$constats) {
     if (k$traitement != "R") next
     if (.portee_effective(ctx$dico, k$code, k$table, k$colonne) == "table") {
@@ -1262,8 +1330,15 @@ controler_base <- function(donnees, arrete, declarations = NULL, conventions = N
       c1 <- colonnes[[k$table]]
       if (is.null(c1[[k$colonne]])) c1[[k$colonne]] <- k$code
       colonnes[[k$table]] <- c1
+      # refus de valeur, identifié par ligne (hors écart de forme, .refus_valeur_de())
+      if (!(k$code %in% .CODES_FORME)) {
+        v1 <- valeurs[[k$table]]
+        v1[[k$colonne]] <- c(v1[[k$colonne]], list(list(code = k$code, lignes = k$lignes)))
+        valeurs[[k$table]] <- v1
+      }
     }
   }
+  ctx$refus_valeur <- valeurs
   # `directs` : refus de portée table autres qu'un refus induit (code, colonne), dans l'ordre
   # des constats ; `racines` : tables refusées directement dont procède le refus induit d'une
   # table (lecture de l'enjeu, D7)
@@ -1285,12 +1360,21 @@ controler_base <- function(donnees, arrete, declarations = NULL, conventions = N
 # composante n'étant sans valeur que pour un identifiant dont les lignes en double divergent
 # sur une colonne qu'elle lit, .divergences_d01a()) ; un refus induit ne l'empêche pas quand
 # il procède seulement du refus de l'écart (la table de l'écart ne porte aucun autre refus
-# direct) : la cascade est chiffrée.
-.cause_enjeu <- function(ctx, table, colonne, ecart) {
+# direct) : la cascade est chiffrée. Le refus de valeur d'une colonne de visibilité
+# (.DATES_VISIBILITE, lue par les composantes pour la visibilité) n'empêche pas la lecture :
+# à un arrêté antérieur à l'extraction, ses lignes sont de visibilité non déterminée et chaque
+# porteur qu'elles touchent est sans valeur, cause visibilite_non_determinee (M201 ;
+# spécification, § 4.2) ; à l'extraction, la vue est la base entière (règle 3) et la colonne
+# n'est pas lue, comme par les règles V (décision du mainteneur du 9 novembre 2026, Q2, #33).
+# `valeur` : la composante lit aussi la colonne comme valeur (.LUS_VALEUR_ENJEU) ; à
+# l'extraction, où la ligne refusée est lue, le refus l'empêche alors (M169).
+.cause_enjeu <- function(ctx, table, colonne, ecart, valeur = FALSE) {
   forme <- .cause(ctx, table, colonne, forme_seule = TRUE)
   if (!is.na(forme)) return(forme)
   c1 <- ctx$refus_pv$colonnes[[table]]
-  if (!is.null(c1) && colonne %in% names(c1)) return(c1[[colonne]])
+  visibilite <- colonne %in% .DATES_VISIBILITE[[table]] && !is.null(.lignes_refusees(ctx, table, colonne)) &&
+    !(valeur && .vue_totale(ctx))
+  if (!is.null(c1) && colonne %in% names(c1) && !visibilite) return(c1[[colonne]])
   propre <- !is.null(ecart) && identical(ecart$action, "refus") && !is.na(ecart$table) &&
     .portee_effective(ctx$dico, ecart$motif, ecart$table, ecart$colonne) == "table"
   d <- ctx$refus_pv$directs[[table]]
@@ -1349,9 +1433,11 @@ controler_base <- function(donnees, arrete, declarations = NULL, conventions = N
 .vue_totale <- function(ctx) as.numeric(ctx$arrete) == as.numeric(ctx$date_extraction)
 
 # Règle P et visibilité propre, jusqu'au point fixe des refus qu'elle induit (décision du
-# mainteneur, D12) : à un arrêté antérieur à l'extraction, une règle P empêchée sur une table
-# lue par la vue (colonne lue refusée ou illisible : .regle()) rend la visibilité de toutes
-# ses lignes inconnue ; la table reçoit un refus induit de portée table (`refus_induit`,
+# mainteneur, D12 ; M178, restreinte au défaut de forme par M199) : à un arrêté antérieur à
+# l'extraction, une règle P empêchée sur une table lue par la vue (colonne lue illisible par
+# sa forme, ou table refusée : .regle() ; un refus de valeur ne l'empêche pas, elle s'exécute
+# alors sur les lignes lisibles) rend la visibilité de toutes ses lignes inconnue ; la table
+# reçoit un refus induit de portée table (`refus_induit`,
 # origine : la colonne « table.colonne » qui empêche la règle), propagé à ses filles par
 # les clés étrangères comme les refus induits de la règle B (origine : la table visée).
 # Les règles P sont alors rejouées sur la base des refus complétés (les constats et
@@ -1431,8 +1517,14 @@ controler_base <- function(donnees, arrete, declarations = NULL, conventions = N
     dates <- .DATES_VISIBILITE[[table]]
     if (!totale) {
       for (colonne in dates) {
-        x <- if (is.na(.cause(ctx, table, colonne))) as.numeric(.valeurs(ctx, table, colonne)) else rep(NA_real_, n)
-        vis <- vis & !is.na(x) & x <= a
+        refusees <- .lignes_refusees(ctx, table, colonne)
+        x <- if (is.na(.cause(ctx, table, colonne)) || !is.null(refusees)) as.numeric(.valeurs(ctx, table, colonne))
+             else rep(NA_real_, n)
+        ok <- !is.na(x) & x <= a
+        # valeur refusée : non lue ; la visibilité se tranche sur les autres dates
+        # (.refus_vue(), .construire_vue())
+        ok[refusees] <- TRUE
+        vis <- vis & ok
       }
       ctx$lit_propre[[table]] <- if (length(dates)) paste(table, dates, sep = ".") else character(0)
     }
@@ -1456,6 +1548,65 @@ controler_base <- function(donnees, arrete, declarations = NULL, conventions = N
   as.numeric(date_parente)[o][match(cle, cle_parente[o], incomparables = NA)]
 }
 
+# Logique à trois valeurs de la règle P (logique de Kleene ; spécification, § 2.2, (b) et
+# (c) ; principe de M187 ; avis d'`actuary`, #33) : une valeur refusée pour sa valeur
+# (.lignes_refusees()) est inconnue, sa présence comprise. Le verdict d'une règle P sur une
+# ligne vaut TRUE, FALSE ou NA (inconnu) ; seule une ligne au verdict inconnu est écartée de
+# la détection (.regle(), `partiel`). `.inconnu()` : lignes de `table` dont la valeur de
+# `colonne` est inconnue ; `.date_connue()` : la date en nombre, NA si absente ou inconnue.
+.inconnu <- function(ctx, table, colonne) seq_len(nrow(ctx$base[[table]])) %in% .lignes_refusees(ctx, table, colonne)
+.date_connue <- function(ctx, table, colonne) {
+  # colonne illisible par sa forme : la table est refusée en portée table et n'est pas lue
+  # (défensif : .refus_vue() évalue le verdict avant de filtrer par table)
+  if (!is.na(.cause(ctx, table, colonne, forme_seule = TRUE))) return(rep(NA_real_, nrow(ctx$base[[table]])))
+  x <- as.numeric(.valeurs(ctx, table, colonne))
+  x[.inconnu(ctx, table, colonne)] <- NA_real_
+  x
+}
+# x < y (D02b) : FALSE si l'une des dates est connue absente ; NA si l'une est inconnue et
+# l'autre présente ou inconnue (`ix`, `iy` : inconnues).
+.avant3 <- function(x, ix, y, iy) {
+  r <- !is.na(x) & !is.na(y) & x < y
+  r[ix | iy] <- NA
+  r[(ix & !iy & is.na(y)) | (iy & !ix & is.na(x))] <- FALSE
+  r
+}
+# Valeur manquante (D03g) : NA si la valeur est inconnue.
+.manque3 <- function(ctx, table, colonne) {
+  r <- is.na(.valeurs(ctx, table, colonne))
+  r[.inconnu(ctx, table, colonne)] <- NA
+  r
+}
+# Type d'événement programmable (.programmable()) : NA si le type est inconnu, ou si sa
+# programmation dépend du motif (`oui:<motifs>`) et que le motif est inconnu.
+.programmable3 <- function(ctx) {
+  te <- ctx$dico$types_evenements
+  prog <- te$programmable[match(.valeurs(ctx, "evenements", "type_evenement"), te$type_evenement)]
+  r <- .programmable(ctx)
+  r[!is.na(prog) & startsWith(prog, "oui:") & .inconnu(ctx, "evenements", "motif")] <- NA
+  r[.inconnu(ctx, "evenements", "type_evenement")] <- NA
+  r
+}
+# Verdict de D02b sur evenements : type non programmable et saisie antérieure à la date
+# d'effet (.regle_prealable(), .refus_vue()).
+.d02b_evenements3 <- function(ctx) {
+  !.programmable3(ctx) & .avant3(.date_connue(ctx, "evenements", "date_saisie"), .inconnu(ctx, "evenements", "date_saisie"),
+                                 .date_connue(ctx, "evenements", "date_effet"), .inconnu(ctx, "evenements", "date_effet"))
+}
+# Verdict de D02b sur une fille saisie avant sa parente : date de la fille `x` (inconnue :
+# `ix`) face à la date de sa parente (.date_parente()), inconnue si la ligne parente de même
+# clé a une date inconnue (`inconnue_parente`). Seule famille a des clés de parente non
+# uniques (versions), et sa date de saisie, colonne de clé, n'est jamais refusée pour sa
+# valeur.
+.avant_parente3 <- function(x, ix, cle, cle_parente, date_parente, inconnue_parente) {
+  .avant3(x, ix, .date_parente(cle, cle_parente, date_parente), !is.na(cle) & cle %in% cle_parente[inconnue_parente])
+}
+# Hypothèse de D02b déclarée pour chaque référentiel (la vue est commune aux deux).
+.h_d02b <- function(ctx) {
+  hyp <- ctx$declarations$hypotheses
+  all(REFERENTIELS %in% hyp$referentiel[hyp$motif == "D02b"])
+}
+
 # Règle P (spécification, § 2.2) : D02b et D03g, détectés sur la base entière après la
 # règle B. À l'arrêté égal à l'extraction, ils sont des signalements (S, règle I) ; à un
 # arrêté antérieur, D02b attend son hypothèse (H) et D03g son hypothèse ou son exclusion
@@ -1465,7 +1616,9 @@ controler_base <- function(donnees, arrete, declarations = NULL, conventions = N
 # ou fin d'un contrat saisie avant son effet), la ligne reste dans la vue, la partie est
 # masquée (.valeurs_vue()) et recensée sous sa colonne (décision du mainteneur, D1). Une
 # règle P non exécutée à un arrêté antérieur sur une table lue par la vue (non refusée en
-# portée table) rend la vue provisoire (`p_non_executee`). Une hypothèse de D02b déclarée
+# portée table) rend la vue provisoire (`p_non_executee`) ; un refus de valeur sur une
+# colonne lue ne l'empêche pas : elle s'exécute sur les autres lignes (M200, `regle_p`), les
+# lignes refusées étant de visibilité non déterminée (.refus_vue()). Une hypothèse de D02b déclarée
 # pour chaque référentiel est appliquée : la ligne entre dans la vue à sa date de visibilité
 # (max de la saisie, de la date d'effet et de la visibilité de la parente). Le délai et
 # l'exclusion de D03g sont appliqués quand ils sont complets (.application_d03g() ; D5) :
@@ -1479,8 +1632,7 @@ controler_base <- function(donnees, arrete, declarations = NULL, conventions = N
   v <- function(table, colonne) .valeurs(ctx, table, colonne)
   # hypothèse de D02b déclarée pour chaque référentiel (la vue est commune aux deux) : date de
   # visibilité = max(date de saisie, date d'effet, visibilité de la parente), dictionnaire, § 9
-  hyp <- ctx$declarations$hypotheses
-  h_d02b <- all(REFERENTIELS %in% hyp$referentiel[hyp$motif == "D02b"])
+  h_d02b <- .h_d02b(ctx)
   # `partie` : colonne de la partie de ligne indéterminée, NA pour la ligne entière ; `date_h` :
   # date d'effet que l'hypothèse de D02b ajoute à la visibilité propre (NULL : la règle 1 du
   # § 6 suffit, pour une fille ou pour la fin d'un contrat, visible avec son contrat)
@@ -1527,33 +1679,39 @@ controler_base <- function(donnees, arrete, declarations = NULL, conventions = N
     }
     nd(table, partie, motif, lignes)
   }
-  nd <- function(table, partie, motif, lignes) {
+  # `origine` : « table.colonne » de la valeur refusée pour un motif de refus (M202), NA sinon
+  nd <- function(table, partie, motif, lignes, origine = NA_character_) {
     if (is.na(partie)) ctx$non_determine[[table]][lignes] <- TRUE else ctx$partie_nd[[table]][lignes] <- TRUE
-    ctx$lignes_nd[[length(ctx$lignes_nd) + 1L]] <- list(table = table, colonne = partie, motif = motif, lignes = lignes)
+    ctx$lignes_nd[[length(ctx$lignes_nd) + 1L]] <- list(table = table, colonne = partie, motif = motif, lignes = lignes,
+                                                        origine = origine)
     invisible(NULL)
   }
+  # règle P exécutée sur les lignes dont aucune valeur lue n'est refusée (M200, .regle())
+  regle_p <- function(...) .regle(..., partiel = TRUE)
   ctx$lignes_nd <- list()
   ctx$p_non_executee <- FALSE
   ctx$p_empechees <- list()
   ctx$p_entrees <- list()
   ctx$h_g <- list()
-  avant <- function(x, y) { x <- as.numeric(x); y <- as.numeric(y); !is.na(x) & !is.na(y) & x < y }
+  # verdicts à trois valeurs (.avant3()) : une valeur refusée est inconnue
+  avant <- function(t1, c1, t2, c2) .avant3(.date_connue(ctx, t1, c1), .inconnu(ctx, t1, c1),
+                                             .date_connue(ctx, t2, c2), .inconnu(ctx, t2, c2))
 
   # D02b : saisie antérieure au fait que la ligne enregistre
-  marquer("evenements", "D02b", .regle(ctx, "D02b", "evenements", "date_saisie",
+  marquer("evenements", "D02b", regle_p(ctx, "D02b", "evenements", "date_saisie",
     c("evenements.date_effet", "evenements.type_evenement", "evenements.motif"), t_b, "exacte",
-    function() avant(v("evenements", "date_saisie"), v("evenements", "date_effet")) & !.programmable(ctx)),
+    function() .d02b_evenements3(ctx)),
     date_h = "date_effet")
-  marquer("sinistres", "D02b", .regle(ctx, "D02b", "sinistres", "date_saisie", "sinistres.date_declaration",
-    t_b, "exacte", function() avant(v("sinistres", "date_saisie"), v("sinistres", "date_declaration"))),
+  marquer("sinistres", "D02b", regle_p(ctx, "D02b", "sinistres", "date_saisie", "sinistres.date_declaration",
+    t_b, "exacte", function() avant("sinistres", "date_saisie", "sinistres", "date_declaration")),
     date_h = "date_declaration")
-  marquer("catastrophes", "D02b", .regle(ctx, "D02b", "catastrophes", "date_saisie", "catastrophes.date_evenement",
-    t_b, "exacte", function() avant(v("catastrophes", "date_saisie"), v("catastrophes", "date_evenement"))),
+  marquer("catastrophes", "D02b", regle_p(ctx, "D02b", "catastrophes", "date_saisie", "catastrophes.date_evenement",
+    t_b, "exacte", function() avant("catastrophes", "date_saisie", "catastrophes", "date_evenement")),
     date_h = "date_evenement")
   # fin d'un contrat saisie avant que le contrat soit visible (partie de ligne saisie avant
   # sa ligne)
-  marquer("contrats", "D02b", .regle(ctx, "D02b", "contrats", "date_saisie_fin", "contrats.date_effet",
-    t_b, "exacte", function() avant(v("contrats", "date_saisie_fin"), v("contrats", "date_effet"))), "date_saisie_fin")
+  marquer("contrats", "D02b", regle_p(ctx, "D02b", "contrats", "date_saisie_fin", "contrats.date_effet",
+    t_b, "exacte", function() avant("contrats", "date_saisie_fin", "contrats", "date_effet")), "date_saisie_fin")
   # D02b : ligne fille saisie avant sa parente (règle 1 du § 6)
   filles <- list(
     list("famille", "date_saisie", "id_sinistre", "sinistres", "id_sinistre", "date_saisie"),
@@ -1569,20 +1727,21 @@ controler_base <- function(donnees, arrete, declarations = NULL, conventions = N
     list("victimes", "date_saisie", "id_sinistre", "sinistres", "id_sinistre", "date_saisie"))
   for (f in filles) {
     if (!(f[[4L]] %in% ctx$tables)) next
-    marquer(f[[1L]], "D02b", .regle(ctx, "D02b", f[[1L]], f[[2L]],
+    marquer(f[[1L]], "D02b", regle_p(ctx, "D02b", f[[1L]], f[[2L]],
       c(paste(f[[1L]], f[[3L]], sep = "."), paste(f[[4L]], c(f[[5L]], f[[6L]]), sep = ".")), t_b, "exacte",
-      function() avant(v(f[[1L]], f[[2L]]), .date_parente(v(f[[1L]], f[[3L]]), v(f[[4L]], f[[5L]]), v(f[[4L]], f[[6L]])))))
+      function() .avant_parente3(.date_connue(ctx, f[[1L]], f[[2L]]), .inconnu(ctx, f[[1L]], f[[2L]]), v(f[[1L]], f[[3L]]),
+                                 v(f[[4L]], f[[5L]]), .date_connue(ctx, f[[4L]], f[[6L]]), .inconnu(ctx, f[[4L]], f[[6L]]))))
   }
   # D03g : date de saisie manquante (fin d'un contrat ou d'une affiliation : sous sa condition)
   for (table in c("affiliations", "famille", "sinistres", "beneficiaires", "rentes", "evenements", "prestations",
                   "designations", "ayants_droit_sante")) {
-    marquer(table, "D03g", .regle(ctx, "D03g", table, "date_saisie", character(0), t_g, "exacte",
-                                  function() is.na(v(table, "date_saisie"))))
+    marquer(table, "D03g", regle_p(ctx, "D03g", table, "date_saisie", character(0), t_g, "exacte",
+                                  function() .manque3(ctx, table, "date_saisie")))
   }
   # partie de ligne : l'hypothèse seule la résout (D9) ; traitement H à un arrêté antérieur
   for (table in c("contrats", "affiliations")) {
-    marquer(table, "D03g", .regle(ctx, "D03g", table, "date_saisie_fin", paste0(table, ".date_fin"), t_b, "exacte",
-      function() is.na(v(table, "date_saisie_fin")) & !is.na(v(table, "date_fin"))), "date_saisie_fin")
+    marquer(table, "D03g", regle_p(ctx, "D03g", table, "date_saisie_fin", paste0(table, ".date_fin"), t_b, "exacte",
+      function() .manque3(ctx, table, "date_saisie_fin") & !.manque3(ctx, table, "date_fin")), "date_saisie_fin")
   }
   .appliquer_h_d03g(ctx, nd)
   invisible(NULL)
@@ -1608,7 +1767,13 @@ controler_base <- function(donnees, arrete, declarations = NULL, conventions = N
   liens <- .liens_visibilite(ctx$dico)
   liens <- liens[liens$table %in% ctx$tables & liens$table_cible %in% ctx$tables, , drop = FALSE]
   lisible <- function(t, c1) is.na(.cause(ctx, t, c1, forme_seule = TRUE))
-  lire <- function(t, c1) if (lisible(t, c1)) as.numeric(.valeurs(ctx, t, c1)) else rep(NA_real_, nrow(ctx$base[[t]]))
+  # une valeur refusée n'est pas lue (M199) : inconnue
+  lire <- function(t, c1) {
+    if (!lisible(t, c1)) return(rep(NA_real_, nrow(ctx$base[[t]])))
+    x <- as.numeric(.valeurs(ctx, t, c1))
+    x[.lignes_refusees(ctx, t, c1)] <- NA_real_
+    x
+  }
   delai <- ctx$declarations$seuils[[.SEUIL_DELAI_D03G]]
   tables <- setdiff(ctx$tables, "extraction")
   # date de saisie retenue (NA hors hypothèse) ; dates propres de visibilité de chaque ligne
@@ -1673,12 +1838,25 @@ controler_base <- function(donnees, arrete, declarations = NULL, conventions = N
         ctx$parente_g[[t]] <- sort(unique(c(ctx$parente_g[[t]], h$lignes[par_parente])))
       }
       reste <- h$lignes[is.na(g) & !par_parente]
+      # date d'effet refusée pour sa valeur : la ligne reste non déterminée sous le motif du
+      # refus (spécification, § 2.2, cas limite 2), toujours attendue en exclusion
+      if (!is.null(effet[[t]])) {
+        for (r in .refus_valeur_de(ctx, t, effet[[t]])) {
+          l <- intersect(reste, r$lignes)
+          if (length(l) > 0L) nd(t, NA_character_, r$code, l, paste(t, effet[[t]], sep = "."))
+        }
+        refus_e <- reste %in% .lignes_refusees(ctx, t, effet[[t]])
+        if (any(refus_e)) ctx$reste_g[[t]] <- sort(unique(c(ctx$reste_g[[t]], reste[refus_e])))
+        reste <- reste[!refus_e]
+      }
       ok <- h$lignes[!is.na(g)]
-      # visibilité propre recalculée avec la date de saisie retenue
+      # visibilité propre recalculée avec la date de saisie retenue ; une autre date de
+      # visibilité refusée pour sa valeur ne tranche pas (.refus_vue())
       vis <- rep(TRUE, length(ok))
       for (c1 in .DATES_VISIBILITE[[t]]) {
         d <- if (c1 == "date_saisie") ctx$date_g[[t]][ok] else lire(t, c1)[ok]
-        vis <- vis & !is.na(d) & d <= a
+        refusee <- c1 != "date_saisie" & ok %in% .lignes_refusees(ctx, t, c1)
+        vis <- vis & (refusee | (!is.na(d) & d <= a))
       }
       ctx$propre[[t]][ok] <- vis
       ctx$lit_propre[[t]] <- unique(c(ctx$lit_propre[[t]], unlist(lapply(effet[t], function(e) paste(t, e, sep = ".")))))
@@ -1705,16 +1883,40 @@ controler_base <- function(donnees, arrete, declarations = NULL, conventions = N
 # s'ils sont référencés par une ligne retenue. À l'arrêté égal à l'extraction, la vue est
 # la base entière (règle 3), famille réduite à ses lignes valables. Les filles écartées par
 # la règle 1 d'une ligne de visibilité non déterminée sont recensées sous le motif
-# `parente_non_determinee` (décision du mainteneur, D1). `lit_vue` : colonnes lues pour
-# établir la vue d'une table (visibilité de la table et de ses ascendantes, clés des liens ;
-# famille : id_membre et date_saisie, à tout arrêté).
+# `parente_non_determinee` (décision du mainteneur, D1). Une ligne dont une colonne lue par la
+# vue est refusée pour sa valeur est de visibilité non déterminée, sous le code du refus et son
+# origine, sauf si une autre date lisible (de la ligne ou de ses ascendantes) la rend
+# invisible ; pour une partie de ligne, seule la partie l'est, la ligne restant dans la vue
+# (M199, M202 ; .refus_vue()). `lit_vue` : colonnes lues pour établir la vue d'une table
+# (visibilité de la table et de ses ascendantes, clés des liens ; famille : id_membre et
+# date_saisie, à tout arrêté).
 .construire_vue <- function(ctx) {
   totale <- .vue_totale(ctx)
   liens <- .liens_visibilite(ctx$dico)
   liens <- liens[liens$table %in% ctx$tables & liens$table_cible %in% ctx$tables, , drop = FALSE]
   tables <- setdiff(ctx$tables, "extraction")
-  depart <- lapply(tables, function(t) ctx$propre[[t]] & !ctx$non_determine[[t]])
+  refus <- if (totale) list() else .refus_vue(ctx)
+  # lignes entières refusées sur une colonne lue par la vue, visibles par leurs autres dates
+  candidates <- lapply(stats::setNames(tables, tables), function(t) rep(FALSE, length(ctx$propre[[t]])))
+  for (k in refus) {
+    if (is.na(k$colonne)) candidates[[k$table]][k$lignes[ctx$propre[[k$table]][k$lignes]]] <- TRUE
+  }
+  depart <- lapply(tables, function(t) ctx$propre[[t]] & !ctx$non_determine[[t]] & !candidates[[t]])
   names(depart) <- tables
+  if (any(unlist(candidates))) {
+    # une parente invisible de façon déterminée rend la candidate invisible (règle 1) ; une
+    # parente de visibilité non déterminée la laisse candidate
+    vis_c <- .propager_vue(ctx, liens, lapply(stats::setNames(tables, tables), function(t) depart[[t]] | candidates[[t]]),
+                           totale, ctx$non_determine)
+    for (k in refus) {
+      if (!is.na(k$colonne)) next
+      l <- k$lignes[candidates[[k$table]][k$lignes] & vis_c[[k$table]][k$lignes]]
+      if (length(l) == 0L) next
+      ctx$non_determine[[k$table]][l] <- TRUE
+      ctx$lignes_nd[[length(ctx$lignes_nd) + 1L]] <- list(table = k$table, colonne = NA_character_, motif = k$motif,
+                                                          lignes = l, origine = k$origine)
+    }
+  }
   retenu <- .propager_vue(ctx, liens, depart, totale)
   if (!totale) {
     # lignes que la règle 1 n'écarte qu'à cause d'une parente de visibilité non déterminée
@@ -1723,10 +1925,13 @@ controler_base <- function(donnees, arrete, declarations = NULL, conventions = N
       lignes <- which(sans_nd[[t]] & !retenu[[t]])
       if (length(lignes) > 0L) {
         ctx$lignes_nd[[length(ctx$lignes_nd) + 1L]] <- list(table = t, colonne = NA_character_,
-                                                            motif = "parente_non_determinee", lignes = lignes)
+                                                            motif = "parente_non_determinee", lignes = lignes,
+                                                            origine = NA_character_)
       }
     }
   }
+  # famille.date_saisie est une colonne de clé (id_membre, date_saisie) : son refus est de
+  # portée table (dict. § 1.10), jamais un refus de valeur
   if ("famille" %in% ctx$tables && is.na(.cause(ctx, "famille", "date_saisie")) &&
       is.na(.cause(ctx, "famille", "id_membre"))) {
     membre <- as.character(.valeurs(ctx, "famille", "id_membre"))
@@ -1749,6 +1954,16 @@ controler_base <- function(donnees, arrete, declarations = NULL, conventions = N
     retenu[[t]] <- retenu[[t]] & cle %in% cites[!is.na(cites)]
   }
   ctx$retenu <- retenu
+  # partie de ligne refusée sur une colonne lue par la vue, d'une ligne retenue : partie
+  # masquée (.valeurs_vue()) et recensée sous sa colonne
+  for (k in refus) {
+    if (is.na(k$colonne)) next
+    l <- k$lignes[retenu[[k$table]][k$lignes]]
+    if (length(l) == 0L) next
+    ctx$partie_nd[[k$table]][l] <- TRUE
+    ctx$lignes_nd[[length(ctx$lignes_nd) + 1L]] <- list(table = k$table, colonne = k$colonne, motif = k$motif,
+                                                        lignes = l, origine = k$origine)
+  }
   # colonnes lues pour établir la vue de chaque table : sa visibilité et celle de ses
   # ascendantes par les liens, et les clés de ces liens
   ctx$lit_vue <- list()
@@ -1769,6 +1984,74 @@ controler_base <- function(donnees, arrete, declarations = NULL, conventions = N
     ctx$lit_vue[[t]] <- unique(lus)
   }
   invisible(NULL)
+}
+
+# Colonnes lues par la vue, hors clés (M199 ; spécification, § 2.2, frontière) : colonnes de
+# visibilité de la ligne entière (.DATES_VISIBILITE) et colonnes que lit D02b, hors clés
+# (`.COLONNES_D02B`) ; pour une partie de ligne (.PARTIES_LIGNE), sa date et la date de fin
+# que lit D03g (`.COLONNES_PARTIE_D03G`). Les colonnes de la parente que lit une règle P sont
+# des colonnes de visibilité de la parente : leur refus passe à la fille par la règle 1.
+.COLONNES_D02B <- list(evenements = c("date_effet", "type_evenement", "motif"), sinistres = "date_declaration",
+                       catastrophes = "date_evenement")
+.COLONNES_PARTIE_D03G <- list(contrats = "date_fin", affiliations = "date_fin")
+
+# Refus de valeur sur une colonne lue par la vue, à un arrêté antérieur à l'extraction
+# (.construire_vue()) : une entrée par refus (table, colonne : NA pour la ligne entière, sinon
+# colonne de la partie de ligne ; motif : code du refus ; origine : « table.colonne » ;
+# lignes), dans l'ordre des tables du dictionnaire, des colonnes lues et des constats. Une
+# ligne n'y entre que si la valeur refusée peut changer sa visibilité à l'arrêté
+# (spécification, § 2.2, (c) ; visa d'`actuary`, Q5, #33) :
+# - date de visibilité (.DATES_VISIBILITE), date de saisie de la partie de ligne,
+#   sinistres.date_declaration, catastrophes.date_evenement : toute ligne refusée ;
+# - evenements.type_evenement, motif, date_effet (lues par D02b) : ligne dont le verdict de
+#   D02b est inconnu (logique de Kleene, .d02b_evenements3() ; une ligne au verdict
+#   déterminé est détectée ou non par la règle P elle-même) ; sous l'hypothèse de D02b
+#   déclarée, en plus, effet postérieur à l'arrêté ou inconnu (la visibilité est max(saisie,
+#   effet)) ; motif : en plus, type inconnu ou programmable selon le motif (`oui:<motifs>`) ;
+# - date_fin de contrats et d'affiliations (lue par D03g sur la partie de ligne) : ligne dont
+#   la date de saisie de la fin manque ou est inconnue (sinon la fin est connue à cette date).
+# Logique à trois valeurs (principe de M187) : la ligne qu'une autre date lisible rend
+# invisible l'est de façon déterminée (.construire_vue()).
+.refus_vue <- function(ctx) {
+  a <- as.numeric(ctx$arrete)
+  res <- list()
+  ajouter <- function(table, colonne, colonne_lue, lignes_admises = NULL) {
+    for (r in .refus_valeur_de(ctx, table, colonne_lue)) {
+      l <- if (is.null(lignes_admises)) r$lignes else intersect(r$lignes, lignes_admises)
+      if (length(l) > 0L) res[[length(res) + 1L]] <<- list(table = table, colonne = colonne, motif = r$code,
+                                                           lignes = l, origine = paste(table, colonne_lue, sep = "."))
+    }
+  }
+  admises <- list()
+  if ("evenements" %in% ctx$tables) {
+    # verdict de D02b inconnu (.d02b_evenements3()) ; sous l'hypothèse de D02b déclarée, la
+    # visibilité est max(saisie, effet) : elle n'en dépend que si l'effet est postérieur à
+    # l'arrêté ou inconnu
+    effet <- .date_connue(ctx, "evenements", "date_effet")
+    # sur les lignes refusées retenues, le verdict n'est jamais vrai : is.na() y équivaut à
+    # !(... %in% FALSE)
+    inconnu <- is.na(.d02b_evenements3(ctx))
+    if (.h_d02b(ctx)) inconnu <- inconnu & (is.na(effet) | effet > a)
+    # le motif ne joue que si le type est inconnu ou programmable selon le motif (`oui:<motifs>`)
+    te <- ctx$dico$types_evenements
+    prog <- te$programmable[match(.valeurs(ctx, "evenements", "type_evenement"), te$type_evenement)]
+    motif_joue <- .inconnu(ctx, "evenements", "type_evenement") | (!is.na(prog) & startsWith(prog, "oui:"))
+    admises$evenements <- list(type_evenement = which(inconnu), motif = which(inconnu & motif_joue),
+                               date_effet = which(inconnu))
+  }
+  for (t in setdiff(ctx$tables, "extraction")) {
+    for (c1 in unique(c(.DATES_VISIBILITE[[t]], .COLONNES_D02B[[t]]))) {
+      ajouter(t, NA_character_, c1, if (c1 %in% .DATES_VISIBILITE[[t]]) NULL else admises[[t]][[c1]])
+    }
+    for (p in .PARTIES_LIGNE) {
+      if (p$table != t) next
+      ajouter(t, p$date, p$date)
+      # date_fin refusée : verdict de D03g inconnu si la date de saisie de la fin manque ou
+      # est elle-même inconnue (.manque3())
+      for (c1 in .COLONNES_PARTIE_D03G[[t]]) ajouter(t, p$date, c1, which(!(.manque3(ctx, t, p$date) %in% FALSE)))
+    }
+  }
+  res
 }
 
 # Règle 1 du § 6, jusqu'au point fixe : une fille n'est retenue que si sa parente existante
@@ -1801,7 +2084,8 @@ controler_base <- function(donnees, arrete, declarations = NULL, conventions = N
 
 # Valeurs d'une colonne dans la vue : manquantes pour une ligne non retenue et pour une
 # partie de ligne inconnue à l'arrêté (fin d'un contrat ou d'une affiliation saisie après,
-# ou de saisie non déterminée ; instruction postérieure) ; une jointure sur ces valeurs ne
+# ou de saisie non déterminée ; instruction postérieure ; partie dont une colonne lue par la
+# vue est refusée pour sa valeur) ; une jointure sur ces valeurs ne
 # voit donc que la vue.
 .valeurs_vue <- function(ctx, table, colonne) {
   x <- .valeurs(ctx, table, colonne)
@@ -1814,7 +2098,8 @@ controler_base <- function(donnees, arrete, declarations = NULL, conventions = N
         # fin connue à la date que retient l'hypothèse déclarée de D03g
         dh <- ctx$partie_h[[table]]
         if (!is.null(dh) && p$date == "date_saisie_fin") d <- ifelse(is.na(dh), d, dh)
-        masque <- masque | is.na(d) | d > a | (p$date == "date_saisie_fin" & ctx$partie_nd[[table]])
+        # partie de visibilité non déterminée (règle P, ou refus de valeur, .refus_vue())
+        masque <- masque | is.na(d) | d > a | ctx$partie_nd[[table]]
       }
     }
   }
@@ -1823,32 +2108,44 @@ controler_base <- function(donnees, arrete, declarations = NULL, conventions = N
 }
 
 # Règle de la règle V : comme .regle(), sur les seules lignes retenues par la vue ; une
-# table refusée, ou une colonne inutilisable lue pour établir la vue, empêche la règle
-# (cause : son motif).
-.regle_vue <- function(ctx, code, table, colonne, lit, traitement, detection, f, colonne_ne = colonne) {
+# table refusée, ou une colonne illisible par sa forme lue pour établir la vue, empêche la
+# règle (cause : son motif). `vue` : colonnes d'autres tables lues pour établir leur vue,
+# qui s'ajoutent à celles de la table (`lit_vue`) : un refus de valeur sur l'une d'elles ne
+# bloque pas la règle, ses lignes étant hors de la vue (M200 ; .regle()).
+.regle_vue <- function(ctx, code, table, colonne, lit, traitement, detection, f, colonne_ne = colonne,
+                       vue = character(0)) {
   if (is.null(ctx$base[[table]])) return(invisible(integer(0)))
   cle <- paste(table, .eclater_champ(ctx$dico$tables$cle_primaire[ctx$dico$tables$table == table])[1L], sep = ".")
-  .regle(ctx, code, table, colonne, c(lit, cle, ctx$lit_vue[[table]]), traitement, detection, function() {
+  # à l'arrêté égal à l'extraction, aucune ligne n'est non déterminée (spécification, § 2.2,
+  # (g)) : les colonnes lues pour la vue (famille : version valable) sont lues comme valeurs
+  totale <- .vue_totale(ctx)
+  .regle(ctx, code, table, colonne, if (totale) c(lit, vue, cle, ctx$lit_vue[[table]]) else c(lit, cle), traitement,
+         detection, function() {
     r <- f()
     !is.na(r) & r & ctx$retenu[[table]]
-  }, colonne_ne)
+  }, colonne_ne, vue = if (totale) character(0) else c(vue, ctx$lit_vue[[table]]))
 }
 
-# Visibilité non déterminée (M156, D1) : une ligne par (table, colonne, motif) ; colonne NA
-# pour la ligne entière, sinon colonne de la partie de ligne ; ordre du dictionnaire (tables,
-# colonnes, NA en tête), puis du motif.
+# Visibilité non déterminée (M156, D1) : une ligne par (table, colonne, motif, origine) ;
+# colonne NA pour la ligne entière, sinon colonne de la partie de ligne ; origine :
+# « table.colonne » de la valeur refusée pour un motif de refus, NA sinon (M202 ; ADR 0010,
+# quatorzième série, (b)) ; ordre du dictionnaire (tables, colonnes, NA en tête), puis du
+# motif, puis de l'origine (NA en dernier).
 .visibilite_non_determinee <- function(ctx) {
   nd <- ctx$lignes_nd
   df <- data.frame(table = vapply(nd, `[[`, "", "table"), colonne = vapply(nd, function(k) k$colonne, ""),
-                   motif = vapply(nd, `[[`, "", "motif"), nombre = integer(length(nd)),
-                   identifiants = character(length(nd)), stringsAsFactors = FALSE)
+                   motif = vapply(nd, `[[`, "", "motif"), origine = vapply(nd, function(k) k$origine, ""),
+                   nombre = integer(length(nd)), identifiants = character(length(nd)), stringsAsFactors = FALSE)
   if (nrow(df) == 0L) return(df)
-  cles <- paste(df$table, df$colonne, df$motif, sep = "\r")
+  cles <- paste(df$table, df$colonne, df$motif, df$origine, sep = "\r")
   groupes <- split(seq_along(nd), factor(cles, levels = unique(cles)))
   df <- df[vapply(groupes, `[`, 0L, 1L), , drop = FALSE]
   lignes <- lapply(groupes, function(g) sort(unique(unlist(lapply(nd[g], `[[`, "lignes")))))
   df$nombre <- vapply(lignes, length, 0L, USE.NAMES = FALSE)
   df$identifiants <- vapply(seq_along(lignes), function(i) .identifiants(ctx, df$table[i], lignes[[i]]), "")
+  # tri par origine d'abord, que le tri stable (radix) de .trier() garde à table, colonne et
+  # motif égaux
+  df <- df[order(df$origine, na.last = TRUE, method = "radix"), , drop = FALSE]
   .trier(df, ctx$dico, "motif")
 }
 
@@ -2055,7 +2352,7 @@ controler_base <- function(donnees, arrete, declarations = NULL, conventions = N
   # `depot_cdc` sans prestation `capital` (prestations visibles à l'arrêté)
   .regle_vue(ctx, "D06", "evenements", "justificatif",
              c("evenements.type_evenement", "evenements.motif", "evenements.id_dossier", "prestations.id_dossier",
-               "prestations.type_prestation", ctx$lit_vue$prestations), "H;S", "exacte", function() {
+               "prestations.type_prestation"), "H;S", "exacte", function() {
     sans_justificatif <- is.na(vv("evenements", "justificatif")) &
       ((type() %in% "sortie" & motif() %in% c("reprise_travail", "deces")) |
          (type() %in% "fin_service" & motif() %in% "deces_beneficiaire"))
@@ -2066,21 +2363,21 @@ controler_base <- function(donnees, arrete, declarations = NULL, conventions = N
       ((motif() %in% "regle" & !(dossier %in% payes[!is.na(payes)])) |
          (motif() %in% "depot_cdc" & !(dossier %in% capital[!is.na(capital)])))
     sans_justificatif | cloture
-  })
+  }, vue = ctx$lit_vue$prestations)
   # D13 : instruction absente (à l'arrêté) d'un sinistre décès dont le dossier `deces` a une
   # prestation `capital` visible
   .regle_vue(ctx, "D13", "sinistres", "date_instruction",
              c("sinistres.nature_sinistre", "sinistres.id_sinistre", "dossiers.id_dossier", "dossiers.id_sinistre",
                "dossiers.id_garantie_souscrite", "garanties_souscrites.id_garantie_souscrite",
-               "garanties_souscrites.code_garantie", "prestations.id_dossier", "prestations.type_prestation",
-               ctx$lit_vue$prestations), "H;S", "exacte", function() {
+               "garanties_souscrites.code_garantie", "prestations.id_dossier", "prestations.type_prestation"),
+             "H;S", "exacte", function() {
     p_dossier <- vv("prestations", "id_dossier")[vv("prestations", "type_prestation") %in% "capital"]
     gs <- .joindre(ctx, "dossiers", "id_dossier", "id_garantie_souscrite", p_dossier)
     code <- .joindre(ctx, "garanties_souscrites", "id_garantie_souscrite", "code_garantie", gs)
     sinistres <- .joindre(ctx, "dossiers", "id_dossier", "id_sinistre", p_dossier[code %in% "deces"])
     vv("sinistres", "nature_sinistre") %in% "deces" & is.na(vv("sinistres", "date_instruction")) &
       .valeurs(ctx, "sinistres", "id_sinistre") %in% sinistres[!is.na(sinistres)]
-  })
+  }, vue = ctx$lit_vue$prestations)
   invisible(NULL)
 }
 
@@ -2106,8 +2403,8 @@ controler_base <- function(donnees, arrete, declarations = NULL, conventions = N
   # et retenue dans la vue
   .regle_vue(ctx, "D10c", "dossiers", NA_character_,
              c(lit_gs, "dossiers.id_sinistre", "sinistres.id_sinistre", "sinistres.date_survenance",
-               paste0("garanties_souscrites.", c("code_garantie", "id_contrat", "college", "date_effet", "date_fin")),
-               ctx$lit_vue$garanties_souscrites), "S", "exacte", function() {
+               paste0("garanties_souscrites.", c("code_garantie", "id_contrat", "college", "date_effet", "date_fin"))),
+             "S", "exacte", function() {
     joindre_gs <- function(colonne, gs) .joindre(ctx, "garanties_souscrites", "id_garantie_souscrite", colonne, gs)
     gs <- vv("dossiers", "id_garantie_souscrite")
     code <- joindre_gs("code_garantie", gs)
@@ -2131,7 +2428,7 @@ controler_base <- function(donnees, arrete, declarations = NULL, conventions = N
     }, NA)
     code %in% c("rente_conjoint", "rente_education", "double_effet") & souscrite &
       !(sinistre %in% avec_deces[!is.na(avec_deces)])
-  })
+  }, vue = ctx$lit_vue$garanties_souscrites)
   invisible(NULL)
 }
 
@@ -2167,11 +2464,11 @@ controler_base <- function(donnees, arrete, declarations = NULL, conventions = N
   propre <- function(t) function() list(p = seq_len(nrow(ctx$base[[t]])), date = vv(t, "date_saisie"))
   emplois <- list(
     assures_sinistre = list(lit = c("assures.id_assure", "sinistres.id_sinistre", "sinistres.id_assure",
-                                    "sinistres.date_survenance", ctx$lit_vue$sinistres),
+                                    "sinistres.date_survenance"), vue = ctx$lit_vue$sinistres,
                             ref = function() list(p = assure_de("sinistres"), date = vv("sinistres", "date_survenance"))),
     assures_affiliation = list(lit = c("assures.id_assure", "affiliations.id_assure", "affiliations.date_debut",
-                                       "contrats.id_assure", "contrats.date_effet", "contrats.nature_contrat",
-                                       ctx$lit_vue$affiliations, ctx$lit_vue$contrats),
+                                       "contrats.id_assure", "contrats.date_effet", "contrats.nature_contrat"),
+                               vue = c(ctx$lit_vue$affiliations, ctx$lit_vue$contrats),
                                ref = function() {
                                  ind <- vv("contrats", "nature_contrat") %in% "individuel"
                                  list(p = c(assure_de("affiliations"), assure_de("contrats")[ind]),
@@ -2218,7 +2515,8 @@ controler_base <- function(donnees, arrete, declarations = NULL, conventions = N
       seq_len(nrow(ctx$base[[t]])) %in% r$p[!is.na(age) & (age < mini | age > maxi)]
     }
     for (traitement in c("S", "X")) {
-      .regle_vue(ctx, "D02c", t, "date_naissance", e$lit, traitement, "exacte", invraisemblable, colonne_ne = NA_character_)
+      .regle_vue(ctx, "D02c", t, "date_naissance", e$lit, traitement, "exacte", invraisemblable, colonne_ne = NA_character_,
+                 vue = e$vue)
     }
   }
   if (sans_convention) .requerir(ctx, "conventions", "D02c", "age", paste(CONVENTIONS_AGE, collapse = ";"))
@@ -2317,8 +2615,9 @@ controler_base <- function(donnees, arrete, declarations = NULL, conventions = N
   lit_commun <- c("dossiers.id_dossier", "dossiers.id_garantie_souscrite", "garanties_souscrites.id_garantie_souscrite",
                   "garanties_souscrites.code_garantie", "garanties_souscrites.prolongation_handicap",
                   "parametres.id_garantie_souscrite", "parametres.parametre", "parametres.valeur", "famille.id_membre",
-                  "famille.lien", "famille.date_naissance", "famille.situation", "famille.date_deces", ev_lus,
-                  ctx$lit_vue$famille, ctx$lit_vue$parametres, ctx$lit_vue$evenements)
+                  "famille.lien", "famille.date_naissance", "famille.situation", "famille.date_deces", ev_lus)
+  # colonnes lues pour établir la vue de famille, parametres et evenements (.regle_vue())
+  vue_commun <- c(ctx$lit_vue$famille, ctx$lit_vue$parametres, ctx$lit_vue$evenements)
   service <- c("ouverture_service", "modification_montant")
   .regle_vue(ctx, "D07", "rentes", NA_character_, c("rentes.id_rente", "rentes.id_dossier", "rentes.id_membre",
                                                     "evenements.id_rente", lit_commun), "H;S", "exacte", function() {
@@ -2334,7 +2633,7 @@ controler_base <- function(donnees, arrete, declarations = NULL, conventions = N
     ok[ok] <- a_charge()[m[ok]]
     if (any(ok)) ok[ok] <- noter("rentes", eteint(m[ok], gs[ok]))
     ok
-  })
+  }, vue = vue_commun)
   # double effet : un dossier clos, ou dont le second décès est retenu à l'arrêté (le droit
   # au capital s'y fixe, avis d'`actuary`, Q3 (b)), n'est pas candidat
   .regle_vue(ctx, "D07", "dossiers", NA_character_, c("dossiers.id_sinistre", "sinistres.id_sinistre",
@@ -2362,7 +2661,7 @@ controler_base <- function(donnees, arrete, declarations = NULL, conventions = N
     bloque <- tabulate(p$i[!x$eteint & !x$non_defini], nd) > 0L
     noter("dossiers", list(eteint = x$eteint, non_defini = x$non_defini & !bloque[p$i]))
     candidat & nb > 0L & nb_eteints == nb
-  })
+  }, vue = vue_commun)
   invisible(NULL)
 }
 
@@ -2422,7 +2721,9 @@ controler_base <- function(donnees, arrete, declarations = NULL, conventions = N
         if (!is.null(g)) d <- ifelse(is.na(g), d, g)
         if (any(g_lignes)) {
           e <- .EFFET_D03G[[t]]
-          d[g_lignes] <- if (is.null(e)) -Inf else if (lisible(t, e)) as.numeric(.valeurs(ctx, t, e))[g_lignes] else NA_real_
+          # date d'effet refusée pour sa valeur : non lue, visibilité non déterminée (M199)
+          de <- if (is.null(e) || !lisible(t, e)) NULL else replace(as.numeric(.valeurs(ctx, t, e)), .lignes_refusees(ctx, t, e), NA_real_)
+          d[g_lignes] <- if (is.null(e)) -Inf else if (!is.null(de)) de[g_lignes] else NA_real_
         }
       }
       v <- v & d <= a
@@ -2432,12 +2733,14 @@ controler_base <- function(donnees, arrete, declarations = NULL, conventions = N
     vis[[t]] <- v
   }
   # lignes de visibilité non déterminée (ligne entière) ; variante : hors D03g et hors filles
-  # recensées (la règle 1 ci-dessous propage les autres causes)
+  # recensées (la règle 1 ci-dessous propage les autres causes) ; une ligne non déterminée par
+  # un refus de valeur (origine renseignée) l'est quelle que soit la valeur refusée, qui n'est
+  # pas lue (M201)
   for (k in ctx$lignes_nd) {
     if (d03g && k$motif %in% c("D03g", "parente_non_determinee")) next
     if (is.na(k$colonne) && !is.null(vis[[k$table]])) {
       x <- vis[[k$table]]
-      x[k$lignes[x[k$lignes] %in% TRUE]] <- NA
+      x[k$lignes[!is.na(k$origine) | x[k$lignes] %in% TRUE]] <- NA
       vis[[k$table]] <- x
     }
   }
@@ -2987,6 +3290,10 @@ controler_base <- function(donnees, arrete, declarations = NULL, conventions = N
 # de visibilité non déterminée.
 .FAMILLE_COUPLE <- c(rep("dossier", 4L), "prestation", "cotisation", "cotisation", rep("evenement", 3L))
 .CAUSE_VISIBILITE <- "visibilite_non_determinee"
+# Colonne de visibilité que les composantes 2 à 4 lisent aussi comme valeur : départage des
+# derniers événements par la date de saisie (spécification, § 4.2, point 3 ; .cause_enjeu() ;
+# paiements_cumules ne la lit pas).
+.LUS_VALEUR_ENJEU <- "evenements.date_saisie"
 # Colonnes lues par la composante portée par une ligne de evenements (montant_evenement),
 # prestations (prestations_ecartees) ou cotisations (composantes 6 et 7).
 .LUS_LIGNE_ENJEU <- list(evenements = c("montant", "type_evenement", "date_saisie", "id_rente", "id_dossier"),
@@ -3016,11 +3323,11 @@ controler_base <- function(donnees, arrete, declarations = NULL, conventions = N
   }
   # première colonne lue empêchée ; une cause directe (forme, refus) d'une colonne prime sur
   # le refus induit d'une autre (priorité des causes, M185)
-  cause_de <- function(lus) {
+  cause_de <- function(lus, valeur = character(0)) {
     induite <- NULL
     for (tc in lus) {
       m <- strsplit(tc, ".", fixed = TRUE)[[1L]]
-      cz <- .cause_enjeu(ctx, m[1L], m[2L], ecart)
+      cz <- .cause_enjeu(ctx, m[1L], m[2L], ecart, tc %in% valeur)
       if (is.na(cz)) next
       if (cz != "refus_induit") return(c(table = m[1L], colonne = m[2L], cause = cz))
       if (is.null(induite)) induite <- c(table = m[1L], colonne = m[2L], cause = cz)
@@ -3075,7 +3382,7 @@ controler_base <- function(donnees, arrete, declarations = NULL, conventions = N
       }
       for (k in 1:4) {
         composante <- COMPOSANTES_ENJEU$composante[k]
-        cz <- cause_de(lus_k[[composante]])
+        cz <- cause_de(lus_k[[composante]], .LUS_VALEUR_ENJEU)
         if (!is.null(cz)) {
           empecher("dossiers", composante, COMPOSANTES_ENJEU$unite[k], cz)
           next
