@@ -1869,6 +1869,87 @@ verifier_egal("#33, M200, règle P partielle : D02b de dossiers, SI1 de date de 
                    ligne(r_c$controles, "D02b", "evenements")$identifiants,
                    ligne(r_c$controles_non_executes, "D02b", "evenements", "date_saisie")$cause),
               list("DO3", "D02c", "EV3", "hors_domaine"))
+# cause de la ligne partielle (spécification, § 2.2, (b) ; revue finale, #33) : le premier
+# refus de valeur qui touche une ligne écartée, non le premier code de la colonne. (a)
+# dossiers.date_ouverture : DO1 hors bornes (D02c, premier constat de la colonne) sous SI1
+# sans date de saisie (connue absente : verdict faux), DO3 manquante (manquant_obligatoire)
+# sous SI2 saisi : seul DO3 est écarté ; (b) evenements.motif : EV3 (sortie, saisi après son
+# effet : verdict faux) vide et hors domaine, EV1 (sortie, saisi avant son effet) hors
+# domaine : seul EV1 est écarté ; (c) date de la parente : DO1 hors bornes (D02c), DO2
+# manquante ; RE1, fille de DO2, est écartée de D02b sur rentes, sous manquant_obligatoire
+r_a <- cb(avec(function(b) { b$sinistres$date_saisie[1L] <- NA; b$dossiers$date_ouverture[1L] <- D("1900-01-01")
+                             b$dossiers$date_ouverture[3L] <- NA; b }), A0)
+r_b <- cb(avec(function(b) { b$evenements$motif[3L] <- ""; b$evenements$type_evenement[1L] <- "sortie"
+                             b$evenements$motif[1L] <- "zzz"; b$evenements$date_effet[1L] <- D("2024-03-10"); b }), A0)
+r_c <- cb(avec(function(b) { b$dossiers$date_ouverture[1L] <- D("1900-01-01"); b$dossiers$date_ouverture[2L] <- NA; b }), A0)
+verifier_egal("#33, cause de la ligne partielle : premier refus de valeur qui touche une ligne écartée (D02b de dossiers : manquant_obligatoire de DO3, non D02c de DO1 au verdict faux ; D02b de evenements : hors_domaine de EV1, non chaine_vide de EV3 au verdict faux ; D02b de rentes, par la parente : manquant_obligatoire de DO2, parente de RE1, non D02c de DO1)",
+              list(paste(r_a$refus_tables$motif[r_a$refus_tables$table == "dossiers"], collapse = ";"),
+                   ligne(r_a$controles_non_executes, "D02b", "dossiers", "date_ouverture")$cause,
+                   ligne(r_b$controles_non_executes, "D02b", "evenements", "date_saisie")$cause,
+                   paste(r_c$refus_tables$motif[r_c$refus_tables$table == "dossiers"], collapse = ";"),
+                   ligne(r_c$controles_non_executes, "D02b", "rentes", "date_saisie")$cause),
+              list("D02c;manquant_obligatoire", "manquant_obligatoire", "hors_domaine", "D02c;manquant_obligatoire",
+                   "manquant_obligatoire"))
+# date de visibilité refusée pour sa valeur et enjeu de D03g (spécification, § 4.2 ; M199,
+# M201) : PR1 sans date de saisie (D03g), date de règlement après l'extraction (D02c) ; la
+# valeur refusée n'est pas lue : visibilité non déterminée pour l'enjeu, prestations_ecartees
+# sans valeur, cause visibilite_non_determinee (avant : 0, la date refusée lue la rendant
+# invisible à A0) ; date de règlement admise (2025-01-05) : 1240 ; le refus D02c a
+# nombre_visibles NA (ligne de visibilité non déterminée ; § 4.4, Q7) et nombre_dossiers 1
+# (dossier rattaché DO3, connu à A0 : .nombre_dossiers_union())
+enjeu_pr1 <- function(dr) {
+  r <- cb(avec(function(b) { b$prestations$date_saisie[1L] <- NA; b$prestations$date_reglement[1L] <- D(dr); b }), A0)
+  e <- r$enjeu[r$enjeu$table %in% "prestations" & r$enjeu$motif == "D03g", , drop = FALSE]
+  list(unique(e$montant), unique(e$nombre_valeurs), unique(e$cause), r)
+}
+e_refuse <- enjeu_pr1("2027-01-05")
+k_refuse <- refus(e_refuse[[4L]], "D02c", "prestations", "date_reglement")
+verifier_egal("#33, M199 : date de règlement refusée (D02c) d'une prestation de D03g, à A0 : enjeu sans valeur, cause visibilite_non_determinee, refus D02c à nombre_visibles NA et nombre_dossiers 1 ; admise : 1240",
+              list(e_refuse[1:3], k_refuse$nombre_visibles, k_refuse$nombre_dossiers, enjeu_pr1("2025-01-05")[1:3]),
+              list(list(NA_real_, NA_integer_, "visibilite_non_determinee"), NA_integer_, 1L,
+                   list(1240, 1L, NA_character_)))
+# cas limite 3 étendu (spécification, § 2.2, cas limite (3), et § 3.1) : sur une table refusée
+# en portée table, le refus de valeur d'une colonne lue seulement par la règle P ou pour la
+# vue n'est pas une cause ; le refus de portée table l'est (refus induit compris) ; une règle
+# qui lit la colonne comme valeur garde la cause directe (M169, M185). sinistres.date_declaration
+# en texte (défaut de forme, refus induit à A0 propagé à dossiers et à ses filles) et
+# dossiers.date_ouverture[1] manquante ; puis dossiers refusée par D01a
+q1_33 <- avec(function(b) { b$sinistres$date_declaration <- as.character(b$sinistres$date_declaration)
+                            b$dossiers$date_ouverture[1L] <- NA; b })
+d01_33 <- avec(function(b) { b$dossiers <- rbind(b$dossiers, transform(b$dossiers[2L, ], id_garantie_souscrite = "GS1"))
+                             b$dossiers$date_ouverture[1L] <- NA; b })
+causes_d02b <- function(r) {
+  ne <- r$controles_non_executes
+  ne <- ne[ne$code == "D02b" & ne$table %in% c("dossiers", "beneficiaires", "rentes", "evenements"), , drop = FALSE]
+  paste(ne$table, ne$cause)
+}
+verifier_egal("#33, cas limite 3 étendu : D02b de dossiers, beneficiaires, rentes, evenements à A0 : refus_induit (table refusée par propagation), non manquant_obligatoire ; à l'extraction : manquant_obligatoire (détection partielle) ; dossiers refusée par D01a : D01a aux deux arrêtés",
+              list(causes_d02b(cb(q1_33, A0)), causes_d02b(cb(q1_33)), causes_d02b(cb(d01_33, A0)), causes_d02b(cb(d01_33))),
+              list(c("dossiers refus_induit", "beneficiaires refus_induit", "rentes refus_induit", "evenements refus_induit"),
+                   c("dossiers manquant_obligatoire", "beneficiaires manquant_obligatoire", "evenements manquant_obligatoire"),
+                   c("dossiers D01a", "beneficiaires D01a", "rentes D01a", "evenements D01a"),
+                   c("dossiers D01a", "beneficiaires D01a", "rentes D01a", "evenements D01a")))
+# règle écrite sur dossiers à A0 (aucune règle V ne lit dossiers.date_ouverture comme valeur :
+# .regle() appelée directement) : colonne lue comme valeur, cause directe ; lue pour la vue
+# seulement (dans la table ou dans la parente), refus de portée table
+ctx <- ctx_complet(q1_33, A0)
+ns$.regle(ctx, "essai", "dossiers", "date_ouverture", character(0), "S", "exacte", function() rep(FALSE, 3L))
+ns$.regle(ctx, "essai", "dossiers", "id_garantie_souscrite", character(0), "S", "exacte", function() rep(FALSE, 3L),
+          vue = "dossiers.date_ouverture")
+ns$.regle(ctx, "essai", "beneficiaires", "part", character(0), "S", "exacte", function() FALSE, vue = "dossiers.date_ouverture")
+verifier_egal("#33, cas limite 3 étendu, règle V sur une table refusée par propagation (dossiers, à A0) : dossiers.date_ouverture lue comme valeur : manquant_obligatoire (M169) ; lue pour la vue seulement : refus_induit",
+              vapply(tail(ctx$non_executes, 3L), `[[`, "", "cause"), c("manquant_obligatoire", "refus_induit", "refus_induit"))
+# garde de .regle() en mode partiel : un verdict inconnu (NA) sans refus de valeur qui
+# l'explique est une erreur interne (une valeur refusée, D02c de SI1, rend la règle partielle ;
+# le verdict NA rendu sur DO3, fille de SI2, n'en procède pas)
+ctx <- ctx_complet(avec(function(b) { b$sinistres$date_saisie[1L] <- D("2027-01-05"); b }), A0)
+garde <- tryCatch({
+  ns$.regle(ctx, "essai", "dossiers", "date_ouverture", c("dossiers.id_sinistre", "sinistres.id_sinistre", "sinistres.date_saisie"),
+            "S", "exacte", function() c(FALSE, FALSE, NA), partiel = TRUE, parente = c("id_sinistre", "sinistres", "id_sinistre"))
+  "aucune erreur"
+}, error = function(e) conditionMessage(e))
+verifier("#33, garde de la règle P partielle : verdict inconnu sans refus de valeur qui l'explique : erreur interne de provie",
+         startsWith(garde, "erreur interne de provie : ") && grepl("sans refus de valeur", garde, fixed = TRUE))
 # logique à trois valeurs par la parente (audit, M4) : DO3, de date d'ouverture manquante, a
 # pour parente SI2, saisi après A0 : invisible de façon déterminée
 r <- cb(avec(function(b) { b$sinistres$date_saisie[2L] <- D("2025-08-01"); b$dossiers$date_ouverture[3L] <- NA; b }), A0)

@@ -394,7 +394,7 @@ controler_base <- function(donnees, arrete, declarations = NULL, conventions = N
 # Sous-schéma `donnees` du plan (ADR 0010, point 17) : NULL (aucune déclaration fournie,
 # M148) ou liste nommée de rubriques connues (RUBRIQUES_DECLARATIONS). Rend la liste, avec
 # `exclusions` et `hypotheses` mises sous forme de data.frame (.table_declarations()).
-# `exclusions` : motif d'un défaut admettant X (code du § 9, ou sous-cas D10a à D10h),
+# `exclusions` : motif d'un défaut admettant X (code du § 9, ou sous-cas D10a à D10f et D10h),
 # famille de FAMILLES_CALCUL, action de ACTIONS_EXCLUSION, une ligne par (motif, famille),
 # hors des couples traités S (.EXCEPTIONS_FAMILLE), D03g en `exclure` seulement ;
 # `hypotheses` : motif d'un défaut admettant H (ou, pour la valeur .VALEUR_SIGNALEMENT, motif
@@ -451,7 +451,7 @@ controler_base <- function(donnees, arrete, declarations = NULL, conventions = N
     .refus_plan("declarations$seuils : d02c_age_min sup\u00e9rieur \u00e0 d02c_age_max pour un emploi")
   }
   ex <- .table_declarations(declarations$exclusions, c("motif", "famille", "action"), "exclusions")
-  # un motif D10 se déclare par sous-cas (D10a à D10h) : D10 seul est refusé (réserve m1)
+  # un motif D10 se déclare par sous-cas (D10a à D10f et D10h) : D10 seul est refusé (réserve m1)
   if (!all(.motif_admet(dico, ex$motif, "X")) || any(ex$motif == "D10") || !all(ex$famille %in% FAMILLES_CALCUL) ||
       !all(ex$action %in% ACTIONS_EXCLUSION) || anyDuplicated(ex[, c("motif", "famille")])) {
     .refus_plan(paste0("declarations$exclusions : motif d'un d\u00e9faut trait\u00e9 X (D10 par sous-cas), famille (",
@@ -661,12 +661,15 @@ controler_base <- function(donnees, arrete, declarations = NULL, conventions = N
 # valeurs, une valeur refusée étant inconnue (logique de Kleene, .avant3()) ; la règle
 # s'exécute sur les lignes au verdict déterminé et écarte celles au verdict inconnu (NA) ; si
 # elle en écarte une, elle garde sa ligne dans controles_non_executes, cause = motif du
-# premier refus de valeur qui touche une ligne écartée, dans l'ordre des colonnes lues
-# (détection partielle, nombre minorant). Toute autre cause (forme, refus de portée table) bloque la
+# premier refus de valeur qui touche une ligne écartée, dans l'ordre des colonnes lues puis
+# des constats : refus d'une colonne de la table sur une ligne écartée, à défaut refus d'une
+# colonne de la parente sur une parente d'une ligne écartée (`parente` : colonne de clé de la
+# fille, table et colonne de clé de la parente ; spécification, § 2.2, (b)) (détection
+# partielle, nombre minorant). Toute autre cause (forme, refus de portée table) bloque la
 # règle ; la cause rendue est alors la première dans l'ordre des colonnes lues, hors colonnes
 # dont le refus de valeur ne bloque pas (`vue` seule ; toute colonne lue en mode `partiel`).
 .regle <- function(ctx, code, table, colonne, lit, traitement, detection, f, colonne_ne = colonne,
-                   partiel = FALSE, vue = character(0)) {
+                   partiel = FALSE, vue = character(0), parente = NULL) {
   if (is.null(ctx$base[[table]])) return(invisible(integer(0)))
   valeur <- unique(c(if (!is.na(colonne)) paste(table, colonne, sep = "."), lit))
   lit <- unique(c(valeur, vue))
@@ -685,9 +688,19 @@ controler_base <- function(donnees, arrete, declarations = NULL, conventions = N
     !(lit[i] %in% names(refusees)) && !is.na(.cause(ctx, morceaux[[i]][1L], morceaux[[i]][2L]))
   }, NA))
   if (bloquee) {
+    # sur une table refusée en portée table (.refus_valeur_de() y rend NULL), le refus de
+    # valeur d'une colonne dont le refus de valeur ne bloque pas n'est pas une cause directe :
+    # le refus de portée table, induit compris, l'emporte (spécification, § 2.2, cas limite 3,
+    # et § 3.1) ; une colonne lue comme valeur garde sa cause directe (M169, M185)
+    valeur_seule <- vapply(seq_along(lit), function(i) {
+      t <- morceaux[[i]][1L]
+      c1 <- morceaux[[i]][2L]
+      lit[i] %in% admet && !is.null(ctx$refus_valeur[[t]][[c1]]) &&
+        is.na(.cause(ctx, t, c1, forme_seule = TRUE))
+    }, NA)
     for (directe in c(TRUE, FALSE)) {
       for (i in seq_along(lit)) {
-        if (lit[i] %in% saute) next
+        if (lit[i] %in% saute || (directe && valeur_seule[i])) next
         cause <- .cause(ctx, morceaux[[i]][1L], morceaux[[i]][2L], directe = directe)
         if (!is.na(cause)) {
           .ajouter_non_execute(ctx, code, table, colonne_ne, cause, lu = lit[i])
@@ -700,17 +713,41 @@ controler_base <- function(donnees, arrete, declarations = NULL, conventions = N
   if (partiel && length(refusees) > 0L) {
     # verdict à trois valeurs (.avant3(), .manque3()) : seules les lignes au verdict inconnu
     # (NA) sont écartées ; la ligne de controles_non_executes n'existe que s'il y en a une,
-    # cause = motif du premier refus de valeur, dans l'ordre des colonnes lues, qui explique
-    # une ligne écartée : colonne de la table refusée sur l'une d'elles, sinon colonne d'une
-    # autre table (date de la parente d'une fille, lue après les colonnes de la table). Un
-    # verdict inconnu procède toujours d'une valeur refusée d'une colonne lue (.inconnu()).
+    # cause = motif du premier refus de valeur, dans l'ordre des colonnes lues puis des
+    # constats, qui touche une ligne écartée : refus d'une colonne de la table sur l'une
+    # d'elles, sinon refus d'une colonne de la parente (date de la parente d'une fille, lue
+    # après les colonnes de la table) sur une parente de l'une d'elles. Un verdict inconnu
+    # procède toujours d'une valeur refusée d'une colonne lue (.inconnu()) : son absence est
+    # une erreur interne.
     ecartees <- which(is.na(detecte))
     if (length(ecartees) > 0L) {
+      # lignes de chaque table lue qui expliquent une ligne écartée : les lignes écartées
+      # elles-mêmes ; pour la parente (`parente` : colonne de clé de la fille, table et colonne
+      # de clé de la parente), ses lignes dont la clé est celle d'une ligne écartée (toutes les
+      # versions de famille : branche défensive, la date de saisie de famille, colonne de clé,
+      # n'étant jamais refusée pour sa valeur ; son refus, de portée table, bloque la règle
+      # avant ce point)
+      touchees <- function(u) {
+        if (u == table) return(ecartees)
+        if (is.null(parente) || u != parente[2L]) return(integer(0))
+        which(.valeurs(ctx, u, parente[3L]) %in% stats::na.omit(.valeurs(ctx, table, parente[1L])[ecartees]))
+      }
       propres <- names(refusees)[startsWith(names(refusees), paste0(table, "."))]
-      explique <- vapply(propres, function(x) length(intersect(refusees[[x]], ecartees)) > 0L, NA)
-      tc <- c(propres[explique], setdiff(names(refusees), propres))[1L]
-      m <- strsplit(tc, ".", fixed = TRUE)[[1L]]
-      .ajouter_non_execute(ctx, code, table, colonne_ne, .cause(ctx, m[1L], m[2L]), lu = tc)
+      cause <- NULL
+      for (tc in c(propres, setdiff(names(refusees), propres))) {
+        m <- strsplit(tc, ".", fixed = TRUE)[[1L]]
+        l <- touchees(m[1L])
+        for (r in .refus_valeur_de(ctx, m[1L], m[2L])) {
+          if (length(intersect(r$lignes, l)) > 0L) {
+            cause <- r$code
+            break
+          }
+        }
+        if (!is.null(cause)) break
+      }
+      if (is.null(cause)) stop("erreur interne de provie : r\u00e8gle P : ligne \u00e9cart\u00e9e sans refus de valeur qui l'explique (", code, ", ",
+                               table, ")", call. = FALSE)
+      .ajouter_non_execute(ctx, code, table, colonne_ne, cause, lu = tc)
     }
   }
   lignes <- which(detecte)
@@ -1730,7 +1767,8 @@ controler_base <- function(donnees, arrete, declarations = NULL, conventions = N
     marquer(f[[1L]], "D02b", regle_p(ctx, "D02b", f[[1L]], f[[2L]],
       c(paste(f[[1L]], f[[3L]], sep = "."), paste(f[[4L]], c(f[[5L]], f[[6L]]), sep = ".")), t_b, "exacte",
       function() .avant_parente3(.date_connue(ctx, f[[1L]], f[[2L]]), .inconnu(ctx, f[[1L]], f[[2L]]), v(f[[1L]], f[[3L]]),
-                                 v(f[[4L]], f[[5L]]), .date_connue(ctx, f[[4L]], f[[6L]]), .inconnu(ctx, f[[4L]], f[[6L]]))))
+                                 v(f[[4L]], f[[5L]]), .date_connue(ctx, f[[4L]], f[[6L]]), .inconnu(ctx, f[[4L]], f[[6L]])),
+      parente = c(f[[3L]], f[[4L]], f[[5L]])))
   }
   # D03g : date de saisie manquante (fin d'un contrat ou d'une affiliation : sous sa condition)
   for (table in c("affiliations", "famille", "sinistres", "beneficiaires", "rentes", "evenements", "prestations",
@@ -1768,12 +1806,7 @@ controler_base <- function(donnees, arrete, declarations = NULL, conventions = N
   liens <- liens[liens$table %in% ctx$tables & liens$table_cible %in% ctx$tables, , drop = FALSE]
   lisible <- function(t, c1) is.na(.cause(ctx, t, c1, forme_seule = TRUE))
   # une valeur refusée n'est pas lue (M199) : inconnue
-  lire <- function(t, c1) {
-    if (!lisible(t, c1)) return(rep(NA_real_, nrow(ctx$base[[t]])))
-    x <- as.numeric(.valeurs(ctx, t, c1))
-    x[.lignes_refusees(ctx, t, c1)] <- NA_real_
-    x
-  }
+  lire <- function(t, c1) .date_connue(ctx, t, c1)
   delai <- ctx$declarations$seuils[[.SEUIL_DELAI_D03G]]
   tables <- setdiff(ctx$tables, "extraction")
   # date de saisie retenue (NA hors hypothèse) ; dates propres de visibilité de chaque ligne
@@ -2678,8 +2711,9 @@ controler_base <- function(donnees, arrete, declarations = NULL, conventions = N
 # propre ; versions de famille : visible si l'une l'est) ; adherents et assures visibles
 # s'ils sont référencés par une ligne visible. Deux écarts à la vue, pour compter sans
 # corriger : les refus R ne l'empêchent pas (spécification, § 2.3, point 2 : une ligne
-# refusée invisible à l'arrêté), seule une colonne illisible par sa forme rend la visibilité
-# non déterminée ; une ligne que l'exclusion déclarée de D03g sort de la vue a pour
+# refusée invisible à l'arrêté), seules une colonne illisible par sa forme et une date de
+# visibilité refusée pour sa valeur, qui n'est pas lue (.date_connue() ; M199, M201), rendent
+# la visibilité non déterminée ; une ligne que l'exclusion déclarée de D03g sort de la vue a pour
 # visibilité celle que lui donnerait l'hypothèse avec un délai nul : la date que compare D02b
 # (evenements.date_effet, sinistres.date_declaration ; aucune pour une fille, que borne la
 # visibilité de sa parente) tient lieu de date de saisie, borne basse de sa connaissance
@@ -2715,15 +2749,15 @@ controler_base <- function(donnees, arrete, declarations = NULL, conventions = N
       g_lignes[ctx$parente_g[[t]]] <- TRUE   # lignes de D03g qui suivent leur parente (Q2 (b))
     }
     for (c1 in .DATES_VISIBILITE[[t]]) {
-      d <- if (lisible(t, c1)) as.numeric(.valeurs(ctx, t, c1)) else rep(NA_real_, n)
+      # valeur refusée pour sa valeur : non lue, visibilité non déterminée (M199, M201)
+      d <- .date_connue(ctx, t, c1)
       if (c1 == "date_saisie") {
         g <- ctx$date_g[[t]]
         if (!is.null(g)) d <- ifelse(is.na(g), d, g)
         if (any(g_lignes)) {
           e <- .EFFET_D03G[[t]]
           # date d'effet refusée pour sa valeur : non lue, visibilité non déterminée (M199)
-          de <- if (is.null(e) || !lisible(t, e)) NULL else replace(as.numeric(.valeurs(ctx, t, e)), .lignes_refusees(ctx, t, e), NA_real_)
-          d[g_lignes] <- if (is.null(e)) -Inf else if (!is.null(de)) de[g_lignes] else NA_real_
+          d[g_lignes] <- if (is.null(e)) -Inf else .date_connue(ctx, t, e)[g_lignes]
         }
       }
       v <- v & d <= a
@@ -3767,7 +3801,7 @@ controler_base <- function(donnees, arrete, declarations = NULL, conventions = N
 # Une ligne par clé (code, table, colonne) de `non_executes` (colonnes code, table, colonne,
 # cause, dans l'ordre d'émission), à la cause de plus petit rang (.RANGS_CAUSES ; cause
 # directe : motif de refus, code de controles.csv ou de defauts.csv, ou sous-cas lettré
-# déclaré d'un code non lettré de defauts.csv, D10a à D10h (.TRAITEMENTS_SOUS_CAS_D10, comme
+# déclaré d'un code non lettré de defauts.csv, D10a à D10f et D10h (.TRAITEMENTS_SOUS_CAS_D10, comme
 # .motif_admet()), rang 3) ; à rang égal, la première émise. Le rang est cherché avant le
 # caractère direct (refus_induit est aussi un code de controles.csv). Les autres colonnes
 # sont celles de la première ligne de la clé. Une cause ni rangée ni motif de refus est une
