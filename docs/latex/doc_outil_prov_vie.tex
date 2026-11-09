@@ -60,7 +60,7 @@
 % Dans un guide, \datedoc est une date figée (jamais \today) et \statutdoc
 % vaut Projet ou Final ; \datedroit est la date de référence du droit.
 \newcommand{\annee}{2026}
-\newcommand{\datedoc}{8 novembre 2026}
+\newcommand{\datedoc}{9 novembre 2026}
 \newcommand{\versiondoc}{0.1}
 \newcommand{\statutdoc}{Projet}
 \newcommand{\titredoc}{Documentation du package provie}
@@ -814,6 +814,15 @@ indéfini, il lève un
 \textbf{refus d'appel}, qui interrompt l'appel sans rendre d'objet et porte
 un motif d'une liste fermée (section~\ref{sec:outils}).
 
+Dans l'état du code, le package exporte huit fonctions~:
+\code{dictionnaire()} et \code{controler\_types()} (module
+\code{dictionnaire}), \code{lire\_base()}, \code{ecrire\_base()},
+\code{ecrire\_jeu()} et \code{lire\_jeu()} (module \code{lecture}),
+\code{controler\_base()} (module \code{donnees}) et \code{simuler\_base()}
+(module \code{simulation}), ainsi que les méthodes \code{format()} et
+\code{print()} de la classe \code{jeu\_simule}. Le point d'entrée
+\code{calculer\_provisions()} n'est pas encore écrit.
+
 % =============================================================================
 \section{Quinze modules et leur graphe}
 \label{sec:modules}
@@ -926,7 +935,7 @@ Les constantes sont citées d'après le code (\code{R/outils.R}).
 \code{VERSION\_DICTIONNAIRE\_ATTENDUE} & \code{"1.5"} & Version du dictionnaire de la base attendue par le moteur (dictionnaire de la base, version~1.5). Lue par \code{dictionnaire()}, qui refuse un dictionnaire embarqué d'une autre version, et par \code{controler\_version\_extraction()}, qui refuse une base d'une autre version (section~\ref{sec:dictionnaire}). \\
 \code{REPRESENTATION\_CANONIQUE} & \code{"provie-resultat-1"} & Identifiant de la représentation canonique du résultat. Aucune fonction ne la lit encore. \\
 \code{VERSION\_LISTE} & entier \code{1} & Version du format de sérialisation des listes (section~\ref{sec:format-liste}). \\
-\code{MOTIFS\_REFUS} & dix-huit motifs & Liste fermée des motifs de refus d'appel (ci-dessous). \\
+\code{MOTIFS\_REFUS} & dix-neuf motifs & Liste fermée des motifs de refus d'appel (ci-dessous). \\
 \code{CONVENTIONS\_AGE} & quatre chaînes & Liste fermée des conventions de calcul de l'âge~: \code{revolu}, \code{millesime}, \code{plus\_proche}, \code{naissance\_31\_decembre} (section~\ref{sec:age}). \\
 \code{AGE\_MAXIMUM} & entier \code{200} & Âge le plus élevé admis par \code{date\_atteinte\_age()}~; au-delà, la fonction lève une erreur R ordinaire (section~\ref{sec:age}). \\
 \end{tabular}
@@ -947,7 +956,7 @@ ordinaire, qui n'est pas un refus d'appel. Les \code{identifiants} sont
 tronqués aux dix premiers\fsp; \code{nombre}, converti en entier, porte
 le total quand l'appelant le renseigne.
 
-La liste fermée compte dix-huit motifs. Le tableau ci-dessous dit, pour
+La liste fermée compte dix-neuf motifs. Le tableau ci-dessous dit, pour
 chacun, quelles fonctions le lèvent dans l'état du code, directement ou par
 une fonction qu'elles appellent (ainsi, toute fonction qui lit le
 dictionnaire peut lever \code{dictionnaire\_invalide})\fsp; un motif levé
@@ -963,7 +972,7 @@ documentera avec eux.
 \code{plan\_incomplet} & \code{controler\_base()}~: date d'arrêté absente. \\
 \code{plan\_invalide} & \code{controler\_base()}~: date d'arrêté mal formée, déclaration ou convention mal formée ou hors de sa liste fermée\fsp; \code{calculer\_age()} et \code{date\_atteinte\_age()}~: convention hors de \code{CONVENTIONS\_AGE}. \\
 \code{liste\_invalide} & \code{ecrire\_valeurs()}, \code{ecrire\_liste()} et \code{lire\_liste()}~: valeur, liste ou texte que l'écriture canonique ou le format de liste n'admet pas (sections~\ref{sec:ecriture} et~\ref{sec:format-liste})\fsp; \code{controler\_types()}, \code{constater\_forme()} et \code{controler\_base()}~: base qui n'est pas une liste nommée de \code{data.frame} aux tables connues\fsp; \code{ecrire\_base()}~: valeur que le CSV ne relirait pas à l'identique. \\
-\code{fichier\_invalide} & \code{lire\_base()} et \code{ecrire\_base()}~: chemin qui n'est pas une chaîne unique, dossier introuvable, non vide ou impossible à créer, fichier inconnu du dictionnaire, fichier dont la lecture ne rendrait pas le texte exact (section~\ref{sec:lecture}). \\
+\code{fichier\_invalide} & \code{lire\_base()}, \code{ecrire\_base()}, \code{ecrire\_jeu()} et \code{lire\_jeu()}~: chemin qui n'est pas une chaîne unique, dossier introuvable, non vide ou impossible à créer, fichier inconnu du dictionnaire, fichier dont la lecture ne rendrait pas le texte exact (section~\ref{sec:lecture-base})\fsp; pour \code{lire\_jeu()}, disposition d'un jeu, liste d'empreintes, volumétrie ou tables de vérité non conformes (section~\ref{sec:lecture-jeu}). \\
 \code{table\_base\_absente} & \code{controler\_base()}~: table obligatoire absente. \\
 \code{colonne\_absente} & \code{controler\_types()}, et par elle \code{ecrire\_base()}~: colonne obligatoire ou conditionnelle absente\fsp; \code{lire\_base()} et \code{controler\_base()}, pour la seule table \code{extraction}. \\
 \code{colonne\_inconnue} & Mêmes fonctions que \code{colonne\_absente}~: colonne inconnue du dictionnaire. \\
@@ -972,12 +981,13 @@ documentera avec eux.
 \code{arrete\_posterieur\_extraction} & \code{controler\_base()}~: date d'arrêté postérieure à la date d'extraction. \\
 \code{declaration\_manquante} & Aucune fonction. \\
 \code{table\_absente} & Aucune fonction. \\
-\code{empreinte\_discordante} & Aucune fonction. \\
+\code{empreinte\_discordante} & \code{lire\_jeu()}~: fichier d'un jeu dont le MD5 diffère de celui de \code{empreintes.md5}, avec l'empreinte attendue et l'empreinte reçue. \\
 \code{version\_discordante} & \code{lire\_liste()}~: en-tête d'une autre version du format de liste, avec la version attendue (\code{attendu}) et la version reçue (\code{recu}). \\
 \code{lien\_non\_declare} & Aucune fonction. \\
 \code{catalogue\_invalide} & Aucune fonction. \\
 \code{dictionnaire\_invalide} & \code{dictionnaire()}, et par elle toute fonction qui lit le dictionnaire~: dictionnaire embarqué incohérent (par exemple d'une autre version, d'une empreinte discordante ou d'une référence interne invalide). \\
 \code{format\_table\_inconnu} & Aucune fonction. \\
+\code{jeu\_invalide} & \code{simuler\_base()}~: argument qui ne définit pas un jeu simulé (loi vraie, graines, date d'extraction, nom, description, date de visa, déclarations)\fsp; \code{ecrire\_jeu()}~: objet qui n'a pas la forme d'un jeu simulé. \\
 \end{tabular}
 \end{center}
 
@@ -1377,12 +1387,13 @@ fichiers~: base en CSV, jeux versionnés, tables importées. Les types sont
 imposés par le dictionnaire de la base\fsp; une valeur n'est jamais
 convertie dans un autre type que le sien. Le module transmet des
 \code{data.frame}. Dans l'état du code, il lit et écrit la base en CSV
-(section~\ref{sec:lecture-base}) et les jeux versionnés\fsp; la lecture des
+(section~\ref{sec:lecture-base}) et les jeux simulés
+(section~\ref{sec:lecture-jeu})\fsp; la lecture des
 tables importées et la provenance des fichiers lus ne sont pas encore
 écrites. Il est hors de la chaîne du moteur~: aucun module du
 moteur ne l'appelle. Le format xlsx est lu par l'application, hors du
 package. Il ne peut appeler que \code{dictionnaire} et \code{outils}.
-Ses deux fonctions sont exportées.
+Ses quatre fonctions sont exportées.
 
 \begin{center}
 \small
@@ -1464,6 +1475,51 @@ lecture~: une base écrite est conforme. \code{lire\_base(ecrire\_base(x,
 d))} rend \code{x} à l'identique quand \code{x} liste ses tables dans
 l'ordre du dictionnaire et porte des noms de lignes automatiques~; c'est un
 constat de la batterie unitaire sur les bases testées.
+
+% =============================================================================
+\section{Écriture et relecture d'un jeu simulé}
+\label{sec:lecture-jeu}
+% =============================================================================
+
+La fonction \code{ecrire\_jeu(jeu, dossier)} écrit un jeu simulé (objet
+de la classe \code{jeu\_simule} que rend \code{simuler\_base()},
+section~\ref{sec:simulation-jeu}) dans un dossier neuf ou vide, selon la
+disposition d'un jeu versionné~:
+
+\begin{itemize}[itemsep=2pt]
+\item \code{base/}~: une table de la base par fichier \code{<table>.csv},
+  écrite par \code{ecrire\_base()}\fsp;
+\item \code{verite/}~: une table de vérité par fichier \code{<nom>.csv}, au
+  même format CSV, les types des colonnes étant portés par le manifeste\fsp;
+\item \code{loi\_vraie.txt} et \code{manifeste.txt}, écrits par
+  \code{ecrire\_liste()} (section~\ref{sec:format-liste})\fsp;
+\item \code{declarations.txt}, facultatif, si le jeu porte des
+  déclarations\fsp;
+\item \code{empreintes.md5}~: une ligne «~\code{<md5>}, deux espaces,
+  \code{<chemin relatif>}~» par fichier, triés indépendamment de la locale,
+  au format que vérifie la commande \code{md5sum -c} lancée depuis le
+  dossier du jeu.
+\end{itemize}
+
+Avant toute écriture, \code{ecrire\_jeu()} refuse (\code{jeu\_invalide}) un
+objet qui n'a pas la forme d'un jeu simulé~: classe, champs \code{base},
+\code{loi\_vraie}, \code{verite}, \code{manifeste} dans cet ordre, puis
+\code{declarations} facultatif, tables de vérité en liste nommée de
+\code{data.frame}, colonnes et types de ces tables exactement décrits par le
+manifeste. Les refus d'\code{ecrire\_base()} et d'\code{ecrire\_liste()}
+s'appliquent aussi.
+
+\code{lire\_jeu(dossier)} relit un jeu écrit par \code{ecrire\_jeu()}. Elle
+contrôle d'abord la disposition (les fichiers et dossiers attendus, rien
+d'autre) et la liste d'empreintes (une ligne par fichier, chacun présent une
+fois), par le motif \code{fichier\_invalide}, puis l'empreinte de chaque
+fichier (\code{empreinte\_discordante} au premier qui diffère). Elle lit
+ensuite la base par \code{lire\_base()}, dont les tables et les nombres de
+lignes doivent être ceux de la volumétrie du manifeste, les listes par
+\code{lire\_liste()}, et les tables de vérité dans les types que décrit le
+manifeste~; tout écart est refusé par \code{fichier\_invalide}. Elle
+n'évalue aucun code. Que \code{lire\_jeu(ecrire\_jeu(j, d))} rende un objet
+identique à \code{j} est un constat des batteries, non une démonstration.
 
 
 \partie{Partie VI}{Module donnees}
@@ -1888,10 +1944,15 @@ sauf \code{lecture}. Ce module n'a pas encore de fonction.
 
 Le module \code{simulation} est le simulateur~: il tire une base brute
 fictive sous une loi vraie et une graine, puis y injecte les défauts de
-données paramétrés. Il rend un objet en mémoire et n'écrit aucun fichier. Il
-est hors de la chaîne du moteur~: aucun module du moteur ne l'appelle. Il
-ne peut appeler que \code{dictionnaire}, \code{garanties}, \code{tables} et
-\code{outils}. Ce module n'a pas encore de fonction.
+données paramétrés. Il rend un objet en mémoire et n'écrit aucun fichier~:
+l'écriture et la relecture d'un jeu sont dans le module \code{lecture}
+(section~\ref{sec:lecture-jeu}). Il est hors de la chaîne du moteur~: aucun
+module du moteur ne l'appelle. Il peut appeler \code{dictionnaire},
+\code{garanties}, \code{tables} et \code{outils}\fsp; dans l'état du code,
+il n'appelle que \code{dictionnaire} et \code{outils}~: les tables de la loi
+vraie y sont passées par valeurs, et la configuration des garanties liées
+est un paramètre de la loi vraie. Sa fonction \code{simuler\_base()} et
+les deux méthodes de la classe \code{jeu\_simule} sont exportées.
 
 \begin{center}
 \small
@@ -1903,6 +1964,163 @@ ne peut appeler que \code{dictionnaire}, \code{garanties}, \code{tables} et
 \code{simuler\_base()} & \code{loi\_vraie}, \code{graines}, \code{date\_extraction}, \code{nom}, \code{description}, \code{declarations = NULL}, \code{date\_visa = NULL} & Tire une base brute fictive sous la loi vraie, en flux séparés (population, famille, sinistres, information), chacun sous sa graine, puis injecte chaque défaut de données paramétré sous la graine des défauts augmentée de son rang\fsp; rend un objet \code{jeu\_simule} (base, loi vraie, tables de vérité dont le registre des défauts, manifeste avec la version du simulateur, déclarations facultatives) sans écrire de fichier\fsp; refuse (\code{jeu\_invalide}) une loi vraie, des graines ou des arguments mal formés. \\
 \code{format.jeu\_simule()} & \code{x}, \code{...} & Décrit un jeu simulé en lignes de texte, par des décomptes seuls~: nom, date d'extraction, versions du dictionnaire, du simulateur et du package, date de visa, lignes par table, lignes du registre des défauts par code, déclarations. \\
 \code{print.jeu\_simule()} & \code{x}, \code{...} & Imprime \code{format(x)} et rend le jeu, invisible. \\
+\end{tabular}
+\end{center}
+
+% =============================================================================
+\section{Tirage d'une base brute fictive}
+\label{sec:simulation-tirage}
+% =============================================================================
+
+\textbf{Modèle.} Les assurés sont affiliés à des contrats collectifs
+obligatoires qui portent trois garanties liées~: décès, incapacité,
+invalidité. En activité, le décès et l'arrêt de travail sont en risques
+concurrents, par pas de 30~jours, sous des taux annuels par âge. Un arrêt
+suit un modèle mensuel par ancienneté (reprise, décès, passage en
+invalidité)\fsp; il passe en invalidité ou s'éteint par fin de droits au
+terme de la durée maximale d'indemnisation, et prend fin à l'âge de fin de
+service. L'invalidité suit des taux mensuels constants (reprise, décès). Le
+décès d'un assuré en activité ou en arrêt ouvre un sinistre décès
+(maintien de la garantie décès pendant l'arrêt)\fsp; un arrêt peut être
+classé sans suite. Chaque paramètre est lu dans la \textbf{loi vraie},
+liste nommée de version \code{VERSION\_LOI\_VRAIE}, où il est un jugement
+d'expert déclaré~: le simulateur n'a aucune valeur par défaut, et une loi
+vraie à laquelle manque une feuille est refusée (\code{jeu\_invalide}).
+
+\textbf{Flux séparés.} Le jeu propre est tiré en quatre flux, dans cet
+ordre~: \code{population} (contrats, assurés, affiliations),
+\code{famille} (conjoints vrais), \code{sinistres} (trajectoires vraies des
+assurés et des arrêts) et \code{information} (délais de déclaration, de
+saisie, d'instruction et de règlement). Chaque flux est tiré par un seul
+appel d'\code{avec\_graine()} (section~\ref{sec:graine}), sous sa graine,
+en tableaux d'uniformes de taille fixe par unité (contrat, assuré, arrêt,
+sinistre), transformés ensuite par inversion. Le nombre d'uniformes d'un
+flux ne dépend que du nombre d'unités, issu des flux amont, et de bornes
+fixes, jamais des paramètres du flux ni d'un flux aval~: le tirage d'une
+unité ne dépend pas de ce qui arrive aux autres, et le flux
+\code{information} ne change aucun tirage des flux qui le précèdent. Les
+bornes de taille (ainsi le nombre maximal d'arrêts par assuré) sont des
+paramètres de la loi vraie.
+
+\textbf{Défauts injectés.} Chaque défaut du catalogue
+\code{DEFAUTS\_SIMULES} d'intensité non nulle est ensuite injecté sous la
+graine des défauts augmentée de son rang dans le catalogue (et non dans la
+liste des défauts actifs). L'intensité, lue dans la loi vraie, est la
+probabilité d'injection par ligne éligible. Les lignes éligibles et les
+tirages d'un défaut ne lisent que le jeu propre, et deux défauts d'une même
+table touchent des colonnes distinctes ou des lignes disjointes~: activer
+ou désactiver un défaut ne change donc ni le jeu propre ni les autres
+défauts. Chaque modification est consignée au registre des défauts (table
+de vérité \code{defauts}, colonnes \code{COLONNES\_REGISTRE}~: code,
+paramètre, rang, table, clé, colonne, valeur propre, valeur injectée). Le
+catalogue compte douze défauts du dictionnaire, chacun limité à un
+sous-cas~; les autres défauts ne sont pas simulés, et leur paramètre est
+refusé dans la loi vraie.
+
+\begin{center}
+\small
+\rowcolors{2}{tablerow}{white}
+\begin{tabular}{@{}p{0.8cm}p{1.1cm}p{4.8cm}p{2.3cm}>{\raggedright\arraybackslash}p{4.7cm}@{}}
+\rowcolor{tableheader}
+\textcolor{financeblue}{\textbf{Rang}} & \textcolor{financeblue}{\textbf{Code}} & \textcolor{financeblue}{\textbf{Paramètre}} & \textcolor{financeblue}{\textbf{Table}} & \textcolor{financeblue}{\textbf{Lignes éligibles et effet}} \\
+1 & D01b & \code{doublon\_contenu} & \code{cotisations} & Encaissements~: copie sous un nouvel identifiant, datée après l'original. \\
+2 & D02a & \code{date\_ordre} & \code{prestations} & Indemnités journalières~: début et fin de période permutés. \\
+3 & D02b & \code{saisie\_anterieure} & \code{evenements} & Événements d'un type non programmable~: saisie avant la date d'effet. \\
+4 & D03a & \code{manquant\_date\_naissance} & \code{assures} & Date de naissance effacée. \\
+5 & D03b & \code{manquant\_sexe} & \code{assures} & Sexe effacé. \\
+6 & D03c & \code{manquant\_salaire} & \code{affiliations} & Salaire de référence effacé. \\
+7 & D03g & \code{manquant\_date\_saisie} & \code{prestations} & Date de saisie effacée. \\
+8 & D04b & \code{orpheline} & \code{cotisations} & Émissions~: garantie souscrite remplacée par un identifiant inconnu. \\
+9 & D05 & \code{clos\_sans\_motif} & \code{evenements} & Sorties sans suite~: motif effacé. \\
+10 & D06 & \code{cloture\_sans\_justificatif} & \code{evenements} & Sorties pour reprise du travail ou décès~: justificatif effacé. \\
+11 & D09 & \code{montant\_aberrant} & \code{prestations} & Paiements~: montant de signe inversé. \\
+12 & D13 & \code{instruction\_absente} & \code{sinistres} & Sinistres décès dont le capital est réglé~: date d'instruction effacée. \\
+\end{tabular}
+\end{center}
+
+% =============================================================================
+\section{Jeu simulé et jeux versionnés}
+\label{sec:simulation-jeu}
+% =============================================================================
+
+\textbf{Jeu simulé.} \code{simuler\_base()} rend un objet de classe
+\code{jeu\_simule}, liste nommée~:
+
+\begin{itemize}[itemsep=2pt]
+\item \code{base}~: les tables obligatoires du dictionnaire, dans son
+  ordre, colonnes dans l'ordre du dictionnaire, lignes saisies au plus tard
+  à la date d'extraction\fsp;
+\item \code{loi\_vraie}~: la loi vraie reçue, inchangée\fsp;
+\item \code{verite}~: ce que l'organisme ignore, en cinq tables de vérité
+  décrites par la constante \code{SCHEMA\_VERITE}, seule définition de
+  leurs colonnes et de leurs types~: \code{flux\_futurs} (prestations
+  réglées après l'extraction, avec la date de survenance du sinistre et,
+  pour un décès survenu après l'extraction au cours d'un arrêt de travail ou d'une invalidité,
+  l'identifiant de l'arrêt d'origine), \code{etats\_vrais} (trajectoire
+  vraie de chaque arrêt), \code{familles\_vraies} (conjoints vrais),
+  \code{sinistres\_non\_declares} (sinistres survenus au plus tard à
+  l'extraction et saisis après) et \code{defauts} (registre des
+  défauts)\fsp;
+\item \code{manifeste}~: dans cet ordre, nom, version du dictionnaire,
+  version du package qui a produit le jeu, version du simulateur, graines,
+  date d'extraction, volumétrie par table, description, date de visa, et
+  colonnes des tables de vérité\fsp;
+\item \code{declarations}, facultatif~: les déclarations et conventions de
+  \code{controler\_base()} qui conviennent au jeu, portées sans être
+  lues.
+\end{itemize}
+
+Les graines forment une liste nommée de cinq entiers, une par flux et une
+pour les défauts (\code{GRAINES\_SIMULATION}). À loi vraie, graines et
+arguments identiques, \code{simuler\_base()} rend un jeu identique~; c'est
+ce que vérifie, sur la plateforme où elle tourne, la batterie de
+reproductibilité.
+
+\textbf{Version du simulateur.} \code{VERSION\_SIMULATEUR} est consignée
+au manifeste. Toute modification du module qui change la sortie de
+\code{simuler\_base()} pour une entrée admise, fût-ce sur un seul jeu,
+l'incrémente, et son commit est un changement de résultat sur les jeux,
+avec son tableau avant~/ après\fsp; un refactorage sans effet garde la
+version. La sémantique des intensités de défauts de la loi vraie de
+version~1 est figée~: ajouter un sous-cas demande une nouvelle version de
+la loi vraie et du simulateur.
+
+\textbf{Jeux versionnés.} Un jeu versionné est écrit par
+\code{ecrire\_jeu()} sous \code{inst/extdata/jeux/<nom>/}, après le visa du
+mainteneur, dont la date est portée au manifeste (décision M188), et n'est
+jamais modifié en place. Un jeu d'une version antérieure du simulateur ou
+du dictionnaire est retiré et remplacé par un jeu de numéro suivant
+(décision M189). La batterie de reproductibilité rejoue chaque jeu
+versionné à partir de ses seuls fichiers et le compare au jeu relu, champ à
+champ, hors de la version du package qui l'a produit, contrôlée à part (au
+plus la version installée)\fsp; elle compare aussi les empreintes, et
+vérifie que les entrées du jeu sont celles du script de provenance
+\code{tests/jeux\_v1.R}, qui porte en commentaire le statut et la
+justification de chaque paramètre. Deux jeux sont versionnés~:
+\code{v1-modeste-01}, jeu propre d'un portefeuille modeste à garanties
+liées décès et arrêt de travail, et \code{v1-modeste-02}, même jeu propre
+avec les douze défauts du catalogue, jeu de contrôle et non de calcul. Ils
+servent aux tests fonctionnels, sans portée statistique.
+
+\textbf{Affichage.} \code{format()} et \code{print()} décrivent un jeu par
+des décomptes seuls, sans aucune somme.
+
+Les constantes du module sont citées d'après le code
+(\code{R/simulation.R})~:
+
+\begin{center}
+\small
+\rowcolors{2}{tablerow}{white}
+\begin{tabular}{@{}p{5.6cm}p{9.5cm}@{}}
+\rowcolor{tableheader}
+\textcolor{financeblue}{\textbf{Constante}} & \textcolor{financeblue}{\textbf{Valeur et objet}} \\
+\code{FLUX\_SIMULATION} & \code{population}, \code{famille}, \code{sinistres}, \code{information}~: flux du jeu propre, dans leur ordre de tirage. \\
+\code{GRAINES\_SIMULATION} & Les quatre flux, puis \code{defauts}~: noms de l'argument \code{graines}. \\
+\code{VERSION\_LOI\_VRAIE} & Entier \code{1}~: version du format de la loi vraie. \\
+\code{VERSION\_SIMULATEUR} & Entier \code{1}~: version du simulateur, consignée au manifeste. \\
+\code{DEFAUTS\_SIMULES} & Catalogue des défauts injectables (rang, code, paramètre, table, lignes éligibles), douze lignes. \\
+\code{COLONNES\_REGISTRE} & Colonnes du registre des défauts, dans leur ordre. \\
+\code{SCHEMA\_VERITE} & Tables de vérité, leurs colonnes et leurs types (types du dictionnaire). \\
 \end{tabular}
 \end{center}
 
@@ -1980,7 +2198,9 @@ Trois batteries se lancent depuis la racine du dépôt, dans cet ordre~:
   module, plus ceux qui testent le harnais et la batterie de concordance.
 \item La \textbf{batterie de reproductibilité} vérifie les aller-retours
   identiques du sérialiseur de listes, la graine locale et la restauration
-  de l'état global du générateur.
+  de l'état global du générateur, puis rejoue chaque jeu versionné de
+  \code{inst/extdata/jeux/} à partir de ses seuls fichiers
+  (section~\ref{sec:simulation-jeu}).
 \item La \textbf{batterie de concordance} compare la présente documentation
   au code (section~\ref{sec:concordance}).
 \end{itemize}
