@@ -1,0 +1,5 @@
+id_beneficiaire,id_dossier,id_membre,qualite,part,date_saisie
+"BE001","DO0060","ME0029","conjoint_survivant",1,2021-05-07
+"BE002","DO0061",,"heritiers",1,2024-09-18
+"BE005","DO0064",,"heritiers",1,2021-04-18
+"BE006","DO0065","ME0473","conjoint_survivant",1,2021-06-10
