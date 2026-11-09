@@ -773,6 +773,11 @@ paramétrés.
   ses fonctions de premier niveau, hors auxiliaires (fonctions dont le nom
   commence par un point). La batterie de concordance compare ces tableaux
   au code (section~\ref{sec:concordance}).
+\item \textbf{Tableaux de constantes.} Les constantes d'un module dont le
+  nom est en majuscules sont citées d'après le code, dans un tableau de
+  constantes placé dans la partie du module\fsp; la batterie de
+  concordance compare au code les valeurs qui y sont écrites sous une
+  forme littérale (section~\ref{sec:concordance}).
 \item \textbf{Chiffres.} Aucun chiffre issu d'une exécution du package
   n'est écrit dans ce document.
 \end{itemize}
@@ -2435,6 +2440,39 @@ commence par un point. Elle relève comme écarts~:
 \item une fonction exportée par le package qui n'est citée dans aucun
   tableau.
 \end{itemize}
+
+\textbf{Valeurs des constantes.} La batterie lit aussi les tableaux de
+constantes, reconnus à la première cellule de leur en-tête,
+«~Constante~»\fsp; chacun appartient au module dont le tableau de
+fonctions le précède. Elle évalue les constantes de premier niveau de
+\code{R/<module>.R} dont le nom est en majuscules, sans charger le
+package, et compare à leur valeur quatre formes littérales écrites dans
+la deuxième ou la troisième cellule d'une rangée~:
+
+\begin{itemize}[itemsep=2pt]
+\item une chaîne, \code{"texte"} en tête de la deuxième cellule\fsp;
+\item un entier, «~entier~\code{N}~» en tête de la deuxième cellule, pour
+  une constante de type entier\fsp;
+\item un décompte, «~quatorze lignes~», «~dix-neuf motifs~», en chiffres
+  ou en lettres jusqu'à vingt, comparé à la longueur de la constante ou à
+  son nombre de lignes\fsp;
+\item une liste de valeurs écrites sans guillemets, comparée dans
+  l'ordre.
+\end{itemize}
+
+Une valeur rédigée autrement n'est pas lue~: la batterie nomme la
+constante «~sans valeur littérale lue~», sans écart. Elle relève comme
+écarts une valeur différente de celle du code, une constante citée absente
+de son module, non évaluable ou citée deux fois, un tableau de constantes
+qui ne suit aucun tableau de fonctions, un décompte composé en lettres
+(qu'elle ne sait pas lire), une rangée mal fermée ou plus large que
+l'en-tête, et toute chaîne entre guillemets qu'aucune forme n'a lue
+(décision du mainteneur du 9~novembre~2026, M207)~: une version citée au
+fil d'une phrase, une chaîne en troisième cellule, une liste écrite avec
+guillemets. Une chaîne entre guillemets écrite dans une cellule de valeur
+est donc toujours comparée au code ou signalée. Les constantes internes,
+dont le nom commence par un point, ne sont pas lues\fsp; elles se citent
+dans le texte, d'après le code.
 
 Avec l'option \code{-{}-strict}, tout écart, comme l'absence du document,
 fait échouer la batterie\fsp; sans elle, les écarts sont des avertissements.
