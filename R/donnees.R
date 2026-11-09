@@ -596,12 +596,13 @@ controler_base <- function(donnees, arrete, declarations = NULL, conventions = N
 # refus R aussi (.refus_regle_b()) : une table refusée n'est plus lue, une colonne refusée
 # non plus (spécification, § 2.2 et § 4.2). `forme_seule` : écarts de forme seulement
 # (identifiants du bilan). `directe` : un refus induit (règle B, clé étrangère visant une
-# table refusée ; règle P empêchée, D12, `tables_d12`) ne masque pas la cause propre de la
-# colonne (refus ou forme), rendue seule (NA sans elle) ; priorité des causes, M185.
+# table refusée ; règle P empêchée, D12 : un refus de portée table de code `refus_induit`)
+# ne masque pas la cause propre de la colonne (refus ou forme), rendue seule (NA sans elle) ;
+# priorité des causes, M185.
 .cause <- function(ctx, table, colonne, forme_seule = FALSE, directe = FALSE) {
   if (!forme_seule && !is.null(ctx$refus_pv)) {
     t <- ctx$refus_pv$tables[[table]]
-    if (!is.null(t) && !(directe && (t == "refus_induit" || table %in% ctx$tables_d12))) return(t)
+    if (!is.null(t) && !(directe && t == "refus_induit")) return(t)
     c1 <- ctx$refus_pv$colonnes[[table]]
     if (!is.null(c1) && colonne %in% names(c1)) return(c1[[colonne]])
   }
@@ -1352,7 +1353,6 @@ controler_base <- function(donnees, arrete, declarations = NULL, conventions = N
   constats <- ctx$constats
   non_executes <- ctx$non_executes
   ctx$p_refusees <- character(0)
-  ctx$tables_d12 <- character(0)
   repeat {
     .visibilite_propre(ctx)
     .regle_prealable(ctx)
@@ -1401,7 +1401,6 @@ controler_base <- function(donnees, arrete, declarations = NULL, conventions = N
                      .traitement_code_controle(dico, "refus_induit"), "exacte", origine = paste(o, collapse = ";"))
   }
   ctx$p_refusees <- unique(c(ctx$p_refusees, names(empechees)))
-  ctx$tables_d12 <- unique(c(ctx$tables_d12, names(origines)))
   invisible(NULL)
 }
 
