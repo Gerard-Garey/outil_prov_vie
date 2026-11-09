@@ -1,8 +1,9 @@
 # Batterie de reproductibilité (CLAUDE.md, « Commandes » ; ADR 0010, point 25). À lancer
 # depuis la racine du dépôt : Rscript tests/test_reproductibilite.R
 # Au socle (T1) : aller-retours `identical` du sérialiseur, graine locale, état global
-# restauré. Le rejeu des fiches, les jeux versionnés et les références de tests/reference/
-# s'ajoutent avec les branches qui les créent.
+# restauré ; jeux versionnés de inst/extdata/jeux/ (#19), relus identiques à leur tirage. Le
+# rejeu des fiches et les références de tests/reference/ s'ajoutent avec les branches qui les
+# créent.
 
 options(warn = 2)
 fichier <- sub("^--file=", "", grep("^--file=", commandArgs(FALSE), value = TRUE))
@@ -54,5 +55,62 @@ set.seed(2026)
 etat <- .Random.seed
 invisible(try(outils$avec_graine(7L, { runif(2); stop("boum") }), silent = TRUE))
 verifier("état restauré même après une erreur", identical(.Random.seed, etat))
+
+section("jeux versionnés : rejeu de leurs fichiers, provenance, empreintes (#19 ; ADR 0010, points 19 et 20, onzième série)")
+source(file.path(racine, "tests", "jeux_v1.R"))
+# Comparaison d'identité (onzième série, (c)) : tout le jeu sous identical, sauf
+# manifeste$version_provie (version qui a produit le jeu), contrôlée à part : au plus la
+# version installée.
+sans_version <- function(jeu, version) { jeu$manifeste$version_provie <- version; jeu }
+for (nom in names(JEUX_V1)) {
+  versionne <- file.path(racine, "inst", "extdata", "jeux", nom)
+  if (!verifier(paste0(nom, " : jeu versionné présent sous inst/extdata/jeux/"), dir.exists(versionne))) next
+  relu <- lire_jeu(versionne)   # contrôle aussi chaque empreinte de empreintes.md5
+  m <- relu$manifeste
+  verifier(paste0(nom, " : version_provie du jeu au plus égale à la version installée"),
+           package_version(m$version_provie) <= utils::packageVersion("provie"))
+  # (i) rejeu des seuls fichiers versionnés
+  rejoue <- simuler_base(relu$loi_vraie, m$graines, m$date_extraction, nom = m$nom, description = m$description,
+                         declarations = relu$declarations, date_visa = m$date_visa)
+  dossier <- tempfile(paste0(nom, "-"))
+  verifier_egal(paste0(nom, " : lire_jeu(ecrire_jeu(simuler_base(<fichiers du jeu>))) identique au jeu versionné"),
+                sans_version(lire_jeu(ecrire_jeu(rejoue, dossier)), m$version_provie), relu)
+  # (ii) concordance avec le script de provenance tests/jeux_v1.R
+  verifier_egal(paste0(nom, " : entrées versionnées = définitions de tests/jeux_v1.R (loi vraie, graines, ",
+                       "extraction, description, déclarations, visa)"),
+                list(relu$loi_vraie, m$graines, m$date_extraction, m$description, relu$declarations, m$date_visa),
+                list(loi_vraie_v1(nom), GRAINES_V1, DATE_EXTRACTION_V1, JEUX_V1[[nom]]$description,
+                     JEUX_V1[[nom]]$declarations, DATE_VISA_V1))
+  verifier_egal(paste0(nom, " : simuler_jeu_v1() identique au jeu versionné (hors version_provie)"),
+                sans_version(simuler_jeu_v1(nom), m$version_provie), relu)
+  # octets (réserve m5) : à version égale, empreintes.md5 entier ; sinon, toutes ses lignes hors
+  # celle de manifeste.txt (seul fichier qui porte version_provie)
+  md5_regenere <- readLines(file.path(dossier, "empreintes.md5"))
+  md5_versionne <- readLines(file.path(versionne, "empreintes.md5"))
+  if (identical(m$version_provie, as.character(utils::packageVersion("provie")))) {
+    verifier_egal(paste0(nom, " : mêmes octets que les fichiers versionnés (empreintes.md5 entier)"),
+                  readBin(file.path(dossier, "empreintes.md5"), "raw", n = 1e6),
+                  readBin(file.path(versionne, "empreintes.md5"), "raw", n = 1e6))
+  }
+  hors_manifeste <- function(l) l[substring(l, 35L) != "manifeste.txt"]
+  verifier_egal(paste0(nom, " : mêmes octets que les fichiers versionnés, hors manifeste.txt (empreintes.md5)"),
+                hors_manifeste(md5_regenere), hors_manifeste(md5_versionne))
+  if (nzchar(Sys.which("md5sum"))) {
+    verifier(paste0(nom, " : md5sum -c empreintes.md5 (depuis le dossier du jeu)"), local({
+      ancien <- setwd(versionne)
+      on.exit(setwd(ancien))
+      is.null(attr(suppressWarnings(system2("md5sum", c("-c", "--quiet", "empreintes.md5"), stdout = TRUE,
+                                            stderr = TRUE)), "status"))
+    }))
+  }
+  # date de visa renseignée (onzième série, (d) ; M188) : le contrôle bascule de lui-même quand la
+  # session renseigne DATE_VISA_V1 et réécrit les jeux
+  if (is.na(DATE_VISA_V1)) {
+    attendu_echec(paste0(nom, " : date_visa renseignée"), "#19, visa du mainteneur en attente (M188)",
+                  !is.na(m$date_visa))
+  } else {
+    verifier(paste0(nom, " : date_visa renseignée"), !is.na(m$date_visa))
+  }
+}
 
 bilan()

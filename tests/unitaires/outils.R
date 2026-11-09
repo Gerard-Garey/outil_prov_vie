@@ -26,16 +26,16 @@ verifier_egal("VERSION_FICHE", outils$VERSION_FICHE, 1L)
 verifier_egal("VERSION_DICTIONNAIRE_ATTENDUE", outils$VERSION_DICTIONNAIRE_ATTENDUE, "1.5")
 verifier_egal("REPRESENTATION_CANONIQUE", outils$REPRESENTATION_CANONIQUE, "provie-resultat-1")
 verifier_egal("VERSION_LISTE", outils$VERSION_LISTE, 1L)
-verifier("MOTIFS_REFUS : dix-huit motifs distincts en minuscules et soulignés",
-         length(outils$MOTIFS_REFUS) == 18L && !anyDuplicated(outils$MOTIFS_REFUS) &&
+verifier("MOTIFS_REFUS : dix-neuf motifs distincts en minuscules et soulignés",
+         length(outils$MOTIFS_REFUS) == 19L && !anyDuplicated(outils$MOTIFS_REFUS) &&
            all(grepl("^[a-z_]+$", outils$MOTIFS_REFUS)))
-verifier("MOTIFS_REFUS contient les motifs de l'ADR 0010, point 11, et fichier_invalide (M141)",
+verifier("MOTIFS_REFUS contient les motifs de l'ADR 0010, point 11, fichier_invalide (M141) et jeu_invalide (onzième série, (f))",
          all(c("plan_incomplet", "plan_invalide", "liste_invalide", "fichier_invalide", "table_base_absente",
                "colonne_absente", "colonne_inconnue", "type_incompatible",
                "extraction_invalide", "arrete_posterieur_extraction",
                "declaration_manquante", "table_absente", "empreinte_discordante",
                "version_discordante", "lien_non_declare", "catalogue_invalide",
-               "dictionnaire_invalide", "format_table_inconnu") %in% outils$MOTIFS_REFUS))
+               "dictionnaire_invalide", "format_table_inconnu", "jeu_invalide") %in% outils$MOTIFS_REFUS))
 
 section("outils : refuser")
 verifier_refus("refuser lève un refus de motif donné", refuser("message", "plan_invalide"),
