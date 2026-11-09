@@ -94,7 +94,7 @@ RUBRIQUES_DECLARATIONS <- c("exclusions", "hypotheses", "seuils", "evaluations_g
 ENTREES_CONVENTIONS <- c("age", "instant_date", "repartition_annee", "fractionnement", "limite_age")
 
 # Contrôles prévus par la spécification (§ 2.4) et reportés (décision du mainteneur : #18 se
-# ferme avec un report déclaré ; issue de report à créer) : rendus dans
+# ferme avec un report déclaré ; #34) : rendus dans
 # controles_non_executes avec la cause `non_implemente` (CAUSE_NON_IMPLEMENTE), pour que le
 # bilan dise lui-même qu'il est partiel. D07 sur evenements : sous-cas (a) et (b).
 # Colonne NA : contrôle qui porte sur plusieurs colonnes, ou sous-cas qui ne doit pas se
@@ -2227,7 +2227,9 @@ controler_base <- function(donnees, arrete, declarations = NULL, conventions = N
 # (rentes.id_membre), ceux de l'assuré du sinistre pour le double effet. Un enfant handicape
 # sous prolongation_handicap, ou de naissance manquante (D03a), n'est jamais éteint ; une
 # limite non déterminable (paramètre absent ou à valeurs distinctes) non plus, et la table va
-# dans controles_non_executes (.CAUSE_PARAMETRE_NON_DEFINI). Traitement
+# dans controles_non_executes (.CAUSE_PARAMETRE_NON_DEFINI) si la limite peut décider de la
+# détection (dossiers : aucun autre enfant non éteint de façon déterminée ; rentes : un seul
+# enfant, toujours). Traitement
 # H ou S. Sans conventions$limite_age : non exécuté (cause declaration_absente) et
 # déclaration requise (rubrique conventions, cles limite_age$regle et limite_age$age).
 # Constat sur la table qui porte la charge (rentes, dossiers), colonne NA ; D07 (a) et (b),
@@ -2341,9 +2343,15 @@ controler_base <- function(donnees, arrete, declarations = NULL, conventions = N
     enfants <- which(a_charge())
     p <- .paires(assure, vv("famille", "id_assure")[enfants])
     if (nrow(p) == 0L) return(rep(FALSE, nd))
-    e <- noter("dossiers", eteint(enfants[p$j], gs[p$i]))
+    x <- eteint(enfants[p$j], gs[p$i])
     nb <- tabulate(p$i, nd)
-    nb_eteints <- tabulate(p$i[e], nd)
+    nb_eteints <- tabulate(p$i[x$eteint], nd)
+    # la limite non déterminable n'est notée que si elle peut décider de la détection : aucun
+    # enfant du dossier non éteint de façon déterminée (avis d'`actuary`) ; un tel enfant
+    # (limite déterminée non atteinte, handicapé sous prolongation, naissance manquante)
+    # écarte le dossier quel que soit l'enfant ambigu
+    bloque <- tabulate(p$i[!x$eteint & !x$non_defini], nd) > 0L
+    noter("dossiers", list(eteint = x$eteint, non_defini = x$non_defini & !bloque[p$i]))
     candidat & nb > 0L & nb_eteints == nb
   })
   invisible(NULL)
