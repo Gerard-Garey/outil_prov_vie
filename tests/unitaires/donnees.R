@@ -593,29 +593,13 @@ ecarts_chev <- vapply(1:300, function(k) {
   !identical(ns$.chevauchements(g, d, f), chev_paires(g, d, f))
 }, TRUE)
 verifier("chevauchements : identique à l'énumération des paires sur 300 tirages (groupes, manquants, fin infinie, renversés)", !any(ecarts_chev))
-# travail de f(...) : les opérations de base qu'appelle f sont remplacées, dans une copie de
-# f, par des enveloppes qui cumulent la longueur de leurs arguments (`&&`, paresseux, n'est
-# pas enveloppé)
-travail_de <- function(f, ...) {
-  travail <- 0
-  env <- new.env(parent = environment(f))
-  for (nom in c("which", "match", "unique", "order", "rep", "c", "seq_along", "seq_len", "==", "!=", "<=", ">=",
-                "<", ">", "&", "|", "!", "is.na", "[", "[<-", "length")) {
-    local({
-      g <- get(nom, envir = baseenv())
-      assign(nom, function(...) {
-        travail <<- travail + sum(lengths(list(...)))
-        g(...)
-      }, envir = env)
-    })
-  }
-  environment(f) <- env
-  f(...)
-  travail
-}
+# travail de .chevauchements : travail_de() de tests/harnais.R, aux opérations vectorielles
+# de base que la fonction appelle
+OPS_CHEV <- c("which", "match", "unique", "order", "rep", "c", "seq_along", "seq_len", "==", "!=", "<=", ">=",
+              "<", ">", "&", "|", "!", "is.na", "[", "[<-", "length")
 groupes_chev <- function(n) list(groupe = rep(sprintf("G%06d", seq_len(n)), each = 3L), debut = rep(c(0, 5, 20), n),
                                  fin = rep(c(10, 15, 30), n))
-travail_chev <- vapply(c(2000L, 8000L), function(n) do.call(travail_de, c(list(ns$.chevauchements), groupes_chev(n))), 0)
+travail_chev <- vapply(c(2000L, 8000L), function(n) do.call(travail_de, c(list(ns$.chevauchements), groupes_chev(n), list(ops = OPS_CHEV))), 0)
 verifier("performance : travail de .chevauchements de 2 000 à 8 000 groupes de 3 intervalles multiplié par moins de 6 (linéaire : 4 ; boucle par groupe : 16 ; #35)",
          travail_chev[2L] / travail_chev[1L] < 6)
 perf_garanties <- function(n) {
@@ -2037,13 +2021,19 @@ verifier_egal("performance : paires de clés (.paires, .composer) sans jointure 
               list(ns$.paires(c("a", NA, "b", "a"), c("b", "a", "a", NA)),
                    ns$.composer(data.frame(i = 1:2, j = c(2L, 1L)), data.frame(i = c(1L, 2L, 2L), j = c(10L, 20L, 30L)))),
               list(data.frame(i = c(1L, 1L, 3L, 4L, 4L), j = c(2L, 3L, 1L, 2L, 3L)), data.frame(i = c(1L, 1L, 2L), j = c(20L, 30L, 10L))))
-# croissance plutôt que durée absolue (réserve m-a de l'audit : une durée dépend de la machine) :
-# rapport des durées à 8 000 et 2 000 dossiers, meilleure de deux mesures ; linéaire, il vaut
-# environ 4 (moins avec les coûts fixes) ; quadratique (rattachement d'avant (ii-c)), environ 16.
-# Borne 10, large : seule une croissance quadratique la franchit.
-duree <- function(nd) { b <- perf(nd); min(vapply(1:2, function(i) system.time(cb(b))[["elapsed"]], 0)) }
-verifier("performance : durée de 2 000 à 8 000 dossiers d'un même sinistre (écart D01a sur evenements) multipliée par moins de 10 (rattachement linéaire)",
-         duree(8000L) / max(duree(2000L), 0.01) < 10)
+# croissance plutôt que durée, et travail plutôt qu'horloge (une durée dépend de la charge de
+# la machine ; réserve m-a de l'audit, #45) : travail de controler_base (travail_de() de
+# tests/harnais.R : somme des tailles des arguments des opérations vectorielles de base,
+# comptées dans controler_base et dans toutes les fonctions du package qu'elle appelle),
+# rapport du travail à 2 000 et 500 dossiers : environ 3,5 (linéaire, frais fixes compris ;
+# 4 sans eux) ; 12 si le rattachement par le sinistre n'est pas restreint aux événements sans
+# dossier (rattachement d'avant (ii-c), paires de chaque événement avec tous les dossiers du
+# sinistre ; mesuré). Borne 6 : seule une croissance quadratique la franchit.
+OPS_CB <- c("which", "match", "unique", "order", "rep", "c", "rbind", "==", "!=", "<=", ">=", "<", ">", "&", "|", "!",
+            "is.na", "[[")
+travail_cb <- function(b, ...) travail_de(ns$controler_base, b, A, ..., ops = OPS_CB, sous = fonctions_de(ns))
+verifier("performance : travail de controler_base de 500 à 2 000 dossiers d'un même sinistre (écart D01a sur evenements) multiplié par moins de 6 (rattachement linéaire ; quadratique : 12)",
+         travail_cb(perf(2000L)) / travail_cb(perf(500L)) < 6)
 
 section("donnees : D02c (âge), D07 (c), causes directes (D12), enjeu sous lien de garantie non résolu")
 emplois <- names(ns$.EMPLOIS_D02C)
@@ -2218,10 +2208,11 @@ verifier_egal("D07 (c) sous options(warn = 2), famille.date_deces ou evenements.
               m2, rep(list(c("dossiers NA type_incompatible", "rentes NA type_incompatible")), 2L))
 # constat m1 de l'audit : croissance avec D02c et D07 (c) exécutés (seuils et conventions
 # déclarés) : n dossiers double effet non clos de l'assuré de ME1 (n paires enfant, dossier)
-# et n conjoints en famille (D02c) ; même borne large que le test de croissance précédent
-# (mesuré : 0,25 s à 2 000, 0,74 s à 8 000). Les garanties y sont peu nombreuses : la
-# croissance en nombre de garanties portant un paramètre (constat M3) est testée à la
-# section règle B (#35 ; .chevauchements, hors de D07 (c), y était quadratique).
+# et n conjoints en famille (D02c) ; travail de controler_base à 4 000 et 1 000 dossiers (même
+# mesure et même borne que le test de croissance précédent ; environ 3,7 si linéaire, 8,6 si
+# calculer_age accumule ses résultats élément par élément ; mesuré). Les garanties y sont peu
+# nombreuses : la croissance en nombre de garanties portant un paramètre (constat M3) est
+# testée à la section règle B (#35 ; .chevauchements, hors de D07 (c), y était quadratique).
 perf_decl <- function(n) {
   b <- de("1999-03-01")
   dz <- b$dossiers[rep(nrow(b$dossiers), n), ]; dz$id_dossier <- sprintf("DX%06d", seq_len(n)); b$dossiers <- rbind(b$dossiers, dz)
@@ -2229,14 +2220,13 @@ perf_decl <- function(n) {
   b$famille <- rbind(b$famille, fz)
   b
 }
-duree_decl <- function(n) {
-  b <- perf_decl(n)
-  min(vapply(1:2, function(i) system.time(cb(b, declarations = list(seuils = seuils_age(0, 120)), conventions = conv_age))[["elapsed"]], 0))
+travail_decl <- function(n) {
+  travail_cb(perf_decl(n), declarations = list(seuils = seuils_age(0, 120)), conventions = conv_age)
 }
 r <- cb(perf_decl(20L), declarations = list(seuils = seuils_age(0, 120)), conventions = conv_age)
-verifier("performance : D02c et D07 (c) exécutés (aucun non exécuté hors evenements) ; durée de 2 000 à 8 000 dossiers double effet et conjoints multipliée par moins de 10",
+verifier("performance : D02c et D07 (c) exécutés (aucun non exécuté hors evenements) ; travail de 1 000 à 4 000 dossiers double effet et conjoints multiplié par moins de 6",
          nrow(ligne(r$controles_non_executes, c("D02c", "D07"), NULL)) == 1L && ligne(r$controles, "D07", "dossiers")$nombre == 21L &&
-           duree_decl(8000L) / max(duree_decl(2000L), 0.01) < 10)
+           travail_decl(4000L) / travail_decl(1000L) < 6)
 verifier("D07 (c) : convention de limite d'âge hors liste : plan_invalide (M164)",
          all(c(motif_de(cb(base_ref, conventions = cv("atteinte", "plus_proche"))),
                motif_de(cb(base_ref, conventions = cv("atteinte", "naissance_31_decembre"))),
