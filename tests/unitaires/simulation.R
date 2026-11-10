@@ -359,6 +359,22 @@ for (arrete in list(A, A0)) {
   }
 }
 
+# W8 (#40, précision P2) : sans déclaration au 2024-12-31, PR00027 (D03g) est non déterminée,
+# hors de la population des règles V : aucune ligne de controles_non_executes pour son propre
+# verdict (D02a sur prestations.fin_periode la détecte quand elle est visible) ; les autres
+# lignes non exécutées sont celles du bilan avec déclarations, plus les seuils de D02c et la
+# composante paiements_cumules de l'enjeu (inchangées à 325555f)
+r_sans <- controler_base(j2$base, A0, conventions = j2$declarations$conventions)
+r_avec <- bilan_de(j2, A0)
+cles_ne <- function(r) with(r$controles_non_executes, paste(code, table, colonne, cause))
+verifier_egal("W8 (#40) : v1-modeste-02 sans déclaration au 2024-12-31 : PR00027 non déterminée (D03g), aucune ligne (D02a, prestations) dans controles_non_executes ; lignes non exécutées = celles avec déclarations, plus D02c (declaration_absente) et paiements_cumules (D09, inchangé) ; D02a sur PR00039 seule",
+              list(with(r_sans$vue$visibilite_non_determinee, identifiants[table == "prestations"]),
+                   nrow(r_sans$controles_non_executes[r_sans$controles_non_executes$code == "D02a", ]),
+                   setdiff(cles_ne(r_sans), cles_ne(r_avec)),
+                   r_sans$controles$identifiants[r_sans$controles$code == "D02a"]),
+              list("PR00027", 0L, c("D02c assures NA declaration_absente", "D02c famille NA declaration_absente",
+                                    "paiements_cumules prestations montant D09"), "PR00039"))
+
 section("lecture : ecrire_jeu() et lire_jeu() (ADR 0010, point 20)")
 dossier <- tempfile("jeu-")
 verifier("ecrire_jeu() rend le dossier, invisible", identical(withVisible(ecrire_jeu(j2, dossier))$visible, FALSE))

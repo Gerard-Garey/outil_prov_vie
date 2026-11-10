@@ -172,6 +172,11 @@ CONVENTIONS_LIMITE_AGE <- c("revolu", "millesime")
 # erreur d'arrondi d'une somme de fractions en double précision (1/3 + 1/3 + 1/3), non une
 # tolérance de gestion.
 .TOLERANCE_PARTS <- sqrt(.Machine$double.eps)
+# Nombre de bénéficiaires non déterminés d'un même dossier au-delà duquel somme_parts n'énumère
+# pas leurs sous-sommes (2^k), dans le seul cas que les raccourcis exacts ne tranchent pas :
+# verdict inconnu pour le dossier, ligne écartée avec la cause (γ) (spécification v1.5.4,
+# § 2.2 (d) ; avis d'`actuary`).
+.MAX_PARTS_ND <- 20L
 
 # Garanties de rente (dossier porteur d'une ligne de `rentes`, dictionnaire, § 3, T12) ;
 # garanties d'un capital fixé (`fixation_capital`, dictionnaire, § 4).
@@ -2588,6 +2593,14 @@ controler_base <- function(donnees, arrete, declarations = NULL, conventions = N
 # règle (cause : son motif). `vue` : colonnes d'autres tables lues pour établir leur vue,
 # qui s'ajoutent à celles de la table (`lit_vue`) : un refus de valeur sur l'une d'elles ne
 # bloque pas la règle, ses lignes étant hors de la vue (M200 ; .regle()).
+# Verdict à trois valeurs (spécification v1.5, § 2.2 (d) ; M218, lecture (ii), précision P2) :
+# la population est la vue (lignes retenues ; famille : versions valables déterminées, et
+# dernière version visible d'un membre à version valable non déterminée, .verdict_vue()) ; une
+# ligne non déterminée en est exclue, sans ligne de controles_non_executes pour son propre
+# verdict. `f()` rend un vecteur logique ; s'il porte l'attribut `index` (.verdict3(),
+# .existe_vue3()), une valeur NA est un verdict inconnu : la ligne est écartée de la détection
+# (nombre minorant) et la règle garde une ligne dans controles_non_executes, cause (γ)
+# (.cause_nd()). Sans cet attribut, NA vaut « non détecté » (inchangé).
 .regle_vue <- function(ctx, code, table, colonne, lit, traitement, detection, f, colonne_ne = colonne,
                        vue = character(0)) {
   if (is.null(ctx$base[[table]])) return(invisible(integer(0)))
@@ -2595,11 +2608,170 @@ controler_base <- function(donnees, arrete, declarations = NULL, conventions = N
   # à l'arrêté égal à l'extraction, aucune ligne n'est non déterminée (spécification, § 2.2,
   # (g)) : les colonnes lues pour la vue (famille : version valable) sont lues comme valeurs
   totale <- .vue_totale(ctx)
-  .regle(ctx, code, table, colonne, if (totale) c(lit, vue, cle, ctx$lit_vue[[table]]) else c(lit, cle), traitement,
-         detection, function() {
-    r <- f()
-    !is.na(r) & r & ctx$retenu[[table]]
+  ecart <- NULL
+  res <- .regle(ctx, code, table, colonne, if (totale) c(lit, vue, cle, ctx$lit_vue[[table]]) else c(lit, cle), traitement,
+                detection, function() {
+    r <- .verdict_vue(ctx, table, f)
+    x <- ifelse(attr(r, "population"), r, FALSE)
+    if (!is.null(attr(r, "index"))) {
+      ecart <<- list(lignes = which(is.na(x)), index = attr(r, "index"))
+    }
+    x %in% TRUE
   }, colonne_ne, vue = if (totale) character(0) else c(vue, ctx$lit_vue[[table]]))
+  if (!is.null(res) && length(ecart$lignes) > 0L) {
+    .ajouter_non_execute(ctx, code, table, colonne_ne, .cause_nd(ctx, ecart$index, ecart$lignes, code, table))
+  }
+  invisible(res)
+}
+
+# Verdict de `f()` sur la population de la règle V de `table` (attribut `population`) : les
+# lignes retenues par la vue ; pour famille, aussi la dernière version visible d'un membre à
+# version valable non déterminée, dont le verdict est celui de chaque candidate
+# (.visibilite_a(), `candidate`) : `f()` est évaluée avec les candidates dans la vue (verdict
+# propre à la ligne : D03a, D03b, D02a et D02c sur famille), et la version visible prend le
+# verdict commun de ses candidates, inconnu (NA) s'il varie, éléments non déterminés : les
+# candidates non déterminées de verdict différent (spécification v1.5, § 2.2 (c) 6 et (d) ;
+# M216, M218).
+.verdict_vue <- function(ctx, table, f) {
+  population <- ctx$retenu[[table]]
+  ev <- if (table == "famille" && !.vue_totale(ctx)) .visibilite_a(ctx, "vue") else NULL
+  if (is.null(ev$candidate) || !any(ev$candidate)) {
+    r <- f()
+    attr(r, "population") <- population
+    return(r)
+  }
+  retenu <- ctx$retenu$famille
+  on.exit(ctx$retenu$famille <- retenu)
+  ctx$retenu$famille <- retenu | ev$candidate
+  r0 <- f()
+  ctx$retenu$famille <- retenu
+  visible <- which(ev$candidate & ev$statut$famille %in% TRUE)
+  nd <- which(ev$candidate & is.na(ev$statut$famille))
+  index0 <- attr(r0, "index")
+  r <- as.vector(r0)
+  r[ev$candidate] <- FALSE
+  index <- if (is.null(index0)) list() else lapply(index0, function(z) { z[ev$candidate] <- list(NULL); z })
+  index$famille <- if (is.null(index$famille)) vector("list", length(r)) else index$famille
+  # candidates non déterminées de chaque membre (un regroupement, travail linéaire)
+  nd_membre <- split(nd, ev$membre[nd])[ev$membre[visible]]
+  for (k in seq_along(visible)) {
+    i <- visible[k]
+    autres <- nd_membre[[k]]
+    v <- r0[c(i, autres)]
+    differe <- autres[!(r0[autres] %in% r0[i])]
+    r[i] <- if (all(v %in% TRUE)) TRUE else if (all(v %in% FALSE)) FALSE else NA
+    if (is.na(r[i])) {
+      index$famille[[i]] <- if (is.na(r0[i])) autres else differe
+      for (tc in names(index0)) index[[tc]][[i]] <- unique(unlist(index0[[tc]][c(i, autres)]))
+    }
+  }
+  population[visible] <- TRUE
+  attr(r, "index") <- index
+  attr(r, "population") <- population
+  r
+}
+
+# Lignes de `table` de statut non déterminé dans la vue (évaluation unique, .visibilite_a()),
+# hors table refusée en portée table (aucune ligne dans la vue, écart (i)) ; aucune à l'arrêté
+# égal à l'extraction (spécification, § 2.2 (g)). Famille : versions de statut non déterminé
+# (les candidates d'un membre à version valable non déterminée relèvent de .verdict_vue()).
+.nd_vue <- function(ctx, table) {
+  n <- NROW(ctx$base[[table]])
+  if (.vue_totale(ctx) || !is.null(ctx$refus_pv$tables[[table]])) return(rep(FALSE, n))
+  is.na(.visibilite_a(ctx, "vue")$statut[[table]])
+}
+
+# Entrée à trois valeurs (.verdict3()) « il existe une ligne de `table` dans la vue, de clé
+# `cle` égale à `valeurs_cle`, qui satisfait `p` (vecteur logique sur les lignes de `table`,
+# valeurs brutes) » (forme « absence » des règles V, spécification v1.5, § 2.2 (d)) : vraie si
+# une ligne retenue satisfait ; inconnue si aucune ne satisfait parmi les retenues et qu'une
+# ligne non déterminée (.nd_vue()) satisfait ; fausse sinon. Une clé NA ne s'apparie pas.
+# `index` : lignes non déterminées qui rendent l'entrée inconnue (cause, .cause_nd()).
+.existe_vue3 <- function(ctx, table, valeurs_cle, cle, p) {
+  p <- p %in% TRUE & !is.na(cle)
+  existe <- valeurs_cle %in% cle[ctx$retenu[[table]] & p]
+  nd <- which(.nd_vue(ctx, table) & p)
+  inconnu <- !existe & valeurs_cle %in% cle[nd]
+  index <- vector("list", length(existe))
+  if (any(inconnu)) {
+    g <- split(nd, as.character(cle[nd]))
+    index[inconnu] <- unname(g[as.character(valeurs_cle[inconnu])])
+  }
+  list(tc = table, valeurs = existe, inconnu = inconnu, index = index, domaine = c(TRUE, FALSE))
+}
+
+# Cause (γ) d'une règle V qui écarte les lignes `lignes` (spécification v1.5, § 3.1 ; M218) :
+# éléments non déterminés dont l'état peut changer le verdict (`index` : par « table » ou
+# « table.colonne » de partie de ligne, lignes de la table pour chaque ligne de la règle).
+# Cause d'un élément : le motif du refus pour une ligne ou une partie non déterminée par un
+# refus de valeur ; declaration_absente pour D02b ou D03g ; pour parente_non_determinee, la
+# cause de l'ascendante la plus proche non déterminée par elle-même (récursivement, par les
+# liens de la règle 1). Entre plusieurs éléments, la priorité des causes (cause directe, rang
+# 3, avant declaration_absente, rang 6), puis l'ordre de vue$visibilite_non_determinee. Une
+# ligne écartée sans élément qui l'explique est une erreur interne.
+.cause_nd <- function(ctx, index, lignes, code, table) {
+  if (is.null(ctx$cles_nd)) {
+    nd <- .visibilite_non_determinee(ctx)
+    ctx$cles_nd <- paste(nd$table, nd$colonne, nd$motif, nd$origine, sep = "\r")
+  }
+  liens <- .liens_visibilite(ctx$dico)
+  liens <- liens[liens$table %in% ctx$tables & liens$table_cible %in% ctx$tables, , drop = FALSE]
+  statut <- .visibilite_a(ctx, "vue")$statut
+  meilleure <- list(rang = Inf, position = Inf, cause = NA_character_)
+  retenir <- function(k) {
+    rang <- if (k$motif %in% .MOTIFS_REGLE_P) .RANGS_CAUSES[["declaration_absente"]] else .RANG_CAUSE_DIRECTE
+    position <- match(paste(k$table, k$colonne, k$motif, k$origine, sep = "\r"), ctx$cles_nd)
+    if (rang < meilleure$rang || (rang == meilleure$rang && position < meilleure$position)) {
+      meilleure <<- list(rang = rang, position = position,
+                         cause = if (k$motif %in% .MOTIFS_REGLE_P) "declaration_absente" else k$motif)
+    }
+  }
+  # inscriptions de `t` (colonne `colonne`) qui portent l'une des lignes `l` : les causes des
+  # inscriptions propres sont retenues ; rend les lignes de `l` inscrites par elles-mêmes
+  # (`propre`) et celles inscrites seulement sous parente_non_determinee (`parente`)
+  inscriptions <- function(t, colonne, l) {
+    propre <- integer(0)
+    parente <- integer(0)
+    for (k in ctx$lignes_nd) {
+      if (k$table != t || !identical(k$colonne, colonne)) next
+      x <- intersect(k$lignes, l)
+      if (length(x) == 0L) next
+      if (k$motif == "parente_non_determinee") parente <- c(parente, x) else { retenir(k); propre <- c(propre, x) }
+    }
+    list(propre = unique(propre), parente = setdiff(parente, propre))
+  }
+  # ascendante non déterminée la plus proche qui l'est par elle-même, niveau par niveau, pour
+  # chaque ligne de `t` inscrite sous parente_non_determinee
+  ascendantes <- function(t, l) {
+    niveau <- stats::setNames(list(l), t)
+    while (length(unlist(niveau)) > 0L) {
+      suivant <- list()
+      trouve <- FALSE
+      for (t1 in names(niveau)) {
+        for (i in which(liens$table == t1)) {
+          u <- liens$table_cible[i]
+          cles <- .valeurs(ctx, t1, liens$colonne[i])[niveau[[t1]]]
+          p <- which(.valeurs(ctx, u, liens$colonne_cible[i]) %in% cles[!is.na(cles)] & is.na(statut[[u]]))
+          if (length(p) == 0L) next
+          x <- inscriptions(u, NA_character_, p)
+          if (length(x$propre) > 0L) trouve <- TRUE
+          suivant[[u]] <- unique(c(suivant[[u]], x$parente))
+        }
+      }
+      if (trouve) break
+      niveau <- suivant
+    }
+  }
+  for (tc in names(index)) {
+    l <- sort(unique(unlist(index[[tc]][lignes])))
+    if (length(l) == 0L) next
+    m <- strsplit(tc, ".", fixed = TRUE)[[1L]]
+    x <- inscriptions(m[1L], if (length(m) > 1L) m[2L] else NA_character_, l)
+    for (r in x$parente) ascendantes(m[1L], r)
+  }
+  if (is.na(meilleure$cause)) stop("erreur interne de provie : r\u00e8gle V : ligne \u00e9cart\u00e9e sans \u00e9l\u00e9ment non ",
+                                   "d\u00e9termin\u00e9 qui l'explique (", code, ", ", table, ")", call. = FALSE)
+  meilleure$cause
 }
 
 # Visibilité non déterminée (M156, D1) : une ligne par (table, colonne, motif, origine) ;
@@ -2641,7 +2813,50 @@ controler_base <- function(donnees, arrete, declarations = NULL, conventions = N
     if (!any(ok)) return(rep(FALSE, length(part)))
     somme <- rowsum(part[ok], dossier[ok])
     s <- somme[match(dossier, rownames(somme)), 1L]
-    !is.na(s) & abs(s - 1) > .TOLERANCE_PARTS
+    r <- !is.na(s) & abs(s - 1) > .TOLERANCE_PARTS
+    # bénéficiaires non déterminés du dossier (spécification v1.5, § 2.2 (d)) : verdict inconnu
+    # si une sous-somme de leurs parts, ajoutée à celle des visibles, tombe à moins de la
+    # tolérance de 1 alors qu'une autre n'y tombe pas ; les parts étant positives (]0 ; 1]), les
+    # sommes vont de celle des visibles à celle de tous, et une sous-somme qui dépasse
+    # 1 + tolérance n'y revient pas
+    brut <- as.character(.valeurs(ctx, "beneficiaires", "id_dossier"))
+    nd <- which(.nd_vue(ctx, "beneficiaires") & !is.na(brut))
+    l <- which(!is.na(s) & dossier %in% brut[nd])
+    if (length(l) == 0L) return(r)
+    # parts et lignes non déterminées du dossier de chaque ligne de `l` (un regroupement)
+    parts_nd <- split(.valeurs(ctx, "beneficiaires", "part")[nd], brut[nd])[dossier[l]]
+    lignes_nd <- split(nd, brut[nd])[dossier[l]]
+    index <- vector("list", length(r))
+    # raccourcis exacts en O(k) (V : somme des visibles ; T : des non déterminées ; [a, b] :
+    # tolérance autour de 1) : vrai si V > b ou V + T < a ; faux si V et V + T dans [a, b] ;
+    # inconnu si leurs verdicts diffèrent, ou si V < a, V + T > b et chaque part non
+    # déterminée vaut au plus b - a (les sommes partielles franchissent [a, b] par pas d'au plus
+    # b - a) ; cas résiduel : énumération des sous-sommes, au plus .MAX_PARTS_ND parts, inconnu
+    # au-delà (avis d'`actuary`)
+    bas <- 1 - .TOLERANCE_PARTS
+    haut <- 1 + .TOLERANCE_PARTS
+    for (k in seq_along(l)) {
+      i <- l[k]
+      p <- parts_nd[[k]]
+      v <- s[i]
+      vt <- v + sum(p)
+      if (v > haut || vt < bas) next
+      dans_v <- v >= bas && v <= haut
+      dans_vt <- vt >= bas && vt <= haut
+      if (dans_v && dans_vt) next
+      inconnu <- dans_v != dans_vt || all(p <= haut - bas) || length(p) > .MAX_PARTS_ND
+      if (!inconnu) {
+        sommes <- v
+        for (x in p) sommes <- unique(c(sommes, (sommes + x)[sommes + x <= haut]))
+        inconnu <- any(sommes >= bas & sommes <= haut)
+      }
+      if (inconnu) {
+        r[i] <- NA
+        index[[i]] <- lignes_nd[[k]]
+      }
+    }
+    attr(r, "index") <- list(beneficiaires = index)
+    r
   })
   .regle_v_manquants(ctx)
   .regle_v_ordre_dates(ctx)
@@ -2717,8 +2932,23 @@ controler_base <- function(donnees, arrete, declarations = NULL, conventions = N
   t <- "X;H"
   # date_debut > date_fin : contrats, versions de garanties, affiliations, ayants droit
   # santé ; termes et début de gestion d'un contrat avant son effet
-  .regle_vue(ctx, "D02a", "contrats", "date_fin", "contrats.date_effet", t, "exacte",
-             function() apres(vv("contrats", "date_effet"), vv("contrats", "date_fin")))
+  # fin d'un contrat ou d'une affiliation, partie de ligne (spécification v1.5, § 2.2 (d)) :
+  # partie connue, comparaison ; non connue à l'arrêté (déterminé), faux ; non déterminée
+  # (inscrite sous la colonne de la partie), inconnu si le début dépasse la fin (valeurs
+  # brutes), faux sinon
+  fin_partie <- function(table, debut) function() {
+    r <- apres(vv(table, debut), vv(table, "date_fin"))
+    nd <- ctx$retenu[[table]] & ctx$partie_nd[[table]]
+    if (!any(nd)) return(r)
+    brut <- function(c1) as.numeric(.valeurs(ctx, table, c1))
+    l <- which(nd & apres(brut(debut), brut("date_fin")))
+    r[l] <- NA
+    index <- vector("list", length(r))
+    index[l] <- as.list(l)
+    attr(r, "index") <- stats::setNames(list(index), paste(table, "date_saisie_fin", sep = "."))
+    r
+  }
+  .regle_vue(ctx, "D02a", "contrats", "date_fin", "contrats.date_effet", t, "exacte", fin_partie("contrats", "date_effet"))
   .regle_vue(ctx, "D02a", "contrats", "date_terme", "contrats.date_effet", t, "exacte",
              function() apres(vv("contrats", "date_effet"), vv("contrats", "date_terme")))
   .regle_vue(ctx, "D02a", "contrats", "date_debut_gestion", "contrats.date_effet", t, "exacte",
@@ -2726,7 +2956,7 @@ controler_base <- function(donnees, arrete, declarations = NULL, conventions = N
   .regle_vue(ctx, "D02a", "garanties_souscrites", "date_fin", "garanties_souscrites.date_effet", t, "exacte",
              function() apres(vv("garanties_souscrites", "date_effet"), vv("garanties_souscrites", "date_fin")))
   .regle_vue(ctx, "D02a", "affiliations", "date_fin", "affiliations.date_debut", t, "exacte",
-             function() apres(vv("affiliations", "date_debut"), vv("affiliations", "date_fin")))
+             fin_partie("affiliations", "date_debut"))
   .regle_vue(ctx, "D02a", "ayants_droit_sante", "fin_couverture", "ayants_droit_sante.debut_couverture", t, "exacte",
              function() apres(vv("ayants_droit_sante", "debut_couverture"), vv("ayants_droit_sante", "fin_couverture")))
   # debut_periode > fin_periode
@@ -2800,6 +3030,34 @@ controler_base <- function(donnees, arrete, declarations = NULL, conventions = N
       meme_cle <- duplicated(data.frame(contenu, .cle = .valeurs(ctx, table, cle)[o], stringsAsFactors = FALSE))
       copie <- rep(FALSE, length(retenu))
       copie[o[duplicated(contenu) & !meme_cle]] <- TRUE
+      # lignes non déterminées (spécification v1.5, § 2.2 (d)) : une ligne qu'aucune ligne visible
+      # ne précède est de verdict inconnu si une ligne non déterminée de même contenu peut la
+      # précéder (ordre connu antérieur, ou date de visibilité absente ou inconnue : placée en
+      # tête) ; toutes dans la vue ainsi placées, chaque ligne a ses prédécesseurs possibles
+      nd <- .nd_vue(ctx, table)
+      if (!any(nd)) return(copie)
+      date_o <- as.numeric(.valeurs(ctx, table, date))
+      date_o[nd & (is.na(date_o) | .inconnu(ctx, table, date))] <- -Inf
+      o2 <- order(date_o, .valeurs(ctx, table, cle), method = "radix", na.last = TRUE)
+      o2 <- o2[retenu[o2] | nd[o2]]
+      # contenu en clé exacte (nombres et dates en hexadécimal, sans arrondi)
+      exacte <- function(x) ifelse(is.na(x), "\001", if (is.numeric(x) || inherits(x, "Date")) sprintf("%a", as.numeric(x))
+                                   else paste0("=", x))
+      groupe <- do.call(paste, c(lapply(colonnes, function(c1) exacte(.valeurs(ctx, table, c1)[o2])), sep = "\r"))
+      groupe <- match(groupe, groupe)
+      possible <- rep(FALSE, length(retenu))
+      possible[o2[duplicated(groupe)]] <- TRUE
+      l <- which(retenu & !copie & possible)
+      if (length(l) == 0L) return(copie)
+      # lignes non déterminées de chaque groupe de contenu, dans l'ordre o2 (un passage) ; une
+      # ligne écartée ne lit que celles de son groupe qui la précèdent (travail linéaire)
+      rang <- match(seq_along(retenu), o2)
+      pos_nd <- which(nd[o2])
+      nd_groupe <- split(pos_nd, groupe[pos_nd])
+      index <- vector("list", length(retenu))
+      index[l] <- Map(function(q, r) o2[q[q < r]], nd_groupe[match(groupe[rang[l]], as.integer(names(nd_groupe)))], rang[l])
+      copie[l] <- NA
+      attr(copie, "index") <- stats::setNames(list(index), table)
       copie
     }
     for (t in c("S", "X")) {
@@ -2838,7 +3096,18 @@ controler_base <- function(donnees, arrete, declarations = NULL, conventions = N
     cloture <- type() %in% "cloture_dossier" &
       ((motif() %in% "regle" & !(dossier %in% payes[!is.na(payes)])) |
          (motif() %in% "depot_cdc" & !(dossier %in% capital[!is.na(capital)])))
-    sans_justificatif | cloture
+    r <- sans_justificatif | cloture
+    # prestations non déterminées (spécification v1.5, § 2.2 (d)) : « sans prestation du
+    # dossier » vrai si aucune prestation visible ni non déterminée, faux si une visible,
+    # inconnu sinon ; verdict (a) OU (b)
+    if (!any(.nd_vue(ctx, "prestations"))) return(r)
+    brut <- .valeurs(ctx, "prestations", "id_dossier")
+    tout <- .existe_vue3(ctx, "prestations", dossier, brut, rep(TRUE, length(brut)))
+    cap <- .existe_vue3(ctx, "prestations", dossier, brut, .valeurs(ctx, "prestations", "type_prestation") %in% "capital")
+    clot <- type() %in% "cloture_dossier"
+    .verdict3(list(sj = .connue3("sj", sans_justificatif), regle = .connue3("regle", clot & motif() %in% "regle"),
+                   cdc = .connue3("cdc", clot & motif() %in% "depot_cdc"), tout = tout, cap = cap),
+              function(x) x$sj | (x$regle & !x$tout) | (x$cdc & !x$cap))
   }, vue = ctx$lit_vue$prestations)
   # D13 : instruction absente (à l'arrêté) d'un sinistre décès dont le dossier `deces` a une
   # prestation `capital` visible
@@ -2851,8 +3120,19 @@ controler_base <- function(donnees, arrete, declarations = NULL, conventions = N
     gs <- .joindre(ctx, "dossiers", "id_dossier", "id_garantie_souscrite", p_dossier)
     code <- .joindre(ctx, "garanties_souscrites", "id_garantie_souscrite", "code_garantie", gs)
     sinistres <- .joindre(ctx, "dossiers", "id_dossier", "id_sinistre", p_dossier[code %in% "deces"])
-    vv("sinistres", "nature_sinistre") %in% "deces" & is.na(vv("sinistres", "date_instruction")) &
-      .valeurs(ctx, "sinistres", "id_sinistre") %in% sinistres[!is.na(sinistres)]
+    sans <- vv("sinistres", "nature_sinistre") %in% "deces" & is.na(vv("sinistres", "date_instruction"))
+    r <- sans & .valeurs(ctx, "sinistres", "id_sinistre") %in% sinistres[!is.na(sinistres)]
+    # prestations non déterminées (spécification v1.5, § 2.2 (d)) : vrai si une prestation
+    # `capital` d'un dossier `deces` du sinistre est visible ; faux si aucune n'est visible ni
+    # non déterminée ; inconnu sinon
+    if (!any(.nd_vue(ctx, "prestations"))) return(r)
+    brut <- .valeurs(ctx, "prestations", "id_dossier")
+    code_brut <- .joindre(ctx, "garanties_souscrites", "id_garantie_souscrite", "code_garantie",
+                          .joindre(ctx, "dossiers", "id_dossier", "id_garantie_souscrite", brut))
+    paye <- .existe_vue3(ctx, "prestations", .valeurs(ctx, "sinistres", "id_sinistre"),
+                         .joindre(ctx, "dossiers", "id_dossier", "id_sinistre", brut),
+                         .valeurs(ctx, "prestations", "type_prestation") %in% "capital" & code_brut %in% "deces")
+    .verdict3(list(sans = .connue3("sans", sans), paye = paye), function(x) x$sans & x$paye)
   }, vue = ctx$lit_vue$prestations)
   invisible(NULL)
 }
@@ -2902,8 +3182,31 @@ controler_base <- function(donnees, arrete, declarations = NULL, conventions = N
       !is.na(survenance[i]) && length(j) > 0L &&
         any(!is.na(effet[j]) & effet[j] <= survenance[i] & (is.na(fin[j]) | fin[j] >= survenance[i]))
     }, NA)
-    code %in% c("rente_conjoint", "rente_education", "double_effet") & souscrite &
-      !(sinistre %in% avec_deces[!is.na(avec_deces)])
+    vise <- code %in% c("rente_conjoint", "rente_education", "double_effet")
+    r <- vise & souscrite & !(sinistre %in% avec_deces[!is.na(avec_deces)])
+    # dossiers et versions non déterminés (spécification v1.5, § 2.2 (d) ; M209) : « sans
+    # dossier `deces` dans la vue » vrai si aucun visible ni non déterminé, faux si un visible,
+    # inconnu sinon ; « décès souscrit » vrai si une version visible en vigueur à la survenance,
+    # faux si aucune visible ni non déterminée, inconnu sinon ; conjonction
+    nd_gs <- .nd_vue(ctx, "garanties_souscrites")
+    if (!any(.nd_vue(ctx, "dossiers")) && !any(nd_gs)) return(r)
+    deces_dossier <- .existe_vue3(ctx, "dossiers", sinistre, .valeurs(ctx, "dossiers", "id_sinistre"),
+                                  joindre_gs("code_garantie", .valeurs(ctx, "dossiers", "id_garantie_souscrite")) %in% "deces")
+    versions_nd <- which(nd_gs & .valeurs(ctx, "garanties_souscrites", "code_garantie") %in% "deces")
+    cle_nd <- paste(.valeurs(ctx, "garanties_souscrites", "id_contrat")[versions_nd],
+                    .valeurs(ctx, "garanties_souscrites", "college")[versions_nd], sep = "\r")
+    effet_nd <- as.numeric(.valeurs(ctx, "garanties_souscrites", "date_effet"))[versions_nd]
+    fin_nd <- as.numeric(.valeurs(ctx, "garanties_souscrites", "date_fin"))[versions_nd]
+    index <- vector("list", length(gs))
+    for (i in which(vise & !souscrite & !is.na(survenance))) {
+      j <- which(cle_nd == cle_dossier[i] & !is.na(effet_nd) & effet_nd <= survenance[i] &
+                   (is.na(fin_nd) | fin_nd >= survenance[i]))
+      if (length(j) > 0L) index[[i]] <- versions_nd[j]
+    }
+    sous <- list(tc = "garanties_souscrites", valeurs = souscrite, inconnu = lengths(index) > 0L, index = index,
+                 domaine = c(TRUE, FALSE))
+    .verdict3(list(vise = .connue3("vise", vise), sous = sous, deces = deces_dossier),
+              function(x) x$vise & x$sous & !x$deces)
   }, vue = ctx$lit_vue$garanties_souscrites)
   invisible(NULL)
 }
@@ -2935,20 +3238,32 @@ controler_base <- function(donnees, arrete, declarations = NULL, conventions = N
   v <- function(t, c1) .valeurs(ctx, t, c1)
   vv <- function(t, c1) .valeurs_vue(ctx, t, c1)
   present <- function(t) !is.null(ctx$base[[t]])
+  # lignes non déterminées de la vue, valeurs brutes (NA ailleurs) : références possibles d'un
+  # assuré (spécification v1.5, § 2.2 (d))
+  vnd <- function(t, c1) { x <- v(t, c1); x[!.nd_vue(ctx, t)] <- NA; x }
   # personne (ligne de la table de l'emploi) et date de référence, sur les lignes de la vue
-  assure_de <- function(t) match(as.character(vv(t, "id_assure")), as.character(v("assures", "id_assure")), incomparables = NA)
+  # (`val` : .valeurs_vue(), ou `vnd` sur les lignes non déterminées) ; `source` : table et ligne
+  # de chaque référence (assures_sinistre, assures_affiliation)
+  assure_de <- function(t, val = vv) {
+    match(as.character(val(t, "id_assure")), as.character(v("assures", "id_assure")), incomparables = NA)
+  }
   propre <- function(t) function() list(p = seq_len(nrow(ctx$base[[t]])), date = vv(t, "date_saisie"))
+  n_de <- function(t) NROW(ctx$base[[t]])
   emplois <- list(
     assures_sinistre = list(lit = c("assures.id_assure", "sinistres.id_sinistre", "sinistres.id_assure",
                                     "sinistres.date_survenance"), vue = ctx$lit_vue$sinistres,
-                            ref = function() list(p = assure_de("sinistres"), date = vv("sinistres", "date_survenance"))),
+                            ref = function(val = vv) list(p = assure_de("sinistres", val), date = val("sinistres", "date_survenance"),
+                                                          table = rep("sinistres", n_de("sinistres")),
+                                                          ligne = seq_len(n_de("sinistres")))),
     assures_affiliation = list(lit = c("assures.id_assure", "affiliations.id_assure", "affiliations.date_debut",
                                        "contrats.id_assure", "contrats.date_effet", "contrats.nature_contrat"),
                                vue = c(ctx$lit_vue$affiliations, ctx$lit_vue$contrats),
-                               ref = function() {
-                                 ind <- vv("contrats", "nature_contrat") %in% "individuel"
-                                 list(p = c(assure_de("affiliations"), assure_de("contrats")[ind]),
-                                      date = c(vv("affiliations", "date_debut"), vv("contrats", "date_effet")[ind]))
+                               ref = function(val = vv) {
+                                 ind <- val("contrats", "nature_contrat") %in% "individuel"
+                                 list(p = c(assure_de("affiliations", val), assure_de("contrats", val)[ind]),
+                                      date = c(val("affiliations", "date_debut"), val("contrats", "date_effet")[ind]),
+                                      table = c(rep("affiliations", n_de("affiliations")), rep("contrats", sum(ind))),
+                                      ligne = c(seq_len(n_de("affiliations")), which(ind)))
                                }),
     famille = list(lit = c("famille.situation", "famille.id_sinistre", "famille.date_saisie", "sinistres.id_sinistre",
                            "sinistres.date_survenance"),
@@ -2988,7 +3303,23 @@ controler_base <- function(donnees, arrete, declarations = NULL, conventions = N
       if (any(!is.na(naissance) & !is.na(r$date) & is.na(age))) {
         .ajouter_non_execute(ctx, "D02c", t, NA_character_, .CAUSE_AGE_NON_DEFINI)
       }
-      seq_len(nrow(ctx$base[[t]])) %in% r$p[!is.na(age) & (age < mini | age > maxi)]
+      res <- seq_len(nrow(ctx$base[[t]])) %in% r$p[!is.na(age) & (age < mini | age > maxi)]
+      # assuré : vrai si une référence visible donne un âge hors bornes ; faux si aucune référence
+      # visible ni non déterminée n'en donne ; inconnu sinon (spécification v1.5, § 2.2 (d))
+      if (is.null(r$table)) return(res)
+      rn <- e$ref(vnd)
+      age_n <- calculer_age(vv(t, "date_naissance")[rn$p], rn$date, conv)
+      hors <- which(!is.na(rn$p) & !is.na(age_n) & (age_n < mini | age_n > maxi) & !res[rn$p])
+      if (length(hors) == 0L) return(res)
+      index <- list()
+      for (u in unique(rn$table[hors])) {
+        k <- hors[rn$table[hors] == u]
+        index[[u]] <- vector("list", length(res))
+        for (i in unique(rn$p[k])) index[[u]][[i]] <- rn$ligne[k[rn$p[k] == i]]
+      }
+      res[rn$p[hors]] <- NA
+      attr(res, "index") <- index
+      res
     }
     for (traitement in c("S", "X")) {
       .regle_vue(ctx, "D02c", t, "date_naissance", e$lit, traitement, "exacte", invraisemblable, colonne_ne = NA_character_,
@@ -3056,15 +3387,15 @@ controler_base <- function(donnees, arrete, declarations = NULL, conventions = N
   # Q3 (a)). Prolongation pour études : enfant scolarise ou apprenti (décision du mainteneur,
   # jugement d'expert : l'apprentissage vaut poursuite d'études, comme pour la rente
   # d'éducation du recensement des méthodes) ; sans age_limite_etudes, age_limite.
-  eteint <- function(m, gs) {
-    situation <- vv("famille", "situation")[m]
+  eteint <- function(m, gs, val = vv) {
+    situation <- val("famille", "situation")[m]
     etudes_ok <- situation %in% c("scolarise", "apprenti")
     l1 <- parametre("age_limite", gs)
     l2 <- parametre("age_limite_etudes", gs)
     limite <- ifelse(etudes_ok & !is.na(l2$valeur), l2$valeur, l1$valeur)
     limite[etudes_ok & l2$ambigu] <- NA_real_
     limite <- limite + (la$regle == "depassement")
-    age <- calculer_age(vv("famille", "date_naissance")[m], rep(ctx$arrete, length(m)), la$age)
+    age <- calculer_age(val("famille", "date_naissance")[m], rep(ctx$arrete, length(m)), la$age)
     handicap <- .joindre(ctx, "garanties_souscrites", "id_garantie_souscrite", "prolongation_handicap", gs) %in% TRUE &
       situation %in% "handicape"
     decide <- !is.na(age) & !handicap
@@ -3076,11 +3407,30 @@ controler_base <- function(donnees, arrete, declarations = NULL, conventions = N
     if (any(e$non_defini)) .ajouter_non_execute(ctx, "D07", t, NA_character_, .CAUSE_PARAMETRE_NON_DEFINI)
     e$eteint
   }
-  # enfant à charge : ligne valable dans la vue, lien enfant, non décédé à l'arrêté
-  a_charge <- function() {
-    deces <- as.numeric(vv("famille", "date_deces"))
-    !is.na(vv("famille", "id_membre")) & vv("famille", "lien") %in% "enfant" & (is.na(deces) | deces > a)
+  # enfant à charge : ligne valable dans la vue, lien enfant, non décédé à l'arrêté (`val` = v :
+  # sur toute version, valeurs brutes)
+  a_charge <- function(val = vv) {
+    deces <- as.numeric(val("famille", "date_deces"))
+    !is.na(val("famille", "id_membre")) & val("famille", "lien") %in% "enfant" & (is.na(deces) | deces > a)
   }
+  # verdict à trois valeurs (spécification v1.5, § 2.2 (d) ; M218) : événements non déterminés de
+  # type `types`, d'effet au plus l'arrêté ou inconnu (seuls ils peuvent être retenus)
+  ev_nd <- function(types) {
+    effet <- .date_connue(ctx, "evenements", "date_effet")
+    which(.nd_vue(ctx, "evenements") & v("evenements", "type_evenement") %in% types & !((effet > a) %in% TRUE))
+  }
+  # versions de famille dont l'état est en jeu : candidates d'un membre à version valable non
+  # déterminée (.visibilite_a()), et versions non déterminées d'un membre sans version visible
+  vis_f <- if ("famille" %in% names(ctx$base)) .visibilite_a(ctx, "vue") else NULL
+  fam_nd <- function() {
+    if (is.null(vis_f$membre)) return(rep(FALSE, NROW(ctx$base$famille)))
+    st <- vis_f$statut$famille
+    sans_visible <- !(vis_f$membre %in% vis_f$membre[st %in% TRUE])
+    vis_f$candidate | (.nd_vue(ctx, "famille") & sans_visible)
+  }
+  # verdict de la vue `r` gardé tel quel sans élément en jeu (`en_jeu` faux) ; sinon,
+  # conjonction à trois valeurs (.verdict3()) de ses entrées
+  garder <- function(r, en_jeu, entrees, g) if (en_jeu) .verdict3(entrees, g) else r
   # événements de la vue de date d'effet au plus l'arrêté
   evenements_retenus <- function() {
     type <- vv("evenements", "type_evenement")
@@ -3105,10 +3455,59 @@ controler_base <- function(donnees, arrete, declarations = NULL, conventions = N
     en_service <- !is.na(dernier) & ev$type[dernier] %in% service
     gs <- gs_de(v("rentes", "id_dossier"))
     m <- match(as.character(v("rentes", "id_membre")), as.character(vv("famille", "id_membre")), incomparables = NA)
-    ok <- code_de(gs) %in% "rente_education" & en_service & !is.na(m)
+    education <- code_de(gs) %in% "rente_education"
+    ok <- education & en_service & !is.na(m)
     ok[ok] <- a_charge()[m[ok]]
     if (any(ok)) ok[ok] <- noter("rentes", eteint(m[ok], gs[ok]))
-    ok
+    # « en service » : la classe (service, fin) du dernier événement retenu est inconnue si un
+    # événement non déterminé peut le suivre dans l'ordre du § 4.2 avec une autre classe (effet,
+    # ordre du type, date de saisie, identifiant ; une valeur absente ou inconnue peut suivre)
+    kn <- ev_nd(c(service, "fin_service"))
+    pn <- .paires(v("evenements", "id_rente")[kn], v("rentes", "id_rente"))
+    index_s <- vector("list", nr)
+    if (nrow(pn) > 0L) {
+      e <- kn[pn$i]
+      d <- dernier[pn$j]
+      te <- ctx$dico$types_evenements
+      cle_tri <- function(c1, x) if (c1 == "type_evenement") te$ordre[match(x, te$type_evenement)] else x
+      suit <- is.na(d)
+      egal <- !suit
+      for (c1 in c("date_effet", "type_evenement", "date_saisie", "id_evenement")) {
+        x <- v("evenements", c1)
+        if (c1 %in% c("date_effet", "date_saisie")) x <- .date_connue(ctx, "evenements", c1)
+        xe <- cle_tri(c1, x[e])
+        xd <- cle_tri(c1, x[ifelse(is.na(d), 1L, d)])
+        plus <- if (is.character(xe)) mapply(function(y, z) order(c(z, y), method = "radix")[1L] == 1L && y != z, xe, xd)
+                else xe > xd
+        suit <- suit | (egal & (is.na(xe) | plus %in% TRUE))
+        egal <- egal & !is.na(xe) & !is.na(xd) & xe == xd
+      }
+      autre <- suit & (v("evenements", "type_evenement")[e] %in% service) != en_service[pn$j]
+      for (q in which(autre)) index_s[[pn$j[q]]] <- c(index_s[[pn$j[q]]], e[q])
+    }
+    s3 <- list(tc = "evenements", valeurs = en_service, inconnu = lengths(index_s) > 0L, index = index_s,
+               domaine = c(TRUE, FALSE))
+    # enfant : version valable dans la vue, ou chaque candidate d'un membre à version valable non
+    # déterminée ; inconnu si elles diffèrent
+    enfant <- !is.na(m)
+    enfant[enfant] <- a_charge()[m[enfant]]
+    if (any(enfant)) enfant[enfant] <- eteint(m[enfant], gs[enfant])$eteint
+    index_e <- vector("list", nr)
+    cand <- if (is.null(vis_f$candidate)) integer(0) else which(vis_f$candidate)
+    sans_m <- which(is.na(m) & as.character(v("rentes", "id_membre")) %in% vis_f$membre[cand])
+    cand_m <- split(cand, vis_f$membre[cand])[as.character(v("rentes", "id_membre"))[sans_m]]
+    for (k in seq_along(sans_m)) {
+      i <- sans_m[k]
+      cm <- cand_m[[k]]
+      x <- a_charge(v)[cm]
+      x[x] <- eteint(cm[x], rep(gs[i], sum(x)), v)$eteint
+      visible <- vis_f$statut$famille[cm] %in% TRUE
+      enfant[i] <- x[visible][1L]
+      if (length(unique(x)) > 1L) index_e[[i]] <- cm[!visible & x != enfant[i]]
+    }
+    e3 <- list(tc = "famille", valeurs = enfant, inconnu = lengths(index_e) > 0L, index = index_e, domaine = c(TRUE, FALSE))
+    garder(ok, length(kn) > 0L || length(cand) > 0L, list(education = .connue3("education", education), s = s3, e = e3),
+           function(x) x$education & x$s & x$e)
   }, vue = vue_commun)
   # double effet : un dossier clos, ou dont le second décès est retenu à l'arrêté (le droit
   # au capital s'y fixe, avis d'`actuary`, Q3 (b)), n'est pas candidat
@@ -3120,23 +3519,71 @@ controler_base <- function(donnees, arrete, declarations = NULL, conventions = N
     gs <- v("dossiers", "id_garantie_souscrite")
     fin <- ev$retenu & ev$type %in% c("cloture_dossier", "second_deces")
     clos <- v("dossiers", "id_dossier") %in% v("evenements", "id_dossier")[fin]
-    candidat <- code_de(gs) %in% "double_effet" & !clos
-    if (!any(candidat)) return(rep(FALSE, nd))
-    assure <- .joindre(ctx, "sinistres", "id_sinistre", "id_assure", v("dossiers", "id_sinistre"))
-    assure[!candidat] <- NA
-    enfants <- which(a_charge())
-    p <- .paires(assure, vv("famille", "id_assure")[enfants])
-    if (nrow(p) == 0L) return(rep(FALSE, nd))
-    x <- eteint(enfants[p$j], gs[p$i])
-    nb <- tabulate(p$i, nd)
-    nb_eteints <- tabulate(p$i[x$eteint], nd)
-    # la limite non déterminable n'est notée que si elle peut décider de la détection : aucun
-    # enfant du dossier non éteint de façon déterminée (avis d'`actuary`) ; un tel enfant
-    # (limite déterminée non atteinte, handicapé sous prolongation, naissance manquante)
-    # écarte le dossier quel que soit l'enfant ambigu
-    bloque <- tabulate(p$i[!x$eteint & !x$non_defini], nd) > 0L
-    noter("dossiers", list(eteint = x$eteint, non_defini = x$non_defini & !bloque[p$i]))
-    candidat & nb > 0L & nb_eteints == nb
+    double_effet <- code_de(gs) %in% "double_effet"
+    candidat <- double_effet & !clos
+    base <- function() {
+      if (!any(candidat)) return(rep(FALSE, nd))
+      assure <- .joindre(ctx, "sinistres", "id_sinistre", "id_assure", v("dossiers", "id_sinistre"))
+      assure[!candidat] <- NA
+      enfants <- which(a_charge())
+      p <- .paires(assure, vv("famille", "id_assure")[enfants])
+      if (nrow(p) == 0L) return(rep(FALSE, nd))
+      x <- eteint(enfants[p$j], gs[p$i])
+      nb <- tabulate(p$i, nd)
+      nb_eteints <- tabulate(p$i[x$eteint], nd)
+      # la limite non déterminable n'est notée que si elle peut décider de la détection : aucun
+      # enfant du dossier non éteint de façon déterminée (avis d'`actuary`) ; un tel enfant
+      # (limite déterminée non atteinte, handicapé sous prolongation, naissance manquante)
+      # écarte le dossier quel que soit l'enfant ambigu
+      bloque <- tabulate(p$i[!x$eteint & !x$non_defini], nd) > 0L
+      noter("dossiers", list(eteint = x$eteint, non_defini = x$non_defini & !bloque[p$i]))
+      candidat & nb > 0L & nb_eteints == nb
+    }
+    r <- base()
+    # « candidat » inconnu si une clôture ou un second décès non déterminé (effet au plus
+    # l'arrêté ou inconnu) existe
+    kn <- ev_nd(c("cloture_dossier", "second_deces"))
+    pc <- rep(FALSE, NROW(ctx$base$evenements))
+    pc[kn] <- TRUE
+    clos3 <- .existe_vue3(ctx, "evenements", v("dossiers", "id_dossier"), v("evenements", "id_dossier"), fin | pc)
+    # « chaque enfant à charge éteint » (au moins un) : par membre de l'assuré, catégories
+    # possibles (hors charge, éteint, non éteint) de sa version valable, de chaque candidate, ou
+    # de chaque version non déterminée d'un membre sans version visible (hors charge compris) ;
+    # vrai possible si chaque membre peut être hors charge ou éteint et l'un éteint ; faux
+    # possible si l'un peut être non éteint, ou tous hors charge
+    enjeu_f <- fam_nd()
+    index_e <- vector("list", nd)
+    e_val <- r
+    if (any(enjeu_f)) {
+      assure <- .joindre(ctx, "sinistres", "id_sinistre", "id_assure", v("dossiers", "id_sinistre"))
+      assure[!(double_effet & !(clos3$valeurs))] <- NA
+      lignes_f <- which(ctx$retenu$famille | enjeu_f)
+      p <- .paires(assure, v("famille", "id_assure")[lignes_f])
+      if (nrow(p) > 0L) {
+        j <- lignes_f[p$j]
+        charge <- a_charge(v)[j]
+        cat_f <- ifelse(!charge, "hors", "non_eteint")
+        if (any(charge)) cat_f[charge][eteint(j[charge], gs[p$i][charge], v)$eteint] <- "eteint"
+        sans_visible <- enjeu_f[j] & !vis_f$candidate[j]
+        membre <- paste(p$i, vis_f$membre[j], sep = "\r")
+        possibles <- split(c(cat_f, rep("hors", sum(sans_visible))), c(membre, membre[sans_visible]))
+        de_i <- as.integer(sub("\r.*$", "", names(possibles)))
+        peut <- function(cat) vapply(possibles, function(z) cat %in% z, NA)
+        peut_ok <- peut("hors") | peut("eteint")
+        vrai <- tapply(peut_ok, de_i, all) & tapply(peut("eteint"), de_i, any)
+        faux <- tapply(peut("non_eteint"), de_i, any) | tapply(peut("hors"), de_i, all)
+        i_vrai <- as.integer(names(vrai))
+        e_val[i_vrai] <- vrai & !faux
+        # incertitude : un membre a plusieurs catégories possibles, ce que seule une version non
+        # déterminée en jeu permet (candidate, ou version d'un membre sans version visible)
+        incertain <- i_vrai[vrai & faux]
+        nd_j <- enjeu_f[j] & !(vis_f$statut$famille[j] %in% TRUE) & p$i %in% incertain
+        index_e[incertain] <- lapply(split(j[nd_j], factor(p$i[nd_j], levels = incertain)), function(z) sort(unique(z)))
+      }
+    }
+    e3 <- list(tc = "famille", valeurs = e_val, inconnu = lengths(index_e) > 0L, index = index_e, domaine = c(TRUE, FALSE))
+    garder(r, length(kn) > 0L || any(enjeu_f), list(de = .connue3("de", double_effet), clos = clos3, e = e3),
+           function(x) x$de & !x$clos & x$e)
   }, vue = vue_commun)
   invisible(NULL)
 }
@@ -3301,6 +3748,8 @@ controler_base <- function(donnees, arrete, declarations = NULL, conventions = N
   # version plus récente, ou de saisie inconnue, de visibilité non déterminée la rend non
   # déterminée (candidates : la dernière visible et ces versions)
   valable <- NULL
+  candidate <- NULL
+  membre <- NULL
   if ("famille" %in% tables) {
     valable <- statut$famille
     if (lisible("famille", "id_membre")) {
@@ -3316,6 +3765,12 @@ controler_base <- function(donnees, arrete, declarations = NULL, conventions = N
       recente_nd <- stats::ave(ifelse(is.na(x), ifelse(is.na(saisie), Inf, saisie), NA_real_), membre, FUN = max_de)
       x[x %in% TRUE & !is.na(derniere) & (is.na(saisie) | saisie < derniere)] <- FALSE
       x[x %in% TRUE & !is.na(recente_nd) & (is.na(saisie) | recente_nd > saisie)] <- NA
+      # candidates d'un membre à version valable non déterminée (règle V, .regle_vue()) : la
+      # dernière version visible, et chaque version non déterminée plus récente ou de saisie
+      # inconnue
+      candidate_visible <- valable %in% TRUE & is.na(x)
+      a_candidate <- stats::ave(as.numeric(candidate_visible), membre, FUN = max) > 0
+      candidate <- candidate_visible | (is.na(valable) & a_candidate & (is.na(saisie) | saisie > derniere))
       valable <- x
     }
   }
@@ -3363,7 +3818,8 @@ controler_base <- function(donnees, arrete, declarations = NULL, conventions = N
     for (k in refus) if (k$table == t && identical(k$colonne, p$date)) x[k$lignes] <- NA
     parties[[t]] <- x & statut[[t]]
   }
-  res <- list(statut = statut, propre = propre, valable = valable, parties = parties, refus = refus)
+  res <- list(statut = statut, propre = propre, valable = valable, candidate = candidate, membre = membre,
+              parties = parties, refus = refus)
   assign(nom, res, envir = ctx)
   res
 }
