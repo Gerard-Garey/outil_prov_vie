@@ -1597,11 +1597,11 @@ encore écrits. Il ne peut appeler que \code{dictionnaire} et
 
 \code{controler\_base(donnees, arrete, declarations, conventions)}
 applique la spécification du module \code{donnees}
-(\code{docs/specifications/module-donnees-v1.md}, version~1.5.3\fsp;
+(\code{docs/specifications/module-donnees-v1.md}, version~1.5.4\fsp;
 versions~1.1, 1.3, 1.4 et~1.5 visées par le mainteneur, la version~1.5
 le 10~novembre~2026 avec ses précisions P1 à~P5, M222\fsp; errata~1.5.1
-et~1.5.2 et précision~1.5.3 sur ses décisions du même jour, M223 à
-M225\fsp; décisions de la version~1.2, M194 et M195, prises par lui), sous le dictionnaire de la base en version~1.5. La date d'arrêté est obligatoire,
+et~1.5.2 et précisions~1.5.3 et~1.5.4 sur ses décisions du même jour, M223
+à M226\fsp; décisions de la version~1.2, M194 et M195, prises par lui), sous le dictionnaire de la base en version~1.5. La date d'arrêté est obligatoire,
 sans valeur par défaut. \code{declarations} est le sous-schéma
 \code{donnees} du plan (rubriques \code{exclusions}, \code{hypotheses},
 \code{seuils}, \code{evaluations\_gestion})\fsp; \code{conventions} est la
@@ -1622,7 +1622,8 @@ vue)\fsp; (6)~évaluation unique de la visibilité et construction de la
 vue à l'arrêté (paragraphe «~Visibilité à l'arrêté~» ci-dessous)\fsp;
 (7)~détection, sur la
 vue, des autres défauts traités par exclusion, hypothèse par défaut ou
-signalement (\textbf{règle~V})\fsp; (8)~enjeu des lignes écartées. Chaque
+signalement (\textbf{règle~V}), en logique à trois valeurs (paragraphe
+«~Règles~V à trois valeurs~» ci-dessous)\fsp; (8)~enjeu des lignes écartées. Chaque
 étape suppose les précédentes~: une clé mal typée ne se joint pas, et la vue
 suppose des clés résolues. Les règles~P et~V et la vue ne lisent ni une
 table refusée en portée table, ni une colonne illisible par sa forme, ni
@@ -2054,7 +2055,8 @@ aussi aux lignes de D03g non résolues et à celles qui suivent leur
 parente. La vue retient les lignes visibles et, pour \code{famille}, les
 versions valables déterminées\fsp; un membre à version valable non
 déterminée est présent dans la vue, puisqu'il est visible, mais sans
-version désignée. À l'arrêté égal à l'extraction, tout est visible, hors
+version désignée~: les règles~V lisent ses colonnes sur chaque candidate
+(paragraphe «~Règles~V à trois valeurs~»). À l'arrêté égal à l'extraction, tout est visible, hors
 des versions remplacées de \code{famille}, invisibles pour les comptes
 comme pour la vue (P5).
 
@@ -2093,6 +2095,132 @@ chaque traitement admis~: elle doit être invisible de façon déterminée si
 et seulement si elle n'est visible sous aucun, non déterminée si son
 statut varie (critère~6~(b) de la spécification, vérification sur un
 corpus fini de cas, non preuve).
+
+\textbf{Règles~V à trois valeurs} (spécification, §~2.2~(d) et §~3.1\fsp;
+décision du mainteneur du 10~novembre~2026, M218, lecture~(ii)\fsp;
+précision P2 de M222\fsp; version~1.5.4, M226).
+
+\begin{itemize}[itemsep=2pt]
+\item \textbf{Population.} La population d'une règle~V est la vue~: lignes
+  visibles et, pour \code{famille}, versions valables déterminées. Pour un
+  membre à version valable non déterminée, la dernière version visible
+  entre dans la population et prend le verdict commun de ses candidates,
+  inconnu s'il varie. Une ligne non déterminée est hors de la population
+  (P2)~: elle n'est ni détectée, ni la source d'une ligne de
+  \code{controles\_non\_executes} pour son propre verdict\fsp; elle est
+  recensée une fois dans \code{vue\$visibilite\_non\_determinee}, et la vue
+  est provisoire.
+\item \textbf{Verdict.} Le verdict d'une règle~V sur une ligne de la
+  population est inconnu si deux états des éléments non déterminés qu'il
+  lit lui donnent deux verdicts différents. Ces états sont~: chaque ligne
+  non déterminée dans la vue ou hors de la vue\fsp; chaque partie non
+  déterminée connue ou non à l'arrêté\fsp; chaque candidate d'un membre de
+  \code{famille} valable ou non. Les valeurs connues restent fixées. Une
+  ligne au verdict inconnu est écartée de la détection (nombre minorant),
+  et la règle garde une ligne dans \code{controles\_non\_executes}, avec la
+  cause~($\gamma$) ci-dessous. À l'arrêté égal à l'extraction, aucun
+  élément n'est non déterminé.
+\item \textbf{Clés exposées.} Dix-huit clés (code, table, colonne) ont un
+  verdict qui lit une autre ligne de la vue, une partie de ligne ou une
+  version de \code{famille} (tableau ci-dessous). Les autres règles~V ont
+  un verdict propre à la ligne, ou ne lisent qu'une parente ou une ligne
+  référencée, présente dans la vue dès que la ligne l'est\fsp; D05 lit
+  l'absence de prestation sur la base entière, sans visibilité. Une
+  référence non déterminée qui ne donne pas d'âge défini (date de
+  référence antérieure à la naissance) ne rend pas inconnu le verdict de
+  D02c sur \code{assures} et n'émet pas \code{age\_non\_defini}, émis pour
+  une référence de la vue seulement.
+  De même, pour D07 sur \code{rentes} et sur \code{dossiers},
+  \code{parametre\_non\_defini} n'est émis que pour un enfant de la
+  vue~: un enfant non déterminé, ou une candidate d'un membre à version
+  valable non déterminée, dont la limite d'âge n'est pas déterminable est
+  tenu pour non éteint, sans émettre cette cause. Pour un enfant non
+  déterminé, la règle est celle de l'âge ci-dessus. Pour les candidates d'un
+  membre visible, c'est un écart à la substitution du critère~6~(c)~: si la
+  limite n'est déterminable pour aucune candidate, la cause serait émise
+  dans tout état, et D07 ne laisse aujourd'hui aucune trace (issue~50 du
+  dépôt).
+\end{itemize}
+
+\begin{center}
+\small
+\rowcolors{2}{tablerow}{white}
+\begin{tabular}{@{}>{\raggedright\arraybackslash}p{4.9cm}>{\raggedright\arraybackslash}p{3.3cm}p{6.9cm}@{}}
+\rowcolor{tableheader}
+\textcolor{financeblue}{\textbf{Clé}} & \textcolor{financeblue}{\textbf{Lu hors de la ligne}} & \textcolor{financeblue}{\textbf{Verdict à trois valeurs}} \\
+\code{somme\_parts} sur \code{beneficiaires.part} & Parts des autres bénéficiaires du dossier & Voir ci-dessous. \\
+D03a, D03b, D02a, D02c sur \code{famille} & Version valable du membre & Verdict sur chaque candidate\fsp; inconnu s'ils diffèrent. \\
+D02a sur \code{contrats.date\_fin} et \code{affiliations.date\_fin} & Partie de ligne de la fin & Partie connue~: comparaison\fsp; partie non connue à l'arrêté, de façon déterminée~: faux\fsp; partie non déterminée~: inconnu si la date de début dépasse la date de fin, faux sinon. \\
+D01b (cinq tables) & Autres lignes de même contenu & Copie si une ligne visible de même contenu la précède (date de visibilité, puis clé)\fsp; inconnu si aucune ligne visible ne la précède mais qu'une ligne non déterminée de même contenu le peut. \\
+D06 sur \code{evenements.justificatif} & Prestations du dossier & Clôture de motif \code{regle} sans prestation du dossier, ou de motif \code{depot\_cdc} sans prestation en capital~: vrai si aucune telle prestation n'est visible ni non déterminée, faux si une est visible, inconnu sinon\fsp; disjonction avec le cas propre à la ligne (justificatif absent d'une sortie ou d'une fin de service). \\
+D13 sur \code{sinistres.date\_instruction} & Prestations en capital des dossiers décès du sinistre & Vrai si une telle prestation est visible, faux si aucune n'est visible ni non déterminée, inconnu sinon. \\
+D10c sur \code{dossiers} & Autres dossiers du sinistre\fsp; versions décès de la garantie souscrite & Conjonction de «~aucun dossier décès dans la vue~» et de «~décès souscrit à la survenance~», chacun vrai, faux ou inconnu selon les lignes visibles et non déterminées. \\
+D02c sur \code{assures} (deux emplois) & Sinistres, affiliations et contrats individuels qui citent l'assuré & Vrai si une référence visible donne un âge hors bornes\fsp; faux si aucune référence visible ni non déterminée n'en donne\fsp; inconnu sinon. \\
+D07 sur \code{rentes} & Événements de la rente, version valable de l'enfant & «~En service~» inconnu si un événement non déterminé, d'effet au plus l'arrêté ou inconnu, peut suivre le dernier retenu avec une autre classe\fsp; enfant lu sur chaque candidate\fsp; conjonction. \\
+D07 sur \code{dossiers} & Clôtures et seconds décès, enfants de l'assuré & «~Candidat~» inconnu si une clôture ou un second décès non déterminé existe\fsp; «~chaque enfant à charge éteint~» faux si un enfant visible n'est pas éteint de façon déterminée, inconnu si un enfant non déterminé, ou une candidate, peut être à charge non éteint\fsp; conjonction. \\
+\end{tabular}
+\end{center}
+
+\begin{itemize}[itemsep=2pt]
+\item \textbf{\code{somme\_parts}.} On note V la somme des parts visibles
+  du dossier, T celle des parts des bénéficiaires non déterminés, et
+  $[a, b]$ l'intervalle de tolérance autour de~1 (constante interne
+  \code{.TOLERANCE\_PARTS}, racine carrée de l'epsilon de la machine). Les
+  parts étant positives, toute sous-somme est dans $[V, V + T]$. Des
+  raccourcis exacts, en temps linéaire en le nombre de parts, donnent le
+  verdict~: vrai si $V > b$ ou $V + T < a$\fsp; faux si $V$ et $V + T$ sont
+  dans $[a, b]$\fsp; inconnu si les verdicts de $V$ et de $V + T$
+  diffèrent, ou si $V < a$, $V + T > b$ et chaque part non déterminée vaut
+  au plus $b - a$. Dans le seul cas résiduel, les sous-sommes sont
+  énumérées\fsp; au-delà de 20~bénéficiaires non déterminés dans le dossier
+  (constante interne \code{.MAX\_PARTS\_ND}), le verdict est inconnu
+  (version~1.5.4, M226). C'est la seule dérogation à la lecture
+  existentielle~: une approximation sûre, qui peut rendre inconnu un
+  verdict déterminé, jamais l'inverse (ni fausse détection, ni faux zéro)\fsp;
+  la ligne est alors écartée avec la cause des bénéficiaires non
+  déterminés.
+\item \textbf{Cause~($\gamma$).} Pour chaque élément non déterminé dont
+  l'état peut changer le verdict, la cause est~:
+  \begin{itemize}[itemsep=0pt]
+  \item le motif du refus, pour une ligne ou une partie non déterminée
+    par un refus de valeur\fsp;
+  \item \code{declaration\_absente}, pour une ligne ou une partie non
+    déterminée sous D02b ou D03g\fsp;
+  \item pour une fille inscrite sous \code{parente\_non\_determinee}, la
+    cause de l'ascendante la plus proche qui est non déterminée par
+    elle-même\fsp;
+  \item pour une candidate de \code{famille}, la cause de la version non
+    déterminée.
+  \end{itemize}
+  Entre plusieurs éléments, la priorité des causes s'applique (une cause
+  directe, rang~3, passe avant \code{declaration\_absente}, rang~6),
+  puis, à rang égal, l'ordre de leurs lignes dans le recensement des
+  lignes de visibilité non déterminée. Aucune cause nouvelle n'est
+  créée, et la cause propre à l'élément \code{enjeu}
+  (\code{visibilite\_non\_determinee}) n'est jamais retenue ici. Une ligne écartée
+  qu'aucun élément n'explique arrête le calcul («~erreur interne de
+  provie~»).
+\end{itemize}
+
+\textbf{Motif et alternative écartée} (jugement d'expert, M218). Une règle
+qui juge une absence (D10c, D06, D13, D07~(c), \code{somme\_parts}, D01b)
+détecterait à tort, ou manquerait en silence, quand la ligne qui manque
+est seulement non déterminée. L'écarter, avec sa cause, dit que la
+détection est partielle sans affirmer ni nier l'anomalie\fsp; une ligne
+dont le verdict ne dépend pas des éléments non déterminés garde son
+verdict. L'alternative écartée (P2) est la logique de Kleene jusqu'à la
+ligne elle-même~: une ligne non déterminée dont le verdict propre serait
+vrai donnerait aussi une ligne de \code{controles\_non\_executes}, ce qui
+redoublerait, dans chaque règle, le recensement de
+\code{vue\$visibilite\_non\_determinee}. Aucune provision n'en dépend. La
+batterie unitaire force chaque élément non déterminé dont dépend une ligne
+dans la vue puis hors de la vue (pour \code{famille}, chaque candidate tour
+à tour valable)~: la ligne doit être détectée si et seulement si elle
+l'est dans tous les états, et écartée si et seulement si le verdict varie
+(critère~6~(c) de la spécification, vérification sur un corpus fini de
+cas, non preuve)\fsp; elle vérifie aussi que toute cause
+\code{declaration\_absente} d'une règle~V a sa ligne dans
+\code{declarations\_requises}.
 
 \textbf{Le bilan.} Il est rendu en liste nommée de onze éléments, dans cet
 ordre~:
@@ -2177,8 +2305,13 @@ indéterminée.
   lit la vue (jamais par un refus de valeur)\fsp;
 \item \code{non\_implemente}~: contrôle prévu par la spécification et
   reporté (ci-dessous)\fsp;
-\item \code{declaration\_absente}~: contrôle qui attend une convention ou un
-  seuil non déclarés\fsp;
+\item \code{declaration\_absente}~: déclaration du plan absente, au sens
+  élargi de la version~1.5 (M218)~: (i)~convention ou seuil que le
+  contrôle attend\fsp; (ii)~déclaration de traitement d'un motif de la
+  règle~P (hypothèse de D02b\fsp; hypothèse, exclusion ou délai de D03g),
+  dont l'absence laisse non déterminée une ligne, ou une partie, dont
+  dépend le verdict d'une règle~V\fsp; dans les deux cas, la déclaration
+  manquante figure dans \code{declarations\_requises}\fsp;
 \item \code{non\_lisible}~: sous-cas qu'aucune colonne de la base ne permet
   de lire\fsp;
 \item \code{age\_non\_defini}~: date de référence antérieure à la
