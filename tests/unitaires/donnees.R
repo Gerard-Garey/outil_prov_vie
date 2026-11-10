@@ -2186,6 +2186,15 @@ verifier_egal("B7 : BE1 de qualité zzz, à A0 : qualite seule refusée (plus de
 # critère 1 (v1.5) : les lignes de controles_non_executes nées de la règle B sont invariantes en A
 verifier("critère 1 (v1.5) : lignes partielles de la règle B identiques à A0 et à A (B1 à B7)",
          all(vapply(names(cas42), function(n) identical(lignes_b(r42[[n]]), lignes_b(r42_a0[[n]])), NA)))
+# auto-lecture retirée de la cause (spécification, § 2.2, B.1 et B.5 : la colonne contrôlée n'est
+# ni une colonne à valeur inconnue ni une cause ; branche `admet` de .regle(), audit final de #42) :
+# EV3 de type zzz (hors_domaine) et de source_information vide (chaine_vide), à A ; la ligne
+# partielle (hors_domaine, evenements, source_information) a pour cause hors_domaine, non chaine_vide
+r <- cb(avec(function(b) { b$evenements$type_evenement[3L] <- "zzz"; b$evenements$source_information[3L] <- ""; b }), A)
+x <- lignes_b(r)
+verifier_egal("#42, auto-lecture : EV3 de type zzz et de source_information \"\" : deux refus de valeur ; ligne partielle (hors_domaine, evenements, source_information), cause hors_domaine (non chaine_vide, la colonne contrôlée n'est pas une cause)",
+              list(refus_de_b(r), x$cause[x$code == hd & x$table == "evenements" & x$colonne == "source_information"]),
+              list(c("evenements type_evenement hors_domaine colonne EV3", "evenements source_information chaine_vide colonne EV3"), hd))
 # garde de .regle() en règle B : un verdict inconnu sans refus de valeur qui l'explique est
 # une erreur interne (spécification, § 2.2, B.5)
 ctx <- ns$.contexte(base_ref, d, list(date_extraction = A), A)
@@ -2624,6 +2633,19 @@ r <- cb(avec(function(b) { be <- b$beneficiaires; be$part <- 0.5
                            b$beneficiaires <- rbind(be, x2, x3); b }), A0)
 verifier_egal("#40, priorité des causes (γ) : somme_parts écarté par BE2 (D03g, rang 6) et BE3 (D02c, rang 3) : cause D02c",
               ne40(r, "somme_parts", "beneficiaires"), "part D02c")
+# départage à rang égal (spécification v1.5, § 3.1 : l'ordre de vue$visibilite_non_determinee
+# départage) : EV7 clôture « regle » de DO1 ; PR2 saisi le 9999-12-31 (D02c) et PR4 sans date de
+# règlement (manquant_obligatoire), deux causes directes de rang 3 : D06 prend la première de la
+# vue, D02c (audit final de #40, mutant « ordre de la vue inversé »)
+r <- cb(avec(function(b) {
+  b <- w40$ev7(b)
+  b$prestations$date_saisie[2L] <- D("9999-12-31")
+  p <- b$prestations[2L, ]; p$id_prestation <- "PR4"; p$date_reglement <- D(NA); p$date_saisie <- D("2025-03-02")
+  b$prestations <- rbind(b$prestations, p); b }), A0)
+nd <- r$vue$visibilite_non_determinee
+verifier_egal("#40, départage à rang égal : D06 écarté par PR2 (D02c) et PR4 (manquant_obligatoire), deux causes de rang 3 : cause D02c, première de vue$visibilite_non_determinee",
+              list(paste(nd$table, nd$motif, nd$identifiants), ne40(r, "D06", "evenements")),
+              list(c("prestations D02c PR2", "prestations manquant_obligatoire PR4"), "justificatif D02c"))
 # somme_parts, raccourcis exacts et borne de l'énumération (avis d'`actuary`, .MAX_PARTS_ND) :
 # BE1 visible de part `v`, bénéficiaires non déterminés (D03g) de parts `p` sur DO1 ; verdict
 # de BE1 : "detecte", "ecarte" ou "non"
