@@ -211,7 +211,8 @@ CONVENTIONS_LIMITE_AGE <- c("revolu", "millesime")
 #     une détection partielle ;
 #   refus_tables : refus R, portée effective colonne ou table, origine d'un refus induit,
 #     lignes visibles à l'arrêté (règles de la vue, NA si indéterminée, .connus()) et
-#     dossiers rattachés visibles ;
+#     dossiers rattachés à l'arrêté par une ligne visible (.nombre_dossiers_union(), NA si
+#     un rattachement est non déterminé) ;
 #   exclusions (par motif, famille de calcul et action déclarée), hypotheses_defaut (par
 #     motif, référentiel, poste et valeur déclarés), signalements (S, ou signalement
 #     déclaré), declarations_requises (déclaration attendue par un constat : rubrique,
@@ -3933,7 +3934,7 @@ controler_base <- function(donnees, arrete, declarations = NULL, conventions = N
 }
 
 # Composantes 1 à 4 de chaque dossier à l'arrêté (spécification, § 4.3) : `garantie`
-# (code_garantie, ou non_rattache), `connu` (.connus()), `valeurs` (liste nommée par
+# (code_garantie, ou non_rattache), `valeurs` (liste nommée par
 # composante d'un vecteur par dossier, NA : aucune valeur ; une composante sans objet pour la
 # garantie du dossier n'a pas de valeur), `indetermine` (par composante, dossier dont une
 # ligne qui entre dans la valeur a une visibilité non déterminée : la valeur n'est pas connue
@@ -4080,7 +4081,7 @@ controler_base <- function(donnees, arrete, declarations = NULL, conventions = N
   for (k in names(forme)) if (!is.null(forme[[k]])) valeurs[[k]] <- rep(NA_real_, nd)
   brutes$paiements_cumules <- valeurs$paiements_cumules
   for (k in names(forme_brut)) if (!is.null(forme_brut[[k]])) brutes[[k]] <- rep(NA_real_, nd)
-  assign(nom, list(garantie = garantie, connu = .connus(ctx, "dossiers", d03g), valeurs = valeurs, brutes = brutes,
+  assign(nom, list(garantie = garantie, valeurs = valeurs, brutes = brutes,
                    indetermine = indetermine, lus = lus, lus_brut = lus_brut, lus_g = lus_g), envir = ctx)
   ctx[[nom]]
 }
@@ -4206,7 +4207,7 @@ controler_base <- function(donnees, arrete, declarations = NULL, conventions = N
 
 # Agrège des lignes brutes de placement par les colonnes `cles` : une ligne par clé, avec le
 # nombre de lignes distinctes (table, ligne) et, si `dossiers`, le nombre de dossiers
-# rattachés connus (.nombre_dossiers_union()).
+# rattachés à l'arrêté (.nombre_dossiers_union() ; variante `d03g` pour le motif D03g).
 .agreger_placement <- function(ctx, brut, cles, nom_nombre, dossiers = FALSE) {
   colonnes <- stats::setNames(rep(list(character(0)), length(cles)), cles)
   if (length(brut) == 0L) {
@@ -4227,24 +4228,51 @@ controler_base <- function(donnees, arrete, declarations = NULL, conventions = N
   }, 0L, USE.NAMES = FALSE)
   if (dossiers) {
     df$nombre_dossiers <- vapply(groupes, function(g) {
-      parts <- lapply(g, function(x) list(table = x$table, lignes = x$lignes))
+      parts <- lapply(g, function(x) list(table = x$table, lignes = x$lignes, d03g = identical(x$motif, "D03g")))
       .nombre_dossiers_union(ctx, parts)
     }, 0L, USE.NAMES = FALSE)
   }
   df
 }
 
-# Dossiers distincts rattachés connus à l'arrêté pour plusieurs (table, lignes), NA si l'un
-# des rattachements est illisible ou la visibilité d'un dossier rattaché indéterminée.
+# Disjonction de Kleene par clé : pour chaque élément, TRUE si une valeur de sa clé est vraie,
+# sinon NA si l'une est inconnue, sinon FALSE (même longueur que `cle`).
+.ou_kleene <- function(cle, x) ifelse(cle %in% cle[x %in% TRUE], TRUE, ifelse(cle %in% cle[is.na(x)], NA, FALSE))
+
+# Statut de rattachement à l'arrêté des dossiers que .rattacher() rattache aux lignes `lignes`
+# de `table` (spécification v1.5, § 4.4 ; M219, lecture (ii)), seule implémentation, lue par
+# les comptes de dossiers (.nombre_dossiers_union()) et par les montants des composantes 1 à
+# 4 (.enjeu_elementaire()) : s(d) = statut(d) ET (OU, sur les lignes rattachées à d, de leur
+# statut), en logique de Kleene, sur l'évaluation unique de la visibilité (.connus() ; variante
+# `d03g` pour un écart de D03g, pour la ligne comme pour le dossier ; pour dossiers, la ligne
+# est le dossier). Rend data.frame(dossier, statut), un dossier par ligne, trié : TRUE
+# rattaché à l'arrêté, FALSE non rattaché, NA rattachement non déterminé. Le rattachement
+# illisible par sa forme (r$cause) est traité par l'appelant.
+.statut_rattachement <- function(ctx, table, lignes, d03g = FALSE) {
+  p <- .rattacher(ctx, table)$paires
+  p <- p[p$ligne %in% lignes, , drop = FALSE]
+  ou <- .ou_kleene(p$dossier, .connus(ctx, table, d03g)[p$ligne])
+  garde <- !duplicated(p$dossier)
+  d <- p$dossier[garde]
+  o <- order(d, method = "radix")
+  d <- d[o]
+  data.frame(dossier = d, statut = .connus(ctx, "dossiers", d03g)[d] & ou[garde][o])
+}
+
+# Dossiers distincts rattachés à l'arrêté pour plusieurs (table, lignes, d03g)
+# (.statut_rattachement() ; spécification v1.5, § 4.4) : disjonction de Kleene des statuts
+# d'un dossier entre les parties ; NA si l'un des rattachements est illisible par sa forme ou
+# si un dossier est de rattachement non déterminé ; 0 sans dossier rattaché.
 .nombre_dossiers_union <- function(ctx, parts) {
-  d <- integer(0)
+  s <- list()
   for (x in parts) {
-    r <- .rattacher(ctx, x$table)
-    if (!is.null(r$cause)) return(NA_integer_)
-    d <- c(d, r$paires$dossier[r$paires$ligne %in% x$lignes])
+    if (!is.null(.rattacher(ctx, x$table)$cause)) return(NA_integer_)
+    s[[length(s) + 1L]] <- .statut_rattachement(ctx, x$table, x$lignes, isTRUE(x$d03g))
   }
-  connu <- .connus(ctx, "dossiers")[unique(d)]
-  if (anyNA(connu)) NA_integer_ else sum(connu)
+  s <- do.call(rbind, s)
+  if (is.null(s) || nrow(s) == 0L) return(0L)
+  u <- .ou_kleene(s$dossier, s$statut)[!duplicated(s$dossier)]
+  if (anyNA(u)) NA_integer_ else sum(u)
 }
 
 # Niveau élémentaire de l'enjeu (spécification, § 4.5, point 1 ; ADR 0010, sixième série,
@@ -4257,9 +4285,10 @@ controler_base <- function(donnees, arrete, declarations = NULL, conventions = N
 # `visibilite_non_determinee` pour un porteur dont la visibilité, ou celle d'une ligne qui
 # entre dans sa valeur, n'est pas déterminée, réserve Q8 (b) ; `D01a` pour un porteur
 # touché par un identifiant de l'écart D01a dont les doubles divergent sur une colonne lue,
-# D10), `cause_table`, `cause_colonne`), `dossiers` (dossiers rattachés : `dossier`,
-# `garantie`, `connu`, `famille` : famille de composantes pour laquelle le dossier est
-# compté), `familles_cause` (familles dont le rattachement est illisible) et `familles`
+# D10), `cause_table`, `cause_colonne`), `dossiers` (dossiers rattachés à l'arrêté ou de
+# rattachement non déterminé, .statut_rattachement() : `dossier`, `garantie`, `connu` (statut
+# de rattachement : TRUE ou NA), `famille` : famille de composantes pour laquelle le dossier
+# est compté), `familles_cause` (familles dont le rattachement est illisible) et `familles`
 # (dossier, evenement, prestation, cotisation : composantes que la table de l'écart porte,
 # § 4.4). Un écart de D03g lit la visibilité de ses lignes par la variante `d03g` de
 # .connus() (réserves Q4, Q8).
@@ -4327,15 +4356,19 @@ controler_base <- function(donnees, arrete, declarations = NULL, conventions = N
     if (!is.null(r$cause)) familles_cause <- tags
     if (is.null(r$cause) && !is.null(ctx$base$dossiers)) {
       cd <- .composantes_dossiers(ctx, d03g)
-      d <- sort(unique(r$paires$dossier[r$paires$ligne %in% lignes]))
-      d <- d[!(cd$connu[d] %in% FALSE)]   # dossiers invisibles à l'arrêté : non rattachés
+      # statut de rattachement à l'arrêté (§ 4.4, M219) : un dossier non rattaché n'entre pas
+      # dans l'écart ; de rattachement non déterminé, il est un porteur de visibilité non
+      # déterminée (connu NA)
+      st <- .statut_rattachement(ctx, table, lignes, d03g)
+      st <- st[!(st$statut %in% FALSE), , drop = FALSE]
+      d <- st$dossier
       # garantie lue sur la clé étrangère refusée de l'écart (D10 (a), D04b) : lien non résolu,
       # dossier non rattaché (réserve Q4)
       lien_g <- identical(ecart$action, "refus") && ecart$motif %in% .MOTIFS_LIEN_ECART &&
         paste(ecart$table, ecart$colonne, sep = ".") %in% cd$lus_g
       garantie <- if (is.null(cause_de(cd$lus_g)) && !lien_g) cd$garantie[d] else rep("non_rattache", length(d))
       dossiers <- do.call(rbind, lapply(tags, function(f) {
-        data.frame(dossier = d, garantie = garantie, connu = cd$connu[d], famille = rep(f, length(d)), stringsAsFactors = FALSE)
+        data.frame(dossier = d, garantie = garantie, connu = st$statut, famille = rep(f, length(d)), stringsAsFactors = FALSE)
       }))
     }
   }
@@ -4541,13 +4574,22 @@ controler_base <- function(donnees, arrete, declarations = NULL, conventions = N
 # (la première cause de refus, sinon la visibilité non déterminée) ; nombre_dossiers :
 # dossiers distincts comptés pour la famille de composantes du couple (réserve M3 : un dossier
 # rattaché par une prestation écartée n'est compté que pour prestations_ecartees), NA si le
-# rattachement est illisible ou la visibilité d'un dossier indéterminée ; nombre_valeurs :
-# porteurs qui portent une valeur. Un élément sans porteur (indice NA) empêche la composante
-# pour toute garantie.
+# rattachement est illisible ou un dossier de rattachement non déterminé (§ 4.4) ;
+# nombre_valeurs : porteurs qui portent une valeur. Un élément sans porteur (indice NA) empêche
+# la composante pour toute garantie. Groupe de plusieurs écarts (rangée motif = ensemble) : le
+# statut de rattachement d'un dossier y est la disjonction de Kleene de ses statuts dans les
+# écarts (§ 4.4, M219) ; un dossier rattaché par un écart n'est plus porteur de visibilité non
+# déterminée par le rattachement non déterminé d'un autre (ses éléments de connu NA et de
+# cause visibilite_non_determinee tombent ; une autre cause, D01a par exemple, demeure).
 .rangees_enjeu <- function(elements, dossiers, familles_cause, familles) {
-  if (!is.null(elements)) elements <- elements[!duplicated(elements[, c("porteur", "indice", "composante", "unite", "cause")]), ,
-                                               drop = FALSE]
+  dossiers$connu <- .ou_kleene(paste(dossiers$dossier, dossiers$famille), dossiers$connu)
   dossiers <- dossiers[!duplicated(dossiers[, c("dossier", "famille")]), , drop = FALSE]
+  if (!is.null(elements)) {
+    rattache <- dossiers$dossier[dossiers$famille == "dossier" & dossiers$connu %in% TRUE]
+    elements <- elements[!(elements$porteur == "dossiers" & !is.na(elements$indice) & is.na(elements$connu) &
+                             elements$cause %in% .CAUSE_VISIBILITE & elements$indice %in% rattache), , drop = FALSE]
+    elements <- elements[!duplicated(elements[, c("porteur", "indice", "composante", "unite", "cause")]), , drop = FALSE]
+  }
   famille_el <- if (is.null(elements)) character(0) else
     .FAMILLE_COUPLE[match(paste(elements$composante, elements$unite), paste(COMPOSANTES_ENJEU$composante, COMPOSANTES_ENJEU$unite))]
   porte <- if (is.null(elements)) logical(0) else !is.na(elements$indice)
@@ -4815,7 +4857,7 @@ controler_base <- function(donnees, arrete, declarations = NULL, conventions = N
                       }, 0L, USE.NAMES = FALSE),
                       identifiants = controles$identifiants[r],
                       nombre_dossiers = vapply(constats[r], function(k) {
-                        .nombre_dossiers_union(ctx, list(list(table = k$table, lignes = k$lignes)))
+                        .nombre_dossiers_union(ctx, list(list(table = k$table, lignes = k$lignes, d03g = identical(k$code, "D03g"))))
                       }, 0L, USE.NAMES = FALSE),
                       postes_arretes = rep(NA_character_, sum(r)),
                       stringsAsFactors = FALSE)

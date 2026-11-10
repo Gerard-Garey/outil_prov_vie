@@ -1109,8 +1109,8 @@ verifier("dossier sans sinistre : aucun D04a ; D04b R de dossiers et refus indui
                  refus(r, "refus_induit", NULL)$table))
 r <- cb(avec(function(b) { b$prestations$montant[3L] <- -750; b }), D("2025-03-15"))
 x <- refus(r, "D09", "prestations", "montant")
-verifier_egal("critère 5 (§ 2.5) : refus D09 d'une prestation saisie après l'arrêté : compté, nombre_visibles = 0, dossier connu compté",
-              list(x$nombre, x$nombre_visibles, x$identifiants, x$nombre_dossiers), list(1L, 0L, "PR3", 1L))
+verifier_egal("critère 5 (§ 2.5) : refus D09 d'une prestation saisie après l'arrêté : compté, nombre_visibles = 0 ; dossier rattaché par une ligne invisible : non rattaché à l'arrêté, nombre_dossiers 0 (#44, M219)",
+              list(x$nombre, x$nombre_visibles, x$identifiants, x$nombre_dossiers), list(1L, 0L, "PR3", 0L))
 b <- avec(function(b) { b$assures <- rbind(b$assures, b$assures[1L, ]); b })
 verifier_egal("nombre_visibles (Q8 a) : assures visibles s'ils sont référencés par une ligne visible (CT1 en vigueur depuis 2015 ; avant : invisible)",
               c(refus(cb(b, A0), "D01a", "assures")$nombre_visibles, refus(cb(b), "D01a", "assures")$nombre_visibles,
@@ -1932,8 +1932,9 @@ verifier_egal("#33, cause de la ligne partielle : premier refus de valeur qui to
 # valeur refusée n'est pas lue : visibilité non déterminée pour l'enjeu, prestations_ecartees
 # sans valeur, cause visibilite_non_determinee (avant : 0, la date refusée lue la rendant
 # invisible à A0) ; date de règlement admise (2025-01-05) : 1240 ; le refus D02c a
-# nombre_visibles NA (ligne de visibilité non déterminée ; § 4.4, Q7) et nombre_dossiers 1
-# (dossier rattaché DO3, connu à A0 : .nombre_dossiers_union())
+# nombre_visibles NA (ligne de visibilité non déterminée ; § 4.4, Q7) et nombre_dossiers NA
+# (DO3, connu à A0, rattaché par la seule PR1, non déterminée : rattachement non déterminé,
+# #44, M219)
 enjeu_pr1 <- function(dr) {
   r <- cb(avec(function(b) { b$prestations$date_saisie[1L] <- NA; b$prestations$date_reglement[1L] <- D(dr); b }), A0)
   e <- r$enjeu[r$enjeu$table %in% "prestations" & r$enjeu$motif == "D03g", , drop = FALSE]
@@ -1941,9 +1942,9 @@ enjeu_pr1 <- function(dr) {
 }
 e_refuse <- enjeu_pr1("2027-01-05")
 k_refuse <- refus(e_refuse[[4L]], "D02c", "prestations", "date_reglement")
-verifier_egal("#33, M199 : date de règlement refusée (D02c) d'une prestation de D03g, à A0 : enjeu sans valeur, cause visibilite_non_determinee, refus D02c à nombre_visibles NA et nombre_dossiers 1 ; admise : 1240",
+verifier_egal("#33, M199 : date de règlement refusée (D02c) d'une prestation de D03g, à A0 : enjeu sans valeur, cause visibilite_non_determinee, refus D02c à nombre_visibles NA et nombre_dossiers NA (#44) ; admise : 1240",
               list(e_refuse[1:3], k_refuse$nombre_visibles, k_refuse$nombre_dossiers, enjeu_pr1("2025-01-05")[1:3]),
-              list(list(NA_real_, NA_integer_, "visibilite_non_determinee"), NA_integer_, 1L,
+              list(list(NA_real_, NA_integer_, "visibilite_non_determinee"), NA_integer_, NA_integer_,
                    list(1240, 1L, NA_character_)))
 # cas limite 3 étendu (spécification, § 2.2, cas limite (3), et § 3.1) : sur une table refusée
 # en portée table, le refus de valeur d'une colonne lue seulement par la règle P ou pour la
@@ -2771,6 +2772,203 @@ w9 <- list(list(w40$W1, A0), list(w40$W2(D(NA)), A0), list(w40$W2(D("2025-03-01"
            list(w40$W1, A))
 verifier("W9 (#40, critère 6 (c)) : batterie de substitution des règles V (éléments non déterminés forcés dans la vue puis hors de la vue, candidates de famille tour à tour valables) : détection ssi dans tous les états, ligne de controles_non_executes ssi le verdict varie ; cause declaration_absente avec ses déclarations requises (bases W1 à W6, formes, extraction)",
          all(vapply(w9, function(k) batterie_c40(k[[1L]], k[[2L]], if (length(k) > 2L) k[[3L]], if (length(k) > 3L) k[[4L]]), NA)))
+
+section("donnees : nombre_dossiers et composantes 1 à 4 sur le rattachement à l'arrêté, lecture (ii) (#44, M219 ; spécification v1.5, § 4.4 ; § 4.6, critères E1 à E10)")
+# statut de rattachement d'un dossier à l'arrêté : s(d) = statut(d) ET (OU, sur les lignes de
+# l'écart rattachées à d, de leur statut), en logique de Kleene (.statut_rattachement()) ; un
+# dossier non rattaché n'entre pas dans l'écart, un dossier de rattachement non déterminé
+# rend nombre_dossiers NA et ses composantes 1 à 4 sans valeur (visibilite_non_determinee)
+enjeu44 <- function(r, motif, table = NULL) {
+  e <- r$enjeu[r$enjeu$motif == motif & (if (is.null(table)) TRUE else r$enjeu$table %in% table), , drop = FALSE]
+  paste(e$garantie, e$composante, e$unite, e$montant, e$nombre_dossiers, e$nombre_valeurs, e$cause)
+}
+b44 <- list(
+  E1 = avec(function(b) { b$prestations$montant[2L] <- -60000; b$prestations$date_saisie[2L] <- D("2026-06-01"); b }),
+  E2 = avec(function(b) { b$evenements$montant[5L] <- -3000; b$evenements$date_saisie[5L] <- D("2026-01-01"); b }),
+  E3 = avec(function(b) { b$prestations$montant[2L] <- -60000; b$prestations$date_reglement[2L] <- D("2027-03-01"); b }),
+  E4 = avec(function(b) { b$beneficiaires$qualite[1L] <- "zzz"; b$beneficiaires$date_saisie[1L] <- D("2026-01-01"); b }),
+  E5 = avec(function(b) { b$dossiers$date_ouverture[1L] <- NA; b }),
+  E6 = avec(function(b) { b$cotisations$montant[1L] <- -1000; b }),
+  E7 = v43$V1,
+  E8 = v43$V12,
+  E9 = avec(function(b) { b$beneficiaires$date_saisie[1L] <- D("2027-03-01"); b$sinistres$canal_declaration[1L] <- "zzz"; b }))
+r44 <- lapply(b44, cb, A0)
+r <- r44$E1
+verifier_egal("E1 (#44) : PR2 au montant négatif (D09), saisie le 2026-06-01, à A0 : nombre_dossiers 0 ; plus de rangée deces ; rangée ensemble sans valeur, cause D09, nombre_dossiers 0 ; à A : 1, inchangé",
+              list(refus(r, "D09", "prestations")$nombre_dossiers, enjeu44(r, "D09"), enjeu44(r, "ensemble"),
+                   refus(cb(b44$E1), "D09", "prestations")$nombre_dossiers),
+              list(0L, "ensemble prestations_ecartees euro NA 0 NA D09", "ensemble prestations_ecartees euro NA 0 NA D09", 1L))
+r <- r44$E2
+d09 <- paste("ensemble", ns$COMPOSANTES_ENJEU$composante[c(2:4, 8:10)], ns$COMPOSANTES_ENJEU$unite[c(2:4, 8:10)], "NA 0 NA D09")
+verifier_egal("E2 (#44) : EV5 au montant négatif (D09), saisi le 2026-01-01, à A0 : nombre_dossiers 0 ; plus de rangée rente_education ; paiements_cumules 0, nombre_valeurs 0 ; composantes empêchées par D09 sans valeur, cause D09",
+              list(refus(r, "D09", "evenements")$nombre_dossiers, enjeu44(r, "D09"), enjeu44(r, "ensemble")),
+              list(0L, c("ensemble paiements_cumules euro 0 0 0 NA", d09[1:3], d09[4:6]),
+                   c("ensemble paiements_cumules euro 0 0 0 NA", d09[1:3], d09[4:6])))
+r <- r44$E3
+verifier_egal("E3 (#44) : PR2 au montant négatif et à date de règlement refusée (D02c), à A0 : PR2 non déterminée, DO1 de rattachement non déterminé : nombre_dossiers NA sur les deux rangées de refus_tables et dans enjeu",
+              list(refus(r, c("D02c", "D09"), "prestations")$nombre_dossiers, unique(r$enjeu$nombre_dossiers)),
+              list(c(NA_integer_, NA_integer_), NA_integer_))
+r <- r44$E4
+z4 <- paste("ensemble", ns$COMPOSANTES_ENJEU$composante[1:4], ns$COMPOSANTES_ENJEU$unite[1:4], "0 0 0 NA")
+verifier_egal("E4 (#44) : BE1 de qualité zzz, saisi le 2026-01-01, à A0 : nombre_dossiers 0 ; plus de rangée deces ; paiements_cumules et capital_fixe 0, nombre_valeurs 0",
+              list(refus(r, "hors_domaine", "beneficiaires")$nombre_dossiers, enjeu44(r, "hors_domaine"), enjeu44(r, "ensemble")),
+              list(0L, z4, z4))
+verifier_egal("E5, E6 (#44) : DO1 sans date d'ouverture, à A0 : NA, inchangé ; CO1 au montant négatif (table sans dossier rattaché) : 0, inchangé",
+              list(refus(r44$E5, "manquant_obligatoire", "dossiers")$nombre_dossiers, unique(r44$E5$enjeu$nombre_dossiers),
+                   refus(r44$E6, "D09", "cotisations")$nombre_dossiers, unique(r44$E6$enjeu$nombre_dossiers)),
+              list(NA_integer_, NA_integer_, 0L, 0L))
+r <- cb(b44$E7, A0, declarations = list(exclusions = excl4("D03g")))
+verifier_egal("E7 (#44) : exclusion X de D03g de PR1 (date de règlement 2026-12-01), à A0 : nombre_dossiers 0 dans exclusions et dans enjeu, montant 0, rangée ensemble seule ; même effet sous non_declaree (sans déclaration)",
+              list(r$exclusions$nombre_dossiers, unique(enjeu44(r, "D03g")), unique(enjeu44(r, "ensemble")),
+                   unique(enjeu44(r44$E7, "D03g")), unique(r44$E7$enjeu$garantie)),
+              list(rep(0L, 4L), "ensemble prestations_ecartees euro 0 0 0 NA", "ensemble prestations_ecartees euro 0 0 0 NA",
+                   "ensemble prestations_ecartees euro 0 0 0 NA", "ensemble"))
+verifier_egal("E8 (#44) : refus du sexe d'une version remplacée de ME1 : nombre_dossiers 0 à A0 (avant : 2) et à l'extraction ; composantes 1 à 4 à 0",
+              list(refus(r44$E8, "hors_domaine", "famille", "sexe")$nombre_dossiers,
+                   refus(cb(b44$E8), "hors_domaine", "famille", "sexe")$nombre_dossiers, enjeu44(r44$E8, "ensemble")),
+              list(0L, 0L, z4))
+r <- r44$E9
+verifier_egal("E9 (#44) : DO1 de rattachement non déterminé par BE1 (date de saisie refusée, D02c) et rattaché par SI1 (canal hors domaine), à A0 : rangée ensemble par disjonction, DO1 et DO2 rattachés, composantes chiffrées ; écart de BE1 : NA",
+              list(c(refus(r, "hors_domaine", "sinistres")$nombre_dossiers, refus(r, "D02c", "beneficiaires")$nombre_dossiers),
+                   enjeu44(r, "ensemble")[grepl("^ensemble", enjeu44(r, "ensemble"))],
+                   unique(r$enjeu$nombre_dossiers[r$enjeu$table %in% "beneficiaires"])),
+              list(c(2L, NA_integer_),
+                   paste("ensemble", ns$COMPOSANTES_ENJEU$composante[1:4], ns$COMPOSANTES_ENJEU$unite[1:4], c(60750, 60000, 3000, 0),
+                         2L, c(2L, 1L, 1L, 0L), NA),
+                   NA_integer_))
+# E9, indépendance de l'ordre des écarts : un même dossier non déterminé dans un écart et rattaché
+# dans l'autre, dans les deux ordres (avant : la première occurrence l'emportait)
+el9 <- function(connu, cause) data.frame(porteur = "dossiers", indice = 1L, garantie = "deces", connu = connu,
+                                         composante = "paiements_cumules", unite = "euro", valeur = 60000, cause = cause,
+                                         cause_table = if (is.na(cause)) NA_character_ else "dossiers", cause_colonne = NA_character_,
+                                         stringsAsFactors = FALSE)
+do9 <- function(connu) data.frame(dossier = 1L, garantie = "deces", connu = connu, famille = "dossier", stringsAsFactors = FALSE)
+rg9 <- function(i) {
+  x <- ns$.rangees_enjeu(rbind(el9(NA, "visibilite_non_determinee"), el9(TRUE, NA))[i, ], rbind(do9(NA), do9(TRUE))[i, ],
+                         character(0), "dossier")
+  x <- x[x$composante == "paiements_cumules", ]
+  paste(x$garantie, x$montant, x$nombre_dossiers, x$nombre_valeurs, x$cause)
+}
+rg9_nd <- ns$.rangees_enjeu(el9(NA, "visibilite_non_determinee"), do9(NA), character(0), "dossier")
+verifier_egal("E9 (#44) : .rangees_enjeu() : disjonction de Kleene des statuts d'un dossier, indépendante de l'ordre des écarts (NA puis TRUE, TRUE puis NA : rattaché) ; NA seul : non déterminé",
+              list(rg9(1:2), rg9(2:1), unique(rg9_nd$nombre_dossiers), rg9_nd$cause[rg9_nd$composante == "paiements_cumules"]),
+              list(c("deces 60000 1 1 NA", "ensemble 60000 1 1 NA"), c("deces 60000 1 1 NA", "ensemble 60000 1 1 NA"), NA_integer_,
+                   rep("visibilite_non_determinee", 2L)))
+# OU sur les lignes d'un même écart (reprise de l'audit léger de #44) : (a) DO1 rattaché, dans
+# un même écart D09, par PR2 visible et par sa copie PR4 saisie le 2026-06-01 (invisible à
+# A0) : rattaché (VRAI OU FAUX) ; (b) PR2 invisible (saisie le 2026-06-01) et PR4 non
+# déterminée (date de règlement refusée, D02c) : rattachement non déterminé (FAUX OU NA)
+ou44 <- function(f) avec(function(b) { p <- b$prestations; p <- rbind(p, p[2L, ]); p$id_prestation[4L] <- "PR4"
+  p$montant[c(2L, 4L)] <- -1; b$prestations <- f(p); b })
+r_a <- cb(ou44(function(p) { p$date_saisie[4L] <- D("2026-06-01"); p }), A0)
+r_b <- cb(ou44(function(p) { p$date_saisie[2L] <- D("2026-06-01"); p$date_reglement[4L] <- D("2027-03-01"); p }), A0)
+verifier_egal("#44, OU sur les lignes d'un écart : (a) DO1 rattaché par PR2 visible et par PR4 invisible (D09, à A0) : nombre_dossiers 1, rangée deces présente ; (b) PR2 invisible et PR4 non déterminée : NA dans refus_tables et dans enjeu",
+              list(refus(r_a, "D09", "prestations")$nombre_dossiers, unique(r_a$enjeu$garantie[r_a$enjeu$motif == "D09"]),
+                   unique(r_a$enjeu$nombre_dossiers[r_a$enjeu$motif == "D09"]),
+                   refus(r_b, "D09", "prestations")$nombre_dossiers, unique(r_b$enjeu$nombre_dossiers[r_b$enjeu$motif == "D09"])),
+              list(1L, c("deces", "ensemble"), 1L, NA_integer_, NA_integer_))
+# variante d03g contre mode « comptes » (reprise de l'audit léger de #44) : PR1 sans date de
+# saisie (D03g), réglée le 2025-01-15, au montant négatif (D09), à A0 : non déterminée pour
+# les comptes (D09 : NA), visible sous la variante d03g, délai nul (D03g : 1)
+b_s3 <- avec(function(b) { b$prestations$date_saisie[1L] <- NA; b$prestations$date_reglement[1L] <- D("2025-01-15")
+  b$prestations$montant[1L] <- -1240; b })
+r <- cb(b_s3, A0)
+verifier_egal("#44, variante d03g : PR1 sans date de saisie, réglée le 2025-01-15, montant -1240, à A0 : rangées D03g de enjeu à nombre_dossiers 1 (variante d03g), refus D09 à NA (comptes)",
+              list(unique(r$enjeu$nombre_dossiers[r$enjeu$motif == "D03g"]), refus(r, "D09", "prestations")$nombre_dossiers),
+              list(1L, NA_integer_))
+# filtre de .rangees_enjeu() restreint à la cause de visibilité (reprise de l'audit léger) :
+# un élément D01a de connu NA d'un dossier rattaché par un autre écart demeure
+el6 <- function(connu, cause) data.frame(porteur = "dossiers", indice = 1L, garantie = "deces", connu = connu,
+                                         composante = "capital_fixe", unite = "euro", valeur = if (is.na(cause)) 60000 else NA_real_,
+                                         cause = cause, cause_table = NA_character_, cause_colonne = NA_character_, stringsAsFactors = FALSE)
+x <- ns$.rangees_enjeu(rbind(el6(NA, "D01a"), el6(TRUE, NA)), rbind(do9(NA), do9(TRUE)), character(0), "dossier")
+x <- x[x$composante == "capital_fixe", ]
+verifier_egal("#44, .rangees_enjeu() : élément D01a de connu NA d'un dossier rattaché par un autre écart conservé (montant NA, cause D01a) ; seuls tombent les éléments de cause visibilite_non_determinee",
+              paste(x$garantie, x$montant, x$nombre_dossiers, x$cause), c("deces NA 1 D01a", "ensemble NA 1 D01a"))
+# E10 : batterie (d) du critère 6 du § 2.5 : vérification de cohérence à trois valeurs, non
+# preuve. Chaque statut non déterminé dont dépend le rattachement (dossier, ligne de l'écart
+# rattachée, version de famille) est forcé à vrai puis à faux, indépendamment des autres et
+# dans toutes les combinaisons, dans l'évaluation de la visibilité du contexte (mode comptes,
+# ou variante d03g) : c'est un sur-ensemble des états admissibles (un statut lié par la règle 1
+# à celui de sa parente est forcé à part). Les candidates d'un membre de famille ne sont pas
+# rendues tour à tour version valable (une seule à la fois) : chacune est forcée librement,
+# ce qui n'est pas la substitution exacte pour famille (issue #49).
+# .statut_rattachement() et .nombre_dossiers_union() sont rejoués dans chaque état : un
+# dossier est de rattachement non déterminé, et le compte NA, si et seulement si le résultat
+# varie ; sinon, ils ont la valeur commune.
+batterie_d44 <- function(b, arrete, parts, d03g = FALSE) {
+  ctx0 <- ctx_complet(b, arrete)
+  ev <- ns$.visibilite_a(ctx0, if (d03g) "d03g" else "comptes")
+  statut_de <- function(t, e) if (t == "famille") e$valable else e$statut[[t]]
+  inconnus <- list()
+  for (x in parts) {
+    p <- ns$.rattacher(ctx0, x$table)$paires
+    p <- p[p$ligne %in% x$lignes, , drop = FALSE]
+    for (i in unique(p$ligne[is.na(statut_de(x$table, ev)[p$ligne])])) inconnus[[length(inconnus) + 1L]] <- list(x$table, i)
+    for (j in unique(p$dossier[is.na(ev$statut$dossiers[p$dossier])])) inconnus[[length(inconnus) + 1L]] <- list("dossiers", j)
+  }
+  inconnus <- unique(inconnus)
+  k <- length(inconnus)
+  stopifnot(k <= 10L)
+  parts <- lapply(parts, function(x) c(x, list(d03g = d03g)))
+  etats <- lapply(seq_len(2^k) - 1L, function(m) {
+    e <- ev
+    for (u in seq_len(k)) {
+      t <- inconnus[[u]][[1L]]; i <- inconnus[[u]][[2L]]; val <- bitwAnd(m, 2L^(u - 1L)) > 0L
+      if (t == "famille") e$valable[i] <- val else e$statut[[t]][i] <- val
+    }
+    ctx <- copie40(ctx0)
+    for (nom in c("visibilite_vue", "visibilite_comptes", "visibilite_d03g")) assign(nom, e, envir = ctx)
+    list(n = ns$.nombre_dossiers_union(ctx, parts),
+         s = lapply(parts, function(x) ns$.statut_rattachement(ctx, x$table, x$lignes, d03g)))
+  })
+  commun <- function(z) if (length(unique(z)) == 1L) z[[1L]] else NA
+  n_att <- commun(vapply(etats, `[[`, 0L, "n"))
+  s_att <- lapply(seq_along(parts), function(i) {
+    m <- vapply(etats, function(e) e$s[[i]]$statut, logical(nrow(etats[[1L]]$s[[i]])))
+    if (is.null(dim(m))) m <- matrix(m, nrow = nrow(etats[[1L]]$s[[i]]))
+    apply(m, 1L, commun)
+  })
+  s_k <- lapply(parts, function(x) ns$.statut_rattachement(ctx0, x$table, x$lignes, d03g)$statut)
+  list(k = k, egal = identical(ns$.nombre_dossiers_union(ctx0, parts), as.integer(n_att)) &&
+         identical(lapply(s_k, as.logical), lapply(s_att, as.logical)))
+}
+p44 <- function(table, lignes) list(table = table, lignes = lignes)
+d44 <- list(
+  list(b44$E3, A0, list(p44("prestations", 2L))),                                            # ligne NA, dossier vrai
+  list(b44$E5, A0, list(p44("dossiers", 1L))),                                               # dossier NA (ligne = dossier)
+  list(b44$E5, A0, list(p44("sinistres", 1L))),                                              # dossier NA, ligne vraie
+  list(within(b44$E5, prestations$date_saisie[2L] <- D("2026-06-01")), A0, list(p44("prestations", 2L))),   # dossier NA, ligne fausse
+  list(b44$E9, A0, list(p44("beneficiaires", 1L), p44("sinistres", 1L))),                    # union : disjonction
+  list(b44$E9, A0, list(p44("beneficiaires", 1L))),
+  list(v43$V11, A0, list(p44("famille", 1:2))),                                              # candidates de famille (forçage libre, #49)
+  list(within(b44$E3, dossiers$date_ouverture[1L] <- NA), A0, list(p44("prestations", 2L), p44("evenements", 4L))),
+  list(b44$E1, A0, list(p44("prestations", 2L))),                                            # aucun inconnu
+  list(ou44(function(p) { p$date_saisie[2L] <- D("2026-06-01"); p$date_reglement[4L] <- D("2027-03-01"); p }), A0,
+       list(p44("prestations", c(2L, 4L)))),                                                 # OU : ligne fausse, ligne NA
+  list(b_s3, A0, list(p44("prestations", 1L)), TRUE),                                        # variante d03g, aucun inconnu
+  list(avec(function(b) { b$prestations$date_saisie[1L] <- NA; b$prestations$date_reglement[1L] <- D("2027-01-05"); b }), A0,
+       list(p44("prestations", 1L)), TRUE))                                                  # variante d03g, ligne NA (D02c)
+res_d44 <- lapply(d44, function(k) batterie_d44(k[[1L]], k[[2L]], k[[3L]], length(k) > 3L && isTRUE(k[[4L]])))
+verifier("E10 (#44, critère 6 (d)) : batterie de substitution du statut de rattachement, statuts forcés à vrai puis à faux indépendamment (sur-ensemble des états admissibles, vérification de cohérence à trois valeurs ; candidates de famille non rendues tour à tour valables, #49), en mode comptes et sous la variante d03g : rattachement non déterminé et nombre_dossiers NA si et seulement si le résultat varie, valeur commune sinon (12 cas, dont 10 à statuts inconnus)",
+         all(vapply(res_d44, `[[`, NA, "egal")) && sum(vapply(res_d44, `[[`, 0L, "k") > 0L) == 10L)
+# complexité (#45) avec lignes non déterminées rattachées : n dossiers d'un même sinistre de
+# canal hors domaine (écart visible qui les rattache tous), chacun avec un événement sans date
+# de saisie (D03g, non déterminé à A0) au montant négatif (D09) : statut de rattachement et
+# disjonction de la rangée ensemble sur chaque dossier ; travail de controler_base
+# (travail_de(), sans horloge) de 500 à 2 000 dossiers multiplié par moins de 6 (linéaire)
+perf44 <- function(nd) {
+  b <- base_ref
+  dz <- b$dossiers[rep(1L, nd), ]; dz$id_dossier <- sprintf("DX%06d", seq_len(nd)); b$dossiers <- rbind(b$dossiers, dz)
+  ez <- b$evenements[rep(4L, nd), ]; ez$id_evenement <- sprintf("EX%06d", seq_len(nd)); ez$id_dossier <- dz$id_dossier
+  ez$montant <- -1; ez$date_saisie <- D(NA)
+  b$evenements <- rbind(b$evenements, ez)
+  b$sinistres$canal_declaration[1L] <- "zzz"
+  b
+}
+travail44 <- function(n) travail_de(ns$controler_base, perf44(n), A0, ops = OPS_CB, sous = fonctions_de(ns))
+verifier("#44, performance : rattachement à l'arrêté avec lignes non déterminées rattachées, travail de controler_base de 500 à 2 000 dossiers multiplié par moins de 6",
+         travail44(2000L) / travail44(500L) < 6)
 
 section("donnees : D02c (âge), D07 (c), causes directes (D12), enjeu sous lien de garantie non résolu")
 emplois <- names(ns$.EMPLOIS_D02C)
