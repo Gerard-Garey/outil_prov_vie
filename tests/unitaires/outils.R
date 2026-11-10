@@ -370,21 +370,24 @@ verifier("ecrire_liste(lire_liste(o)) == o sur plusieurs textes canoniques",
          all(vapply(list(liste_riche, list(a = 1L), list(), list(x = list(y = NULL))),
                     function(l) identical(ecrire_liste(lire_liste(ecrire_liste(l))), ecrire_liste(l)), NA)))
 
-# #25 : la relecture d'une liste plate de n feuilles est linéaire. Croissance plutôt que
-# durée seule (une durée dépend de la machine) : rapport des durées à 40 000 et 10 000
-# feuilles, meilleure de deux mesures ; linéaire, il vaut environ 4, quadratique (insertion
-# feuille par feuille d'avant #25), environ 15 (mesure du 9 novembre 2026, R 4.3.3). Borne 10 ;
-# durée de 40 000 feuilles bornée à 20 s (environ 3 s mesurées ; 37 s avant #25).
+# #25 : la relecture d'une liste de n feuilles est linéaire. Travail plutôt qu'horloge (une
+# durée dépend de la charge de la machine ; #45) : travail de lire_liste (travail_de() de
+# tests/harnais.R : somme des tailles des arguments des appels de c(), rbind() et unlist(),
+# et des appels aux fonctions du package), de 2 500 à 10 000 feuilles (ou groupes de trois
+# feuilles) ; rapport 4 si linéaire, environ 16 pour l'insertion feuille par feuille d'avant
+# #25 (.inserer, qui recopiait le noeud parent à chaque appel ; mesuré : 4,00 contre 15,9 sur
+# une liste plate, 4,00 contre 15,9 sur des groupes de trois feuilles). Borne 6. Les
+# affectations `[<-` faites en place dans une boucle ne sont pas comptées.
 liste_plate <- function(n) stats::setNames(as.list(seq_len(n) / 7), paste0("f", seq_len(n)))
-duree_relecture <- function(o) min(vapply(1:2, function(i) system.time(lire_liste(o))[["elapsed"]], 0))
-o_10k <- ecrire_liste(liste_plate(10000L))
+liste_groupes <- function(n) stats::setNames(lapply(seq_len(n), function(i) list(a = i, b = as.character(i), c = list(d = i / 3))),
+                                             paste0("g", seq_len(n)))
+travail_relecture <- function(o) travail_de(lire_liste, o, ops = c("c", "rbind", "unlist"), sous = fonctions_de(outils))
 o_40k <- ecrire_liste(liste_plate(40000L))
-t_10k <- duree_relecture(o_10k)
-t_40k <- duree_relecture(o_40k)
 verifier("lire_liste : 40 000 feuilles plates, aller-retour identical", identical(lire_liste(o_40k), liste_plate(40000L)))
-verifier("lire_liste : durée de 10 000 à 40 000 feuilles multipliée par moins de 10 (relecture linéaire)",
-         t_40k / max(t_10k, 0.05) < 10)
-verifier("lire_liste : 40 000 feuilles relues en moins de 20 s", t_40k < 20)
+verifier("lire_liste : travail de 2 500 à 10 000 feuilles plates multiplié par moins de 6 (relecture linéaire : 4 ; insertion feuille par feuille : 16)",
+         travail_relecture(ecrire_liste(liste_plate(10000L))) / travail_relecture(ecrire_liste(liste_plate(2500L))) < 6)
+verifier("lire_liste : travail de 2 500 à 10 000 groupes de trois feuilles multiplié par moins de 6 (relecture linéaire : 4 ; insertion feuille par feuille : 16)",
+         travail_relecture(ecrire_liste(liste_groupes(10000L))) / travail_relecture(ecrire_liste(liste_groupes(2500L))) < 6)
 # structure profonde et large : mêmes noeuds, même ordre, feuilles de tous types
 liste_arbre <- list(
   a = list(b = list(c = list(d = 1:3, e = NULL, f = list()), g = "x"), h = c(TRUE, NA)),

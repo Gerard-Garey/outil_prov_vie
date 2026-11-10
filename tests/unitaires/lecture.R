@@ -250,28 +250,24 @@ verifier("non-régression : \"\"\"\" (un guillemet) et \"a\"\"b\" admis, champ v
          identical(r$contrats$id_contrat, "\"") && identical(r$contrats$nature_contrat, "a\"b") &&
            identical(r$contrats$gestionnaire, NA_character_))
 # Revue finale, M3 : le rétablissement des "" est linéaire au nombre de champs "" (une
-# affectation par colonne). Croissance et rapport plutôt que durée seule (même forme que #25) :
-# fichier de deux colonnes, "" sur chaque ligne, meilleure de deux mesures. De 10 000 à 80 000
-# lignes, durée multipliée par 4 à 5 (linéaire : 8 au plus), 21 à 29 avant la correction ; à
-# 80 000 lignes, rapport à la même lecture sans "" de 1,2 à 1,8, 54 à 66 avant ; 80 000 lignes
-# en 0,2 s, 9,8 s avant (mesures du 9 novembre 2026, R 4.3.3). Bornes 16, 10 et 20 s.
+# affectation par colonne). Travail plutôt qu'horloge (une durée dépend de la charge de la
+# machine ; #45) : travail de .lire_table_csv (travail_de() de tests/harnais.R) aux seules
+# affectations `[[<-`, taille de la table affectée comptée ; fichier de deux colonnes, "" sur
+# chaque ligne. De 2 500 à 10 000 lignes, rapport 4 si une affectation par colonne ; 16 si
+# une affectation par champ, qui recopie la table à chaque appel (version d'avant la revue
+# finale ; mesuré). Borne 6.
 assures_vides <- function(n, valeur = "\"\"") {
   dossier_avec(list(assures.csv = paste0("\"id_assure\",\"sexe\"\n",
                                          paste0("\"A", seq_len(n), "\",", valeur, "\n", collapse = ""))))
 }
-duree_lecture <- function(dossier) min(vapply(1:2, function(i) system.time(lire_base(dossier))[["elapsed"]], 0))
-d_10k <- assures_vides(10000L)
-d_80k <- assures_vides(80000L)
-t_10k <- duree_lecture(d_10k)
-t_80k <- duree_lecture(d_80k)
-t_80k_sans <- duree_lecture(assures_vides(80000L, "\"F\""))
-r <- lire_base(d_80k)
+travail_lecture <- function(dossier) {
+  travail_de(ns$.lire_table_csv, file.path(dossier, "assures.csv"), "assures",
+             d$colonnes[d$colonnes$table == "assures", , drop = FALSE], ops = "[[<-")
+}
+r <- lire_base(assures_vides(80000L))
 verifier("80 000 \"\" d'une colonne : tous rendus \"\"", identical(r$assures$sexe, rep("", 80000L)))
-verifier("lire_base : durée de 10 000 à 80 000 lignes à \"\" multipliée par moins de 16 (rétablissement linéaire)",
-         t_80k / max(t_10k, 0.05) < 16)
-verifier("lire_base : 80 000 lignes à \"\" lues en moins de 10 fois la durée des mêmes lignes sans \"\"",
-         t_80k / max(t_80k_sans, 0.05) < 10)
-verifier("lire_base : 80 000 lignes à \"\" lues en moins de 20 s", t_80k < 20)
+verifier("lire_base : travail de .lire_table_csv de 2 500 à 10 000 lignes à \"\" multiplié par moins de 6 (rétablissement linéaire : 4 ; une affectation par champ : 16)",
+         travail_lecture(assures_vides(10000L)) / travail_lecture(assures_vides(2500L)) < 6)
 crlf <- function(texte) gsub("\n", "\r\n", texte, fixed = TRUE)
 r <- lire_base(dossier_avec(list(contrats.csv = crlf(csv_de("contrats", list(id_contrat = "\"\"", gestionnaire = "\"\""))))))
 verifier("\"\" dans un fichier CRLF, en début et en fin de ligne : rendu \"\"",
