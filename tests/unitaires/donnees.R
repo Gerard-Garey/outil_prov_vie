@@ -2779,6 +2779,37 @@ verifier_egal("#38 (b) : refus induit D12 (sinistres.date_declaration en texte, 
               list("type_incompatible", induits_attendus, "age_non_defini"))
 verifier_egal("#36, X2 (#38 (b)) : à A0, une seule ligne (D02c, assures, NA), qui porte age_non_defini (rang 4) et non refus_induit (rang 7, M195)",
               ligne(r_b$controles_non_executes, "D02c", "assures", NA)$cause, "age_non_defini")
+# v1.5.2 (#43, constat 2 de l'audit) : défaut de forme d'une colonne de visibilité qu'aucune
+# règle P ne lit (garanties_souscrites.date_effet, cotisations.date_mouvement) : à A0, refus
+# induit de portée table d'origine « table.colonne », propagé aux filles (M178) ; aucune ligne
+# inscrite dans vue$visibilite_non_determinee, vue provisoire ; rien à l'extraction. Témoin :
+# evenements.date_saisie, lue par une règle P, inchangé.
+en_texte <- function(t, c1) avec(function(b) { b[[t]][[c1]] <- as.character(b[[t]][[c1]]); b })
+f152 <- list(gs = en_texte("garanties_souscrites", "date_effet"), co = en_texte("cotisations", "date_mouvement"),
+             ev = en_texte("evenements", "date_saisie"))
+r152 <- lapply(f152, cb, arrete = A0)
+verifier_egal("v1.5.2 (#43) : garanties_souscrites.date_effet en texte, A0 : refus induit de portée table d'origine garanties_souscrites.date_effet, propagé aux tables filles ; aucune ligne non déterminée ; vue provisoire",
+              list(refus_induits_d12(r152$gs), unique(refus(r152$gs, "refus_induit", "garanties_souscrites")$portee),
+                   nrow(r152$gs$vue$visibilite_non_determinee), r152$gs$vue$provisoire),
+              list(c("garanties_souscrites<-garanties_souscrites.date_effet", "parametres<-garanties_souscrites",
+                     "affiliations<-garanties_souscrites", "dossiers<-garanties_souscrites", "beneficiaires<-dossiers",
+                     "rentes<-dossiers", "evenements<-dossiers;rentes", "prestations<-dossiers;rentes",
+                     "cotisations<-garanties_souscrites", "evaluations_gestion<-dossiers", "designations<-affiliations",
+                     "ayants_droit_sante<-affiliations"), "table", 0L, TRUE))
+verifier_egal("v1.5.2 (#43) : cotisations.date_mouvement en texte, A0 : refus induit de portée table de cotisations seule, d'origine cotisations.date_mouvement ; aucune ligne non déterminée ; vue provisoire ; témoin evenements.date_saisie (règle P) : même refus induit",
+              list(refus_induits_d12(r152$co), nrow(r152$co$vue$visibilite_non_determinee), r152$co$vue$provisoire,
+                   refus_induits_d12(r152$ev)[1L], r152$ev$vue$provisoire),
+              list("cotisations<-cotisations.date_mouvement", 0L, TRUE, "evenements<-evenements.date_saisie", TRUE))
+verifier("v1.5.2 (#43) : à l'extraction, aucun refus induit ni vue provisoire (vue totale) ; invariant de M178 sur ces bases à A0 (provisoire ⇒ ligne non déterminée, ou refus de portée table justifié)",
+         all(vapply(f152, function(b) { r <- cb(b, A); !any(r$refus_tables$motif == "refus_induit") && !r$vue$provisoire }, NA)) &&
+           all(vapply(r152, invariant_vue, NA)))
+# date d'une partie de ligne illisible par sa forme (sinistres.date_instruction en texte) : non
+# convertie (aucun avertissement), partie masquée ; aucun refus induit (v1.5.2 : colonne de
+# visibilité de la ligne seulement)
+r <- cb(en_texte("sinistres", "date_instruction"), A0)
+verifier_egal("v1.5.2 (#43) : sinistres.date_instruction en texte, A0 : bilan rendu sans conversion de la colonne, aucun refus induit",
+              list(refus(r, "type_incompatible", "sinistres")$colonne, any(r$refus_tables$motif == "refus_induit")),
+              list("date_instruction", FALSE))
 # #36, X3 : une cause directe (affiliations.date_debut manquante, manquant_obligatoire, lue par
 # l'emploi assures_affiliation) prime sur declaration_absente (seuil d02c_age_max de l'emploi
 # assures_sinistre absent), émise avant elle pour la même clé (D02c, assures, NA) ; avant #36,

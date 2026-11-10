@@ -1933,7 +1933,11 @@ controler_base <- function(donnees, arrete, declarations = NULL, conventions = N
 # Les règles P sont alors rejouées sur la base des refus complétés (les constats et
 # contrôles non exécutés du passage précédent sont retirés, hors les règles P empêchées,
 # qui gardent leur cause) ; la vue reste provisoire (`p_refusees` : tables refusées par une
-# règle P empêchée).
+# règle P empêchée). Une colonne de visibilité de la ligne (.DATES_VISIBILITE) illisible par sa
+# forme empêche de même la vue de sa table, qu'une règle P la
+# lise ou non : même refus induit, d'origine « table.colonne » ; la table sort de la vue et
+# aucune de ses lignes n'est inscrite dans vue$visibilite_non_determinee (spécification v1.5.2,
+# § 2.2, Frontière ; .vue_empechee()).
 .regle_p <- function(ctx) {
   constats <- ctx$constats
   non_executes <- ctx$non_executes
@@ -1941,6 +1945,7 @@ controler_base <- function(donnees, arrete, declarations = NULL, conventions = N
   repeat {
     .visibilite_propre(ctx)
     .regle_prealable(ctx)
+    .vue_empechee(ctx)
     if (length(ctx$p_empechees) == 0L) break
     empechees <- ctx$p_empechees
     ctx$constats <- constats
@@ -1951,6 +1956,25 @@ controler_base <- function(donnees, arrete, declarations = NULL, conventions = N
     .refus_p_empechee(ctx, empechees)
     constats <- ctx$constats
     .refus_regle_b(ctx)
+  }
+  invisible(NULL)
+}
+
+# Vue d'une table empêchée par un défaut de forme d'une de ses colonnes de visibilité, à un
+# arrêté antérieur à l'extraction (spécification v1.5.2, § 2.2, Frontière ; M178) : la colonne
+# « table.colonne » s'ajoute aux colonnes en cause de la table (`ctx$p_empechees`, lu par
+# .regle_p() et .refus_p_empechee()) ; une table déjà refusée en portée table n'est pas lue par
+# la vue. Une colonne lue par une règle P y figure déjà (.regle_prealable()) : sans double compte.
+.vue_empechee <- function(ctx) {
+  if (.vue_totale(ctx)) return(invisible(NULL))
+  dates <- .DATES_VISIBILITE
+  for (t in intersect(names(dates), ctx$tables)) {
+    if (!is.null(ctx$refus_pv$tables[[t]])) next
+    for (c1 in dates[[t]]) {
+      if (!is.na(.cause(ctx, t, c1, forme_seule = TRUE))) {
+        ctx$p_empechees[[t]] <- unique(c(ctx$p_empechees[[t]], paste(t, c1, sep = ".")))
+      }
+    }
   }
   invisible(NULL)
 }
@@ -3324,7 +3348,8 @@ controler_base <- function(donnees, arrete, declarations = NULL, conventions = N
     t <- p$table
     if (!(t %in% tables)) next
     if (totale) { parties[[t]] <- rep(TRUE, n_de(t)); next }
-    d <- as.numeric(.valeurs(ctx, t, p$date))
+    # date de la partie illisible par sa forme : non lue (aucune conversion), partie masquée
+    d <- if (lisible(t, p$date)) as.numeric(.valeurs(ctx, t, p$date)) else rep(NA_real_, n_de(t))
     dh <- ctx$partie_h[[t]]
     if (!is.null(dh) && p$date == "date_saisie_fin") d <- ifelse(is.na(dh), d, dh)
     x <- !is.na(d) & d <= a
