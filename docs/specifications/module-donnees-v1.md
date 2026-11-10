@@ -1,6 +1,6 @@
 # Spécification du module `donnees` — v1 (base entière et vue, enjeu des lignes écartées, conventions d'âge)
 
-> *Rédigé par l'agent actuary (IA) le 8 novembre 2026 (issue #18, branche `claude/donnees-simulation`, PR #29), sur les questions 4.2 et 4.3 de l'avis d'`actuary-approfondi` sur la question 5d (portée d'un refus) et sur la question 4.5 (conventions d'âge, ADR 0010, cinquième série, (g)). Statut : version `1.1` **visée** par le mainteneur le 8 novembre 2026 (errata E1 à E26) ; la version `1.0` l'a été le même jour (M151). Les décisions des visas sont intégrées par l'agent actuary (IA) (version `1.1` : le 9 novembre 2026), et la session principale contrôle leur transcription au versement.*
+> *Rédigé par l'agent actuary (IA) le 8 novembre 2026 (issue #18, branche `claude/donnees-simulation`, PR #29), sur les questions 4.2 et 4.3 de l'avis d'`actuary-approfondi` sur la question 5d (portée d'un refus) et sur la question 4.5 (conventions d'âge, ADR 0010, cinquième série, (g)). Statut : version `1.4` **visée** par le mainteneur le 9 novembre 2026 (versions `1.3` et `1.1` visées auparavant, décisions de la `1.2` prises par lui, M194 et M195) ; version `1.1` visée le 8 novembre 2026 (errata E1 à E26) ; la version `1.0` l'a été le même jour (M151). Les décisions des visas sont intégrées par l'agent actuary (IA) (version `1.1` : le 9 novembre 2026), et la session principale contrôle leur transcription au versement.*
 >
 > *Historique des versions :*
 > - *`0.1` : proposition du 8 novembre 2026 (questions 4.2 et 4.3), rendue à la session principale, non versée ;*
@@ -19,6 +19,9 @@
 >   - *le report déclaré des contrôles non écrits à la fermeture de #18 (issue #34) ;*
 >   - *D02c pour un âge, D07 (c) et l'enjeu sous lien de garantie non résolu, écrits dans `000f7fc` ;*
 >   - *la priorité de la cause directe sur tout `refus_induit`, règle B comprise (décision du mainteneur du 8 novembre 2026).*
+> - *`1.2` : 9 novembre 2026, issue #36, sur les décisions du mainteneur du même jour (M194 : `refus_induit` en dernier ; M195 : ordre complet des causes). § 3.1, priorité des causes : ordre en sept rangs, `refus_induit` en dernier, priorité de la cause directe (M185) conservée, places de `non_lisible`, `age_non_defini`, `parametre_non_defini` et `declaration_absente` fixées, `visibilite_non_determinee` exclue. Texte rédigé par l'agent actuary-approfondi (IA), versé par la session principale.*
+> - *`1.3` : 9 novembre 2026, issue #33, sur le visa du mainteneur du même jour (M198 à M204) : M178 et M179 rouvertes, M169 précisée. § 2.2, colonne refusée et vue : portée ligne de tout refus de valeur identifié par ligne sur une colonne lue par la vue (visibilité non déterminée, aucun refus induit), portée table maintenue pour un défaut de forme ; § 2.5, critère 1 ; § 3.1, `origine` ; § 3.2, motif de refus et colonne `origine` de `vue$visibilite_non_determinee`, invariant de `provisoire` réécrit ; § 4.2, porteur non déterminé par un refus ; § 6, règle 3 ; § 7, point 6 (P18). Texte rédigé par l'agent actuary-approfondi (IA), forme de la colonne `origine` actée par l'agent architect (IA), versé par la session principale.*
+> - *`1.4` : 9 novembre 2026, issue #33, compléments du visa d'`actuary` sur #33 et décision du mainteneur du 9 novembre 2026 sur l'enjeu à l'extraction (Q2). Ils portent sur la logique à trois valeurs de la règle P, la règle par colonne de la vue, la lecture existentielle de l'origine, les cas limites 1 à 3 et la liste fermée des colonnes de visibilité lues comme valeur par l'enjeu ; s'y ajoutent, au § 3.1, le cas X3 de #36 dans la phrase « Effet » et la liste fermée des causes directes. Aucune provision n'est modifiée. Texte rédigé par l'agent actuary-approfondi (IA), versé par la session principale ; **visée par le mainteneur le 9 novembre 2026** (la version précise M200 (b) : la règle P en logique de Kleene tranche une double lecture ; et la portée de M185). Précisions de forme après la revue finale (validation d'`actuary`, revue d'`audit`) : liste des défauts de forme alignée sur `.CODES_FORME`, domaine de la lecture existentielle, « colonnes de visibilité que lisent les composantes », renvois de lignes ; cas limite 3 étendu à toute table refusée en portée table, et portée de M185 précisée au § 3.1 (question Q1 de la revue finale) ; `nombre_dossiers` décrit tel que le code le calcule (§ 2.2 (c), § 4.4) ; cas limite 2 généralisé à toute colonne refusée d'une ligne à date de saisie connue absente.*
 >
 > *Les points du dictionnaire `1.6` relevés avec les errata (P6 à P17) ne sont pas intégrés (§ 7).*
 
@@ -57,7 +60,7 @@ Elle ne fixe pas la forme interne du code (`architect`), ni les méthodes des po
   - mal formé : `plan_invalide` ;
   - postérieur à `extraction.date_extraction` : `arrete_posterieur_extraction` ;
 - **`declarations`** : le sous-schéma `donnees` du plan (ADR 0010, point 17, :90). Omis, il se lit « aucune déclaration fournie » (M148) ;
-  - **forme** (M170, M174, M177 ; ADR 0010, neuvième série, (e) ; `.lire_declarations()` et ses auxiliaires, `R/donnees.R:407-563`) :
+  - **forme** (M170, M174, M177 ; ADR 0010, neuvième série, (e) ; `.lire_declarations()` et ses auxiliaires, `R/donnees.R:409-563`) :
     - rubriques `exclusions` (`motif`, `famille`, `action`) et `hypotheses` (`motif`, `referentiel`, `poste`, `valeur`), en `data.frame` ou en liste de listes nommées, chaînes renseignées ;
     - `seuils` (liste nommée) ;
     - `evaluations_gestion` (`diagnostics`) ;
@@ -112,10 +115,58 @@ Elle ne fixe pas la forme interne du code (`architect`), ni les méthodes des po
 
   Le code `somme_parts` relève aussi de la règle V.
 - **Règle I (identité).** À A = `date_extraction`, les comptes de la règle V égalent ceux d'une détection sur la base entière, et D02b et D03g sont en `S` (dict. :686).
-- **Colonne refusée, règle P empêchée** (M169, M178 ; ADR 0010, neuvième série, (f)) :
-  - un refus `R` de valeur sur une colonne ordinaire rend la colonne inutilisable pour les règles P et V (le contrôle qui la lit va dans `controles_non_executes`, cause = motif du refus) ;
-  - à A < extraction, une règle P empêchée sur une table lue par la vue (colonne lue refusée ou illisible, valeur manquante comprise) produit un refus induit de portée table, propagé aux filles par les clés étrangères (code `refus_induit`, origine `table.colonne`) ;
-  - une règle V empêchée à la fois par une cause directe et par ce refus induit garde la cause directe (règle générale de priorité au § 3.1).
+- **Colonne refusée et vue** (M169, M178 ; M199 à M204, décisions du mainteneur du 9 novembre 2026, issue #33 ; ADR 0010, neuvième série, (f), et quatorzième série) :
+  - **Frontière.** Une *colonne lue par la vue* est une colonne de visibilité d'une ligne ou d'une partie de ligne (dict. § 6) ou une colonne lue par une règle P (D02b, D03g), dans la table ou dans sa parente ; les colonnes de clé en sont exclues (leur refus reste de portée table, dict. § 1.10).
+    - L'exclusion des colonnes de clé vaut aussi pour une date qui entre dans une clé primaire composite (v1.4, Q11, C4). `famille.date_saisie`, qui entre dans la clé (`id_membre`, `date_saisie`), garde un refus de portée table (dict. § 1.10) et reste hors du mécanisme du refus de valeur : aucune ligne de `famille` n'est de visibilité non déterminée par un refus de sa date de saisie.
+    - Un **refus de valeur identifié par ligne** (`manquant_obligatoire`, `hors_domaine`, `chaine_vide`, D02c date hors bornes, tout refus `R` de portée colonne dont le constat désigne des lignes) sur une colonne lue par la vue est de **portée ligne** pour la vue (M199).
+    - Un **défaut de forme** (`colonne_absente`, `colonne_inconnue`, `type_incompatible` : `.CODES_FORME`) garde la **portée table** : à A < extraction, la règle P empêchée produit un refus induit de portée table, propagé aux filles par les clés étrangères (code `refus_induit`, origine « table.colonne ») (M178, inchangé).
+  - **Mécanisme du refus de valeur.**
+    - (a) `refus_tables` : la ligne du refus `R` de portée colonne est inchangée (règle B). Aucun refus induit ne naît d'un refus de valeur : les refus de valeur sont invariants en A.
+    - (b) **Règle P, logique à trois valeurs** (M200, précisé en v1.4 ; D1, Q1).
+      - **Valeurs inconnues.** Une valeur refusée pour sa valeur est inconnue, y compris sa présence : une valeur refusée comme manquante est inconnue au même titre qu'une valeur hors domaine. Une valeur manquante non refusée est connue absente.
+      - **Verdict.** Le verdict d'une règle P sur une ligne vaut vrai, faux ou inconnu, selon la logique de Kleene : une conjonction est fausse dès qu'un terme est faux, vraie si tous les termes sont vrais, inconnue sinon.
+        - D02b sur `evenements` : (type non programmable) ET (`date_saisie` < `date_effet`). « Type non programmable » est inconnu si le type est inconnu, ou si le type est programmable selon le motif (`oui:<motifs>`) et que le motif est inconnu.
+        - Comparaison de deux dates x < y (D02b sur `evenements`, `sinistres`, `catastrophes`, fin de contrat, fille et parente) : fausse si l'une des dates est connue absente ; inconnue si l'une est inconnue et l'autre présente ou inconnue ; sinon, égale au résultat de la comparaison. La date d'une parente est inconnue si la ligne parente de même clé a une date inconnue.
+        - D03g : date de saisie manquante, inconnue si la date de saisie est inconnue. Pour une partie de ligne : (`date_saisie_fin` manquante) ET (`date_fin` présente).
+      - **Exécution.** À tout arrêté, une ligne au verdict vrai est détectée, une ligne au verdict faux ne l'est pas, et une ligne au verdict inconnu est écartée de la détection.
+      - **Ligne de `controles_non_executes`** (détection partielle, nombre minorant ; ADR 0010, huitième série, (e)). Elle n'existe que si au moins une ligne de la table est écartée (Q1). Sa cause est le motif du premier refus de valeur qui touche une ligne écartée, dans l'ordre des colonnes lues : d'abord une colonne de la table, à défaut une colonne d'une autre table (date de la parente).
+      - **Motif** (jugement d'expert). Une valeur refusée n'est pas lue (dict. § 1.10). Une ligne dont le verdict ne dépend pas de la valeur refusée a un verdict déterminé. L'écarter déclarerait partielle une détection exacte ; pour un verdict vrai, la ligne visée resterait même visible sans déclaration, ce que le § 3.2 écarte (principe de M187). La logique de Kleene ne dépend pas de l'ordre d'évaluation des termes.
+      - **Alternative écartée** : écarter toute ligne dont une colonne lue porte une valeur refusée (lecture par colonne de la v1.3). Elle laisse visible à A, sans déclaration, un événement de type non programmable saisi avant une date d'effet postérieure à A dès que son motif, qui ne joue pas pour ce type, est refusé (cas « m6 » de #33).
+      - **Effet** : aucune provision. Sur les bases des tests, des lignes partielles de D02b ou de D03g disparaissent (verdict faux déterminé), et un événement devient détecté par D02b.
+    - (c) **Vue à A < extraction** (v1.4 ; Q5, D2, D4, Q7, Q8).
+      - **Calcul.** La visibilité d'une ligne, ou d'une partie de ligne, à A se calcule dans la même logique. Elle est inconnue si les valeurs inconnues que la ligne lit, directement ou par le verdict d'une règle P, peuvent lui donner deux statuts différents à A : visible, invisible, ou non déterminée par D02b ou D03g faute de déclaration.
+      - **Exception déterminée.** Une ligne qu'une date connue rend invisible à A, ou dont la parente est invisible, est invisible de façon déterminée (principe de M187).
+      - **Inscription.** Une ligne de visibilité inconnue est de visibilité non déterminée. Elle est inscrite dans `vue$visibilite_non_determinee` avec `motif` = code du refus, `colonne` = `NA` (ligne entière) ou la colonne de la partie (M167), et `origine` = « table.colonne » (M202).
+      - **Origine, lecture existentielle** (D2). La ligne est inscrite sous chaque colonne refusée dont la valeur peut changer son statut à A, les autres valeurs inconnues de la ligne prenant toute valeur du domaine de leur colonne (dictionnaire), sans égard aux autres colonnes de la ligne : déduire une valeur refusée de sa compatibilité avec le reste de la ligne reviendrait à l'imputer (avis d'`actuary` sur la question A de l'audit de #33). L'origine est toujours une colonne de la table de la ligne (Q8).
+      - **Règle par colonne**, conséquence de ce qui précède (Q5, D4) :
+
+        | Colonne refusée | Ligne (ou partie) de visibilité non déterminée |
+        |---|---|
+        | Colonne de visibilité de la ligne (dict. § 6), `date_saisie_fin`, `sinistres.date_instruction` | Toute ligne (ou partie) refusée |
+        | `evenements.type_evenement`, `evenements.date_effet` | Ligne dont le verdict de D02b est inconnu ; sous l'hypothèse de D02b déclarée (visibilité = max(saisie, effet, parente)), seulement si en plus l'effet est postérieur à A ou inconnu |
+        | `evenements.motif` | Comme la ligne précédente, et seulement si le type est inconnu ou programmable selon le motif (`oui:<motifs>`) |
+        | `contrats.date_fin`, `affiliations.date_fin` | Partie dont la `date_saisie_fin` manque ou est inconnue ; sinon, la fin est connue (ou inconnue) à sa date de saisie |
+        | `sinistres.date_declaration`, `catastrophes.date_evenement` | Toute ligne refusée |
+
+        - **`sinistres.date_declaration`.** Son seul verdict de D02b déterminé est celui d'une ligne dont la date de saisie est connue absente, et cette ligne relève de D03g : non déterminée sous D03g sans déclaration, non déterminée sous le motif du refus sous `H` de D03g (cas limite 2), hors de la vue sous `X`. Les deux écritures (« toute ligne refusée » et par verdict) donnent donc le même bilan. `evenements.date_effet`, qui est aussi la date d'effet de D03g, suit l'écriture par verdict, avec le même résultat.
+        - **`catastrophes.date_evenement`.** La date de saisie de `catastrophes` n'a pas de D03g : son absence est un refus, et le verdict de D02b est inconnu sur toute ligne refusée.
+      - **Filles.** Les filles écartées par la règle 1 figurent sous `parente_non_determinee`, origine `NA`, sans exigence propre (cas limite 4 ; Q8).
+      - **Partie de ligne.** Seule la partie est masquée ; la ligne reste dans la vue.
+      - **Comptes** (Q7). Une valeur refusée n'étant pas lue, `nombre_visibles` d'un refus vaut `NA` dès qu'une ligne qui le porte est de visibilité non déterminée, quel qu'en soit le motif ; `nombre_dossiers` compte les dossiers rattachés connus à A et ne vaut `NA` que si la visibilité de l'un d'eux est indéterminée (§ 4.4).
+    - (d) Règles V : la lecture d'une colonne par la vue ne les bloque plus pour un refus de valeur ; les lignes non déterminées sont hors de la vue. Une règle V qui lit la colonne comme valeur reste bloquée, cause = motif (M169, inchangé sur ce point ; M200).
+    - (e) `vue$provisoire = TRUE` dès que `visibilite_non_determinee` n'est pas vide.
+    - (f) `declarations_requises` : aucune ligne. C'est un refus `R` : aucune déclaration ne permet de poursuivre (dict. § 1.10). L'exclusion déclarée demandée par l'issue #33 est reportée au dictionnaire `1.6` (point 6 du § 7 ; M203).
+    - (g) À A = extraction, seuls (a) et (b) s'appliquent au bilan des contrôles : la vue reste totale (règle 3) et aucune ligne n'est non déterminée. Pour l'enjeu à l'extraction, voir le § 4.2 (Q2).
+  - **Cas limites** (1 à 3 remplacés en v1.4 ; D2, Q6, C1).
+    - **(1)** Une ligne qui porte deux refus de valeur apparaît sous chaque (`motif`, `origine`) dont la valeur peut changer son statut à A. Sans hypothèse de D02b, une ligne de date de saisie refusée apparaît aussi sous son type refusé : pour une saisie antérieure à l'effet, le type peut la faire passer de non déterminée à visible. Sous l'hypothèse de D02b, avec un effet antérieur à A, elle n'apparaît que sous la date de saisie, puisque max(saisie, effet) ≤ A équivaut alors à saisie ≤ A.
+    - **(2)** Refus de valeur et D03g sur la même ligne, la date de saisie étant connue absente. Le verdict de D02b est faux (date absente). Sans déclaration, la ligne est non déterminée sous D03g. Sous `H` de D03g, sa date (date d'effet + délai) n'est pas calculable : la ligne reste non déterminée sous le motif du refus ; les exigences attendues sont celles de D03g au § 3.2 (une ligne `exclusions` à `traitements_admis = "X"` par famille, soit quatre lignes), et non celles du refus, qui n'en a aucune ((f)) (Q6). Sous `X` de D03g, la ligne sort de la vue, et le refus reste dans `refus_tables`. Ce cas vaut pour toute colonne refusée d'une ligne dont la date de saisie est connue absente, et non seulement pour la date d'effet de D03g : sous `H` de D03g, une date de visibilité refusée (par exemple `prestations.date_reglement`) laisse la ligne non déterminée sous le motif du refus, la date de saisie retenue ne suffisant pas à déterminer sa visibilité (validation d'`actuary` sur `4350e67`).
+    - **(3)** Table refusée en portée table et refus de valeur dans cette table : la portée table l'emporte, que le refus de portée table vienne d'un défaut de forme de la table (C1), d'une propagation (`refus_induit`) ou d'un autre refus de portée table (clé, D01a, D04b `R`). Une règle P, ou une règle V qui ne lit la colonne que pour la vue, a pour cause le refus de portée table (priorité du § 3.1). Pour une règle P empêchée par un défaut de forme, l'origine du refus induit est la colonne de forme. Une colonne refusée pour sa valeur n'est ni la cause ni l'origine, et aucune ligne de cette table n'est inscrite sous un refus de valeur. Une règle qui lit la colonne refusée **comme valeur** garde la cause directe (M169, M185). (Extension à la propagation : avis d'`actuary` sur la question Q1 de la revue finale d'`audit`, 9 novembre 2026.)
+    - **(4)** Refus de valeur sur la parente : les filles passent sous `parente_non_determinee`, sans exigence propre.
+    - **(5)** Une table refusée en portée table (clé, D01a, D04b `R`, `evaluations_gestion`, § 7.5) : inchangé.
+  - Une règle V empêchée à la fois par une cause directe et par un refus induit garde la cause directe (règle générale de priorité au § 3.1).
+  - **Motif** (jugement d'expert) : un refus de valeur désigne ses lignes (« la ligne en est l'unité de compte et d'identification », dict. § 1.10) ; la vue se construit sur les autres sans lire de valeur refusée ; le bilan des refus reste invariant en A (§ 2.3, 2). Un défaut de forme n'est lu sur aucune ligne (dict. § 1.2) : aucune visibilité n'est déterminable, et la portée table le dit en une ligne, avec son origine. Avec un taux de défaut p par ligne, indépendant, la probabilité qu'une table de n lignes en porte au moins un est 1 − (1 − p)^n : pour p = 10⁻⁴, 0,6 % à n = 60 (taille des jeux versionnés de #19), 9,5 % à n = 1 000, 86,5 % à n = 20 000 (résultat exact sous l'hypothèse d'indépendance ; p est une valeur d'illustration).
+  - **Alternative écartée** : portée table pour tout refus (M178 dans sa forme de Bd), disproportionnée sur une base de taille réelle : une seule date d'effet de contrat manquante refuse 13 tables à A0 (mesure d'`actuary-approfondi` à `ca90614`).
+  - **Effet** : aucune provision. Jeux versionnés identiques hors de la colonne `origine` (mesuré sur la seconde reprise de #33, deux jeux aux deux arrêtés).
 
 **Ordre d'exécution.**
 1. Interruptions (ADR 0010, cinquième série, (a) 1, :273).
@@ -195,11 +246,12 @@ Chaque étape suppose les précédentes : une clé mal typée ne se joint pas, e
 
 ### 2.5 Critères d'acceptation
 
-1. **Invariance** : pour A1 ≠ A2 sur une même base, les lignes du bilan des règles B et P (détection) sont `identical()`.
+1. **Invariance** : pour A1 ≠ A2 sur une même base, les lignes du bilan des règles B et P (détection) sont `identical()`, hors les refus induits nés d'une règle P empêchée par un défaut de forme (M178), seuls dépendants de l'arrêté, et hors `nombre_visibles` et `nombre_dossiers`.
 2. **Identité** : à A = extraction, chaque compte de la règle V égale celui d'une détection directe sur la base entière, et D02b et D03g sont en `S`.
 3. **Aucune exclusion par la vue** : toute orpheline injectée (registre de D04) figure au bilan à tout arrêté.
 4. **Registre** : à A = extraction, détection exacte égale à l'injection (dict. :733). À A < extraction, pour les défauts intrinsèques à la ligne (D02a hors `famille`, D03a à D03f), les lignes détectées égalent les lignes injectées visibles à A.
 5. **Refus sur ligne invisible** : un D09 de signe injecté sur une prestation de `date_saisie` > A figure dans `refus_tables` à A, avec `nombre_visibles = 0`.
+6. **Substitution** (v1.4, R2). Pour toute ligne, ou partie de ligne, qui porte une valeur refusée lue par une règle P, on remplace la valeur refusée par des valeurs admises contrastées : type programmable et non programmable, motif qui rend le type programmable ou non, date antérieure et date postérieure à A ou à la date comparée, absence. Si le statut à A diffère entre les substitutions, la ligne est non déterminée sous un refus ; sinon, elle a ce statut. Le contrôle porte sur un corpus fini de cas qui couvre chaque colonne du tableau de (c), sans hypothèse et sous l'hypothèse de D02b. C'est une vérification, pas une preuve : la règle découle de (b) et (c).
 
 ## 3. Place des lignes du bilan et bilan sans déclaration
 
@@ -208,7 +260,7 @@ Chaque étape suppose les précédentes : une clé mal typée ne se joint pas, e
 - **`refus_tables`** : tout refus `R`, défaut `D..` ou code de contrôle.
   - `portee` vaut `colonne` ou `table`, portée effective résolue par la règle du § 1.10 : `colonne_table` devient `table` pour une colonne de clé primaire ou une colonne qui porte une référence.
   - `colonne` est la colonne d'origine, `NA` pour `refus_induit` et `table_conditionnelle_absente`.
-  - `origine` d'un `refus_induit` (M178 ; ADR 0010, neuvième série, (f) ; `.refus_p_empechee()`, `R/donnees.R:1375-1409`) : tables visées refusées, et, pour un refus né d'une règle P empêchée, la colonne « table.colonne » qui l'empêche, jointes par « ; » (colonnes d'abord, en tri radix, puis tables dans l'ordre du dictionnaire).
+  - `origine` d'un `refus_induit` (M178 ; ADR 0010, neuvième série, (f) ; `.refus_p_empechee()`, `R/donnees.R:1471`) : tables visées refusées, et, pour un refus né d'une règle P empêchée par un défaut de forme, la colonne « table.colonne » qui l'empêche, jointes par « ; » (colonnes d'abord, en tri radix, puis tables dans l'ordre du dictionnaire).
   - Une table facultative refusée porte le code de sa cause (M146) ; elle ne figure pas dans `tables_absentes`, et aucune variante « sans » ne la remplace.
 - **`signalements`** : toute anomalie traitée `S` :
   - `somme_parts` ;
@@ -226,10 +278,29 @@ Chaque étape suppose les précédentes : une clé mal typée ne se joint pas, e
   - Les couples D03a × `triangle` et D12 × `triangle` sont hors du critère de couverture (`S`).
   - Une exclusion des orphelines D04a et D04b ne compte que les lignes dont la visibilité propre tient à A (§ 2.4).
 - **`controles`** : toute détection. Chaque ligne se retrouve dans exactement un élément de traitement ou dans `declarations_requises` (invariant testé).
-- **`controles_non_executes`** : un contrôle empêché par un refus (`cause` = son motif) ou par une déclaration absente (`cause = "declaration_absente"`) ; ou pas encore écrit (`non_implemente`) ; ou illisible (`non_lisible`, D03h collectif) ; ou empêché par le refus induit d'une règle P empêchée (`refus_induit`), s'il n'a pas de cause directe (ADR 0010, huitième série, (a) et (e), et neuvième série, (c) ; M168, M178).
-  - Une composante de l'enjeu empêchée y figure aussi, sous le code de la composante (§ 4.3), avec la table et la colonne lues.
-  - Une clé (code, table, colonne) présente à la fois dans `controles` et ici est une détection partielle : son nombre est un minorant.
-  - **Priorité des causes** (décision du mainteneur du 8 novembre 2026) : la cause directe (refus d'une colonne lue) passe avant **tout** `refus_induit`, règle B comprise.
+- **`controles_non_executes`** : une ligne par clé (`code`, `table`, `colonne`) d'un contrôle non exécuté, ou exécuté en partie, avec sa cause (ADR 0010, huitième série, (a) et (e), et neuvième série, (c) ; M168, M178) :
+  - `non_implemente` : contrôle prévu et pas encore écrit (report déclaré, M181, issue #34) ;
+  - `non_lisible` : sous-cas qu'aucune colonne du dictionnaire ne permet de lire (D03h collectif, M168) ;
+  - **cause directe** : motif du refus d'une colonne lue (écart de forme ou refus `R`) (M169). Liste fermée (v1.4) : codes de `controles.csv` et de `defauts.csv`, et sous-cas lettrés de D10 (`.TRAITEMENTS_SOUS_CAS_D10`, D10a à D10f et D10h ; la lettre g n'est attribuée à aucun sous-cas). Une cause qui n'est ni rangée (ci-dessous) ni motif de refus provoque l'arrêt « erreur interne de provie » ;
+  - `age_non_defini` : âge non défini (§ 5.2) ;
+  - `parametre_non_defini` : limite d'âge non déterminable (§ 5.3, M187) ;
+  - `declaration_absente` : convention ou seuil du plan absent ; la déclaration manquante figure aussi dans `declarations_requises` (§ 3.2) ;
+  - `refus_induit` : contrôle empêché par un refus induit (règle B, ou règle P empêchée, M178).
+  - Une composante de l'enjeu empêchée y figure aussi, sous le code de la composante (§ 4.3), avec la table et la colonne lues. `visibilite_non_determinee` n'est jamais une cause de cette table (§ 4.2).
+  - Une clé présente à la fois dans `controles` et ici est une détection partielle : son nombre est un minorant.
+  - **Priorité des causes** (M185 ; décisions du mainteneur du 9 novembre 2026, M194 et M195, issue #36). Quand plusieurs causes visent une même clé (plusieurs règles, emplois ou colonnes lues), la cause retenue est la première dans l'ordre suivant :
+    1. `non_implemente` ;
+    2. `non_lisible` ;
+    3. cause directe ;
+    4. `age_non_defini` ;
+    5. `parametre_non_defini` ;
+    6. `declaration_absente` ;
+    7. `refus_induit`.
+
+    À rang égal (deux causes directes), la première émise l'emporte : ordre d'exécution du § 2.2, puis, dans une règle, ordre des colonnes lues. `refus_induit` n'est donc retenu que si la clé n'a aucune autre cause. La priorité de la cause directe sur tout refus induit, règle B comprise (M185), est conservée ; elle départage des causes qui empêchent chacune la règle ; un refus de valeur sur une colonne lue seulement par la règle P ou pour la vue n'en est pas une (§ 2.2, cas limite 3).
+  - **Motif** (jugement d'expert) : (a) l'ordre ne dépend pas de l'ordre d'exécution du code : réordonner deux règles ou deux emplois ne change pas le bilan ; (b) passent d'abord les causes que rien ne lève côté utilisateur (outil, puis dictionnaire), puis le défaut de l'extraction (refus `R`), puis la grandeur que la base ne détermine pas ; (c) les deux derniers rangs vont aux causes dont l'information reste au bilan quand elles ne sont pas retenues : `declaration_absente` est toujours reprise dans `declarations_requises` (§ 3.2), le refus d'origine d'un `refus_induit` dans `refus_tables`. Une cause directe, `age_non_defini` ou `parametre_non_defini` masquée serait perdue.
+  - **Alternative écartée** : la première cause émise (ordre d'exécution), qui ferait dépendre une sortie du bilan de l'agencement du code.
+  - **Effet** : aucune ligne sur les bases des tests ni sur les jeux versionnés à `ca90614` (mesure d'`actuary-approfondi`, 309 appels de `.bilan()` et deux jeux aux deux arrêtés) ; seule la clé (`D02c`, `assures`, `NA`) est touchée, sur des bases à défauts multiples (cas « #38 (a) » et « #38 (b) » de `tests/unitaires/donnees.R`, `d4d3abd`, en échec attendu jusqu'à #36). Le cas X3, ajouté par `7c16ff5`, est touché sur la même clé (`declaration_absente` et `manquant_obligatoire` émises ; `manquant_obligatoire` retenue, rang 3 < 6).
 
 ### 3.2 Bilan sans déclaration (M148)
 
@@ -246,11 +317,11 @@ Sans déclaration, `controler_base()` exécute toutes les détections et remplit
 **Visibilité non déterminée (M151).**
 - À A < extraction, une ligne de D03g non résolue (déclaration incomplète, ou date non calculable sous `H`), ou de D02b dont le `H` n'est pas déclaré, n'a pas de date de visibilité (M167, M171). Ces lignes sont :
   - tenues hors de la vue pour les détections de la règle V ;
-  - recensées dans `vue$visibilite_non_determinee` (`table` ; `colonne` : `NA` pour la ligne entière, sinon la partie de ligne ; `motif`, dont `parente_non_determinee` pour les filles écartées par la règle 1 ; `nombre` ; `identifiants`).
+  - recensées dans `vue$visibilite_non_determinee` (`table` ; `colonne` : `NA` pour la ligne entière, sinon la partie de ligne ; `motif`, dont `parente_non_determinee` pour les filles écartées par la règle 1, et le code du refus pour une ligne non déterminée par un refus de valeur (§ 2.2) ; `origine` : « table.colonne » de la valeur refusée pour un motif de refus, toujours une colonne de la table de la ligne (v1.4, Q8), `NA` pour D02b, D03g et `parente_non_determinee` (M202) ; `nombre` ; `identifiants`). Regroupement par (`table`, `colonne`, `motif`, `origine`) ; tri existant, puis `origine` (ADR 0010, quatorzième série, (b)).
 
   Une partie de ligne non déterminée laisse la ligne dans la vue.
 
-  `vue$provisoire` vaut `TRUE` si ce sous-élément n'est pas vide, ou si une règle P a été empêchée sur une table lue par la vue (cette table et ses filles portent alors un refus induit de portée table, § 2.2, M178) : les comptes de la règle V sont alors provisoires. Invariant testé : `provisoire` ⇒ `declarations_requises` non vide, ou refus de portée table sur chaque table rendue provisoire.
+  `vue$provisoire` vaut `TRUE` si ce sous-élément n'est pas vide, ou si une règle P a été empêchée par un défaut de forme sur une table lue par la vue (cette table et ses filles portent alors un refus induit de portée table, § 2.2, M178) : les comptes de la règle V sont alors provisoires. Invariant testé : `provisoire` ⇒ `visibilite_non_determinee` non vide, ou refus de portée table sur chaque table refusée par une règle P empêchée ; et chaque ligne de `visibilite_non_determinee` a sa justification : D02b ou D03g → une ligne de `declarations_requises` ; motif de refus → la ligne de `refus_tables` de même table, colonne (celle de l'`origine`) et motif ; `parente_non_determinee` → sa parente non déterminée.
 - Aucune provision n'en dépend : le calcul de B2 refuse par `declaration_manquante`.
 - **Alternative écartée** : tenir ces lignes pour visibles. Ce serait une hypothèse par défaut non déclarée, contraire à E2.20 (`docs/exigences.md:51`) et à l'option écartée d'ADR 0010, cinquième série, (f) (:285).
 
@@ -292,7 +363,14 @@ Sans déclaration, `controler_base()` exécute toutes les détections et remplit
   - Une composante qui lit une colonne de valeur refusée, ou une forme illisible, vaut `montant = NA`, avec `cause` égal au motif du refus (M173, M176).
   - Le refus qui constitue l'écart ne bloque pas son propre enjeu, ni le refus induit issu du même écart : la cascade est chiffrée. La clé étrangère de l'écart (D04a, D04b, D10 (a), (h)) est comprise : le lien reste non résolu, et la composante se calcule sur ce qui est connu sans la parente. Un autre refus direct bloque.
   - Sous D01a, une composante n'est `NA` (cause `D01a`) que pour un identifiant dont les doubles divergent sur une colonne qu'elle lit. Un identifiant ne compte qu'une fois dans les sommes par dossier.
-  - Un porteur de visibilité non déterminée, ou une ligne qui entre dans sa valeur, donne `NA`, cause `visibilite_non_determinee`, hors de `controles_non_executes`. La cause l'emporte sur l'absence de porteur.
+  - Un porteur de visibilité non déterminée, ou une ligne qui entre dans sa valeur, donne `NA`, cause `visibilite_non_determinee`, hors de `controles_non_executes`. La cause l'emporte sur l'absence de porteur. Une ligne de visibilité non déterminée par un refus de valeur (§ 2.2) est un porteur de visibilité non déterminée (M201).
+    - **À A = extraction** (v1.4 ; décision du mainteneur du 9 novembre 2026, Q2 ; D3), la vue est la base entière (règle 3).
+      - Une composante qui ne lit une colonne de visibilité que pour la visibilité n'est pas empêchée par un refus de valeur de cette colonne : la ligne refusée est chiffrée telle quelle.
+      - Une composante qui lit aussi la colonne comme valeur reste empêchée, avec `montant = NA` et `cause` = motif du refus (M169) ; l'empêchement porte sur toute la composante (M173, M176).
+      - **Liste fermée des colonnes de visibilité lues comme valeur** (`.LUS_VALEUR_ENJEU`) : `evenements.date_saisie`, par les composantes 2 à 4 (départage, point 3). Les autres colonnes de visibilité que lisent les composantes ne servent qu'à la visibilité : `dossiers.date_ouverture`, `rentes.date_saisie`, `prestations.date_saisie` et `prestations.date_reglement`, `cotisations.date_mouvement`. La fenêtre des paiements est bornée par l'extraction (dict. :143), pas par la composante. La composante 8 lit `evenements.date_saisie` pour la visibilité seule.
+    - **À A < extraction**, inchangé : la ligne refusée est de visibilité non déterminée, et chaque porteur qu'elle touche est sans valeur, cause `visibilite_non_determinee` (M201).
+    - **Motif.** À l'extraction, aucune visibilité n'est à établir. Ne pas lire une colonne qui ne sert qu'à la visibilité aligne l'enjeu sur les règles V. Le départage, lui, lit la valeur refusée, ce que le dict. § 1.10 interdit.
+    - **Effet** : aucune provision. Sur les bases des tests, des composantes empêchées à l'extraction deviennent chiffrées. Par exemple : un refus de `dossiers.date_ouverture` de DO1 donne 60000, 60000, 0, 0 ; un refus de `prestations.date_reglement` de PR2 donne 60000 ; un refus de `cotisations.date_mouvement` de CO1 donne 1000 et 0.
   - Hors ce dernier cas, une composante empêchée figure aussi dans `controles_non_executes`, sous le code de la composante (§ 3.1).
 
 ### 4.3 Liste fermée des composantes (M151)
@@ -353,7 +431,7 @@ Huit composantes, dix couples (`composante`, `unite`). Codes d'unité : `euro`, 
 **Visibilité et comptes de l'enjeu** :
 - pour les lignes de l'écart D03g (sous `exclure` comme sous `non_declaree`), visibilité pour l'enjeu = max(date que compare D02b, visibilité de la parente) ≤ A (délai 0), en plus des autres dates de la vue ; les parties de ligne restent masquées ;
 - les enjeux par écart ne s'additionnent pas ;
-- `nombre_visibles` et `nombre_dossiers` suivent la vue, règle 1 comprise (versions valables de `famille`), et valent `NA` si une visibilité est indéterminée.
+- `nombre_visibles` suit la vue, règle 1 comprise (versions valables de `famille`), et vaut `NA` si une visibilité est indéterminée, y compris pour un refus de valeur dont une ligne est de visibilité non déterminée (la valeur refusée n'est pas lue ; v1.4, Q7). `nombre_dossiers` compte les dossiers rattachés connus à A et ne vaut `NA` que si la visibilité de l'un d'eux est indéterminée (v1.4 ; définition à trancher : issue #44, dossiers rattachés connus ou dossiers des lignes visibles).
 
 ### 4.5 Table `enjeu` et agrégation
 
@@ -394,7 +472,7 @@ Colonnes (M151 ; ADR 0010, sixième série, (c) 1, :307) :
 1. L'enjeu de chaque exclusion égale un recalcul indépendant par jointure sur le registre des défauts (ADR 0010, point 19, :95) : nombres et sommes égaux à l'identique.
 2. Le bilan, `enjeu` compris, est identique au bit près avec ou sans T18 (dict. :695, étendu au bilan).
 3. À A = extraction, l'enjeu de la cascade d'un sinistre exclu égale la somme des composantes de ses dossiers.
-4. Une composante qui lit une colonne refusée a `montant = NA`, `cause` renseignée, et figure dans `controles_non_executes`, sous le code de la composante.
+4. Une composante qui lit une colonne refusée a `montant = NA`, `cause` renseignée, et figure dans `controles_non_executes`, sous le code de la composante, sauf, à A = extraction, une composante qui ne lit la colonne refusée que pour la visibilité (§ 4.2, Q2 ; v1.4).
 5. Un dossier touché par D01b et D02a compte une fois dans la rangée `ensemble`.
 6. Pour un dossier, `montant_en_vigueur` d'`etats_a_date()` égale la composante 2, 3 ou 4 correspondante.
 7. `non_declaree` n'apparaît que si `declarations` ne couvre pas le motif.
@@ -488,6 +566,7 @@ Avec `revolu`, pour une naissance le 2000-02-29 : âge 0 le 2001-02-28 et 1 le 2
 
 1. **Total arrêté (question 4.6).** La cellule totale d'une garantie (`poste = "total"`, ADR 0010, point 7 (f)) dont un poste est arrêté est arrêtée elle aussi, avec la liste des postes manquants. Elle n'est jamais la somme des postes calculés, qui sous-évaluerait en silence. Grandeur sous visa (A3).
 2. **Déclarations requises dans le calcul.** `declarations_requises` est toujours vide dans `resultat_provie` ; une ligne non vide y est un refus `declaration_manquante` (ADR 0010, sixième série, (b) 4, :303).
+3. **Visibilité non déterminée par un refus de valeur** (M204). Une ligne de `vue$visibilite_non_determinee` de motif `R` arrête, avec ce motif, les postes qui lisent sa table ou une descendante à l'arrêté ; aucune déclaration ne la lève (dict. § 1.10) avant un traitement `X` du dictionnaire `1.6` (§ 7, point 6). Limite assumée : en B2, aucun arrêt de ce type n'est levé tant qu'aucun traitement `X` n'existe. La forme de l'arrêt dans le bilan est à décider au plan de B2.
 
 ## 7. Points notés pour le dictionnaire `1.6`
 
@@ -496,5 +575,6 @@ Avec `revolu`, pour une naissance le 2000-02-29 : âge 0 le 2001-02-28 et 1 le 2
 3. **Colonne `traitement` (`R`, `S`)** au tableau des codes du § 1.10 et dans `controles.csv` (proposition d'ADR 0010, sixième série, (a), :297), qui rend explicite le `S` de `somme_parts`.
 4. **Question 4.9** : écrire au § 1.10 qu'aucune exclusion `X` d'une valeur illisible ou hors domaine n'est admise en v1 (dict. :154-155).
 5. **Âge** : au § 1.5 (dict. :109), renvoyer aux conventions fermées de la présente spécification, sans les recopier.
+6. **Traitement `X` des dates de visibilité manquantes** (point P18, M203) : soit étendre D03g aux dates de saisie de visibilité hors liste (`dossiers.date_ouverture`, `catastrophes.date_saisie`, `victimes.date_saisie`), soit créer un défaut « date d'effet de visibilité manquante » (`contrats.date_effet`, `garanties_souscrites.date_effet`, `prestations.date_reglement`, `cotisations.date_mouvement`) traité `X`. Les valeurs hors domaine restent `R` (question 4.9, M151). Ce point porte l'exigence X de l'issue #33, hors de la branche `claude/donnees-controles`.
 
-Les points P6 à P17 du commentaire d'errata de la PR #29 complètent cette liste. Ils ne sont pas décidés, sauf P12 (code dédié au refus né d'une règle P empêchée, décidé par le mainteneur le 8 novembre 2026), et ne sont pas intégrés à la présente version.
+Les points P6 à P17 du commentaire d'errata de la PR #29 complètent cette liste. Ils ne sont pas décidés, sauf P12 (code dédié au refus né d'une règle P empêchée, décidé par le mainteneur le 8 novembre 2026), et ne sont pas intégrés à la présente version. Le point P18 est le point 6 ci-dessus.
