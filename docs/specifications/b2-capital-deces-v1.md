@@ -4,7 +4,7 @@
 >
 > *Statut : **visa délégué par le mainteneur le 10/11/2026, à confirmer a posteriori**. La délégation vaut pour une spécification qui suit les décisions du mainteneur du 10 novembre 2026 : I4, I5 et I6 tranchées selon les recommandations de `regulatory` ; I1, I2 et I3 tranchées le 10/11/2026 (avis Fable d'`actuary-approfondi`, auquel la session s'est rangée), validation a posteriori du mainteneur ; échelle d'A132-1-1 établie par `regulatory` ; aucune table réglementaire embarquée en B2 ; issues (1) à (4) créées en `ready-for-agent` avec les corps du § 8.*
 >
-> *Version `1.0` (arbitrage de I1 à I3 intégré le même jour, avant tout commit). Résultats modifiés : aucun (aucun code). Nommage : convention de `docs/specifications/` (objet en minuscules, mots liés par des tirets, suffixe `-v1` du jalon ; la version du texte est dans l'en-tête).*
+> *Version `1.0.1` : errata de rédaction d'`actuary` du 10/11/2026 (§ 2.3, lecteur indépendant des données ; § 2.7, paramètres de P2 ; « huit CSV » aux § 7.1 et § 8.1), sans effet sur le code ni sur les résultats. Version `1.0` (arbitrage de I1 à I3 intégré le même jour, avant tout commit). Résultats modifiés : aucun (aucun code). Nommage : convention de `docs/specifications/` (objet en minuscules, mots liés par des tirets, suffixe `-v1` du jalon ; la version du texte est dans l'en-tête).*
 
 ## 0. Objet, sources, lecture
 
@@ -135,6 +135,8 @@ Le plan est une liste nommée, sections dans l'ordre canonique de l'ADR 0010, po
 
 Une entrée est **exigée** si un lecteur du périmètre la lit ; exigée et absente : refus `plan_incomplet` qui nomme le chemin manquant (par exemple `postes$deces$capitaux_non_reclames$parametres$critere`) ; présente et mal formée : `plan_invalide` ; présente et non lue (entrée inconnue du schéma) : `plan_invalide`. Une entrée connue du schéma mais non lue par le périmètre (par exemple `conventions$limite_age` en B2) est **admise** et canonisée.
 
+Le lecteur s'entend de la méthode déclarée d'un poste du périmètre, indépendamment des données : `valider_plan()` ne voit pas la base. Les mentions de données de la colonne « Lecteur » du § 2.4 (prime unique, primes périodiques) désignent le flux qui lit l'entrée, non une condition d'exigence. Seules les exigences qui dépendent des données (couverture de `taux_par_annee`, § 2.5) sont contrôlées à l'exécution (erratum v1.0.1).
+
 Exigences propres à B2 :
 - chaque poste du catalogue pour une garantie du périmètre est déclaré dans `postes` (B2 : les trois postes de `deces`). **Motif** : un total qui omettrait un poste du catalogue sous-évaluerait en silence (même motif que le total arrêté, § 6.1). Les postes absents du catalogue (P4 tardifs en B2) ne sont pas dans le total : limite restituée par la fiche (`parametres_retenus$postes`) et par la documentation de fond (§ 10.2, point d'attention A2) ;
 - `tables$serie_tme` exigée dès que `deces` est au périmètre en comptes sociaux (indicateurs `R132_3_1`, M128 ; `A132_1`, M124) ;
@@ -187,7 +189,7 @@ Les dates étant prises en fin de journée (§ 2.6), la part de l'année civile 
 | Poste | Forme | Méthodes admises (options) | Paramètres |
 |---|---|---|---|
 | `sinistres_declares_non_regles` | `list(methode, parametres)` | `capital_dossier` (recommandée) ; `capital_dossier_reglement` (alternative, point prudent) | `taux_sans_suite` (`double` dans [0 ; 1], dossiers à l'état `ouvert` de sinistre `deces`) ; `probabilite_reconnaissance_iad` (`double` dans [0 ; 1], dossiers `ouvert` de sinistre `iad`) ; `structure_familiale` : `list(taux_conjoint = [0 ; 1], nombre_enfants = double ≥ 0)` ; `age_limite_enfant_majoration` (`integer` 0 à 30) ; `liens_conjoint_majoration` (sous-ensemble non vide de `conjoint`, `partenaire_pacs`, `concubin`). `delai_reglement_jours` (`integer` ≥ 0, exigé avec `capital_dossier_reglement`). La documentation propose, en comptes sociaux, `taux_sans_suite = 0` et `probabilite_reconnaissance_iad = 1` (Q6) |
-| `capitaux_non_reclames` | `list(methode, parametres)` | `capital_revalorise` (recommandée) ; `capital_revalorise_reglement` (alternative, point prudent, borne supérieure de la lecture (b)) | `critere` : sous-ensemble non vide de `beneficiaire_non_identifie`, `sans_evenement` (réunion) ; `mois_sans_evenement` (`integer` ≥ 1, exigé avec `sans_evenement`) ; mêmes paramètres familiaux que P1 (un capital non fixé se reconstitue de même) |
+| `capitaux_non_reclames` | `list(methode, parametres)` | `capital_revalorise` (recommandée) ; `capital_revalorise_reglement` (alternative, point prudent, borne supérieure de la lecture (b)) | `critere` : sous-ensemble non vide de `beneficiaire_non_identifie`, `sans_evenement` (réunion) ; `mois_sans_evenement` (`integer` ≥ 1, exigé avec `sans_evenement`) ; mêmes paramètres de reconstitution du capital et de facteur d'issue que P1 (`taux_sans_suite`, `probabilite_reconnaissance_iad`, `structure_familiale`, `age_limite_enfant_majoration`, `liens_conjoint_majoration`), sans `delai_reglement_jours` (un capital non fixé se reconstitue de même ; erratum v1.0.1) |
 | `provision_mathematique_temporaire_deces` | `list(individuel = list(methode, parametres), collectif = list(methode, parametres))` | individuel : `prospective_prime_pure`, `prospective_prime_declaree` ; collectif : `prorata_cotisation` | individuel : `pas` (`an`, `mois`), `paiement_capital` (`fin_pas`, `milieu_pas`), `plancher` (`par_contrat`) ; collectif : `list()` |
 
 Les témoins (`retrospective`, `chain_ladder_*`) ne sont **jamais** des options : un plan qui les déclare est refusé (`plan_invalide`, message : « méthode témoin, non option »).
@@ -505,7 +507,7 @@ Deux niveaux, chacun « seulement si cela peut changer le résultat » (principe
 
 ### 7.1 Issue (1) — `plan` et catalogue
 
-1. (1.1) `catalogue_garanties()` lit les sept CSV du § 4.1, valide listes fermées et codes du dictionnaire ; refus `catalogue_invalide` sur un témoin (code de garantie inconnu ; type de flux hors liste ; méthode d'un champ inconnu ; `lectures.csv` qui cite une colonne absente du dictionnaire).
+1. (1.1) `catalogue_garanties()` lit les huit CSV du § 4.1, valide listes fermées et codes du dictionnaire ; refus `catalogue_invalide` sur un témoin (code de garantie inconnu ; type de flux hors liste ; méthode d'un champ inconnu ; `lectures.csv` qui cite une colonne absente du dictionnaire).
 2. (1.2) Plan minimal valide de B2 (§ 7.5) : `valider_plan()` le rend sans erreur, classe `plan_calcul`.
 3. (1.3) `plan_incomplet` : un témoin par entrée exigée du § 2.3 et du § 2.6 (dont `conventions$decompte_jours`, `revalorisation$capital_deces$prorata`, `tables$serie_tme`, `tables$mortalite_tarif` avec une méthode prospective, `revalorisation$capital_deces$taux_futur` avec chaque méthode « règlement », `duree_sans_depot_annees` avec `capital_revalorise_reglement`, `delai_reglement_jours` avec `capital_dossier_reglement`), le message nomme le chemin.
 4. (1.4) `plan_invalide` : `solvabilite_2` au périmètre ; méthode témoin (`retrospective`) déclarée ; doublon dans `perimetre$garanties` ; entrée inconnue ; `instant_date = "debut_journee"` ; `triangles = "tous"` ; `double` non entier pour `graine` ; `taux` hors bornes.
@@ -648,7 +650,7 @@ Libellés : `ready-for-agent` (décision du mainteneur du 10 novembre 2026). Cha
 **Corps** :
 > *Rédigé par l'agent actuary (IA).*
 >
-> **Objet.** Module `plan` (`valider_plan()`, `canoniser_plan()`, `ecrire_plan()`, `lire_plan()`, fiche de calcul, contrôles du rejeu) et module `garanties` avec le catalogue de B2 (`catalogue_garanties()`, sept CSV dont `lectures.csv`), selon la spécification de B2, § 2 et § 4.1.
+> **Objet.** Module `plan` (`valider_plan()`, `canoniser_plan()`, `ecrire_plan()`, `lire_plan()`, fiche de calcul, contrôles du rejeu) et module `garanties` avec le catalogue de B2 (`catalogue_garanties()`, huit CSV dont `lectures.csv`), selon la spécification de B2, § 2 et § 4.1.
 >
 > **Comportement attendu.** Schéma de la v1 au contenu fixé en B2 (§ 2.2 à § 2.7), sans valeur par défaut (règle d'exigence, § 2.3) ; canonisation et sérialisation par `ecrire_liste()`, aller-retour octet pour octet (§ 2.8) ; `VERSION_FICHE` 1 ; sous-schéma `donnees` inchangé (ADR 0010, point 17).
 >
