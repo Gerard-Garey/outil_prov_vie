@@ -1597,8 +1597,9 @@ encore écrits. Il ne peut appeler que \code{dictionnaire} et
 
 \code{controler\_base(donnees, arrete, declarations, conventions)}
 applique la spécification du module \code{donnees}
-(\code{docs/specifications/module-donnees-v1.md}, version~1.4\fsp;
-versions~1.1, 1.3 et~1.4 visées par le mainteneur\fsp; décisions de la
+(\code{docs/specifications/module-donnees-v1.md}, version~1.5\fsp;
+versions~1.1, 1.3, 1.4 et~1.5 visées par le mainteneur, la version~1.5
+le 10~novembre~2026 avec ses précisions P1 à~P5, M222\fsp; décisions de la
 version~1.2, M194 et M195, prises par lui), sous le dictionnaire de la base en version~1.5. La date d'arrêté est obligatoire,
 sans valeur par défaut. \code{declarations} est le sous-schéma
 \code{donnees} du plan (rubriques \code{exclusions}, \code{hypotheses},
@@ -1608,8 +1609,12 @@ section \code{conventions} du plan, dont seules les entrées \code{age} et
 (\code{NULL})~: cela se lit «~aucune déclaration fournie~», et non comme
 une valeur par défaut.
 
-\textbf{Ordre d'exécution.} (1)~Interruptions (refus d'appel)\fsp; (2)~forme,
-(3)~domaine, (4)~clés et refus induits, qui forment la \textbf{règle~B}, sur
+\textbf{Ordre d'exécution.} (1)~Interruptions (refus d'appel)\fsp; (2)~forme\fsp;
+(3)~domaine, par strates (paragraphe «~Règle~B à trois valeurs~»
+ci-dessous), puis les règles de domaine de portée table\fsp; (4)~clés, dont
+la référence composite de \code{affiliations.college} et les
+chevauchements, qui lisent les refus de valeur des strates, puis refus
+induits\fsp; les étapes~2 à~4 forment la \textbf{règle~B}, sur
 la base entière et indépendante de l'arrêté\fsp; (5)~détection des défauts
 D02b et D03g sur la base entière (\textbf{règle~P}, préalables de la
 vue)\fsp; (6)~construction de la vue à l'arrêté\fsp; (7)~détection, sur la
@@ -1620,7 +1625,9 @@ suppose des clés résolues. Les règles~P et~V et la vue ne lisent ni une
 table refusée en portée table, ni une colonne illisible par sa forme, ni
 une valeur refusée~: une valeur refusée est inconnue pour la règle~P et
 la vue, et bloque la règle~V qui la lit comme valeur (paragraphe
-«~Refus de valeur et vue~» ci-dessous).
+«~Refus de valeur et vue~» ci-dessous). La règle~B elle-même tient pour
+inconnue une valeur refusée par une strate antérieure (paragraphe
+«~Règle~B à trois valeurs~»).
 
 \textbf{Traitements.} Chaque anomalie est enregistrée avec son traitement~:
 refus~(R) d'une table ou d'une colonne, exclusion~(X), hypothèse par
@@ -1770,6 +1777,162 @@ valeur refusée, laissait visible à l'arrêté, sans déclaration, un
 postérieure à l'arrêté dès que son motif, qui ne joue pas pour ce type,
 était refusé.
 
+\textbf{Règle~B à trois valeurs, par strates} (spécification, §~2.2,
+B.1 à~B.5\fsp; décision du mainteneur du 10~novembre~2026, M217\fsp;
+précisions P3 et~P4 de M222). La règle~B ne lit pas non plus une valeur
+refusée~: elle l'évalue dans la même logique à trois valeurs que la
+règle~P.
+
+\begin{itemize}[itemsep=2pt]
+\item \textbf{Définitions.} Une \emph{colonne clé} est une colonne de la
+  clé primaire de sa table ou une colonne qui porte une référence, simple
+  ou composite~: son refus est de portée table. Une colonne non clé est
+  \emph{refusable pour sa valeur} si une règle de refus de la règle~B la
+  contrôle avec la portée effective \code{colonne}\fsp; les colonnes de
+  \code{evaluations\_gestion} ne le sont jamais, toute anomalie de cette
+  table la refusant en portée table. Une \emph{règle concernée} est une
+  règle de refus de la règle~B dont le verdict lit une colonne non clé
+  refusable pour sa valeur, autre que celle qu'elle contrôle.
+\item \textbf{Valeur inconnue.} Sur une ligne, une colonne lue est inconnue
+  si sa valeur y est refusée pour sa valeur, présence comprise\fsp; une
+  valeur manquante non refusée est connue absente. Une colonne d'une autre
+  table, lue par jointure sur une clé, est inconnue si la ligne jointe
+  porte un refus de valeur sur cette colonne. Seul un refus rend une valeur
+  inconnue (P3)~: une ligne que sa propre règle a écartée n'est pas
+  refusée, et sa valeur est lue telle quelle par les strates suivantes,
+  par les règles~P et~V et par la vue.
+\item \textbf{Auto-lecture} (P4). Une règle de portée \code{colonne} lit
+  telle quelle la colonne qu'elle contrôle~: son refus et ceux des autres
+  règles de cette colonne portent sur la même cellule. Une règle de portée
+  \code{table} lit la colonne qu'elle contrôle comme toute colonne lue,
+  sans quoi le refus d'une cellule deviendrait celui d'une table\fsp; le
+  seul cas est D10a sur \code{prestations.type\_prestation}.
+\item \textbf{Graphe et strates.} Les nœuds du graphe de dépendance sont
+  les colonnes non clés refusables pour leur valeur\fsp; une arête va de X à
+  Y quand une règle concernée de portée \code{colonne} contrôle Y et lit
+  X. Une règle concernée de portée \code{table} ne crée aucune arête~: son
+  refus n'est pas un refus de valeur, et elle est évaluée après toutes les
+  strates. Le graphe est déclaré dans la constante interne
+  \code{.LECTURES\_REGLE\_B}\fsp; la strate d'une colonne est la longueur du
+  plus long chemin qui y mène (strate~0 sans arête entrante), calculée par
+  le tri topologique de Kahn, et un cycle arrêterait le calcul («~erreur
+  interne de provie~»). Le graphe déclaré a quatre strates, de~0 à~3~: le
+  plus long chemin va de \code{sinistres.nature\_sinistre} (ou de
+  \code{garanties\_souscrites.code\_garantie}) à
+  \code{evenements.type\_evenement}, puis à \code{evenements.motif}, puis à
+  \code{evenements.date\_effet}. La batterie unitaire vérifie que la
+  constante est acyclique et qu'elle couvre chaque règle de la règle~B qui
+  lit une colonne non clé refusable pour sa valeur.
+\item \textbf{Verdict, lecture existentielle.} Le verdict d'une règle sur
+  une ligne est inconnu si deux affectations des valeurs inconnues qu'elle
+  lit, chacune prise dans le domaine de sa colonne, sans égard aux autres
+  colonnes de la ligne, lui donnent deux verdicts différents\fsp; sinon, il
+  vaut le verdict commun. Une valeur refusée parce qu'incompatible avec
+  une autre colonne (type d'événement incompatible avec la garantie) prend
+  tout son domaine~: la déduire de sa compatibilité reviendrait à
+  l'imputer. Le domaine est celui du dictionnaire~: modalités, liste des
+  types d'événements pour \code{evenements.type\_evenement}, vrai et faux
+  pour une colonne logique, plus l'absence pour une colonne non
+  obligatoire. Une colonne sans modalités énumérées reçoit son domaine de
+  la règle qui la lit~: \code{contrats.date\_fin} et
+  \code{affiliations.date\_fin}, lues pour leur seule présence, une date
+  ou l'absence\fsp; \code{assures.nombre\_enfants\_charge}, lu pour sa seule
+  présence, une valeur ou l'absence\fsp; \code{contrats.mois\_echeance}, les
+  entiers de~1 à~12\fsp; pour les versions de
+  \code{garanties\_souscrites}, toute date du 1er~janvier~1901 à
+  l'extraction pour \code{date\_effet}, et toute date à partir du
+  1er~janvier~1901 ou l'absence, qui ouvre l'intervalle, pour
+  \code{date\_fin}\fsp; \code{parametres.age\_max}, les âges de~0 à~120 ou
+  l'absence\fsp; \code{garanties\_souscrites.college}, code opaque, toute
+  chaîne. Une colonne refusée sans modalités énumérées à laquelle aucune
+  règle ne donne de domaine arrêterait le calcul («~erreur interne de
+  provie~»).
+\item \textbf{Formes.} Le tableau ci-dessous donne les formes qui découlent
+  de la lecture existentielle~; c'est la définition qui fait foi.
+\end{itemize}
+
+\begin{center}
+\small
+\rowcolors{2}{tablerow}{white}
+\begin{tabular}{@{}p{4.2cm}p{10.9cm}@{}}
+\rowcolor{tableheader}
+\textcolor{financeblue}{\textbf{Forme}} & \textcolor{financeblue}{\textbf{Verdict à trois valeurs}} \\
+Colonne conditionnelle (colonne requise, interdite ou libre selon d'autres colonnes) & Exigence inconnue si deux valeurs du domaine des colonnes lues donnent deux exigences différentes. \code{manquant\_obligatoire} (requise et absente) est faux si la colonne est présente, \code{hors\_domaine} (interdite et présente) est faux si elle est absente\fsp; «~libre~» n'est pas «~inconnu~»~: les deux verdicts y sont faux. \\
+Borne qui dépend d'une autre colonne (date d'effet d'un événement, jour d'échéance, taux technique, signe d'un montant) & Pour D02c sur \code{evenements.date\_effet}~: (date antérieure au 1er~janvier~1901) ou (type non programmable et date postérieure à l'extraction)\fsp; vrai si la date précède 1901, faux si elle est au plus l'extraction, sinon inconnu si le type, ou le motif quand le type est programmable selon le motif, est inconnu. \\
+Jointure ou appartenance («~il existe une ligne jointe telle que\ldots~», par exemple une garantie décès du contrat) & Vrai si une ligne jointe satisfait la condition quelle que soit la valeur de ses inconnues\fsp; faux si aucune ligne jointe ne le peut\fsp; inconnu sinon. \\
+Chevauchement (versions de \code{garanties\_souscrites} par contrat, garantie et collège\fsp; paliers d'âge de \code{parametres}) & Vrai si, pour toute affectation des valeurs inconnues, la ligne recouvre une autre ligne de même groupe\fsp; faux si aucune affectation ne la fait recouvrir une autre ligne\fsp; inconnu sinon. \\
+\end{tabular}
+\end{center}
+
+\begin{itemize}[itemsep=2pt]
+\item \textbf{Calcul du chevauchement.} Les bornes de chaque ligne sont
+  prises au pire (début au plus tard, fin au plus tôt, absence d'une borne
+  qui retirerait la ligne du contrôle exclue)\fsp; ce pire ne dépend pas de
+  la ligne recouverte, de sorte qu'une ligne qui en recouvre une autre au
+  pire la recouvre sous toute affectation. Une ligne dont une colonne de
+  groupe est inconnue est recouverte sous toute affectation si, pour
+  chaque valeur du domaine de ses colonnes de groupe inconnues, une ligne
+  de ce groupe, connu, la recouvre au pire\fsp; un collège inconnu, code
+  opaque, peut prendre une valeur nouvelle et n'est donc jamais recouvert
+  sous toute affectation. Comme dans la forme à deux valeurs, une clé
+  manquante forme un groupe. Le tableau des formes de la spécification
+  (B.4) ne donne, pour le chevauchement, qu'une condition suffisante du
+  verdict vrai (recouvrement d'une ligne de groupe et d'intervalle
+  connus)~: c'est la définition ci-dessus, plus large, que le code
+  applique.
+\item \textbf{Exécution.} Une passe par strate, de~0 à~3, puis une passe
+  des règles de portée \code{table}\fsp; dans une passe, les règles
+  s'exécutent dans l'ordre du code. Les refus de valeur d'une colonne sont
+  donc complets à la fin de sa strate, avant toute règle qui la lit. Un
+  seul passage, sans point fixe~: le graphe est acyclique. Une ligne au
+  verdict vrai est détectée, une ligne au verdict faux ne l'est pas, une
+  ligne au verdict inconnu est écartée de la détection, qui reste
+  qualifiée d'exacte sur les lignes au verdict déterminé.
+\item \textbf{Ligne de \code{controles\_non\_executes}.} Une règle qui
+  écarte au moins une ligne y a une ligne (détection partielle, nombre
+  minorant), que la clé figure aussi dans \code{controles} ou non~: une
+  règle qui n'a rien détecté parmi les lignes au verdict déterminé ne rend
+  pas un zéro rassurant. Sa cause est le motif du premier refus de valeur
+  qui touche une ligne écartée, dans l'ordre des colonnes lues puis des
+  constats~: refus sur la ligne écartée elle-même, ou, pour une colonne
+  d'une autre table, sur la ligne jointe. C'est une cause directe (rang~3,
+  paragraphe «~Priorité des causes~»). Une ligne écartée qu'aucun refus
+  n'explique arrête le calcul («~erreur interne de provie~»). Comme les
+  constats de la règle~B, ces lignes ne dépendent pas de l'arrêté.
+\item \textbf{Hors du mécanisme.} Le refus d'une colonne clé garde la
+  portée table\fsp; une colonne lue illisible par sa forme bloque la règle
+  entière, avec le défaut de forme pour cause\fsp; la règle~B lit une table
+  refusée en portée table comme les autres, le cas limite~3 ci-dessus ne
+  régissant que les règles~P et~V et la vue.
+\end{itemize}
+
+\textbf{Motif et alternatives écartées} (jugement d'expert, M217). Une
+valeur refusée n'est pas lue (dictionnaire de la base, §~1.10)~: la
+règle~P l'appliquait déjà, mais la règle~B lisait encore la valeur brute,
+de sorte qu'un type d'événement refusé y passait pour non programmable et
+que le refus d'une cellule devenait, par une règle de portée table, le
+refus d'une table, propagé par les refus induits. La précision P3 garde
+une seule notion de valeur inconnue pour les règles~B, P et~V et pour la
+vue. Quatre alternatives sont écartées~: (i)~un seul passage sur les refus
+«~primaires~» (hors domaine, manquant), qui laisserait lu comme connu un
+refus né d'une règle relationnelle, comme un type d'événement incompatible
+avec la garantie\fsp; (ii)~un point fixe sur les refus, inutile puisque le
+graphe est acyclique, et qui pourrait osciller, l'opérateur étant antitone
+(un refus de plus rend des valeurs inconnues, donc retire des
+refus)\fsp; (iii)~tenir pour inconnue la valeur d'une ligne écartée, qui
+écarterait davantage de lignes et créerait une valeur «~de validité
+inconnue~», sans motif de refus, que les règles~P et~V et la vue ne
+connaissent pas\fsp; (iv)~l'auto-lecture dans le mécanisme pour toute règle,
+qui ferait écarter la règle relationnelle d'une colonne par la cellule
+que refuse sa règle de domaine, et rendrait une clé à la fois détectée et
+partielle pour une ligne refusée dans tous les cas. Aucune provision n'en
+dépend. La batterie unitaire vérifie la règle par substitution (critère~6~(a)
+de la spécification)~: pour chaque règle concernée et chaque ligne qui
+lit une valeur refusée, cette valeur est remplacée par chaque valeur de
+son domaine, et la ligne doit être écartée si et seulement si le verdict
+varie, avec le verdict commun sinon\fsp; c'est une vérification sur un corpus
+fini de cas, non une preuve.
+
 \textbf{Le bilan.} Il est rendu en liste nommée de onze éléments, dans cet
 ordre~:
 
@@ -1780,7 +1943,7 @@ ordre~:
 \rowcolor{tableheader}
 \textcolor{financeblue}{\textbf{Élément}} & \textcolor{financeblue}{\textbf{Contenu}} \\
 \code{controles} & Toute détection~: code, table, colonne, détection (exacte ou présomptive), nombre de lignes, identifiants. \\
-\code{controles\_non\_executes} & Contrôle empêché, une ligne par (code, table, colonne), avec sa cause (ci-dessous). \\
+\code{controles\_non\_executes} & Contrôle empêché, ou exécuté en partie (détection partielle), une ligne par (code, table, colonne), avec sa cause (ci-dessous). \\
 \code{refus\_tables} & Refus~R~: table, colonne, motif, portée effective (\code{colonne} ou \code{table}), origine d'un refus induit, nombre de lignes, lignes visibles à l'arrêté (\code{NA} si indéterminé), identifiants, dossiers rattachés connus à l'arrêté (\code{NA} si la visibilité de l'un d'eux est indéterminée), postes arrêtés (\code{NA} dans l'état du code). \\
 \code{exclusions} & Exclusions déclarées~: motif, famille de calcul, action (\code{exclure} ou \code{conserver}), nombre de lignes et de dossiers. \\
 \code{hypotheses\_defaut} & Hypothèses par défaut déclarées~: motif, référentiel, poste, valeur, nombre. \\
@@ -1903,15 +2066,20 @@ qui porte la cause de plus petit rang (décisions du mainteneur du
 \end{enumerate}
 
 À rang égal (deux causes directes distinctes), la première
-émise l'emporte. Un refus induit n'est donc retenu que si la clé n'a
+émise l'emporte, c'est-à-dire la première dans l'ordre d'exécution
+(paragraphe «~Ordre d'exécution~»), et, dans une règle, dans l'ordre des
+colonnes lues. Dans la règle~B, cet ordre est celui des strates, puis des
+règles de portée table, puis des clés~; l'évaluation par strates
+(paragraphe «~Règle~B à trois valeurs~») a donc déplacé ce départage, que
+fixait auparavant l'ordre du code seul. Un refus induit n'est donc retenu que si la clé n'a
 aucune autre cause, et la priorité de la cause directe sur tout refus
 induit, règle~B comprise (M185), est conservée. Cette priorité départage
 des causes qui empêchent chacune la règle~: un refus de valeur sur une
 colonne lue seulement par la règle~P ou pour la vue n'en est pas une
 (cas limite~3 ci-dessus). L'ordre est un jugement
-d'expert, motivé ainsi~: (a)~la cause retenue ne dépend pas de l'ordre
-d'exécution du code, de sorte que réordonner deux règles ou deux emplois
-ne change pas le bilan (l'alternative écartée, la première cause émise,
+d'expert, motivé ainsi~: (a)~entre deux causes de rangs différents, la cause
+retenue ne dépend pas de l'ordre d'exécution du code, de sorte que
+réordonner deux règles ou deux emplois ne change pas ce choix (l'alternative écartée, la première cause émise,
 faisait dépendre le bilan de cet agencement)\fsp; (b)~passent d'abord les
 causes que rien ne lève côté utilisateur (l'outil, puis le
 dictionnaire), puis le défaut de l'extraction, puis la grandeur que la
