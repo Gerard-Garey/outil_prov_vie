@@ -251,23 +251,42 @@ verifier("non-régression : \"\"\"\" (un guillemet) et \"a\"\"b\" admis, champ v
            identical(r$contrats$gestionnaire, NA_character_))
 # Revue finale, M3 : le rétablissement des "" est linéaire au nombre de champs "" (une
 # affectation par colonne). Travail plutôt qu'horloge (une durée dépend de la charge de la
-# machine ; #45) : travail de .lire_table_csv (travail_de() de tests/harnais.R) aux seules
-# affectations `[[<-`, taille de la table affectée comptée ; fichier de deux colonnes, "" sur
-# chaque ligne. De 2 500 à 10 000 lignes, rapport 4 si une affectation par colonne ; 16 si
+# machine ; #45) : travail de lire_base (travail_de() de tests/harnais.R), toute la chaîne
+# de lecture d'une table (#58 ; la mesure de #45 ne comptait que les `[[<-` de
+# .lire_table_csv et ne voyait pas une croissance quadratique apparue ailleurs) : somme des
+# tailles des arguments des appels, dans lire_base et dans toutes les fonctions du package
+# qu'elle appelle (`sous`), aux opérations de base de OPS_LECTURE, qui recopient ou
+# parcourent un vecteur ou la table (découpage et localisation des champs, contrôles de
+# forme, conversion des types) ; fichier de deux colonnes, "" sur chaque ligne. De 2 500 à
+# 10 000 lignes, rapport 3,55 sur le code actuel (linéaire, frais fixes compris) ; 15,84 si
 # une affectation par champ, qui recopie la table à chaque appel (version d'avant la revue
-# finale ; mesuré). Borne 6.
+# finale) ; 15,23 si la localisation des champs compare chaque position à toutes les fins
+# de ligne (`situer`, sans `[[<-`) ; 13,63 si la lecture typée relit des préfixes de la
+# colonne (appels de lire_texte_type() ; mutants mesurés le 10 novembre 2026, R 4.3.3). La
+# mesure de #45 (travail de .lire_table_csv aux seuls `[[<-`) donne 4,00 sur le code actuel
+# comme sur le mutant de `situer`, qu'elle ne voit pas ; les `[[<-` seuls comptés sur
+# lire_base avec `sous` donnent 2,81 dans les deux cas. Borne 6. Limites : ni les fonctions
+# et opérations hors de `sous` et de OPS_LECTURE (ici utils::read.csv(), `[`, `$`), ni un
+# coût sans lien avec la taille des arguments, ne sont vus ; seuls les chemins que parcourt
+# ce fichier sont mesurés : deux colonnes character (id_assure, sexe), donc ni les branches
+# integer, numeric, Date et logical de lire_texte_type() (R/dictionnaire.R), ni le chemin
+# des retours chariot, ne le sont à grande taille.
 assures_vides <- function(n, valeur = "\"\"") {
   dossier_avec(list(assures.csv = paste0("\"id_assure\",\"sexe\"\n",
                                          paste0("\"A", seq_len(n), "\",", valeur, "\n", collapse = ""))))
 }
+OPS_LECTURE <- c("[[<-", "[[", "which", "match", "%in%", "unique", "duplicated", "split", "findInterval",
+                 "cumsum", "gregexpr", "grepl", "sub", "paste", "paste0", "pmax", "pmin", "ifelse", "c", "rep",
+                 "==", "!=", "<", ">", "&", "|", "!", "is.na", "any", "all", "sum", "substr", "nrow")
 travail_lecture <- function(dossier) {
-  travail_de(ns$.lire_table_csv, file.path(dossier, "assures.csv"), "assures",
-             d$colonnes[d$colonnes$table == "assures", , drop = FALSE], ops = "[[<-")
+  travail_de(ns$lire_base, dossier, ops = OPS_LECTURE, sous = fonctions_de(ns))
 }
 r <- lire_base(assures_vides(80000L))
 verifier("80 000 \"\" d'une colonne : tous rendus \"\"", identical(r$assures$sexe, rep("", 80000L)))
-verifier("lire_base : travail de .lire_table_csv de 2 500 à 10 000 lignes à \"\" multiplié par moins de 6 (rétablissement linéaire : 4 ; une affectation par champ : 16)",
+verifier("lire_base : travail de la chaîne de lecture de 2 500 à 10 000 lignes à \"\" multiplié par moins de 6 (linéaire : 3,55 ; une affectation par champ : 16 ; localisation des champs quadratique : 15)",
          travail_lecture(assures_vides(10000L)) / travail_lecture(assures_vides(2500L)) < 6)
+verifier("lire_base : le travail mesuré est déterministe (mêmes comptes à deux exécutions)",
+         identical(travail_lecture(assures_vides(2500L)), travail_lecture(assures_vides(2500L))))
 crlf <- function(texte) gsub("\n", "\r\n", texte, fixed = TRUE)
 r <- lire_base(dossier_avec(list(contrats.csv = crlf(csv_de("contrats", list(id_contrat = "\"\"", gestionnaire = "\"\""))))))
 verifier("\"\" dans un fichier CRLF, en début et en fin de ligne : rendu \"\"",
