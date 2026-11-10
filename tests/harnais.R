@@ -114,6 +114,49 @@ attendu_echec <- function(nom, issue, expr) {
   invisible(NULL)
 }
 
+# Travail de f(...), mesure de complexité sans horloge (une durée dépend de la charge de la
+# machine ; #35, #45) : somme des tailles des arguments (longueur, ou lignes x colonnes
+# d'un data.frame) des appels, dans f, aux opérations de base de `ops` et aux fonctions de
+# `sous`. Les opérations et les fonctions s'enveloppent dans une copie de f, dont
+# l'environnement est un environnement fils de celui de f : seuls les appels écrits dans f,
+# dans les copies de `sous` et dans les fonctions qu'ils définissent sont comptés. `sous`
+# nomme des fonctions cherchées depuis l'environnement de f (ex. fonctions_de(ns)) ; elles
+# sont appelées par la copie, à l'identique, après évaluation de leurs arguments. `&&`,
+# paresseux, ne s'enveloppe pas. Choix de `ops` : une affectation `x[i] <- v` dans une boucle
+# est faite en place (R base) ; ne compter `[<-` que si le coût recherché est celui de sa
+# copie. Un appel avec un argument vide (`x[i, ]`) n'est pas enveloppable.
+travail_de <- function(f, ..., ops = character(0), sous = character(0)) {
+  travail <- 0
+  taille <- function(x) if (is.data.frame(x)) nrow(x) * length(x) else length(x)
+  compter <- function(a) travail <<- travail + sum(vapply(a, taille, 0))
+  env <- new.env(parent = environment(f))
+  for (nom in ops) {
+    local({
+      g <- get(nom, envir = baseenv())
+      assign(nom, function(...) { compter(list(...)); g(...) }, envir = env)
+    })
+  }
+  for (nom in sous) {
+    local({
+      g <- get(nom, envir = environment(f), mode = "function")
+      environment(g) <- env
+      assign(nom, function(...) { compter(list(...)); g(...) }, envir = env)
+    })
+  }
+  environment(f) <- env
+  f(...)
+  travail
+}
+
+# Noms des fonctions (hors primitives) définies directement dans l'espace de noms `ns`.
+fonctions_de <- function(ns) {
+  noms <- ls(ns, all.names = TRUE)
+  noms[vapply(noms, function(n) {
+    g <- get(n, envir = ns)
+    is.function(g) && !is.primitive(g) && identical(environment(g), ns)
+  }, NA)]
+}
+
 # Décompte final ; quitte avec le statut 1 s'il y a un ECHEC ou un SUCCES INATTENDU.
 bilan <- function() {
   k <- .harnais$compteurs
