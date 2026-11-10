@@ -1,7 +1,12 @@
 # Controle : liste blanche des dependances de DESCRIPTION (ADR 0004, point 3 ; ADR 0010,
-# point 26 ; issue #12). Les champs Depends, Imports, LinkingTo et Suggests de DESCRIPTION
-# ne citent que des packages de priorite `base` (et R lui-meme, dans Depends) ; les
-# directives import(), importFrom(), importClassesFrom() et importMethodsFrom() de NAMESPACE (tous les arguments de import(), sur plusieurs lignes) de meme.
+# point 26 ; issue #12 ; #27). Les champs Depends, Imports, LinkingTo, Suggests et Enhances
+# de DESCRIPTION ne citent que des packages de priorite `base` (et R lui-meme, dans Depends) ;
+# les champs Remotes et Additional_repositories sont refuses (un package hors CRAN ou hors
+# liste n'entre pas par un depot declare) ; les directives import(), importFrom(),
+# importClassesFrom() et importMethodsFrom() de NAMESPACE de meme. NAMESPACE est lu par
+# parse() avec srcref, sans evaluation, les deux branches de chaque `if` etant visitees (le
+# texte d'une chaine contenant `#` ne masque rien ; tous les arguments de import(), sur
+# plusieurs lignes, hors `except = ...`).
 # Usage, depuis la racine du depot : Rscript tests/controles/liste_blanche_description.R
 # Un argument facultatif designe une autre racine (copie du depot, pour les temoins).
 # Sortie : lignes [OK] / [ECHEC] fichier:ligne ; statut 1 au moindre [ECHEC].
@@ -26,7 +31,8 @@ fin <- function() quit(save = "no", status = if (.n_echec > 0L) 1L else 0L)
 LISTE_BLANCHE <- c("base", "compiler", "datasets", "graphics", "grDevices", "grid",
                    "methods", "parallel", "splines", "stats", "stats4", "tcltk", "tools",
                    "utils")
-CHAMPS <- c("Depends", "Imports", "LinkingTo", "Suggests")
+CHAMPS <- c("Depends", "Imports", "LinkingTo", "Suggests", "Enhances")
+CHAMPS_REFUSES <- c("Remotes", "Additional_repositories")
 
 # Noms de packages d'un champ DESCRIPTION (versions retirees) ; "R" exclu.
 noms_paquets <- function(valeur) {
@@ -48,7 +54,7 @@ if (!file.exists(description)) {
   fin()
 }
 lignes_description <- readLines(description, warn = FALSE)
-dcf <- read.dcf(description, fields = CHAMPS)
+dcf <- read.dcf(description, fields = c(CHAMPS, CHAMPS_REFUSES))
 for (champ in CHAMPS) {
   noms <- noms_paquets(dcf[1L, champ])
   hors <- setdiff(noms, LISTE_BLANCHE)
@@ -61,61 +67,58 @@ for (champ in CHAMPS) {
   }
 }
 
-# --- NAMESPACE : import(), importFrom(), importClassesFrom(), importMethodsFrom() -------------
-# Directives lues sur le texte sans commentaires (une directive peut couvrir plusieurs
-# lignes). import() : tous ses arguments sont des packages (hors `except = ...`) ; les autres
-# directives : leur premier argument.
-arguments_de <- function(texte, debut) {
-  # `debut` = position de la parenthese ouvrante ; rend les arguments de premier niveau.
-  caracteres <- strsplit(texte, "")[[1L]]
-  profondeur <- 0L
-  courant <- character(0)
-  arguments <- character(0)
-  for (k in debut:length(caracteres)) {
-    c1 <- caracteres[k]
-    if (c1 == "(") {
-      profondeur <- profondeur + 1L
-      if (profondeur == 1L) next
-    } else if (c1 == ")") {
-      profondeur <- profondeur - 1L
-      if (profondeur == 0L) {
-        arguments <- c(arguments, paste(courant, collapse = ""))
-        break
-      }
-    } else if (c1 == "," && profondeur == 1L) {
-      arguments <- c(arguments, paste(courant, collapse = ""))
-      courant <- character(0)
-      next
-    }
-    courant <- c(courant, c1)
+for (champ in CHAMPS_REFUSES) {
+  if (!is.na(dcf[1L, champ])) {
+    echec(sprintf("%s : champ refuse (un package ne peut entrer que par la liste blanche, ADR 0004, point 3)", champ),
+          description, ligne_du_mot(lignes_description, champ))
   }
-  trimws(arguments)
 }
+
+# --- NAMESPACE : import(), importFrom(), importClassesFrom(), importMethodsFrom() -------------
+# NAMESPACE est lu par parse() avec srcref, SANS evaluation (aucun code du depot n'est execute ;
+# parseNamespaceFile() evalue les `if` et ne garderait que la branche vraie) : parcours recursif
+# des expressions, les deux branches de chaque `if` etant visitees. import() : tous ses
+# arguments sauf `except` ; les autres directives : leur premier argument. Un `#` dans une
+# chaine ne masque rien ; la ligne rendue est celle de l'expression de premier niveau.
+DIRECTIVES_NAMESPACE <- c("import", "importFrom", "importClassesFrom", "importMethodsFrom")
 namespace <- file.path(racine, "NAMESPACE")
 if (file.exists(namespace)) {
-  lignes_namespace <- sub("#.*$", "", readLines(namespace, warn = FALSE))
-  texte <- paste(lignes_namespace, collapse = "\n")
-  debuts_de_ligne <- cumsum(c(1L, nchar(lignes_namespace) + 1L))
   avant <- .n_echec
-  directives <- gregexpr("(^|[^A-Za-z0-9._])(import|importFrom|importClassesFrom|importMethodsFrom)[ \t\n]*\\(", texte)[[1L]]
-  if (directives[1L] > 0L) {
-    for (d in seq_along(directives)) {
-      position <- directives[d]
-      longueur <- attr(directives, "match.length")[d]
-      nom_directive <- gsub("[^A-Za-z]", "", substring(texte, position, position + longueur - 1L))
-      ligne <- findInterval(position + 1L, debuts_de_ligne)
-      arguments <- arguments_de(texte, position + longueur - 1L)
-      if (nom_directive != "import") {
-        arguments <- arguments[1L]
-      } else {
-        arguments <- arguments[!grepl("^except[ \t]*=", arguments)]
-      }
-      for (nom in gsub("[\"' \t\n]", "", arguments)) {
-        if (nzchar(nom) && !(nom %in% LISTE_BLANCHE)) {
-          echec(sprintf("NAMESPACE : %s() du package `%s`, hors liste blanche (ADR 0004, point 3)",
-                        nom_directive, nom), namespace, ligne)
+  expressions <- tryCatch(parse(file = namespace, keep.source = TRUE, encoding = "UTF-8"),
+                          error = function(e) conditionMessage(e))
+  if (is.character(expressions)) {
+    echec(paste0("NAMESPACE non analysable : ", gsub("[^ -~]", "?", expressions)), namespace)
+  } else {
+    nom_de <- function(x) if (is.name(x)) as.character(x) else if (is.character(x) && length(x) == 1L) x else NA_character_
+    importes <- character(0)   # packages importes
+    lignes_importes <- integer(0)
+    visiter <- function(e, ligne) {
+      if (!is.call(e)) return(invisible(NULL))
+      tete <- nom_de(e[[1L]])
+      if (!is.na(tete) && tete %in% DIRECTIVES_NAMESPACE) {
+        arguments <- as.list(e)[-1L]
+        if (tete == "import") {
+          noms_arguments <- if (is.null(names(arguments))) rep("", length(arguments)) else names(arguments)
+          arguments <- arguments[noms_arguments != "except"]
+        } else {
+          arguments <- arguments[seq_len(min(1L, length(arguments)))]
         }
+        for (a in arguments) {
+          nom <- nom_de(a)
+          if (!is.na(nom)) {
+            importes <<- c(importes, nom)
+            lignes_importes <<- c(lignes_importes, ligne)
+          }
+        }
+      } else {
+        for (k in seq_along(e)) visiter(e[[k]], ligne)
       }
+      invisible(NULL)
+    }
+    for (e in seq_along(expressions)) visiter(expressions[[e]], attr(expressions, "srcref")[[e]][1L])
+    for (k in which(!(importes %in% LISTE_BLANCHE) & !duplicated(importes))) {
+      echec(sprintf("NAMESPACE : import du package `%s`, hors liste blanche (ADR 0004, point 3)", importes[k]),
+            namespace, lignes_importes[k])
     }
   }
   if (.n_echec == avant) ok("NAMESPACE : aucun import hors liste blanche")

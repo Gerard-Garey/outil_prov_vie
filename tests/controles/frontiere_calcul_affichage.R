@@ -1,22 +1,32 @@
 # Controle : frontiere calcul / affichage du package (ADR 0010, points 12, 21 et 26 ;
 # M112 ; issue #12). Sur chaque fichier de R/ (parse avec srcref, getParseData : numeros de
-# ligne ; commentaires et chaines exclus des recherches de noms) :
-#   1. aucun element de Shiny : input$, reactive*, observe*, isolate, render*, shiny:: ;
+# ligne ; commentaires et chaines exclus des recherches de noms, hors chaine en position
+# d'appel) :
+#   1. aucun element de Shiny : input$ et input[[, session$, output$, reactive*, eventReactive,
+#      bindEvent, reactivePoll, reactiveTimer, debounce, throttle, observe*, isolate, render*,
+#      req, validate, need, showNotification, update* (update suivi d'une majuscule), shiny:: ;
+#      session$ et output$ ne sont refuses que si le nom n'est pas local a la definition ;
 #   2. aucun set.seed(), RNGkind(), RNGversion() (appeles ou simplement references :
 #      `s <- set.seed`), aucun symbole .Random.seed ni chaine ".Random.seed" hors de
-#      R/outils.R (la seule voie vers l'alea est outils::avec_graine, point 21) ;
+#      R/outils.R (la seule voie vers l'alea est outils::avec_graine, point 21) ; un nom
+#      ecrit entre accents graves ou entre guillemets en position d'appel (`cat`("x"),
+#      "cat"("x")) vaut le nom nu ;
 #   3. le moteur ne parle pas (point 12, etendu par decision du mainteneur du 7 novembre
 #      2026) : aucun warning(), message(), cat(), print(), writeLines(), writeChar(),
 #      packageStartupMessage(), Sys.time(), Sys.Date(), date() (appeles ou references,
 #      hors variables locales et champs), hors du corps des fonctions de premier niveau
 #      nommees print.* et format.* ;
-#   4. code ASCII (M112) : aucun octet non ASCII dans les jetons de code (chaines,
-#      noms) ; les commentaires en sont exempts (regle de T1 : "Code ASCII hors
-#      commentaires", en-tete de R/outils.R) ; mettre COMMENTAIRES_ASCII a TRUE pour les
-#      inclure ;
+#   4. code ASCII (M112) : aucun octet non ASCII dans les jetons de code (chaines, noms).
+#      Les commentaires accentues sont admis et ne sont pas controles (decision du
+#      mainteneur du 10 novembre 2026, M236) ; un fichier que l'analyse ne lit pas (souvent
+#      un caractere non ASCII hors commentaire) est signale "non analysable" ;
 #   5. si app/ existe (absent en B1 : toleree) : aucun provie::: et aucun appel de calcul
 #      de la liste CALCULS_APP (heuristique : sum, mean... ; le calcul est dans le
 #      package, `app/` formate et trace des quantites du resultat).
+# Limite documentee (faux negatif connu, issue ouverte a part) : une reference non appelee
+# (`lapply(x, print)`) n'est pas comptee si le meme nom est affecte localement ailleurs dans
+# la meme definition (`print <- 1`) : la variable locale masque la reference. Temoin
+# versionne de tests/unitaires/controles.R : il passe.
 # Usage, depuis la racine du depot : Rscript tests/controles/frontiere_calcul_affichage.R
 # Un argument facultatif designe une autre racine (copie du depot, pour les temoins).
 # Sortie : lignes [OK] / [ECHEC] fichier:ligne ; statut 1 au moindre [ECHEC].
@@ -37,8 +47,9 @@ echec <- function(message, chemin = NA_character_, ligne = NA_integer_) {
 }
 fin <- function() quit(save = "no", status = if (.n_echec > 0L) 1L else 0L)
 
-COMMENTAIRES_ASCII <- FALSE
-APPELS_SHINY <- "^(reactive|reactiveVal|reactiveValues|reactiveValuesToList|observe|observeEvent|isolate|render([A-Z_.].*)?)$"
+APPELS_SHINY <- paste0("^(reactive|reactiveVal|reactiveValues|reactiveValuesToList|observe|observeEvent|",
+                       "isolate|eventReactive|bindEvent|reactivePoll|reactiveTimer|debounce|throttle|",
+                       "req|validate|need|showNotification|render([A-Z_.].*)?|update[A-Z].*)$")
 APPELS_ALEA <- c("set.seed", "RNGkind", "RNGversion")
 APPELS_BAVARDS <- c("warning", "message", "cat", "print", "Sys.time", "Sys.Date", "date",
                     "writeLines", "writeChar", "packageStartupMessage")
@@ -98,25 +109,31 @@ jetons_du_fichier <- function(chemin) {
     }
   }
   terminaux <- which(hors_commentaire$terminal)
+  # Une chaine en position d'appel ("f"(x) : son expression est suivie de `(`) est un appel ;
+  # accents graves et guillemets sont retires des noms et des appels.
+  appel_chaine <- rep(FALSE, length(terminaux))
+  parent_de <- match(hc$parent, hc$id)
+  for (r in which(hc$token[terminaux] == "STR_CONST")) {
+    e <- parent_de[terminaux[r]]
+    g <- parent_de[e]
+    if (!is.na(g)) {
+      k <- enfants[[as.character(hc$id[g])]]
+      m <- match(e, k)
+      appel_chaine[r] <- !is.na(m) && m < length(k) && hc$token[k[m + 1L]] == "'('"
+    }
+  }
+  token_eff <- ifelse(appel_chaine, "SYMBOL_FUNCTION_CALL", hc$token[terminaux])
+  texte_eff <- ifelse(token_eff %in% c("SYMBOL_FUNCTION_CALL", "SYMBOL", "SYMBOL_PACKAGE"),
+                      gsub("[\"'`]", "", hc$text[terminaux]), hc$text[terminaux])
   non_ascii_texte <- function(t) any(as.integer(charToRaw(enc2utf8(t))) > 127L)
   res <- data.frame(
-    ligne = hors_commentaire$line1[terminaux], token = hors_commentaire$token[terminaux],
-    texte = hors_commentaire$text[terminaux], def = nom_def[terminaux],
+    ligne = hors_commentaire$line1[terminaux], token = token_eff,
+    texte = texte_eff, def = nom_def[terminaux],
     prec = c(NA_character_, hors_commentaire$token[terminaux][-length(terminaux)]),
     suiv = c(hors_commentaire$token[terminaux][-1L], NA_character_),
     non_ascii = vapply(hors_commentaire$text[terminaux], non_ascii_texte, logical(1), USE.NAMES = FALSE),
-    local = hc$token[terminaux] == "SYMBOL" & paste(nom_def[terminaux], hc$text[terminaux], sep = "\t") %in% locaux,
+    local = token_eff == "SYMBOL" & paste(nom_def[terminaux], hc$text[terminaux], sep = "\t") %in% locaux,
     stringsAsFactors = FALSE)
-  if (COMMENTAIRES_ASCII) {
-    com <- pd[pd$token == "COMMENT", ]
-    if (nrow(com) > 0L) {
-      res <- rbind(res, data.frame(
-        ligne = com$line1, token = "COMMENT", texte = com$text, def = NA_character_,
-        prec = NA_character_, suiv = NA_character_,
-        non_ascii = vapply(com$text, non_ascii_texte, logical(1), USE.NAMES = FALSE), local = FALSE,
-        stringsAsFactors = FALSE))
-    }
-  }
   res
 }
 
@@ -132,7 +149,7 @@ avant <- .n_echec
 for (chemin in fichiers) {
   j <- tryCatch(jetons_du_fichier(chemin), error = function(e) conditionMessage(e))
   if (is.character(j)) {
-    echec(paste0("fichier non analysable : ", gsub("[^ -~]", "?", j)), chemin)
+    echec(paste0("fichier non analysable : ", gsub("[^ -~]", "?", j), " (caractere non ASCII hors commentaire ? M112)"), chemin)
     next
   }
   if (is.null(j)) next
@@ -141,8 +158,13 @@ for (chemin in fichiers) {
     texte <- j$texte[r]
     champ <- !is.na(j$prec[r]) && j$prec[r] %in% c("'$'", "'@'")
     appel <- j$token[r] == "SYMBOL_FUNCTION_CALL" && !champ
-    if (j$token[r] == "SYMBOL" && texte == "input" && identical(j$suiv[r], "'$'")) {
-      echec("Shiny dans le package : input$ (ADR 0010, point 26)", chemin, j$ligne[r])
+    # session$ et output$ : exemptes quand le nom est local (affecte ou argument formel de la
+    # definition : `output <- list(); output$x <- 1`), refuses sinon ; input$ et input[[ toujours.
+    if (j$token[r] == "SYMBOL" && texte %in% c("input", "session", "output") && !champ &&
+        (texte == "input" || !j$local[r]) &&
+        (identical(j$suiv[r], "'$'") || (texte == "input" && identical(j$suiv[r], "LBB")))) {
+      echec(sprintf("Shiny dans le package : %s%s (ADR 0010, point 26)", texte,
+                    if (identical(j$suiv[r], "LBB")) "[[" else "$"), chemin, j$ligne[r])
     }
     if (appel && grepl(APPELS_SHINY, texte)) {
       echec(sprintf("Shiny dans le package : %s() (ADR 0010, point 26)", texte), chemin, j$ligne[r])
@@ -188,7 +210,7 @@ if (!dir.exists(dossier_app)) {
   for (chemin in fichiers_app) {
     j <- tryCatch(jetons_du_fichier(chemin), error = function(e) conditionMessage(e))
     if (is.character(j)) {
-      echec(paste0("fichier non analysable : ", gsub("[^ -~]", "?", j)), chemin)
+      echec(paste0("fichier non analysable : ", gsub("[^ -~]", "?", j), " (caractere non ASCII hors commentaire ? M112)"), chemin)
       next
     }
     if (is.null(j)) next

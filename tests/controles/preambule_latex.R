@@ -1,12 +1,16 @@
 # Controle : preambule recopie de la charte LaTeX (issue #8 ; ADR 0003 annote ; ADR 0010,
-# point 26). Pour chaque document .tex de docs/latex/ autre que la charte
-# (docs/latex/charte_graphique.tex) : le texte de la ligne 1 a la ligne qui precede
-# \begin{document}, ou chaque bloc "% >>> A ADAPTER : <objet>" ... "% <<< A ADAPTER"
-# (A accentue dans les fichiers) est remplace par une ligne-repere "%%BLOC:<objet>", est
-# identique a celui de la charte traite de meme (espaces de fin de ligne et lignes vides
-# finales ignores). Les reperes gardent la place des blocs : un bloc en trop, absent ou
-# deplace fait differer les deux textes. Un bloc dont l'objet n'existe pas dans la charte,
-# une suite de blocs differente de celle de la charte, un bloc non ferme sont des [ECHEC].
+# point 26 ; #27). Pour chaque document .tex ou .TEX suivi du depot (git ls-files si la racine
+# examinee est la racine d'un depot git, sinon toute l'arborescence hors .git/ et
+# .claude/worktrees/ ; recherche recursive, pas seulement docs/latex/) autre que la charte
+# (docs/latex/charte_graphique.tex) et qui porte un \documentclass (un fichier sans
+# \documentclass est un fragment inclus par un autre document : ignore) : le texte de la ligne
+# 1 a la ligne qui precede \begin{document}, ou chaque bloc "% >>> A ADAPTER : <objet>" ...
+# "% <<< A ADAPTER" (A accentue dans les fichiers) est remplace par une ligne-repere
+# "%%BLOC:<objet>", est identique a celui de la charte traite de meme (espaces de fin de ligne
+# et lignes vides finales ignores). Les reperes gardent la place des blocs : un bloc en trop,
+# absent ou deplace fait differer les deux textes. Un bloc dont l'objet n'existe pas dans la
+# charte, une suite de blocs differente de celle de la charte, un bloc non ferme sont des
+# [ECHEC].
 # Modele : docu_actu, outils/controles/preambule.R (reecrit, sans dependance).
 # Usage, depuis la racine du depot : Rscript tests/controles/preambule_latex.R
 # Un argument facultatif designe une autre racine (copie du depot, pour les temoins).
@@ -54,6 +58,7 @@ sans_commentaire <- function(x) sub("(^|[^\\\\])%.*$", "\\1", x)
 # list(lignes, numeros (lignes d'origine), objets, ouvertures, erreur, ligne).
 traiter <- function(chemin) {
   brut <- lire_lignes(chemin)
+  if (!any(grepl("\\documentclass", sans_commentaire(brut), fixed = TRUE))) return(list(fragment = TRUE))
   debut <- grep(DEBUT_DOCUMENT, sans_commentaire(brut), fixed = TRUE)[1L]
   if (is.na(debut)) return(list(erreur = "\\begin{document} introuvable", ligne = NA_integer_))
   p <- sub("[ \t]+$", "", brut[seq_len(debut - 1L)])
@@ -109,8 +114,23 @@ if (!is.null(ref$erreur)) {
   echec(ref$erreur, charte, ref$ligne)
   fin()
 }
-documents <- sort(Sys.glob(file.path(dossier_latex, "*.tex")), method = "radix")
-documents <- documents[basename(documents) != "charte_graphique.tex"]
+# Fichiers .tex suivis : git ls-files si `racine` est la racine d'un depot git, sinon l'arborescence.
+fichiers_suivis <- function() {
+  if (nzchar(Sys.which("git"))) {
+    haut <- suppressWarnings(system2("git", c("-C", shQuote(racine), "rev-parse", "--show-toplevel"),
+                                     stdout = TRUE, stderr = FALSE))
+    if (is.null(attr(haut, "status")) && length(haut) == 1L && normalizePath(haut) == racine) {
+      liste <- suppressWarnings(system2("git", c("-C", shQuote(racine), "-c", "core.quotepath=off", "ls-files"),
+                                        stdout = TRUE, stderr = FALSE))
+      if (is.null(attr(liste, "status"))) return(file.path(racine, liste))
+    }
+  }
+  tout <- list.files(racine, recursive = TRUE, all.files = TRUE, include.dirs = FALSE)
+  file.path(racine, tout[!startsWith(tout, ".git/") & !startsWith(tout, ".claude/worktrees/")])
+}
+documents <- fichiers_suivis()
+documents <- documents[grepl("\\.tex$", documents, ignore.case = TRUE) & file.exists(documents)]
+documents <- sort(documents[normalizePath(documents) != normalizePath(charte)], method = "radix")
 if (length(documents) == 0L) {
   ok("aucun document a comparer a la charte")
   fin()
@@ -118,6 +138,7 @@ if (length(documents) == 0L) {
 
 for (f in documents) {
   t <- traiter(f)
+  if (isTRUE(t$fragment)) next
   if (!is.null(t$erreur)) {
     echec(t$erreur, f, t$ligne)
     next
@@ -137,7 +158,7 @@ for (f in documents) {
     n <- min(length(t$lignes), length(ref$lignes))
     i <- which(t$lignes[seq_len(n)] != ref$lignes[seq_len(n)])[1L]
     if (is.na(i)) i <- n + 1L
-    ligne <- if (i <= length(t$numeros)) t$numeros[i] else length(t$numeros)
+    ligne <- max(1L, if (i <= length(t$numeros)) t$numeros[i] else length(t$numeros))
     echec("preambule different de celui de la charte (hors blocs A ADAPTER)", f, ligne)
     cat(sprintf("    1re difference (ligne %d du preambule compare) :\n", i))
     cat("    charte : ", if (i <= length(ref$lignes)) ascii(ref$lignes[i]) else "(fin du preambule)", "\n", sep = "")
