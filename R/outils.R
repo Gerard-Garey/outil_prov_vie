@@ -94,13 +94,16 @@ avec_graine <- function(graine, expr) {
     # Le rétablissement d'un échantillonneur « Rounding » (celui de l'appelant) émet un
     # avertissement de R, qui n'a pas à sortir d'une restauration : lui seul est étouffé
     # (décision du mainteneur du 7 novembre 2026) ; tout autre avertissement remonte, donc
-    # échoue sous warn = 2. Même alors, .Random.seed de l'appelant est rétabli (finally).
+    # échoue sous warn = 2. Deux temps, pour que l'étouffement ne couvre que l'échantillonneur
+    # (un avertissement du générateur de normales, « Buggy Kinderman-Ramage », qui s'y
+    # ajouterait n'est pas étouffé). Même alors, .Random.seed de l'appelant est rétabli (finally).
     tryCatch({
       if (identical(anciens_genres[3L], "Rounding")) {
-        suppressWarnings(RNGkind(anciens_genres[1L], anciens_genres[2L], anciens_genres[3L]))
+        suppressWarnings(RNGkind(sample.kind = anciens_genres[3L]))
       } else {
-        RNGkind(anciens_genres[1L], anciens_genres[2L], anciens_genres[3L])
+        RNGkind(sample.kind = anciens_genres[3L])
       }
+      RNGkind(anciens_genres[1L], anciens_genres[2L])
     }, finally = {
       if (avait_graine) {
         assign(".Random.seed", ancienne_graine, envir = global)
