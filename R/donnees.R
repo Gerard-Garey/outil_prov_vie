@@ -1948,7 +1948,7 @@ controler_base <- function(donnees, arrete, declarations = NULL, conventions = N
   non_executes <- ctx$non_executes
   ctx$p_refusees <- character(0)
   repeat {
-    .visibilite_propre(ctx)
+    .initialiser_visibilite(ctx)
     .regle_prealable(ctx)
     .vue_empechee(ctx)
     if (length(ctx$p_empechees) == 0L) break
@@ -2018,13 +2018,14 @@ controler_base <- function(donnees, arrete, declarations = NULL, conventions = N
   invisible(NULL)
 }
 
-# Visibilité propre de chaque ligne à l'arrêté (sans la règle 1), et colonnes lues pour
-# l'établir (`lit_propre`, vide à l'arrêté égal à l'extraction, où tout est visible :
-# règle 3 du § 6). Appelée avant la règle P.
-.visibilite_propre <- function(ctx) {
+# Initialise l'état de la visibilité à l'arrêté : colonnes lues pour établir la visibilité
+# propre de chaque ligne (`lit_propre` : les dates de .DATES_VISIBILITE, vide à l'arrêté égal
+# à l'extraction, où tout est visible : règle 3 du § 6), lignes et parties de ligne non
+# déterminées, dates d'hypothèse et exclusions de D02b et D03g, remplies par la règle P. La
+# visibilité elle-même n'est évaluée qu'une fois, à trois valeurs, par .visibilite_a().
+# Appelée avant la règle P.
+.initialiser_visibilite <- function(ctx) {
   totale <- .vue_totale(ctx)
-  a <- as.numeric(ctx$arrete)
-  ctx$propre <- list()
   ctx$lit_propre <- list()
   ctx$non_determine <- list()
   ctx$partie_nd <- list()
@@ -2032,22 +2033,8 @@ controler_base <- function(donnees, arrete, declarations = NULL, conventions = N
   ctx$exclu_g <- list()
   for (table in setdiff(ctx$tables, "extraction")) {
     n <- nrow(ctx$base[[table]])
-    vis <- rep(TRUE, n)
     dates <- .DATES_VISIBILITE[[table]]
-    if (!totale) {
-      for (colonne in dates) {
-        refusees <- .lignes_refusees(ctx, table, colonne)
-        x <- if (is.na(.cause(ctx, table, colonne)) || !is.null(refusees)) as.numeric(.valeurs(ctx, table, colonne))
-             else rep(NA_real_, n)
-        ok <- !is.na(x) & x <= a
-        # valeur refusée : non lue ; la visibilité se tranche sur les autres dates
-        # (.refus_vue(), .construire_vue())
-        ok[refusees] <- TRUE
-        vis <- vis & ok
-      }
-      ctx$lit_propre[[table]] <- if (length(dates)) paste(table, dates, sep = ".") else character(0)
-    }
-    ctx$propre[[table]] <- vis
+    if (!totale) ctx$lit_propre[[table]] <- if (length(dates)) paste(table, dates, sep = ".") else character(0)
     ctx$non_determine[[table]] <- rep(FALSE, n)
     ctx$partie_nd[[table]] <- rep(FALSE, n)
     ctx$date_h[[table]] <- rep(NA_real_, n)
@@ -2178,7 +2165,6 @@ controler_base <- function(donnees, arrete, declarations = NULL, conventions = N
     if (motif == "D02b" && h_d02b) {
       if (!is.null(date_h)) {
         d <- as.numeric(v(table, date_h))[lignes]
-        ctx$propre[[table]][lignes] <- ctx$propre[[table]][lignes] & !is.na(d) & d <= as.numeric(ctx$arrete)
         dh <- ctx$date_h[[table]]
         dh[lignes] <- pmax(dh[lignes], d, na.rm = TRUE)
         ctx$date_h[[table]] <- dh
@@ -2192,7 +2178,6 @@ controler_base <- function(donnees, arrete, declarations = NULL, conventions = N
         # exclusion déclarée pour les quatre familles : la ligne entière sort de la vue (une
         # partie de ligne n'est résolue que par l'hypothèse, D9)
         ctx$exclu_g[[table]][lignes] <- TRUE
-        ctx$propre[[table]][lignes] <- FALSE
         return(invisible(NULL))
       }
       if (identical(application, "H")) {
@@ -2291,7 +2276,6 @@ controler_base <- function(donnees, arrete, declarations = NULL, conventions = N
 # de la fin retenue).
 .appliquer_h_d03g <- function(ctx, nd) {
   if (length(ctx$h_g) == 0L) return(invisible(NULL))
-  a <- as.numeric(ctx$arrete)
   liens <- .liens_visibilite(ctx$dico)
   liens <- liens[liens$table %in% ctx$tables & liens$table_cible %in% ctx$tables, , drop = FALSE]
   lisible <- function(t, c1) is.na(.cause(ctx, t, c1, forme_seule = TRUE))
@@ -2372,16 +2356,6 @@ controler_base <- function(donnees, arrete, declarations = NULL, conventions = N
         if (any(refus_e)) ctx$reste_g[[t]] <- sort(unique(c(ctx$reste_g[[t]], reste[refus_e])))
         reste <- reste[!refus_e]
       }
-      ok <- h$lignes[!is.na(g)]
-      # visibilité propre recalculée avec la date de saisie retenue ; une autre date de
-      # visibilité refusée pour sa valeur ne tranche pas (.refus_vue())
-      vis <- rep(TRUE, length(ok))
-      for (c1 in .DATES_VISIBILITE[[t]]) {
-        d <- if (c1 == "date_saisie") ctx$date_g[[t]][ok] else lire(t, c1)[ok]
-        refusee <- c1 != "date_saisie" & ok %in% .lignes_refusees(ctx, t, c1)
-        vis <- vis & (refusee | (!is.na(d) & d <= a))
-      }
-      ctx$propre[[t]][ok] <- vis
       ctx$lit_propre[[t]] <- unique(c(ctx$lit_propre[[t]], unlist(lapply(effet[t], function(e) paste(t, e, sep = ".")))))
     } else {
       if (is.null(ctx$partie_h[[t]])) ctx$partie_h[[t]] <- rep(NA_real_, nrow(ctx$base[[t]]))
@@ -2460,12 +2434,13 @@ controler_base <- function(donnees, arrete, declarations = NULL, conventions = N
                  l[is.na(statut[[k$table]][l])])
       }
     }
-    # ligne entière refusée sur une colonne lue par la vue, visible par ses autres conditions
-    # (hors lignes déjà non résolues par la règle P), de statut non déterminé
+    # ligne entière refusée sur une colonne lue par la vue, de statut non déterminé (NA de
+    # .visibilite_a() : aucune autre condition ne la rend invisible), hors lignes déjà non
+    # résolues par la règle P
     for (k in ev$refus) {
       if (!is.na(k$colonne)) next
       l <- k$lignes
-      inscrire(k, l[ctx$propre[[k$table]][l] & !ctx$non_determine[[k$table]][l] & is.na(statut[[k$table]][l])])
+      inscrire(k, l[!ctx$non_determine[[k$table]][l] & is.na(statut[[k$table]][l])])
     }
     for (t in tables) {
       inscrire(list(table = t, colonne = NA_character_, motif = "parente_non_determinee", origine = NA_character_),

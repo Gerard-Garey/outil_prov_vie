@@ -731,7 +731,7 @@ verifier_egal("arrêté antérieur : visibilité non déterminée par table, col
 verifier("arrêté antérieur : vue$provisoire vrai", isTRUE(r_a0$vue$provisoire))
 ctx_vue <- function(b, arrete) {
   ctx <- ns$.contexte(b, d, list(date_extraction = A), arrete)
-  ns$.visibilite_propre(ctx); ns$.regle_prealable(ctx); ns$.construire_vue(ctx)
+  ns$.initialiser_visibilite(ctx); ns$.regle_prealable(ctx); ns$.construire_vue(ctx)
   ctx
 }
 ctx <- ctx_vue(pb, A0)
@@ -1082,7 +1082,7 @@ verifier("D02b, hypothèse déclarée pour un seul référentiel : vue inchangé
 ctx_h <- function(b, arrete, declarations) {
   ctx <- ns$.contexte(b, d, list(date_extraction = A), arrete)
   ctx$declarations <- ns$.lire_declarations(declarations, d)
-  ns$.refus_regle_b(ctx); ns$.visibilite_propre(ctx); ns$.regle_prealable(ctx); ns$.construire_vue(ctx)
+  ns$.refus_regle_b(ctx); ns$.initialiser_visibilite(ctx); ns$.regle_prealable(ctx); ns$.construire_vue(ctx)
   ctx
 }
 b <- avec(function(b) { b$evenements$date_saisie[2L] <- D("2024-05-01"); b$evenements$date_effet[2L] <- D("2024-06-15"); b })
