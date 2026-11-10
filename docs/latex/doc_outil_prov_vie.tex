@@ -1597,11 +1597,11 @@ encore écrits. Il ne peut appeler que \code{dictionnaire} et
 
 \code{controler\_base(donnees, arrete, declarations, conventions)}
 applique la spécification du module \code{donnees}
-(\code{docs/specifications/module-donnees-v1.md}, version~1.5.4\fsp;
+(\code{docs/specifications/module-donnees-v1.md}, version~1.5.5\fsp;
 versions~1.1, 1.3, 1.4 et~1.5 visées par le mainteneur, la version~1.5
 le 10~novembre~2026 avec ses précisions P1 à~P5, M222\fsp; errata~1.5.1
 et~1.5.2 et précisions~1.5.3 et~1.5.4 sur ses décisions du même jour, M223
-à M226\fsp; décisions de la version~1.2, M194 et M195, prises par lui), sous le dictionnaire de la base en version~1.5. La date d'arrêté est obligatoire,
+à M226, et erratum~1.5.5 visé le même jour\fsp; décisions de la version~1.2, M194 et M195, prises par lui), sous le dictionnaire de la base en version~1.5. La date d'arrêté est obligatoire,
 sans valeur par défaut. \code{declarations} est le sous-schéma
 \code{donnees} du plan (rubriques \code{exclusions}, \code{hypotheses},
 \code{seuils}, \code{evaluations\_gestion})\fsp; \code{conventions} est la
@@ -2233,8 +2233,8 @@ ordre~:
 \textcolor{financeblue}{\textbf{Élément}} & \textcolor{financeblue}{\textbf{Contenu}} \\
 \code{controles} & Toute détection~: code, table, colonne, détection (exacte ou présomptive), nombre de lignes, identifiants. \\
 \code{controles\_non\_executes} & Contrôle empêché, ou exécuté en partie (détection partielle), une ligne par (code, table, colonne), avec sa cause (ci-dessous). \\
-\code{refus\_tables} & Refus~R~: table, colonne, motif, portée effective (\code{colonne} ou \code{table}), origine d'un refus induit, nombre de lignes, lignes visibles à l'arrêté (\code{NA} si indéterminé), identifiants, dossiers rattachés connus à l'arrêté (\code{NA} si la visibilité de l'un d'eux est indéterminée), postes arrêtés (\code{NA} dans l'état du code). \\
-\code{exclusions} & Exclusions déclarées~: motif, famille de calcul, action (\code{exclure} ou \code{conserver}), nombre de lignes et de dossiers. \\
+\code{refus\_tables} & Refus~R~: table, colonne, motif, portée effective (\code{colonne} ou \code{table}), origine d'un refus induit, nombre de lignes, lignes visibles à l'arrêté (\code{NA} si indéterminé), identifiants, dossiers rattachés à l'arrêté (\code{NA} si le rattachement d'un dossier n'est pas déterminé), postes arrêtés (\code{NA} dans l'état du code). \\
+\code{exclusions} & Exclusions déclarées~: motif, famille de calcul, action (\code{exclure} ou \code{conserver}), nombre de lignes et de dossiers rattachés à l'arrêté. \\
 \code{hypotheses\_defaut} & Hypothèses par défaut déclarées~: motif, référentiel, poste, valeur, nombre. \\
 \code{signalements} & Constats traités en signalement, ou dont le signalement est déclaré~: mêmes colonnes que \code{controles}. \\
 \code{declarations\_requises} & Déclaration attendue par un constat ou par un contrôle~: rubrique (\code{exclusions}, \code{hypotheses}, \code{seuils} ou \code{conventions}), motif, clé (famille, référentiel, seuil ou entrée de convention), traitements ou valeurs admis, nombre de lignes. \\
@@ -2285,9 +2285,110 @@ déterminée n'y compte pas, et, à l'arrêté égal à l'extraction, une versio
 remplacée de \code{famille} non plus (P5)\fsp; il vaut \code{NA} dès
 qu'une ligne qui le porte est de visibilité non déterminée, quel qu'en
 soit le motif~: la valeur refusée n'est pas lue. Le nombre de dossiers
-(\code{nombre\_dossiers}) compte les dossiers rattachés connus à
-l'arrêté, et ne vaut \code{NA} que si la visibilité de l'un d'eux est
-indéterminée.
+(\code{nombre\_dossiers}) compte les dossiers rattachés à l'arrêté
+(paragraphe suivant).
+
+\textbf{Rattachement d'un dossier à l'arrêté} (spécification, §~4.4\fsp;
+décision du mainteneur du 10~novembre~2026, M219, lecture~(ii)). Les
+dossiers d'une ligne écartée se lisent par les clés étrangères, table par
+table (par exemple dossiers de la garantie souscrite, du contrat ou de
+l'adhérent, dossiers des sinistres de l'assuré ou du sinistre, ou dossier
+de la ligne\fsp; aucun pour \code{cotisations}, \code{evaluations\_gestion},
+\code{designations} et \code{ayants\_droit\_sante}). Pour un écart, refus
+ou exclusion, de lignes $L$ d'une table, et pour chaque dossier $d$
+rattaché à une ligne de $L$, le statut de rattachement de $d$ à l'arrêté
+est
+\[
+s(d) = \mathrm{statut}(d) \wedge \bigvee_{\ell \in L \text{ rattachée à } d} \mathrm{statut}(\ell),
+\]
+en logique de Kleene, les statuts étant ceux de l'évaluation unique de la
+visibilité (vrai~: visible\fsp; faux~: invisible de façon déterminée\fsp;
+inconnu~: non déterminé)\fsp; pour la table \code{dossiers}, la ligne est le
+dossier. Le rattachement est non déterminé pour un dossier non déterminé
+rattaché par une ligne visible ou non déterminée, et pour un dossier
+visible rattaché seulement par des lignes dont aucune n'est visible et
+l'une au moins est non déterminée. La conjonction est fausse dès qu'un
+terme est faux~: un dossier invisible n'est pas rattaché, même par une
+ligne non déterminée (faux et inconnu donnent faux), et un dossier non
+déterminé dont toutes les lignes rattachées sont invisibles ne l'est pas
+non plus (inconnu et faux donnent faux). La disjonction est
+vraie dès qu'une ligne rattachée est visible. Pour un écart de D03g, les
+statuts, de la ligne comme du dossier, sont ceux de la variante de
+l'enjeu de D03g (paragraphe «~Visibilité à l'arrêté~», écart~(iii)). Le
+dossier est \textbf{rattaché à l'arrêté} si $s(d)$ est vrai,
+\textbf{non rattaché} s'il est faux, et de \textbf{rattachement non
+déterminé} sinon. Une seule fonction interne,
+\code{.statut\_rattachement()}, établit ce statut, pour les comptes de
+dossiers comme pour les montants de l'enjeu\fsp; la disjonction par
+dossier est celle de \code{.ou\_kleene()}.
+
+\begin{itemize}[itemsep=2pt]
+\item \textbf{\code{nombre\_dossiers}}~: \code{NA} si le rattachement est
+  illisible par sa forme\fsp; sinon \code{NA} si un dossier est de
+  rattachement non déterminé\fsp; sinon le nombre de dossiers rattachés à
+  l'arrêté, 0 pour une table sans dossier rattaché. La même règle vaut
+  dans \code{refus\_tables}, par constat, dans \code{exclusions}, sur
+  l'union des lignes d'une clé (motif, famille, action), un dossier y
+  étant rattaché s'il l'est par l'une d'elles, et dans \code{enjeu}, pour
+  chaque rangée.
+\item \textbf{Montants des composantes~1 à~4.} Ils se somment sur les
+  dossiers rattachés à l'arrêté. Un dossier non rattaché sort de l'écart~:
+  il n'a ni compte, ni montant, ni rangée de garantie. Un dossier de
+  rattachement non déterminé est un porteur de visibilité non déterminée
+  (M201)~: chacune des composantes dont il est porteur vaut \code{NA}, avec la cause
+  \code{visibilite\_non\_determinee}, hors de
+  \code{controles\_non\_executes}, et \code{nombre\_dossiers} vaut
+  \code{NA}. Une composante dont ce dossier n'est pas porteur (par
+  exemple \code{ij\_en\_vigueur} pour un dossier décès) ne reçoit de lui
+  aucune valeur, qu'il soit rattaché ou non~: son montant et son nombre de
+  valeurs restent ceux des autres porteurs (0 s'il n'y en a pas), sans
+  cause, et \code{nombre\_dossiers} vaut \code{NA} dans les rangées qui
+  comptent ce dossier. Ce montant est un résultat exact, le même pour
+  toute résolution du rattachement. Sous un lien de garantie non résolu,
+  les composantes~2 à~4 s'appliquent à chaque dossier. Une composante empêchée par une colonne lue, de cause égale
+  au motif du refus, reste empêchée quel que soit le nombre de dossiers.
+\item \textbf{Rangée \code{motif = ensemble}.} Le statut d'un dossier y est
+  la disjonction de Kleene de ses statuts dans les écarts de la rangée,
+  par famille de composantes (un dossier rattaché par une prestation
+  écartée n'y est compté que pour \code{prestations\_ecartees})\fsp; elle ne
+  dépend pas de l'ordre des écarts. Un dossier rattaché à l'arrêté par un
+  écart l'est dans la rangée, même s'il est de rattachement non déterminé
+  dans un autre. Seuls tombent alors les éléments de cause
+  \code{visibilite\_non\_determinee} que ce dernier écart lui donne\fsp; un
+  élément d'une autre cause, comme \code{D01a} pour un identifiant en
+  double divergent, est conservé et empêche la composante dans la rangée.
+  La garantie d'un dossier est la même dans tous les écarts de la
+  rangée~: pour un refus, l'écart d'une clé étrangère de la garantie (lien
+  non résolu) rend cette clé illisible pour les autres écarts de refus,
+  où le dossier est aussi \code{non\_rattache} et ses composantes~1 à~4
+  empêchées par le motif de ce refus.
+\end{itemize}
+
+\textbf{Statut et motif} (jugement d'expert, M219, pour la règle\fsp;
+résultat exact pour les comptes et les sommes qui en découlent). L'enjeu mesure
+l'exposition connue à l'arrêté~: un écart porté par une ligne inconnue à
+cette date ne touche aucun dossier. L'alternative écartée compte les
+dossiers rattachés quelle que soit la visibilité de la ligne, et compte
+donc un dossier touché par une ligne invisible. La logique de Kleene ne
+rend une valeur déterminée que si tous les états des statuts non
+déterminés la donnent~: un compte ou un montant déterminé est donc exact.
+Elle ignore en revanche la corrélation entre les versions candidates d'un
+même membre de \code{famille} (si une version plus récente est visible,
+l'ancienne n'est pas valable)~: pour un écart qui couvre toutes les
+candidates d'un membre visible, le compte peut valoir \code{NA} alors qu'une
+substitution exacte le déterminerait (issue~49 du dépôt). Aucune provision
+n'en dépend. La batterie unitaire force chaque statut non déterminé dont
+dépend le rattachement (dossier, ligne rattachée, version de
+\code{famille}) à vrai puis à faux, indépendamment des autres et dans
+toutes les combinaisons, pour les comptes et sous la variante de D03g~: un
+dossier doit être de rattachement non déterminé, et le compte
+\code{NA}, si et seulement si le résultat varie (critère~6~(d) de la
+spécification). Ces combinaisons forment un sur-ensemble des états
+admissibles~: un statut lié à celui de sa parente par la règle~1 est forcé
+à part, et les candidates d'un membre de \code{famille} ne sont pas
+rendues tour à tour valables. C'est une vérification de cohérence à trois
+valeurs sur un corpus fini de cas, ni une preuve, ni la substitution
+exacte pour \code{famille}, que l'issue~49 demande.
 
 \textbf{Contrôles non exécutés et causes.} La colonne \code{cause} de
 \code{controles\_non\_executes} prend l'une des valeurs suivantes~:
