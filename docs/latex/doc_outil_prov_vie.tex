@@ -991,8 +991,8 @@ documentera avec eux.
 \rowcolor{tableheader}
 \textcolor{financeblue}{\textbf{Motif}} & \textcolor{financeblue}{\textbf{Levé, dans l'état du code, par}} \\
 \endhead
-\code{plan\_incomplet} & \code{controler\_base()}~: date d'arrêté absente\fsp; \code{valider\_plan()}, et par elle \code{canoniser\_plan()}, \code{ecrire\_plan()} et \code{construire\_fiche()}~: entrée du plan exigée et absente, le message nommant son chemin (section~\ref{sec:plan-schema}). \\
-\code{plan\_invalide} & \code{controler\_base()}~: date d'arrêté mal formée, déclaration ou convention mal formée ou hors de sa liste fermée\fsp; \code{calculer\_age()} et \code{date\_atteinte\_age()}~: convention hors de \code{CONVENTIONS\_AGE}\fsp; \code{valider\_plan()}, et par elle les mêmes fonctions que pour \code{plan\_incomplet}~: entrée du plan mal formée, hors de son domaine ou inconnue du schéma (section~\ref{sec:plan-schema})\fsp; \code{resoudre\_tables()}~: statut ou nature d'une table autres que ceux que déclarent le plan et l'usage. \\
+\code{plan\_incomplet} & \code{controler\_base()}~: date d'arrêté absente\fsp; \code{facteur\_revalorisation()} et \code{calculer\_engagement()}~: année sans taux de revalorisation (section~\ref{sec:engagement-capital})\fsp; \code{valider\_plan()}, et par elle \code{canoniser\_plan()}, \code{ecrire\_plan()} et \code{construire\_fiche()}~: entrée du plan exigée et absente, le message nommant son chemin (section~\ref{sec:plan-schema}). \\
+\code{plan\_invalide} & \code{controler\_base()}~: date d'arrêté mal formée, déclaration ou convention mal formée ou hors de sa liste fermée\fsp; \code{calculer\_age()} et \code{date\_atteinte\_age()}~: convention hors de \code{CONVENTIONS\_AGE}\fsp; \code{valider\_plan()}, et par elle les mêmes fonctions que pour \code{plan\_incomplet}~: entrée du plan mal formée, hors de son domaine ou inconnue du schéma (section~\ref{sec:plan-schema})\fsp; \code{resoudre\_tables()}~: statut ou nature d'une table autres que ceux que déclarent le plan et l'usage\fsp; \code{provisions\_individuelles()}~: valeur de l'hypothèse D03h qui n'est pas un taux décimal. \\
 \code{liste\_invalide} & \code{ecrire\_valeurs()}, \code{ecrire\_liste()} et \code{lire\_liste()}~: valeur, liste ou texte que l'écriture canonique ou le format de liste n'admet pas (sections~\ref{sec:ecriture} et~\ref{sec:format-liste})\fsp; \code{controler\_types()}, \code{constater\_forme()} et \code{controler\_base()}~: base qui n'est pas une liste nommée de \code{data.frame} aux tables connues\fsp; \code{ecrire\_base()}~: valeur que le CSV ne relirait pas à l'identique\fsp; \code{construire\_fiche()}, \code{ecrire\_fiche()}, \code{lire\_fiche()} et les contrôles du rejeu~: objet ou liste qui n'a pas la forme d'une fiche de calcul. \\
 \code{fichier\_invalide} & \code{lire\_base()}, \code{ecrire\_base()}, \code{ecrire\_jeu()} et \code{lire\_jeu()}~: chemin qui n'est pas une chaîne unique, dossier introuvable, non vide ou impossible à créer, fichier inconnu du dictionnaire, fichier dont la lecture ne rendrait pas le texte exact (section~\ref{sec:lecture-base})\fsp; pour \code{lire\_jeu()}, disposition d'un jeu, liste d'empreintes, volumétrie ou tables de vérité non conformes (section~\ref{sec:lecture-jeu}). \\
 \code{table\_base\_absente} & \code{controler\_base()}~: table obligatoire absente. \\
@@ -1001,7 +1001,7 @@ documentera avec eux.
 \code{type\_incompatible} & Mêmes fonctions que \code{colonne\_absente}~: colonne d'un autre type que son type déclaré\fsp; \code{construire\_table()} et \code{lire\_table()}~: colonne d'une table d'un autre type que celui de son format. \\
 \code{extraction\_invalide} & \code{controler\_version\_extraction()}, et par elle \code{controler\_types()}, \code{ecrire\_base()}, \code{lire\_base()} et \code{controler\_base()}~: version du dictionnaire autre que \code{VERSION\_DICTIONNAIRE\_ATTENDUE}\fsp; \code{controler\_types()} et \code{controler\_base()}~: table \code{extraction} qui n'a pas exactement une ligne, et, pour \code{controler\_base()} seule, valeur manquante ou hors domaine, date antérieure au 1er~janvier~1901 ou début d'historique qui ne précède pas la date d'extraction. \\
 \code{arrete\_posterieur\_extraction} & \code{controler\_base()}~: date d'arrêté postérieure à la date d'extraction. \\
-\code{declaration\_manquante} & Aucune fonction. \\
+\code{declaration\_manquante} & \code{calculer\_risque\_en\_cours()}, par \code{provisions\_individuelles()}~: taux du tarif manquant sans hypothèse D03h déclarée (section~\ref{sec:risque-en-cours-p3}). \\
 \code{table\_absente} & \code{resoudre\_tables()}~: usage exigé sans entrée dans le plan, ou sans table reçue sous l'identifiant déclaré (section~\ref{sec:tables-indicateurs})\fsp; contrôles du rejeu d'une fiche~: table importée de la fiche non reçue (section~\ref{sec:plan-fiche}). \\
 \code{empreinte\_discordante} & \code{lire\_jeu()}~: fichier d'un jeu dont le MD5 diffère de celui de \code{empreintes.md5}, avec l'empreinte attendue et l'empreinte reçue\fsp; \code{resoudre\_tables()}~: table reçue dont l'empreinte diffère de celle du plan\fsp; contrôles du rejeu d'une fiche~: table de la base ou table importée dont l'empreinte diffère de celle de la fiche (section~\ref{sec:plan-fiche}). \\
 \code{version\_discordante} & \code{lire\_liste()}, et par elle \code{lire\_plan()} et \code{lire\_fiche()}~: en-tête d'une autre version du format de liste, avec la version attendue (\code{attendu}) et la version reçue (\code{recu})\fsp; contrôles du rejeu d'une fiche (module \code{plan})~: fiche d'une autre version que \code{VERSION\_FICHE} (section~\ref{sec:plan-fiche}). \\
@@ -1597,9 +1597,11 @@ et contrôles de structure, traitements déclarés (refus, exclusion,
 hypothèse par défaut, signalement), vue à une date, états des sinistres et
 des dossiers à une date, segments, enjeu des lignes écartées. Il ne corrige
 rien en silence. Dans l'état du code, il contrôle la base entière et la vue
-à l'arrêté et chiffre l'enjeu (section~\ref{sec:donnees-bilan})\fsp; les
-états des sinistres et des dossiers à une date et les segments ne sont pas
-encore écrits. Il ne peut appeler que \code{dictionnaire} et
+à l'arrêté et chiffre l'enjeu (section~\ref{sec:donnees-bilan}), construit
+une fois la vue à l'arrêté que lisent les familles de calcul
+(\code{vue\_a\_date()}) et rend l'état à l'arrêté des dossiers du capital
+décès (\code{etats\_a\_date()}, section~\ref{sec:donnees-etats})\fsp; les
+segments ne sont pas encore écrits. Il ne peut appeler que \code{dictionnaire} et
 \code{outils}. Sa fonction \code{controler\_base()} est exportée.
 
 \begin{center}
@@ -1698,12 +1700,16 @@ provisoire. Rien de tel à l'arrêté égal à l'extraction. Une date de partie 
 contraire un refus de portée colonne (version~1.5.3, M225)~: les règles
 qui la lisent sont bloquées, avec la cause \code{type\_incompatible}, et la
 partie est masquée dans la vue sans être inscrite, la vue n'étant pas
-provisoire de ce seul fait. Elle est illisible plutôt que masquée de façon
-déterminée, bien que l'évaluation de la visibilité lui donne le même
-statut (faux) qu'à une partie masquée~: seul son refus dans
-\code{refus\_tables} l'en distingue, et un module qui lit la vue doit lire
-ce refus, et non prendre la valeur manquante pour une absence (issue~51 du
-dépôt). Les dates de saisie de la fin (\code{contrats.date\_saisie\_fin},
+provisoire de ce seul fait. Elle est illisible, et non masquée de façon
+déterminée~: l'évaluation de la visibilité lui donne le statut inconnu
+(valeur manquante de la logique de Kleene), dans les deux modes, à l'arrêté
+antérieur comme à l'arrêté égal à l'extraction, sans convertir la date\fsp;
+une partie absente (champ vide) garde son statut déterminé (issue~51 du
+dépôt). «~Illisible~» vaut donc «~inconnu~», jamais «~absente~»~: la lire
+comme absente serait une correction silencieuse. \code{valeurs\_vue()} rend
+une valeur manquante pour toute partie masquée, inconnue ou absente, qui se
+lit «~hors de la vue~»~; un module qui a besoin de la distinction lit le
+statut de la partie, jamais la valeur masquée seule (issue~54). Les dates de saisie de la fin (\code{contrats.date\_saisie\_fin},
 \code{affiliations.date\_saisie\_fin}), que lisent D02b et D03g, relèvent
 du cas précédent~: illisibles par leur forme à un arrêté antérieur à
 l'extraction, elles empêchent ces règles et produisent le refus induit de
@@ -2264,7 +2270,7 @@ ordre~:
 \textcolor{financeblue}{\textbf{Élément}} & \textcolor{financeblue}{\textbf{Contenu}} \\
 \code{controles} & Toute détection~: code, table, colonne, détection (exacte ou présomptive), nombre de lignes, identifiants. \\
 \code{controles\_non\_executes} & Contrôle empêché, ou exécuté en partie (détection partielle), une ligne par (code, table, colonne), avec sa cause (ci-dessous). \\
-\code{refus\_tables} & Refus~R~: table, colonne, motif, portée effective (\code{colonne} ou \code{table}), origine d'un refus induit, nombre de lignes, lignes visibles à l'arrêté (\code{NA} si indéterminé), identifiants, dossiers rattachés à l'arrêté (\code{NA} si le rattachement d'un dossier n'est pas déterminé), postes arrêtés (\code{NA} dans l'état du code). \\
+\code{refus\_tables} & Refus~R~: table, colonne, motif, portée effective (\code{colonne} ou \code{table}), origine d'un refus induit, nombre de lignes, lignes visibles à l'arrêté (\code{NA} si indéterminé), identifiants, dossiers rattachés à l'arrêté (\code{NA} si le rattachement d'un dossier n'est pas déterminé), postes arrêtés (\code{NA} dans le bilan de \code{controler\_base()}\fsp; dans le résultat de \code{calculer\_provisions()}, postes que la ligne arrête, section~\ref{sec:garanties-arrets}). \\
 \code{exclusions} & Exclusions déclarées~: motif, famille de calcul, action (\code{exclure} ou \code{conserver}), nombre de lignes et de dossiers rattachés à l'arrêté. \\
 \code{hypotheses\_defaut} & Hypothèses par défaut déclarées~: motif, référentiel, poste, valeur, nombre. \\
 \code{signalements} & Constats traités en signalement, ou dont le signalement est déclaré~: mêmes colonnes que \code{controles}. \\
@@ -2561,9 +2567,17 @@ sous deux entrées déclarées~: la règle, \code{atteinte} ou
 \code{depassement} (entrée \code{conventions\$limite\_age\$regle}), et la
 convention d'âge, \code{revolu} ou \code{millesime} (entrée
 \code{conventions\$limite\_age\$age})\fsp; traitement hypothèse par défaut ou
-signalement. Sans la convention ou les bornes, le contrôle n'est pas
-exécuté (\code{declaration\_absente}) et la déclaration manquante figure
-dans \code{declarations\_requises}.
+signalement. Sans la convention d'âge ou les bornes, le contrôle D02c n'est
+pas exécuté
+(\code{declaration\_absente}) et la déclaration manquante figure dans
+\code{declarations\_requises}. Sans la convention de limite d'âge, il en va
+de même pour D07~(c), mais seulement si la vue porte au moins une ligne
+candidate (rente d'une garantie souscrite \code{rente\_education} ou
+dossier \code{double\_effet}, retenue ou de visibilité non déterminée, une
+ligne dont la jointure ne se lit pas comptant comme candidate)\fsp; sans
+ligne candidate, D07~(c) est exécuté à vide, sans exigence~: une
+déclaration qui ne peut changer aucune ligne du bilan ni aucune provision
+ne bloque pas le calcul (spécification de la branche B2, §~6.3).
 
 \textbf{État partiel déclaré.} Le bilan dit lui-même qu'il est partiel~:
 les contrôles prévus par la spécification et reportés à l'issue~34 du
@@ -2596,6 +2610,56 @@ Les constantes du module sont citées d'après le code (\code{R/donnees.R})~:
 \code{CONTROLES\_NON\_IMPLEMENTES} & Tableau des contrôles reportés (code, table, colonne), quatorze lignes. \\
 \end{tabular}
 \end{center}
+
+% =============================================================================
+\section{Vue à l'arrêté et états des dossiers}
+\label{sec:donnees-etats}
+% =============================================================================
+
+\textbf{Vue à l'arrêté.} \code{vue\_a\_date(donnees, arrete, declarations,
+conventions)} construit une seule fois l'objet que lisent les familles de
+calcul, qui ne lisent jamais la base brute (spécification de la branche
+B2, §~4.2). Il porte le bilan, identique à celui que rend
+\code{controler\_base()}, qui n'en est que la lecture\fsp; les lignes
+retenues de chaque table\fsp; le statut des parties de ligne, en logique de
+Kleene (section~\ref{sec:donnees-bilan})\fsp; par famille de calcul et par
+table, les lignes exclues par une déclaration d'exclusion d'action
+\code{exclure} pour cette famille, cascade du dictionnaire comprise\fsp;
+les hypothèses par défaut appliquées. Une famille lit une colonne par
+\code{valeurs\_vue()}, dont la valeur manquante veut dire «~hors de la
+vue~».
+
+\textbf{États des dossiers.} \code{etats\_a\_date(vue, garanties, famille)}
+rend une ligne par dossier retenu à l'arrêté dont la garantie souscrite a
+un code de \code{garanties} (dans l'état du code, \code{deces} seule), pour
+une famille de calcul exigée, sans valeur par défaut. Les dossiers exclus
+pour la famille restent dans la sortie~: l'appelant les écarte. Chaque
+ligne porte l'état du sinistre (\code{deces} ou \code{iad}) et sa date
+d'entrée (date de survenance), le montant en vigueur (dernier
+\code{fixation\_capital} retenu et non exclu pour la famille), l'état du
+dossier, sa date et le motif de clôture, et l'instruction. L'état du
+dossier suit un automate, sur les événements retenus du dossier, non exclus
+pour la famille, d'effet au plus l'arrêté, dans l'ordre de la date d'effet,
+de l'ordre des types d'événement du dictionnaire, de la date de saisie,
+puis de l'identifiant~:
+
+\begin{itemize}[itemsep=2pt]
+\item départ à l'état \code{ouvert}\fsp;
+\item \code{fixation\_capital}~: \code{ouvert} devient \code{capital\_du},
+  et le montant en vigueur est mis à jour (sur un dossier \code{clos}, le
+  montant est mis à jour et l'état reste \code{clos})\fsp;
+\item \code{cloture\_dossier}~: le dossier devient \code{clos}, avec son
+  motif\fsp;
+\item \code{reouverture\_dossier}~: un dossier \code{clos} devient
+  \code{capital\_du} si un montant est en vigueur, \code{ouvert} sinon\fsp;
+\item les autres types d'événement sont sans effet.
+\end{itemize}
+
+\noindent L'état «~réglé~» n'est pas un état de l'automate~: un dossier
+\code{capital\_du} entièrement payé a un solde nul
+(section~\ref{sec:engagement-capital}). L'instruction est lue en logique de
+Kleene~: inconnue si la partie de ligne \code{sinistres.date\_instruction}
+est inconnue, sinon vraie si la partie est connue et la date présente.
 
 
 \partie{Partie VII}{Module tables}
@@ -2818,7 +2882,7 @@ en tire le statut d'une méthode.
 
 \textbf{Table des lectures.} \code{lectures.csv} porte une ligne par
 (garantie, poste, table, colonne) que le poste lit~: c'est la table de
-couverture qui sert à l'arrêt de poste.
+couverture qui sert à l'arrêt de poste (section~\ref{sec:garanties-arrets}).
 Elle est transcrite du dictionnaire de la base, restreinte à ce que les
 postes lisent réellement.
 
@@ -2839,6 +2903,66 @@ Les constantes du module sont citées d'après le code
 \end{tabular}
 \end{center}
 
+% =============================================================================
+\section{Arrêt de poste}
+\label{sec:garanties-arrets}
+% =============================================================================
+
+Un poste dont une donnée lue est refusée ne se calcule pas~: il est
+\textbf{arrêté}, et le calcul continue pour les autres postes (ADR~0010,
+point~11~(b) ; décision du mainteneur M239 ; spécification de la branche
+B2, §~6.2). Une cellule arrêtée porte un montant manquant, le statut de
+calcul \code{arrete} et un motif d'arrêt\fsp; elle n'est jamais un
+montant nul. \code{postes\_a\_arreter()} applique au bilan, pour chaque
+poste du plan et dans cet ordre, trois règles, d'après les colonnes que lit
+le poste (\code{lectures.csv}) et les clés étrangères du dictionnaire~:
+
+\begin{itemize}[itemsep=2pt]
+\item[(i)] une ligne de \code{refus\_tables} de portée table (refus induit
+  compris) sur une table arrête les postes qui lisent une colonne de cette
+  table\fsp;
+\item[(ii)] une ligne de \code{refus\_tables} de portée colonne arrête les postes
+  qui lisent cette colonne et, si la colonne appartient à une partie de
+  ligne, ceux qui lisent une colonne de la partie\fsp;
+\item[(iii)] une ligne de visibilité non déterminée dont le motif est un motif de
+  refus arrête, pour une ligne entière, les postes qui lisent la table ou
+  une table descendante, et, pour une partie de ligne, les postes qui lisent
+  une colonne de cette partie (la ligne et ses descendantes restent
+  visibles).
+\end{itemize}
+
+\noindent Les parties de ligne sont la fin d'un contrat ou d'une
+affiliation (\code{date\_fin}, \code{motif\_fin}, \code{date\_saisie\_fin})
+et l'instruction d'un sinistre (\code{date\_instruction})\fsp; une colonne
+d'une partie, inconnue ou refusée, rend inconnue toute la partie. Le motif
+d'arrêt d'un poste est celui de la première ligne qui l'arrête, dans l'ordre
+du bilan. La ligne de \code{refus\_tables} en cause reçoit, dans sa colonne
+\code{postes\_arretes}, les postes qu'elle arrête (\code{garantie/poste},
+triés, joints par «~;~»), ou une valeur manquante si elle n'en arrête
+aucun~: elle reste alors au bilan. N'arrêtent rien~: une visibilité non
+déterminée de motif D02b ou D03g, qui exige une déclaration\fsp; une
+parente non déterminée, dont la descendance porte la règle~(iii)\fsp; une
+table facultative absente.
+
+\textbf{Motifs nés d'une famille de calcul.} D'autres arrêts naissent du
+calcul lui-même, hors du bilan~; ils n'ont pas de ligne dans
+\code{refus\_tables}, et la fiche de calcul porte le premier identifiant en
+cause (dossier ou contrat) dans les paramètres retenus du poste~:
+
+\begin{center}
+\small
+\rowcolors{2}{tablerow}{white}
+\begin{tabular}{@{}>{\raggedright\arraybackslash}p{4.9cm}>{\raggedright\arraybackslash}p{10.2cm}@{}}
+\rowcolor{tableheader}
+\textcolor{financeblue}{\textbf{Motif d'arrêt}} & \textcolor{financeblue}{\textbf{Cause}} \\
+\code{hors\_axes} & Table lue hors de ses axes sous la déclaration \code{refus} (provision mathématique de la temporaire décès). \\
+\code{affiliation\_non\_determinee} & Sinistres déclarés non réglés et capitaux non réclamés~: affiliation qui porte l'assiette d'un capital à reconstituer non déterminée (section~\ref{sec:engagement-capital}). \\
+\code{assiette\_non\_determinee} & Mêmes postes~: salaire de référence de l'affiliation retenue manquant. \\
+\code{parametre\_non\_determine} & Mêmes postes~: paramètre du capital absent ou à plusieurs valeurs\fsp; provision mathématique de la temporaire décès~: paramètre, date de naissance ou fin de couverture indéterminés (section~\ref{sec:risque-en-cours-p3}). \\
+\code{famille\_non\_determinee} & Sinistres déclarés non réglés et capitaux non réclamés~: majoration familiale inconnue d'un dossier instruit. \\
+\end{tabular}
+\end{center}
+
 
 \partie{Partie IX}{Module engagement}
 
@@ -2853,7 +2977,8 @@ leur valeur actuelle probable sous le modèle multi-états. Il ne peut
 appeler que \code{tables}, \code{garanties}, \code{donnees} et
 \code{outils}. Dans l'état du code, il calcule en comptes sociaux les
 sinistres déclarés non réglés et les capitaux non réclamés du capital
-décès\fsp; aucune de ses fonctions n'est exportée.
+décès (section~\ref{sec:engagement-capital})\fsp; aucune de ses fonctions
+n'est exportée.
 
 \begin{center}
 \small
@@ -2872,6 +2997,148 @@ décès\fsp; aucune de ses fonctions n'est exportée.
 \code{statut\_methode\_catalogue()} & \code{catalogue}, \code{garantie}, \code{poste}, \code{champ}, \code{methode} & Rend le statut d'une méthode au catalogue~: la première méthode du champ est recommandée, les suivantes alternatives. \\
 \end{tabular}
 \end{center}
+
+% =============================================================================
+\section{Capital décès~: sinistres déclarés non réglés et capitaux non réclamés}
+\label{sec:engagement-capital}
+% =============================================================================
+
+Les deux postes de la famille «~engagement~» du capital décès, les
+sinistres déclarés non réglés et les capitaux non réclamés, forment la
+provision pour sinistres à payer vie des comptes sociaux. Ils sont calculés
+dossier par dossier, par une seule fonction pour les quatre méthodes
+(\code{capital\_deces\_dossier()}), d'après la spécification de la branche
+B2 (§~5.3 et~5.4).
+
+\textbf{Population.} Les dossiers sont ceux d'\code{etats\_a\_date()} pour
+la garantie \code{deces} et la famille «~engagement~», non exclus pour
+cette famille et non clos. Les capitaux non réclamés sont les dossiers qui
+remplissent le critère déclaré par le plan, réunion de
+\code{beneficiaire\_non\_identifie} (au moins un bénéficiaire retenu du
+dossier de qualité \code{non\_identifie}) et de \code{sans\_evenement}
+(aucun événement retenu du dossier d'effet postérieur à l'arrêté diminué du
+nombre de mois déclaré, et une date d'ouverture au plus égale à cette
+date)\fsp; les sinistres déclarés non réglés sont les autres. Un dossier
+clos, dont celui clos par un dépôt à la Caisse des dépôts et consignations,
+n'entre dans aucun des deux postes. Les décès que l'organisme ne connaît
+pas sont des sinistres tardifs, qui ne relèvent d'aucun de ces postes
+(section~\ref{sec:calculer-provisions}).
+
+\textbf{Capital.} Pour un dossier \code{capital\_du}, le capital est le
+montant en vigueur (résultat exact). Pour un dossier \code{ouvert}, il est
+reconstitué à partir des paramètres de la garantie souscrite du
+dossier~: \code{capital\_forfaitaire} s'il est présent, sinon l'assiette
+multipliée par \code{taux\_capital}, plus les majorations. Un paramètre lu
+à plusieurs valeurs, ou l'absence simultanée de \code{capital\_forfaitaire}
+et de \code{taux\_capital}, arrête le poste (\code{parametre\_non\_determine}).
+
+L'assiette est le salaire de référence de l'affiliation retenue, non
+exclue pour la famille «~engagement~», de clé (assuré du sinistre, contrat
+de la garantie souscrite du dossier, \textbf{collège} de la garantie
+souscrite du dossier), dont la période couvre la date de survenance. Le
+collège entre dans la clé (décision du mainteneur du 11~novembre~2026,
+M270)~: une affiliation d'un autre collège du même contrat ne porte pas
+l'assiette de la garantie du dossier. Si aucune affiliation de ce collège,
+ou plusieurs, couvrent la survenance, le poste est arrêté
+(\code{affiliation\_non\_determinee}), même si une affiliation d'un autre
+collège du contrat la couvre~: aucune affiliation ne se choisit en
+silence. En logique de Kleene, un collège inconnu, de la garantie souscrite
+du dossier ou d'une affiliation retenue non exclue de l'assuré au contrat
+couvrant la survenance, arrête aussi le poste, avec le même motif, car
+l'affiliation qui porte l'assiette n'est alors pas déterminée. Les deux
+postes lisent donc les colonnes \code{college} des garanties souscrites et
+des affiliations, inscrites dans \code{lectures.csv}~: un refus de l'une
+d'elles arrête le poste par les règles de la section~\ref{sec:garanties-arrets}.
+Un salaire manquant arrête le poste (\code{assiette\_non\_determinee}).
+
+Les majorations dépendent de l'instruction du sinistre. Instruit, chaque
+membre retenu de la famille rattaché au sinistre compte~: un conjoint
+vivant à la survenance, d'un lien déclaré par le plan, ouvre
+\code{majoration\_conjoint}\fsp; chaque enfant vivant à la survenance d'âge
+inférieur à la limite déclarée, ou à naître, ou handicapé, ouvre
+\code{majoration\_enfant} (résultat exact). Un enfant d'âge inconnu, à
+naître et handicapé exceptés, et une ligne de la famille du sinistre exclue
+pour la famille «~engagement~» rendent la majoration inconnue~: le poste est
+arrêté (\code{famille\_non\_determinee}), et la majoration n'est jamais
+comptée pour zéro. Non instruit, la majoration est l'espérance sous la
+structure familiale du plan, assiette $\times$ (\code{majoration\_conjoint}
+$\times$ taux de conjoint $+$ \code{majoration\_enfant} $\times$ nombre
+d'enfants), jugement d'expert. Une majoration absente des paramètres vaut
+zéro, son absence ayant ce sens dans le dictionnaire.
+
+\textbf{Facteur d'issue.} Le capital est pondéré par le complément à~1 de
+\code{taux\_sans\_suite} pour un dossier ouvert d'un sinistre décès,
+par \code{probabilite\_reconnaissance\_iad} pour un dossier ouvert d'une
+invalidité absolue et définitive, et par~1 pour un capital dû.
+
+\textbf{Solde revalorisé.} Le solde à l'arrêté~$A$ est
+\[
+\text{solde} = C \cdot F(s, A) - \sum_j P_j \cdot F(r_j, A),
+\]
+où $C$ est le capital, $s$ la date de survenance, $P_j$ les prestations de
+capital retenues du dossier (paiements et régularisations, signés), $r_j$
+leurs dates de règlement et $F$ le facteur de revalorisation légale de
+\code{facteur\_revalorisation()}~: produit, sur les années civiles~$y$ qui
+coupent l'intervalle, de $1 + r_y\, j_y / J_y$ (prorata \code{simple}) ou
+de $(1 + r_y)^{j_y / J_y}$ (prorata \code{compose}), où $j_y$ est le
+nombre de jours de l'année dans l'intervalle, $J_y$ la longueur de l'année
+selon la convention de décompte des jours, et $r_y$ le taux retenu par le
+plan pour l'année. Une année antérieure ou égale à celle de l'arrêté sans
+taux est refusée (\code{plan\_incomplet}, le message nommant l'année et le
+premier dossier). Un solde nul ou négatif donne une provision nulle, et le
+dossier n'est pas restitué. Les frais sont le chargement déclaré appliqué
+au montant. La revalorisation d'avant la connaissance du décès suit les
+mêmes taux~: c'est une limite, le dictionnaire ne portant aucune clause
+contractuelle de revalorisation.
+
+\textbf{Méthodes.} Le montant est le solde revalorisé à l'arrêté, prolongé
+jusqu'à l'horizon de la méthode~:
+
+\begin{center}
+\small
+\rowcolors{2}{tablerow}{white}
+\begin{tabular}{@{}>{\raggedright\arraybackslash}p{5.3cm}>{\raggedright\arraybackslash}p{2.0cm}>{\raggedright\arraybackslash}p{7.8cm}@{}}
+\rowcolor{tableheader}
+\textcolor{financeblue}{\textbf{Méthode}} & \textcolor{financeblue}{\textbf{Statut}} & \textcolor{financeblue}{\textbf{Horizon}} \\
+\code{capital\_dossier} & recommandée & L'arrêté. \\
+\code{capital\_revalorise} & recommandée & L'arrêté. \\
+\code{capital\_dossier\_reglement} & alternative & L'arrêté plus le délai de règlement déclaré. \\
+\code{capital\_revalorise\_reglement} & alternative & La date de déclaration plus dix ans (dépôt à la Caisse des dépôts et consignations, Code des assurances, art.~L132-27-2, I, la date de déclaration tenant lieu de date de prise de connaissance du décès), ou l'arrêté plus la durée sans dépôt déclarée pour un décès antérieur au 1er~janvier~2015 au titre d'une temporaire décès (même article)\fsp; si l'horizon est au plus l'arrêté, le facteur vaut~1 et un indicateur \code{depot\_cdc\_echu} le signale. \\
+\end{tabular}
+\end{center}
+
+\noindent Au-delà de l'arrêté, le facteur emploie les taux déclarés pour
+les années postérieures, puis le taux futur déclaré. Chaque dossier a un
+échéancier de deux flux, le capital et les frais, datés de l'horizon (au
+plus tôt le lendemain de l'arrêté) et pondérés par le facteur d'issue,
+sans actualisation~; sa provision est rendue par
+\code{valeur\_actuelle\_probable()}, seule fonction de valeur actuelle
+probable du package. L'absence d'actualisation est une convention du plan
+de comptes, non une règle d'un texte pour la vie, et le choix entre
+l'horizon de l'arrêté et celui du règlement est un jugement d'expert déclaré
+dans le plan.
+
+\textbf{Statut.} Le statut d'un dossier est \code{exact} sous les taux
+déclarés, et \code{jugement\_expert} pour une méthode «~règlement~», pour un
+capital reconstitué sous la structure familiale du plan, ou sous un facteur
+d'issue inférieur à~1. Le statut d'une cellule est le plus faible de ceux de
+ses dossiers (\code{statut\_le\_plus\_faible()}). Aucune hypothèse par
+défaut n'entre dans ce statut, et la colonne \code{hypotheses\_defaut} des
+dossiers est vide~: en B2, P1 et P2 ne lisent la valeur d'aucune hypothèse
+(D03a déclarée en hypothèse n'est pas lue, l'âge restant inconnu). Les
+hypothèses de visibilité D02b et D03g, appliquées par la vue à un arrêté
+antérieur à l'extraction, décident de la visibilité de lignes que lisent
+ces postes sans marquer le dossier~; elles restent déclarées au bilan
+(\code{hypotheses\_defaut}). C'est un écart à la règle de la spécification
+(§~5.3, statut \code{jugement\_expert} «~si une hypothèse entre dans le
+montant~»), signalé (issue~87).
+
+\textbf{Indicateurs.} Chaque poste émet une ligne \code{R132\_3\_1} par
+année de taux de revalorisation employée, années postérieures à l'arrêté
+comprises (section~\ref{sec:tables-indicateurs}). Un plan qui déclare une
+méthode à l'horizon de l'arrêté sur l'un des deux postes et une méthode
+«~règlement~» sur l'autre est admis, avec une ligne
+\code{methode\_revalorisation\_mixte}.
 
 
 \partie{Partie X}{Module triangle}
@@ -2906,11 +3173,13 @@ diagnostics. Il ne peut appeler que \code{garanties}, \code{donnees} et
 % =============================================================================
 
 Le module \code{risque\_en\_cours} porte la famille de calcul «~risque en
-cours~»~: limites du contrat et provision pour risques croissants (PRC),
-hors de la première version. Il ne peut appeler que \code{engagement},
-\code{tables}, \code{garanties}, \code{donnees} et \code{outils}. Dans
-l'état du code, il calcule en comptes sociaux la provision mathématique de
-la temporaire décès (contrats individuels et collectifs)\fsp; aucune de ses
+cours~»~: limites du contrat et provision pour risques croissants (PRC).
+Par décision du mainteneur (M118), il entre dès la première version, avec
+la provision mathématique de la temporaire décès. Il ne peut appeler que
+\code{engagement}, \code{tables}, \code{garanties}, \code{donnees} et
+\code{outils}. Dans l'état du code, il calcule en comptes sociaux la
+provision mathématique de la temporaire décès, contrats individuels et
+collectifs (section~\ref{sec:risque-en-cours-p3})\fsp; aucune de ses
 fonctions n'est exportée.
 
 \begin{center}
@@ -2925,6 +3194,96 @@ fonctions n'est exportée.
 \code{provisions\_collectives()} & \code{vue}, \code{plan} & Calcule, par contrat collectif, la provision au prorata des cotisations nettes de chargement sur les jours postérieurs à l'arrêté (\code{prorata\_cotisation}). \\
 \end{tabular}
 \end{center}
+
+% =============================================================================
+\section{Provision mathématique de la temporaire décès}
+\label{sec:risque-en-cours-p3}
+% =============================================================================
+
+La provision mathématique de la temporaire décès est le seul poste de la
+famille «~risque en cours~» dans l'état du code (décision du mainteneur
+M118 ; spécification de la branche B2, §~5.5). Elle a deux champs, déclarés
+séparément par le plan~: les contrats individuels et les contrats
+collectifs. Elle n'a pas de dossier~: ses unités sont des contrats.
+
+\textbf{Champ individuel~: population.} Sont retenues les garanties
+souscrites \code{deces}, retenues, de version en vigueur à l'arrêté, de
+contrats individuels retenus d'effet au plus l'arrêté, dont la couverture
+est en cours à l'arrêté~: la fin de couverture, le plus tôt du terme du
+contrat, de la date à laquelle l'assuré atteint \code{age\_fin\_garantie}
+(selon la convention d'âge) et de la fin du contrat quand elle est connue à
+l'arrêté, est postérieure à l'arrêté. Un contrat dont l'assuré a un
+sinistre \code{deces} ou \code{iad} retenu survenu au plus l'arrêté en sort~:
+il relève des sinistres déclarés non réglés. Le capital est
+\code{capital\_forfaitaire}. Un paramètre lu manquant ou à plusieurs
+valeurs (\code{capital\_forfaitaire}, \code{age\_fin\_garantie} et, sous la
+prime déclarée pour un contrat à primes périodiques,
+\code{prime\_periodique}), une date de naissance manquante ou une fin de
+couverture indéterminée arrêtent le poste
+(\code{parametre\_non\_determine}, premier contrat en cause).
+
+\textbf{Champ individuel~: échéancier.} Les bornes sont l'arrêté, chaque
+date de pas postérieure (années ou mois d'assurance, comptés depuis la date
+d'effet) et la fin de couverture. L'âge de l'année d'assurance~$k$ est l'âge
+à la date d'effet plus~$k$~; les probabilités viennent de la table
+\code{mortalite\_tarif}, les fractions d'année d'âge suivant la convention
+de répartition déclarée. Le capital est payé à la fin du pas ou en son
+milieu, pondéré par la probabilité de décès dans le pas sachant la survie à
+l'arrêté\fsp; chaque échéance de prime postérieure à l'arrêté est un flux
+négatif pondéré par la survie (une échéance datée de l'arrêté est
+passée)\fsp; en prime unique, des frais de gestion annuels, fraction
+déclarée du capital, sont payés à chaque anniversaire postérieur à l'arrêté
+et antérieur à la fin de couverture. Les valeurs actuelles sont rendues par
+\code{valeur\_actuelle\_probable()} du module \code{engagement}.
+
+\textbf{Champ individuel~: méthodes.} Sous \code{prospective\_prime\_pure}
+(recommandée), la prime pure est recalculée par équivalence à la date
+d'effet, avec la table du tarif et le taux du tarif du contrat
+(\code{taux\_technique\_tarif})~: $P = A_{\text{effet}} /
+\ddot{a}_{\text{effet}}$, où $A$ est la valeur actuelle des capitaux et
+$\ddot{a}$ celle des échéances de prime unitaires. En primes périodiques,
+la prime est zillmérisée~: $P_z = P + \alpha\, C / \ddot{a}_{\text{effet}}$,
+où $\alpha$ est le chargement d'acquisition déclaré et $C$ le capital. La
+provision est la valeur actuelle probable des capitaux et des frais moins
+celle des primes, au taux technique retenu par le plan (valeur déclarée ou
+taux du tarif), avec un plancher nul par contrat (Code des assurances,
+art.~A343-1-1, qui impose aussi, en primes périodiques, la prise en compte
+des chargements d'acquisition dans l'engagement du payeur de primes~; la
+valeur de rachat et la provision du capital réduit, autres planchers de cet
+article, sont sans objet pour une temporaire décès, qui ne comporte «~ni
+réduction ni rachat~», art.~L132-23). Sous
+\code{prospective\_prime\_declaree} (alternative), la prime est
+\code{prime\_periodique} nette du chargement de cotisation déclaré. Le
+témoin \code{retrospective}, valeur accumulée des primes passées moins le
+coût du risque aux mêmes bases, est égal à la prospective sous les mêmes
+bases~; ce recoupement exact est testé, et le témoin n'est jamais restitué.
+Un taux du tarif manquant suit l'hypothèse D03h déclarée par le plan, sans
+quoi l'appel est refusé (\code{declaration\_manquante})~; le contrat est
+alors au statut \code{jugement\_expert}, et \code{exact} sinon.
+
+\textbf{Champ collectif.} Sous \code{prorata\_cotisation}, la provision
+d'un contrat collectif est la somme, sur les cotisations retenues
+d'émission, d'annulation et de régularisation (signées) de ses garanties
+\code{deces}, dont la fin de période est postérieure à l'arrêté, du montant
+net du chargement de cotisation déclaré multiplié par la part des jours de
+la période postérieurs à l'arrêté. C'est une approximation (égalité si le
+risque est uniforme sur la période et la prime pure), restituée au statut
+\code{approximation\_numerique} faute d'un statut plus juste dans la liste
+fermée.
+
+\textbf{Cellule et indicateurs.} Le poste a une seule cellule, qui réunit
+les deux champs~: sa méthode s'écrit
+\code{individuel:<méthode>;collectif:<méthode>}, son statut de méthode est
+\code{alternative} dès qu'un champ l'est, et son nombre de dossiers est
+nul. Pour chaque contrat individuel valorisé, le poste émet une ligne
+\code{tarif\_vie}, qui signale un taux retenu supérieur au taux du tarif
+(règlement ANC 2015-11, art.~142-3), et deux lignes \code{A132\_1}, à la
+date de souscription et à l'arrêté~; seule la première confronte le texte,
+A132-1 s'appliquant «~en fonction des taux en vigueur au moment de la
+souscription~», la seconde étant un indicateur d'information (M85~;
+section~\ref{sec:tables-indicateurs}).
+Une table lue hors de ses axes sous la déclaration \code{refus} arrête le
+poste (\code{hors\_axes}).
 
 
 \partie{Partie XII}{Module regles\_comptables}
