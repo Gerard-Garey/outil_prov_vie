@@ -362,7 +362,9 @@ provisions_collectives <- function(vue, plan) {
 # n'a pas de dossier), echeanciers (contrats individuels, cle = id_contrat, flux à l'arrêté au
 # taux retenu, avant plancher), indicateurs (par contrat individuel valorisé : tarif_vie, taux
 # retenu > taux du tarif, et deux lignes A132_1, à la date d'effet de la version de garantie
-# et à l'arrêté)). Une seule cellule pour le poste (champs individuel et collectif réunis) :
+# et à l'arrêté), contrats (id_contrat, champ `individuel` ou `collectif`, montant après
+# plancher, statut_resultat ; un contrat par champ, triés ; vide pour un poste arrêté : unités
+# de la restitution par segment, #67)). Une seule cellule pour le poste (champs individuel et collectif réunis) :
 # méthode « individuel:<méthode>;collectif:<méthode> », statut_methode `alternative` si l'une
 # l'est, statut_resultat le plus faible des contrats (jugement_expert si D03h entre dans le
 # montant ; approximation_numerique pour un contrat collectif), nombre_dossiers 0. Poste
@@ -401,10 +403,13 @@ calculer_risque_en_cours <- function(vue, plan, tables, catalogue, garantie, pos
                       statut_calcul = if (is.na(motif)) "calcule" else "arrete", motif_arret = motif, stringsAsFactors = FALSE)
     res[COLONNES_CELLULES]
   }
+  contrats_vides <- data.frame(id_contrat = character(0), champ = character(0), montant = numeric(0),
+                               statut_resultat = character(0), stringsAsFactors = FALSE)
   arreter <- function(motif, identifiant) {
     cel <- cellule(NA_real_, NA_character_, motif)
     attr(cel, "identifiant_arret") <- identifiant
-    list(cellules = cel, dossiers = dossiers, echeanciers = echeancier_vide, indicateurs = vide_ind)
+    list(cellules = cel, dossiers = dossiers, echeanciers = echeancier_vide, indicateurs = vide_ind,
+         contrats = contrats_vides)
   }
   pa <- postes_a_arreter(catalogue, vue$bilan, plan$postes, parties_ligne())$postes
   motif_bilan <- pa$motif_arret[pa$garantie == garantie & pa$poste == poste]
@@ -438,6 +443,18 @@ calculer_risque_en_cours <- function(vue, plan, tables, catalogue, garantie, pos
                               probabilite = e$probabilite, actualisation = e$actualisation,
                               valeur_actuelle = e$valeur_actuelle, stringsAsFactors = FALSE)[COLONNES_ECHEANCIERS]
   }
+  # contrats valorisés, par champ (restitution par segment, #67) : montant après plancher
+  contrats <- rbind(contrats_vides,
+                    if (!is.null(ct)) data.frame(id_contrat = ct$id_contrat, champ = rep("individuel", nrow(ct)),
+                                                 montant = ct$montant,
+                                                 statut_resultat = ifelse(ct$hypothese_d03h, "jugement_expert", "exact"),
+                                                 stringsAsFactors = FALSE),
+                    if (nrow(col)) data.frame(id_contrat = col$id_contrat, champ = rep("collectif", nrow(col)),
+                                              montant = col$montant,
+                                              statut_resultat = rep("approximation_numerique", nrow(col)),
+                                              stringsAsFactors = FALSE))
+  contrats <- contrats[order(contrats$id_contrat, contrats$champ, method = "radix"), , drop = FALSE]
+  rownames(contrats) <- NULL
   list(cellules = cellule(total, statut_le_plus_faible(statuts), NA_character_), dossiers = dossiers, echeanciers = echeanciers,
-       indicateurs = indicateurs)
+       indicateurs = indicateurs, contrats = contrats)
 }

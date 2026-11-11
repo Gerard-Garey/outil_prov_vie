@@ -487,8 +487,8 @@ exports <- getNamespaceExports("provie")
 verifier("exports du § 2.9 : valider_plan, canoniser_plan, ecrire_plan, lire_plan, ecrire_fiche, lire_fiche, catalogue_garanties",
          all(c("valider_plan", "canoniser_plan", "ecrire_plan", "lire_plan", "ecrire_fiche", "lire_fiche",
                "catalogue_garanties") %in% exports))
-verifier("construire_fiche(), .controler_rejeu() et rejouer_fiche() ne sont pas exportés (rejouer_fiche : issue 4)",
-         !any(c("construire_fiche", ".controler_rejeu", "rejouer_fiche") %in% exports))
+verifier("construire_fiche() et .controler_rejeu() ne sont pas exportés ; rejouer_fiche() l'est, avec calculer_provisions() (issue 4, #67)",
+         !any(c("construire_fiche", ".controler_rejeu") %in% exports) && "rejouer_fiche" %in% exports)
 verifier("méthodes print et format de plan_calcul et fiche_calcul enregistrées",
          all(vapply(list(c("format", "plan_calcul"), c("print", "plan_calcul"), c("format", "fiche_calcul"),
                          c("print", "fiche_calcul")),

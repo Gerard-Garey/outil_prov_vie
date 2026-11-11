@@ -67,3 +67,13 @@ export(formats_tables)
 # Méthodes de la classe table_provie (ADR 0010, point 13) : décomptes seuls.
 S3method(format, table_provie)
 S3method(print, table_provie)
+# Module `calculer_provisions` (#67) : calculer_provisions(), point d'entrée unique du moteur
+# (ADR 0006 ; ADR 0010, point 5), appelé hors du package par l'application (bouton « Relancer
+# les calculs ») et par l'utilisateur sans Shiny ; rejouer_fiche(), appelée par l'utilisateur
+# sans Shiny et par les tests (rejeu d'une fiche relue par lire_fiche(), ADR 0007, point 6 ;
+# ADR 0010, point 13 ; spécification de B2, § 2.1).
+export(calculer_provisions)
+export(rejouer_fiche)
+# Méthodes de la classe resultat_provie (ADR 0010, point 13) : décomptes seuls.
+S3method(format, resultat_provie)
+S3method(print, resultat_provie)

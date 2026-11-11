@@ -472,6 +472,75 @@ etats_a_date <- function(vue, garanties, famille) {
 # par `plan` (graphe de l'ADR 0010, point 1 : `plan` appelle `donnees`).
 REGLES_SEGMENTATION_B2 <- c("contrat", "nature_contrat", "annee_survenance", "ligne_activite")
 
+# Segments des unités de calcul de la vue `vue` (objet vue_a_date()) pour les segmentations
+# déclarées `segmentations` (plan$perimetre$segmentations canonique : nom -> list(regle,
+# correspondance)) et les garanties `garanties` (codes) (ADR 0010, points 9 et 17 ; spécification
+# de B2, § 2.2, § 5.5 et § 7.7). Unités : chaque dossier retenu dont la garantie souscrite retenue a un
+# code de `garanties` (id_dossier, id_sinistre, id_contrat de la garantie souscrite) ; chaque
+# contrat retenu qui porte une garantie souscrite retenue de ces codes (id_dossier et
+# id_sinistre NA). Clé : `contrat` : id_contrat ; `nature_contrat` : contrats.nature_contrat ;
+# `ligne_activite` : correspondance[code_garantie] (pour un contrat, une valeur par code
+# porté, réunies par « ; » triées) ; `annee_survenance` : année de sinistres.date_survenance du
+# sinistre du dossier, `hors_survenance` pour un contrat (erratum v1.0.12). Les règles sont
+# celles de REGLES_SEGMENTATION_B2, contrôlées par valider_plan() à l'étape `plan` de
+# calculer_provisions() : une autre règle ici est une erreur de programmation. Rend le
+# data.frame `segments` du bilan (id_dossier, id_sinistre, id_contrat, segmentation, segment),
+# trié par segmentation, id_contrat, id_dossier (sort radix, NA en tête) ; segment NA si la clé
+# est hors de la vue. Sans point : appelée par l'orchestration, non exportée.
+segments_vue <- function(vue, segmentations, garanties) {
+  if (!inherits(vue, "vue_provie")) stop("segments_vue() : `vue` doit \u00eatre un objet vue_provie", call. = FALSE)
+  vide <- data.frame(id_dossier = character(0), id_sinistre = character(0), id_contrat = character(0),
+                     segmentation = character(0), segment = character(0), stringsAsFactors = FALSE)
+  if (length(segmentations) == 0L) return(vide)
+  regles <- vapply(segmentations, function(s) s$regle, "")
+  if (!all(regles %in% REGLES_SEGMENTATION_B2)) {
+    stop("erreur interne de provie : r\u00e8gle de segmentation hors de REGLES_SEGMENTATION_B2 (",
+         paste(setdiff(regles, REGLES_SEGMENTATION_B2), collapse = ", "), ")", call. = FALSE)
+  }
+  ctx <- vue$ctx
+  vv <- function(t, c1) .valeurs_vue(ctx, t, c1)
+  r_gs <- which(ctx$retenu$garanties_souscrites & vv("garanties_souscrites", "code_garantie") %in% garanties)
+  gs_id <- as.character(vv("garanties_souscrites", "id_garantie_souscrite"))[r_gs]
+  gs_contrat <- as.character(vv("garanties_souscrites", "id_contrat"))[r_gs]
+  gs_code <- vv("garanties_souscrites", "code_garantie")[r_gs]
+  ct_id <- as.character(vv("contrats", "id_contrat"))
+  ct_nature <- vv("contrats", "nature_contrat")
+  # unités : dossiers, puis contrats
+  k <- which(ctx$retenu$dossiers)
+  i_gs <- match(as.character(vv("dossiers", "id_garantie_souscrite"))[k], gs_id, incomparables = NA)
+  k <- k[!is.na(i_gs)]
+  i_gs <- i_gs[!is.na(i_gs)]
+  contrats_u <- sort(unique(gs_contrat[gs_contrat %in% ct_id[ctx$retenu$contrats]]), method = "radix")
+  u_dossier <- c(as.character(vv("dossiers", "id_dossier"))[k], rep(NA_character_, length(contrats_u)))
+  u_sinistre <- c(as.character(vv("dossiers", "id_sinistre"))[k], rep(NA_character_, length(contrats_u)))
+  u_contrat <- c(gs_contrat[i_gs], contrats_u)
+  codes_contrat <- vapply(contrats_u, function(c1) paste(sort(unique(gs_code[gs_contrat == c1]), method = "radix"),
+                                                         collapse = ";"), "", USE.NAMES = FALSE)
+  u_codes <- c(gs_code[i_gs], codes_contrat)
+  si_survenance <- vv("sinistres", "date_survenance")
+  u_annee <- c(as.character(as.POSIXlt(si_survenance[match(u_sinistre[seq_along(k)],
+                                                            as.character(vv("sinistres", "id_sinistre")),
+                                                            incomparables = NA)])$year + 1900L),
+               rep("hors_survenance", length(contrats_u)))
+  lignes <- lapply(names(segmentations), function(nom) {
+    s <- segmentations[[nom]]
+    segment <- switch(s$regle,
+      contrat = u_contrat,
+      annee_survenance = u_annee,
+      nature_contrat = ct_nature[match(u_contrat, ct_id, incomparables = NA)],
+      ligne_activite = vapply(u_codes, function(x) {
+        paste(sort(unique(vapply(strsplit(x, ";", fixed = TRUE)[[1L]], function(g) s$correspondance[[g]], "")),
+                   method = "radix"), collapse = ";")
+      }, "", USE.NAMES = FALSE))
+    data.frame(id_dossier = u_dossier, id_sinistre = u_sinistre, id_contrat = u_contrat,
+               segmentation = rep(nom, length(u_contrat)), segment = as.character(segment), stringsAsFactors = FALSE)
+  })
+  res <- do.call(rbind, lignes)
+  res <- res[order(res$segmentation, res$id_contrat, res$id_dossier, method = "radix", na.last = FALSE), , drop = FALSE]
+  rownames(res) <- NULL
+  res
+}
+
 # --- Refus d'appel -----------------------------------------------------------------
 
 .refus_structure <- function(message, ...) {
