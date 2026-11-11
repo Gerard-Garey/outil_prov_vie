@@ -530,7 +530,8 @@ statut_methode_catalogue <- function(catalogue, garantie, poste, champ, methode)
 # assiette_non_determinee, famille_non_determinee) : cellule `arrete`, montant et nombre de
 # dossiers NA, aucun dossier ni échéancier ; le premier dossier en cause est l'attribut `identifiant_arret` de la cellule.
 # Population (§ 5.3, § 5.4) : dossiers de etats_a_date(vue, "deces", "engagement") non exclus pour la
-# famille engagement, non clos ; P2 = ceux qui remplissent le critère du plan (réunion), P1 =
+# famille engagement, de garantie souscrite hors de garanties_couverture_exclue(vue,
+# "engagement") (erratum v1.0.13), non clos ; P2 = ceux qui remplissent le critère du plan (réunion), P1 =
 # les autres ; un dossier de solde au plus nul n'entre pas dans `dossiers`. Indicateurs : une
 # ligne R132_3_1 par année de taux_par_annee employée ; la ligne methode_revalorisation_mixte
 # (émise par l'appel de P1) ; une ligne depot_cdc_echu par dossier de P2 dont l'horizon de
@@ -562,7 +563,11 @@ calculer_engagement <- function(vue, plan, tables, catalogue, garantie, poste) {
   etats <- etats_a_date(vue, garantie, "engagement")
   i_dos <- match(etats$id_dossier, valeurs_vue(vue, "dossiers", "id_dossier"), incomparables = NA)
   exclu <- vue$exclu$engagement
-  garde <- !exclu$dossiers[i_dos] & etats$etat_dossier != "clos"
+  # couverture exclue (erratum v1.0.13) : dossier d'une garantie souscrite, ou d'un contrat, exclu
+  # pour engagement hors de la population (garanties_couverture_exclue(), seule implémentation)
+  couverture_exclue <- as.character(valeurs_vue(vue, "dossiers", "id_garantie_souscrite"))[i_dos] %in%
+    garanties_couverture_exclue(vue, "engagement")
+  garde <- !exclu$dossiers[i_dos] & !couverture_exclue & etats$etat_dossier != "clos"
   etats <- etats[garde, , drop = FALSE]
   # partition P1 / P2 selon le critère de P2 (réunion des critères déclarés)
   p2 <- plan$postes[[garantie]]$capitaux_non_reclames$parametres

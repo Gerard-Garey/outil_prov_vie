@@ -410,16 +410,18 @@ print.resultat_provie <- function(x, ...) {
 }
 
 # Enjeu par poste (spécification `donnees`, § 4.5, point 3 ; spécification de B2, § 6.4, point 7,
-# et § 7.7) : chaque rangée de l'enjeu du bilan de poste `ensemble`, d'une garantie du plan et
-# d'une table renseignée (motif autre que `ensemble`) est suivie d'une copie par poste de cette
-# garantie au périmètre (ordre du catalogue) qui aurait lu les lignes de la rangée ; la copie
-# porte le code du poste, les autres colonnes inchangées. Rangée de refus (action `refus`) :
-# postes de la même garantie nommés dans `postes_arretes` des lignes de `refus_tables`
-# (`refus_tables`, complété par postes_a_arreter()) de mêmes `table`, `colonne` et `motif` ;
-# le prédicat « le poste lit » est donc celui de l'arrêt (§ 6.2, parties de ligne comprises).
-# Autre rangée : postes dont la famille est celle de la rangée (toute famille pour la famille
-# `ensemble`) et qui lisent la table de la rangée (lectures.csv), la colonne de la rangée quand
-# elle est renseignée.
+# erratum v1.0.13, et § 7.7) : chaque rangée de l'enjeu du bilan de poste `ensemble`, d'une
+# garantie du plan et d'une table renseignée (motif autre que `ensemble`) est suivie d'une copie
+# par poste de cette garantie au périmètre (ordre du catalogue), selon son action ; la copie
+# porte le code du poste, les autres colonnes inchangées (sans partage entre postes) :
+#   - `refus` : postes de la même garantie nommés dans `postes_arretes` des lignes de
+#     `refus_tables` (complété par postes_a_arreter()) de mêmes `table`, `colonne` et `motif`
+#     (prédicat de l'arrêt, § 6.2, parties de ligne comprises) ;
+#   - `exclure` : postes dont la famille est celle de la rangée (toute famille pour la famille
+#     `ensemble`) qui lisent une colonne quelconque de la table de la rangée (lectures.csv) :
+#     l'exclusion écarte la ligne entière ;
+#   - `conserver` (et toute autre action) : postes de la famille de la rangée (toute famille
+#     pour `ensemble`) qui lisent la table de la rangée et, quand elle est renseignée, sa colonne.
 .enjeu_par_poste <- function(enjeu, postes_plan, catalogue, refus_tables) {
   if (nrow(enjeu) == 0L) return(enjeu)
   lec <- catalogue$lectures
@@ -440,9 +442,10 @@ print.resultat_provie <- function(x, ...) {
       lit <- if (identical(enjeu$action[i], "refus")) {
         paste(pp$garantie[j], pp$poste[j], sep = "/") %in% arretes
       } else {
+        regle_table <- identical(enjeu$action[i], "exclure")
         enjeu$famille[i] %in% c(pp$famille[j], "ensemble") &&
           any(lec$code_garantie == pp$garantie[j] & lec$poste == pp$poste[j] & lec$table == enjeu$table[i] &
-                (is.na(enjeu$colonne[i]) | lec$colonne %in% enjeu$colonne[i]))
+                (regle_table | is.na(enjeu$colonne[i]) | lec$colonne %in% enjeu$colonne[i]))
       }
       if (lit) {
         idx <- c(idx, i)

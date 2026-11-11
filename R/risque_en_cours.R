@@ -133,15 +133,18 @@ provisions_individuelles <- function(vue, plan, tables, temoin) {
   exclu <- vue$exclu$risque_en_cours
   vide <- list(contrats = NULL, echeancier = NULL, arret = NA_character_, identifiant = NA_character_)
   # garanties souscrites deces retenues, version en vigueur à l'arrêté, de contrats individuels
-  gs <- which(vue$retenu$garanties_souscrites & !exclu$garanties_souscrites &
-                vv("garanties_souscrites", "code_garantie") %in% "deces")
+  # couverture exclue (erratum v1.0.13) : garantie souscrite, ou contrat, exclu pour risque_en_cours
+  # hors de la population (garanties_couverture_exclue(), seule implémentation), avant toute lecture
+  gs <- which(vue$retenu$garanties_souscrites & vv("garanties_souscrites", "code_garantie") %in% "deces")
+  gs <- gs[!(as.character(vv("garanties_souscrites", "id_garantie_souscrite"))[gs] %in%
+               garanties_couverture_exclue(vue, "risque_en_cours"))]
   g_effet <- as.numeric(vv("garanties_souscrites", "date_effet"))[gs]
   g_fin <- as.numeric(vv("garanties_souscrites", "date_fin"))[gs]
   gs <- gs[g_effet <= a & (is.na(g_fin) | g_fin > a)]
   i_ct <- match(as.character(vv("garanties_souscrites", "id_contrat")[gs]), as.character(vv("contrats", "id_contrat")),
                 incomparables = NA)
   garde <- !is.na(i_ct)
-  garde[garde] <- vue$retenu$contrats[i_ct[garde]] & !exclu$contrats[i_ct[garde]] &
+  garde[garde] <- vue$retenu$contrats[i_ct[garde]] &
     vv("contrats", "nature_contrat")[i_ct[garde]] %in% "individuel" &
     as.numeric(vv("contrats", "date_effet"))[i_ct[garde]] <= a
   gs <- gs[garde]
@@ -333,10 +336,15 @@ provisions_collectives <- function(vue, plan) {
   a <- as.numeric(vue$bilan$vue$date_arrete)
   exclu <- vue$exclu$risque_en_cours
   taux_c <- plan$frais$deces[[.POSTE_P3]][[.REFERENTIEL_P3]]$taux_chargement_cotisation
-  ct <- which(vue$retenu$contrats & !exclu$contrats & !(vv("contrats", "nature_contrat") %in% "individuel"))
-  gs <- which(vue$retenu$garanties_souscrites & !exclu$garanties_souscrites &
-                vv("garanties_souscrites", "code_garantie") %in% "deces" &
-                as.character(vv("garanties_souscrites", "id_contrat")) %in% as.character(vv("contrats", "id_contrat")[ct]))
+  # couverture exclue (erratum v1.0.13) : garantie souscrite, ou contrat, exclu pour risque_en_cours
+  # hors du champ (garanties_couverture_exclue(), seule implémentation), avant toute lecture du contrat
+  gs <- which(vue$retenu$garanties_souscrites & vv("garanties_souscrites", "code_garantie") %in% "deces")
+  gs <- gs[!(as.character(vv("garanties_souscrites", "id_garantie_souscrite"))[gs] %in%
+               garanties_couverture_exclue(vue, "risque_en_cours"))]
+  ct <- which(vue$retenu$contrats & as.character(vv("contrats", "id_contrat")) %in%
+                as.character(vv("garanties_souscrites", "id_contrat"))[gs])
+  ct <- ct[!(vv("contrats", "nature_contrat")[ct] %in% "individuel")]
+  gs <- gs[as.character(vv("garanties_souscrites", "id_contrat"))[gs] %in% as.character(vv("contrats", "id_contrat")[ct])]
   co <- which(vue$retenu$cotisations & !exclu$cotisations & vv("cotisations", "nature_mouvement") %in% .NATURES_PRORATA &
                 as.character(vv("cotisations", "id_garantie_souscrite")) %in%
                 as.character(vv("garanties_souscrites", "id_garantie_souscrite")[gs]))

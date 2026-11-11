@@ -463,6 +463,35 @@ etats_a_date <- function(vue, garanties, famille) {
   res[.COLONNES_ETATS]
 }
 
+# Garanties souscrites dont la couverture est exclue pour la famille `famille` (code de
+# FAMILLES_CALCUL) (spécification de B2, § 5.1, § 5.3, § 5.5 et § 5.6, erratum v1.0.13) :
+# identifiants (id_garantie_souscrite, triés radix) des garanties souscrites retenues dont la
+# ligne de garanties_souscrites est exclue pour la famille (vue$exclu[[famille]]), ou dont le
+# contrat a une ligne retenue de contrats exclue pour la famille. Seule implémentation de la
+# règle de population : un dossier (P1, P2, famille engagement) ou un contrat (P3, famille
+# risque_en_cours) d'une telle garantie sort de la population, sans arrêt ; seules les clés
+# (id_garantie_souscrite, id_contrat) des lignes exclues sont lues. Une exclusion pour une
+# autre famille est sans effet ; le dictionnaire (§ 1.10) n'est pas étendu : vue$exclu des
+# autres tables est inchangé. Sans point : appelée par les familles engagement et
+# risque_en_cours et par segments_vue() ; non exportée.
+garanties_couverture_exclue <- function(vue, famille) {
+  if (!inherits(vue, "vue_provie")) {
+    stop("garanties_couverture_exclue() : `vue` doit \u00eatre un objet vue_provie", call. = FALSE)
+  }
+  if (!is.character(famille) || length(famille) != 1L || is.na(famille) || !(famille %in% FAMILLES_CALCUL)) {
+    stop(paste0("erreur interne de provie : garanties_couverture_exclue() : `famille` doit \u00eatre un code de ",
+                "FAMILLES_CALCUL (", paste(FAMILLES_CALCUL, collapse = ", "), ")"), call. = FALSE)
+  }
+  ctx <- vue$ctx
+  exclu <- vue$exclu[[famille]]
+  vv <- function(t, c1) .valeurs_vue(ctx, t, c1)
+  ct_exclus <- as.character(vv("contrats", "id_contrat"))[ctx$retenu$contrats & exclu$contrats]
+  r_gs <- ctx$retenu$garanties_souscrites
+  gs_exclue <- r_gs & (exclu$garanties_souscrites |
+                         as.character(vv("garanties_souscrites", "id_contrat")) %in% ct_exclus)
+  sort(unique(as.character(vv("garanties_souscrites", "id_garantie_souscrite"))[gs_exclue]), method = "radix")
+}
+
 # --- Segments ----------------------------------------------------------------------
 
 # Règles de segmentation admises en B2 (spécification de B2, § 2.2, erratum v1.0.12), parmi
@@ -476,9 +505,11 @@ REGLES_SEGMENTATION_B2 <- c("contrat", "nature_contrat", "annee_survenance", "li
 # déclarées `segmentations` (plan$perimetre$segmentations canonique : nom -> list(regle,
 # correspondance)) et les garanties `garanties` (codes) (ADR 0010, points 9 et 17 ; spécification
 # de B2, § 2.2, § 5.5 et § 7.7). Unités : chaque dossier retenu dont la garantie souscrite retenue a un
-# code de `garanties` (id_dossier, id_sinistre, id_contrat de la garantie souscrite) ; chaque
-# contrat retenu qui porte une garantie souscrite retenue de ces codes (id_dossier et
-# id_sinistre NA). Clé : `contrat` : id_contrat ; `nature_contrat` : contrats.nature_contrat ;
+# code de `garanties` et n'est pas dans garanties_couverture_exclue(vue, "engagement")
+# (id_dossier, id_sinistre, id_contrat de la garantie souscrite) ; chaque contrat retenu qui
+# porte une garantie souscrite retenue de ces codes hors de garanties_couverture_exclue(vue,
+# "risque_en_cours") (id_dossier et id_sinistre NA) (erratum v1.0.13 : aucune colonne d'une
+# ligne exclue n'est lue pour une unité). Clé : `contrat` : id_contrat ; `nature_contrat` : contrats.nature_contrat ;
 # `ligne_activite` : correspondance[code_garantie] (pour un contrat, une valeur par code
 # porté, réunies par « ; » triées) ; `annee_survenance` : année de sinistres.date_survenance du
 # sinistre du dossier, `hors_survenance` pour un contrat (erratum v1.0.12). Les règles sont
@@ -506,16 +537,23 @@ segments_vue <- function(vue, segmentations, garanties) {
   ct_id <- as.character(vv("contrats", "id_contrat"))
   ct_nature <- vv("contrats", "nature_contrat")
   # unités : dossiers, puis contrats
+  # couverture exclue (erratum v1.0.13) : un dossier d'une garantie souscrite exclue pour engagement
+  # (unités de P1 et P2) et un contrat dont les garanties souscrites sont exclues pour
+  # risque_en_cours (unités de P3) ne sont pas des unités : aucune colonne de la ligne exclue n'est lue
+  exclue_eng <- gs_id %in% garanties_couverture_exclue(vue, "engagement")
+  exclue_rec <- gs_id %in% garanties_couverture_exclue(vue, "risque_en_cours")
   k <- which(ctx$retenu$dossiers)
   i_gs <- match(as.character(vv("dossiers", "id_garantie_souscrite"))[k], gs_id, incomparables = NA)
+  i_gs[!is.na(i_gs)][exclue_eng[i_gs[!is.na(i_gs)]]] <- NA_integer_
   k <- k[!is.na(i_gs)]
   i_gs <- i_gs[!is.na(i_gs)]
-  contrats_u <- sort(unique(gs_contrat[gs_contrat %in% ct_id[ctx$retenu$contrats]]), method = "radix")
+  contrats_u <- sort(unique(gs_contrat[!exclue_rec & gs_contrat %in% ct_id[ctx$retenu$contrats]]), method = "radix")
   u_dossier <- c(as.character(vv("dossiers", "id_dossier"))[k], rep(NA_character_, length(contrats_u)))
   u_sinistre <- c(as.character(vv("dossiers", "id_sinistre"))[k], rep(NA_character_, length(contrats_u)))
   u_contrat <- c(gs_contrat[i_gs], contrats_u)
-  codes_contrat <- vapply(contrats_u, function(c1) paste(sort(unique(gs_code[gs_contrat == c1]), method = "radix"),
-                                                         collapse = ";"), "", USE.NAMES = FALSE)
+  codes_contrat <- vapply(contrats_u, function(c1) {
+    paste(sort(unique(gs_code[!exclue_rec & gs_contrat == c1]), method = "radix"), collapse = ";")
+  }, "", USE.NAMES = FALSE)
   u_codes <- c(gs_code[i_gs], codes_contrat)
   si_survenance <- vv("sinistres", "date_survenance")
   u_annee <- c(as.character(as.POSIXlt(si_survenance[match(u_sinistre[seq_along(k)],

@@ -460,6 +460,117 @@ for (sc in scenarios) {
            inherits(issue, "resultat_provie") || inherits(issue, "refus_provie"))
 }
 
+section("population sous couverture exclue (critère (4.1), § 5.3, § 5.5, § 5.6, erratum v1.0.13)")
+# Valeurs en dur de (a), (b) et (c) : § 7.7, critère (4.1) ; (a) et (c) constatées à la reprise
+# (P1 = P2 = 0) ; (b) : valeurs de la reprise de #67 (P3 sans CTC1).
+seg_nc_ct <- list(nc = list(regle = "nature_contrat"), ct = list(regle = "contrat"))
+calc_x <- function(b, ex) {
+  p_x <- within(p_c1, perimetre$segmentations <- seg_nc_ct)
+  p_x$donnees$exclusions <- ex
+  calculer_provisions(b, p_x, tid)
+}
+cel_x <- function(r, po, sg = "ensemble") {
+  x <- r$provisions[r$provisions$poste == po & r$provisions$segment == sg, c("montant", "nombre_dossiers", "statut_resultat")]
+  rownames(x) <- NULL
+  x
+}
+copies_x <- function(r) {
+  e <- r$donnees$enjeu
+  e <- e[e$poste != "ensemble" & e$table %in% c("contrats", "garanties_souscrites"), c("table", "motif", "famille", "action", "poste")]
+  e <- unique(e)
+  rownames(e) <- NULL
+  e
+}
+r_a <- calc_x(b_ct, excl_x("D02a", "engagement"))
+verifier_egal("(4.1) (a) CTC1 exclu pour engagement (D02a) : P1 = P2 = 0 (ensemble, 0 dossier, exact) ; aucune cellule de P1 ni de P2 dans les segments ; P3 inchangé (4 275,9861, avec CTC1) ; aucune ligne de dossiers ; exclusions D02a engagement exclure, 1 ligne, 5 dossiers",
+              list(cel_x(r_a, P1), cel_x(r_a, P2),
+                   sum(r_a$provisions$poste %in% c(P1, P2) & r_a$provisions$segmentation != "ensemble"),
+                   egal_mixte(cel_x(r_a, P3)$montant, 4275.9860504871), nrow(r_a$dossiers),
+                   as.list(r_a$donnees$exclusions[r_a$donnees$exclusions$action == "exclure",
+                                                  c("motif", "famille", "nombre_lignes", "nombre_dossiers")])),
+              list(data.frame(montant = 0, nombre_dossiers = 0L, statut_resultat = "exact", stringsAsFactors = FALSE),
+                   data.frame(montant = 0, nombre_dossiers = 0L, statut_resultat = "exact", stringsAsFactors = FALSE),
+                   0L, TRUE, 0L, list(motif = "D02a", famille = "engagement", nombre_lignes = 1L, nombre_dossiers = 5L)))
+verifier_egal("(4.1) (a) segments : aucune ligne de dossier (aucune colonne de la ligne de contrats exclue n'est lue pour une unité de P1 ou P2) ; enjeu : rangée contrats D02a engagement exclure copiée vers P1 et P2, risque_en_cours conserver vers P3 seul",
+              list(sum(!is.na(r_a$donnees$segments$id_dossier)), copies_x(r_a)),
+              list(0L, data.frame(table = "contrats", motif = "D02a", famille = c("engagement", "engagement", "risque_en_cours"),
+                                  action = c("exclure", "exclure", "conserver"), poste = c(P1, P2, P3), stringsAsFactors = FALSE)))
+r_b <- calc_x(b_ct, excl_x("D02a", "risque_en_cours"))
+verifier("(4.1) (b) CTC1 exclu pour risque_en_cours : P3 = 3 710,6710 (sans CTC1) ; P1 337 225,9591013698 et P2 103 936 inchangés",
+         egal_mixte(c(cel_x(r_b, P3)$montant, cel_x(r_b, P1)$montant, cel_x(r_b, P2)$montant),
+                    c(3710.6709819939, 337225.9591013698, 103936)))
+verifier_egal("(4.1) (b) enjeu : rangée contrats D02a risque_en_cours exclure copiée vers P3 seul ; engagement conserver vers aucun poste (P1 et P2 ne lisent pas contrats.date_fin)",
+              copies_x(r_b),
+              data.frame(table = "contrats", motif = "D02a", famille = "risque_en_cours", action = "exclure", poste = P3,
+                         stringsAsFactors = FALSE))
+r_c <- calc_x(b_gs, rbind(excl_x("D02a", "engagement"), excl_x("D10b", "aucune")))
+verifier_egal("(4.1) (c) GSC1 exclue pour engagement (D02a), D10b conserver partout : P1 = P2 = 0 (par la garantie souscrite exclue ; lignes de dossiers gardées sous D10b) ; P3 inchangé",
+              list(cel_x(r_c, P1)$montant, cel_x(r_c, P2)$montant, egal_mixte(cel_x(r_c, P3)$montant, 4275.9860504871),
+                   unique(r_c$donnees$exclusions$action[r_c$donnees$exclusions$motif == "D10b"])),
+              list(0, 0, TRUE, "conserver"))
+verifier("(4.1) (d) une seule implémentation : garanties_couverture_exclue() définie une fois, dans R/donnees.R ; appelée par calculer_engagement() et par provisions_individuelles() et provisions_collectives() (calculer_risque_en_cours())",
+         local({
+           defs <- unlist(lapply(list.files(file.path(racine, "R"), pattern = "\\.R$", full.names = TRUE), function(f) {
+             l <- readLines(f, warn = FALSE)
+             if (any(grepl("^garanties_couverture_exclue <- function", l))) basename(f) else NULL
+           }))
+           appel <- function(f) grepl("garanties_couverture_exclue(", paste(deparse(f), collapse = "\n"), fixed = TRUE)
+           identical(defs, "donnees.R") && appel(ns$calculer_engagement) && appel(ns$provisions_individuelles) &&
+             appel(ns$provisions_collectives)
+         }))
+decl_a <- p_c1$donnees
+decl_a$exclusions <- excl_x("D02a", "engagement")
+verifier_egal("(4.1) (d) garanties_couverture_exclue() : GSC1 sous (a) pour engagement, rien pour risque_en_cours ; GSC1 sous (c) ; rien sans exclusion",
+              list(ns$garanties_couverture_exclue(b2_vue(b_ct, A1, decl_a,
+                                                         p_c1$conventions), "engagement"),
+                   ns$garanties_couverture_exclue(b2_vue(b_ct, A1, decl_a,
+                                                         p_c1$conventions), "risque_en_cours"),
+                   ns$garanties_couverture_exclue(b2_vue(base, A1, p_c1$donnees, p_c1$conventions), "engagement")),
+              list("GSC1", character(0), character(0)))
+# (f1) P3 individuel au niveau de la fonction (champ (a)) : ligne CTI1 de contrats, puis de
+# garanties_souscrites, exclue pour risque_en_cours dans la vue ; témoin : la même exclusion
+# pour engagement est sans effet sur P3.
+v_ind <- b2_vue(base, A1, p_c1$donnees, p_c1$conventions)
+ind_x <- function(v) {
+  x <- ns$provisions_individuelles(v, p_c1, tb, FALSE)$contrats
+  list(x$id_contrat, x$montant)
+}
+ligne_cti1 <- function(v, t) which(as.character(ns$valeurs_vue(v, t, "id_contrat")) == "CTI1")
+verifier("(4.1) (f1) provisions_individuelles() : sans exclusion CTI1 3 046,432119555 et CTI3 664,238862439 ; CTI1 exclu pour risque_en_cours (contrats, puis garanties_souscrites) : CTI3 seul ; même exclusion pour engagement : les deux contrats",
+         local({
+           ok <- function(r, ids, m) identical(r[[1L]], ids) && egal_mixte(r[[2L]], m)
+           res <- ok(ind_x(v_ind), c("CTI1", "CTI3"), c(3046.432119555168, 664.23886243874))
+           for (t in c("contrats", "garanties_souscrites")) {
+             v_r <- v_ind
+             v_r$exclu$risque_en_cours[[t]][ligne_cti1(v_ind, t)] <- TRUE
+             v_e <- v_ind
+             v_e$exclu$engagement[[t]][ligne_cti1(v_ind, t)] <- TRUE
+             res <- res && ok(ind_x(v_r), "CTI3", 664.23886243874) &&
+               ok(ind_x(v_e), c("CTI1", "CTI3"), c(3046.432119555168, 664.23886243874))
+           }
+           res
+         }))
+# (f2) De bout en bout : D02a sur contrats.date_debut_gestion de CTI1 (2023-01-01, avant l'effet ;
+# colonne lue par aucun poste de B2), exclu pour risque_en_cours : seule l'exclusion de la ligne
+# sort CTI1 de P3 ; témoin : exclu pour engagement, P3 et total inchangés (§ 7.7, (4.1) (f2),
+# erratum v1.0.14 ; valeurs d'actuary, remesurées).
+b_dg <- base
+b_dg$contrats$date_debut_gestion[b_dg$contrats$id_contrat == "CTI1"] <- D("2023-01-01")
+r_dg <- calc_x(b_dg, excl_x("D02a", "risque_en_cours"))
+r_dg_e <- calc_x(b_dg, excl_x("D02a", "engagement"))
+verifier("(4.1) (f2) D02a sur date_debut_gestion de CTI1, exclu pour risque_en_cours : P3 = 1 229,553930931891, total 442 391,513032301678, aucune cellule de P3 au segment CTI1 ; exclu pour engagement : P3 4 275,986050487058, total 445 437,9451518568",
+         egal_mixte(c(cel_x(r_dg, P3)$montant, cel_x(r_dg, "total")$montant, cel_x(r_dg_e, P3)$montant,
+                      cel_x(r_dg_e, "total")$montant),
+                    c(1229.553930931891, 442391.513032301678, 4275.986050487058, 445437.9451518568)) &&
+           nrow(cel_x(r_dg, P3, "CTI1")) == 0L &&
+           identical(r_dg$donnees$exclusions$nombre_lignes[r_dg$donnees$exclusions$action == "exclure"], 1L))
+attendu_echec("(4.1) (f3) sous (f2), exclusion pour risque_en_cours : au moins une rangée d'enjeu de garantie deces copiée vers P3 (mesure de la provision retirée)",
+              "#84",
+              any(r_dg$donnees$enjeu$garantie == "deces" & r_dg$donnees$enjeu$poste == P3))
+verifier("(4.1) (e) témoins : sans exclusion, les cellules de la base construite (C1) sont celles du § 7.8.4 (ensemble)",
+         egal_mixte(vapply(c(P1, P2, P3, "total"), function(po) cel_x(r_c1, po)$montant, 0),
+                    c(337225.9591013698, 103936, 4275.9860504871, 445437.9451518568)))
+
 section("échec attendu #83 (critère (4.4), § 5.3, « Limite connue »)")
 b_ge <- base   # GSC1 : effet postérieur à l'arrêté, invisible à A, ses dossiers aussi (règle 1)
 b_ge$garanties_souscrites$date_effet[1L] <- D("2026-03-01")
