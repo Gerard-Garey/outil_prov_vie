@@ -343,7 +343,7 @@ Fonction du module `donnees` (ADR 0010, point 14). **Décision de forme** (annot
 
 - `vue_a_date(donnees, arrete, declarations, conventions)` (interne à `donnees`) rend une liste `vue_provie` : `bilan` (la liste que rend `controler_base()`, **identique à l'octet**, `controler_base()` devenant `vue_a_date(...)$bilan`) ; `retenu` (par table, logique) ; `parties` (par table à partie, logique de Kleene, `.visibilite_a(ctx, "vue")$parties`) ; `exclu` (par famille de calcul puis par table, logique : lignes exclues par une déclaration `X` d'action `exclure` pour cette famille, cascade du dictionnaire, § 1.10, comprise) ; `hypotheses` (déclarations `H` appliquées, avec leurs lignes : D03h et les autres motifs qui entrent dans un calcul) ; l'environnement interne nécessaire à `valeurs_vue()` ;
 - `valeurs_vue(vue, table, colonne)` (interne) : `.valeurs_vue()` sur cette vue ;
-- `etats_a_date(vue, garanties, famille)` (`famille` exigée, sans valeur par défaut ; B2 : `engagement` ; erratum v1.0.5) rend un `data.frame`, une ligne par **dossier retenu à l'arrêté** dont la garantie souscrite a un `code_garantie` de `garanties` (B2 : `deces` seule ; tout autre code est une erreur de programmation, `stop()` interne et test) ; colonnes, dans cet ordre :
+- `etats_a_date(vue, garanties, famille)` (`famille` exigée, sans valeur par défaut, code de `FAMILLES_CALCUL` ; B2 : `engagement` ; erratum v1.0.5 ; les lignes des dossiers exclus pour la famille restent dans la sortie, l'appelant les filtre par `vue$exclu[[famille]]$dossiers`) rend un `data.frame`, une ligne par **dossier retenu à l'arrêté** dont la garantie souscrite a un `code_garantie` de `garanties` (B2 : `deces` seule ; tout autre code est une erreur de programmation, `stop()` interne et test) ; colonnes, dans cet ordre :
 
 | Colonne | Contenu (B2) |
 |---|---|
@@ -400,7 +400,7 @@ Arêtes du graphe : celles de l'ADR 0010, point 1. **Annotation** : la colonne �
 
 ### 5.3 P1 — sinistres déclarés non réglés (`capital_dossier`, `capital_dossier_reglement`, comptes sociaux)
 
-**Population** : lignes de `etats_a_date(vue, "deces")` ; dossiers non exclus pour la famille « engagement » (`vue$exclu$engagement`) ; `etat_dossier` ≠ `clos` ; **hors P2** (§ 5.4) ; solde > 0.
+**Population** : lignes de `etats_a_date(vue, "deces", "engagement")` ; dossiers non exclus pour la famille « engagement » (`vue$exclu$engagement`) ; `etat_dossier` ≠ `clos` ; **hors P2** (§ 5.4) ; solde > 0.
 
 **Capital** :
 - `capital_du` : `montant_en_vigueur` (exact) ;
@@ -771,7 +771,7 @@ ADR 0010 :
 3. **Dixième série, (d)** : exigence de `conventions$limite_age` à deux niveaux (§ 6.3).
 4. **Point 1** : colonne « Branche » de `risque_en_cours` B6 → B2 (M118) ; `garanties` livré en issue (1) ; arête nouvelle `lecture` → `tables` (§ 3.3).
 5. **Point 13** : `charger_table()` reporté à la première table embarquée ; `rejouer_fiche()` en issue (4) ; exports de B2 aux § 2.9 et § 3.7.
-6. **Point 14** : `etats_a_date(vue, garanties)` sur l'objet `vue_a_date()` (et non `(base, date)`), colonnes ajoutées `etat_dossier`, `date_etat_dossier`, `motif_cloture`, `instruit` ; colonnes d'échéancier `cle` et `type_flux` ; `calculer_age()` dans `outils` (déjà annoté, septième série, (c)).
+6. **Point 14** : `etats_a_date(vue, garanties, famille)` sur l'objet `vue_a_date()` (et non `(base, date)` ; `famille` exigée, code de `FAMILLES_CALCUL`, garde par erreur interne hors liste ; graphe inchangé ; erratum v1.0.5, accord d'`architect` du 11/11/2026), colonnes ajoutées `etat_dossier`, `date_etat_dossier`, `motif_cloture`, `instruit` ; colonnes d'échéancier `cle` et `type_flux` ; `calculer_age()` dans `outils` (déjà annoté, septième série, (c)).
 7. **Point 15** : statut `fictive` ; `origine$empreinte` = MD5 du contenu canonique ; axe `date` d'une série mensuelle = 12 × année + mois − 1.
 8. **Point 16** : fichier `lectures.csv` du catalogue (§ 4.1) ; préfixe `champ:` dans `methodes` et `temoins` ; lecture « première méthode du champ = recommandée ».
 9. **Point 17** : contenu des sections fixé (§ 2.2 à § 2.7) ; entrée nouvelle `conventions$decompte_jours` et domaines de `instant_date`, `repartition_annee`, `fractionnement` ; `tables$serie_tme$decalage_publication_mois`.
