@@ -4496,13 +4496,17 @@ pour un verdict (ADR~0011, point~10)~; d'\code{actuary} sinon), par un
 script \code{commit\_reference.sh} le contrôle
 (section~\ref{sec:controles}).
 
-\textbf{État transitoire.} Dans l'état du code, aucune référence n'est
-encore produite~: le dossier \code{tests/\allowbreak reference/} n'existe pas, et les
-dix couples sont à l'état \code{a\_produire}. La batterie de
-reproductibilité rend alors leur comparaison et le contrôle de l'arbre en
-échecs attendus (\code{[ATTENDU]}), jusqu'à la première régénération sous
-visa (ADR~0011, point~25)~; la pull request ne sort pas du brouillon dans
-cet état.
+\textbf{État transitoire.} Un couple déclaré avant sa première référence
+porte dans \code{COUPLES\_REFERENCE} l'état \code{a\_produire} et son
+issue~: la batterie de reproductibilité rend alors sa comparaison et le
+contrôle de l'arbre en échecs attendus (\code{[ATTENDU]}), jusqu'au premier
+commit de référence sous visa, que suit un commit qui lève les marques en
+passant le couple à l'état \code{produit} (ADR~0011, point~25)~; la pull
+request ne sort pas du brouillon dans cet état. Dans l'état du code, les
+dix couples sont à l'état \code{produit}~: le premier commit de référence a
+écrit l'arbre \code{tests/\allowbreak reference/} (un répertoire par couple,
+la provenance et les empreintes à sa racine), et la batterie de reproductibilité ne
+rend plus aucun échec attendu.
 
 % =============================================================================
 \section{Harnais}
