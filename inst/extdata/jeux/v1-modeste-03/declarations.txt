@@ -1,0 +1,18 @@
+provie-liste 1
+declarations/seuils/d02c_age_min/assures_sinistre	double	16
+declarations/seuils/d02c_age_min/assures_affiliation	double	16
+declarations/seuils/d02c_age_min/famille	double	0
+declarations/seuils/d02c_age_max/assures_sinistre	double	75
+declarations/seuils/d02c_age_max/assures_affiliation	double	70
+declarations/seuils/d02c_age_max/famille	double	110
+declarations/seuils/d03g_delai_jours/contrats	double	30
+declarations/seuils/d03g_delai_jours/affiliations	double	15
+declarations/seuils/d03g_delai_jours/famille	double	3
+declarations/seuils/d03g_delai_jours/sinistres	double	5
+declarations/seuils/d03g_delai_jours/beneficiaires	double	3
+declarations/seuils/d03g_delai_jours/rentes	double	2
+declarations/seuils/d03g_delai_jours/evenements	double	7
+declarations/seuils/d03g_delai_jours/prestations	double	0
+conventions/age	character	revolu
+conventions/limite_age/regle	character	depassement
+conventions/limite_age/age	character	revolu
