@@ -21,7 +21,7 @@ COUPLES_REFERENCE <- data.frame(
   plan = c(rep("recommandees", 6L), "alternatives", "alternatives", "recommandees", "recommandees"),
   arrete = c("2025-12-31", "2024-12-31", "2025-12-31", "2024-12-31", "2025-12-31", "2025-01-01", "2025-12-31",
              "2025-01-01", "2025-12-31", "2024-12-31"),
-  etat = rep("a_produire", 10L),
+  etat = rep("produit", 10L),
   issue = rep("#67", 10L),
   stringsAsFactors = FALSE)
 ETATS_COUPLE <- c("a_produire", "produit")
