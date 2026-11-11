@@ -1,9 +1,12 @@
 # Batterie de reproductibilité (CLAUDE.md, « Commandes » ; ADR 0010, point 25). À lancer
 # depuis la racine du dépôt : Rscript tests/test_reproductibilite.R
 # Au socle (T1) : aller-retours `identical` du sérialiseur, graine locale, état global
-# restauré ; jeux versionnés de inst/extdata/jeux/ (#19), relus identiques à leur tirage. Le
-# rejeu des fiches et les références de tests/reference/ s'ajoutent avec les branches qui les
-# créent.
+# restauré ; jeux versionnés de inst/extdata/jeux/ (#19), relus identiques à leur tirage.
+# Depuis B2 (#67 ; ADR 0011, point 23) : pour chaque couple de COUPLES_REFERENCE
+# (tests/references.R), (i) deux calculs identiques, (ii) rejeu de la fiche, (iii) comparaison à
+# la référence de tests/reference/ ; puis (iv) arbre des références, (v) plateforme de chaque
+# fiche.txt, (vi) couverture des méthodes. Un couple `a_produire` rend (iii) en [ATTENDU]
+# (ADR 0011, point 25 ; M259).
 
 options(warn = 2)
 fichier <- sub("^--file=", "", grep("^--file=", commandArgs(FALSE), value = TRUE))
@@ -113,5 +116,83 @@ for (nom in names(JEUX_V1)) {
     verifier(paste0(nom, " : date_visa renseignée"), !is.na(m$date_visa))
   }
 }
+
+section("références de non-régression : couples de référence (ADR 0011, points 6 à 10, 23 et 25 ; #67)")
+source(file.path(racine, "tests", "references.R"))
+# Plateforme de référence (ADR 0011, point 23 (v) ; CONTEXT.md, « Plateforme de référence »,
+# mesure r6 de l'ADR 0011) : champs connus en dur ; blas et lapack (chemins des bibliothèques
+# de l'image) comparés à ceux de provenance.txt, écrit par le même run.
+PLATEFORME_REFERENCE <- list(r = "R version 4.3.3 (2024-02-29)", plateforme = "x86_64-pc-linux-gnu", boutisme = "little",
+                             lapack_version = "3.10.0")
+provenance <- NULL
+if (file.exists(file.path(DOSSIER_REFERENCES, "provenance.txt"))) {
+  provenance <- tryCatch(outils$lire_liste(lire_fichier(file.path(DOSSIER_REFERENCES, "provenance.txt"))),
+                         error = function(e) NULL)
+}
+resultats <- list()
+for (i in seq_len(nrow(COUPLES_REFERENCE))) {
+  cr <- COUPLES_REFERENCE[i, ]
+  nom <- paste0(cr$couple, " (", chemin_couple(i), ")")
+  verifier(paste0(nom, " : état déclaré connu"), cr$etat %in% ETATS_COUPLE)
+  e <- entrees_couple(i)
+  r1 <- calculer_couple(e)
+  resultats[[cr$couple]] <- r1
+  verifier(paste0(nom, " : (i) deux appels de calculer_provisions() identiques (identical, empreintes comprises)"),
+           identical(calculer_couple(e), r1))
+  rj <- rejouer_fiche(e$base, lire_fiche(ecrire_fiche(r1$fiche)), e$tables)
+  verifier(paste0(nom, " : (ii) rejeu de la fiche du calcul (écrite puis relue) : même objet, aucun signalement"),
+           identical(rj$resultat, r1) && nrow(rj$signalements) == 0L)
+  dossier <- file.path(DOSSIER_REFERENCES, chemin_couple(i))
+  fr <- file.path(dossier, "resultat.txt")
+  ff <- file.path(dossier, "fiche.txt")
+  if (cr$etat == "a_produire") {
+    attendu_echec(paste0(nom, " : (iii) référence présente sous tests/reference/ et égale au calcul (points 6 à 9)"),
+                  paste0(cr$issue, ", couple déclaré a_produire : première référence produite par la CI après visa (ADR 0011, ",
+                         "points 18 (b) et 25)"),
+                  file.exists(fr) && file.exists(ff) && nrow(comparer_couple(r1, lire_fichier(fr), lire_fichier(ff))) == 0L)
+    next
+  }
+  if (!verifier(paste0(nom, " : référence présente (resultat.txt, fiche.txt)"), file.exists(fr) && file.exists(ff))) next
+  ec <- comparer_couple(r1, lire_fichier(fr), lire_fichier(ff))
+  if (nrow(ec) > 0L) {
+    cat("    tableau avant / après (indicatif hors plateforme de référence ; ADR 0011, point 10) :\n")
+    print(utils::head(ec, 50L), right = FALSE)
+  }
+  verifier(paste0(nom, " : (iii) comparaison à la référence : aucun écart (structure exacte, réels à 1e-10 mixte)"), nrow(ec) == 0L)
+  rf <- rejouer_fiche(e$base, lire_fiche(lire_fichier(ff)), e$tables)
+  verifier(paste0(nom, " : (ii) rejeu de fiche.txt : égal à la référence (écarts de version signalés sans refus)"),
+           nrow(comparer_couple(rf$resultat, lire_fichier(fr), lire_fichier(ff))) == 0L)
+  fiche_ref <- outils$lire_liste(lire_fichier(ff))
+  informer(paste0(nom, " : empreinte du résultat recalculée ", if (identical(fiche_ref$empreintes$resultat, r1$fiche$empreintes$resultat))
+    "égale" else "différente", " à celle de fiche.txt (mesure de portabilité, hors décompte)"))
+  pl <- fiche_ref$plateforme
+  verifier(paste0(nom, " : (v) plateforme de fiche.txt = plateforme de référence (r, plateforme, boutisme, blas, lapack, lapack_version)"),
+           all(vapply(names(PLATEFORME_REFERENCE), function(n) identical(pl[[n]], PLATEFORME_REFERENCE[[n]]), NA)) &&
+             !is.null(provenance) && identical(pl$blas, provenance$plateforme$blas) && identical(pl$lapack, provenance$plateforme$lapack))
+}
+
+section("références de non-régression : arbre tests/reference/ (ADR 0011, points 2, 5 et 23 (iv))")
+produits <- COUPLES_REFERENCE$etat == "produit"
+chemins <- vapply(seq_len(nrow(COUPLES_REFERENCE)), chemin_couple, "")
+if (!dir.exists(DOSSIER_REFERENCES) && !any(produits)) {
+  attendu_echec("arbre tests/reference/ présent : répertoires et couples en bijection, empreintes.md5 exact, provenance.txt bien formé",
+                "#67, tous les couples a_produire : arbre écrit par le premier commit de référence (ADR 0011, point 25)",
+                dir.exists(DOSSIER_REFERENCES))
+} else {
+  ca <- controler_arbre(DOSSIER_REFERENCES, chemins, produits)
+  verifier("répertoires de tests/reference/ et couples déclarés en bijection (aucun répertoire sans couple ; chaque couple produit a le sien)",
+           ca[["bijection"]])
+  verifier("empreintes.md5 : une ligne par fichier de l'arbre (sauf lui-même), MD5 exacts (format de md5sum -c)", ca[["md5"]])
+  verifier("provenance.txt bien formé (version_references, commit, run, tentative, image, plateforme, couples)", ca[["provenance"]])
+}
+
+section("références de non-régression : couverture des méthodes (ADR 0011, point 15 ; spécification de B2, § 7.8.5, R.6)")
+couverture <- couverture_methodes(resultats)
+for (k in seq_len(nrow(couverture))) {
+  verifier(paste0("méthode ", couverture$methode[k], " (", couverture$garantie[k], ", ", couverture$poste[k],
+                  ") : au moins un couple la calcule, cellule calcul non nulle", if (nzchar(couverture$couples[k]))
+                    paste0(" (", couverture$couples[k], ")") else ""), nzchar(couverture$couples[k]))
+}
+verifier("couverture : les sept méthodes du capital décès (M258)", nrow(couverture) == 7L)
 
 bilan()

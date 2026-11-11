@@ -100,3 +100,9 @@ unlink(paquet_faux, recursive = TRUE)
 verifier("TEMOIN : un package qui ne s'installe pas : sortie de R CMD INSTALL, [ECHEC] et statut 1 sous warn = 2",
          r$statut == 1L && grepl("ERROR: unable to collate and parse R files", r$sortie, fixed = TRUE) &&
            grepl("[ECHEC] installation du package provie", r$sortie, fixed = TRUE))
+
+section("harnais : informer (ADR 0011, point 23)")
+r <- executer_harnais("informer('mesure', 'detail'); verifier('a', TRUE)")
+verifier("informer() : ligne [INFO] hors décompte, statut inchangé",
+         r$statut == 0L && grepl("[INFO] mesure -- detail", r$sortie, fixed = TRUE) &&
+           grepl("1 OK, 0 ECHEC, 0 ATTENDU, 0 SUCCES INATTENDU", r$sortie, fixed = TRUE))
