@@ -1,5 +1,5 @@
 # Tests unitaires du module `risque_en_cours` (R/risque_en_cours.R) ; spécification de B2,
-# § 5.5 et § 7.3, critères (3.6) et (3.16), cas T1 à T7 du § 7.4 (#66). Exécuté par
+# § 5.5 et § 7.3, critères (3.6), (3.16) et (3.18), cas T1 à T7 du § 7.4 (#66). Exécuté par
 # tests/test_unitaires.R : le package est installé et chargé, le harnais est sourcé, `racine`
 # est défini. Bases, tables fictives et plan minimal : tests/b2_bases.R.
 # Valeurs en dur : cas T1 à T7 du § 7.4 (mesure m7 de la spécification ; T3, T4 et T6 selon
@@ -228,3 +228,44 @@ verifier_egal("(3.16) (k) deux contrats individuels identiques (CT2 / GS2, CT4 /
               list(excl_p3(deux_ind, plan_p3()), excl_p3(deux_ind, plan_p3(), list(c("GS4", "capital_forfaitaire"))),
                    excl_p3(deux_ind, plan_p3(), list(GS2_CF, c("GS4", "capital_forfaitaire")))),
               list(calcule_p3(2 * v_t1), arret_p3("CT4"), arret_p3()), tolerance = TOL)
+
+section("risque_en_cours : assuré et sinistres exclus pour risque_en_cours (erratum v1.0.10, critère (3.18), § 5.5), #82")
+
+# Exclusions posées sur la vue (vue$exclu[[famille]]$assures, vue$exclu[[famille]]$sinistres),
+# base de P3 (contrat T1 CT2 / GS2, assuré AS2), arrêté 2025-01-01 sauf mention ; sinistre
+# ajouté SI2 de AS2, survenu le 2024-07-01, déclaré le 2024-09-01, saisi le 2024-09-02. Lecture
+# de Kleene stricte (Q-82, tranchée le 11/11/2026) : une ligne exclue est inconnue (date de
+# naissance ; nature et date du sinistre), le contrat ne sort de la population que par une
+# condition connue. Valeur T1 recalculée (v_t1, ci-dessus).
+avec_si2 <- function(base, nature = "deces", copie = FALSE) {
+  s <- b2_tab("sinistres", id_sinistre = "SI2", id_assure = "AS2", nature_sinistre = nature, date_survenance = D("2024-07-01"),
+              date_declaration = D("2024-09-01"), canal_declaration = "beneficiaire", gestionnaire = "interne",
+              date_saisie = D("2024-09-02"))
+  if (copie) s <- rbind(s, transform(s, id_sinistre = "SI2B", date_saisie = D("2024-09-03")))
+  base$sinistres <- s
+  base
+}
+excl_ligne <- function(base, plan = plan_p3(), table = NULL, lignes = integer(0), famille = "risque_en_cours") {
+  v <- b2_vue(base, plan$arrete)
+  if (!is.null(table)) v$exclu[[famille]][[table]][lignes] <- TRUE
+  r <- ns$calculer_risque_en_cours(v, plan, tb, cat_g, "deces", P3)
+  list(r$cellules$montant, r$cellules$nombre_dossiers, r$cellules$statut_resultat, r$cellules$motif_arret,
+       attr(r$cellules, "identifiant_arret"))
+}
+p_27 <- plan_p3(D("2027-01-01"))
+b_27 <- b2_base_p3(extraction = D("2027-06-30"))
+verifier_egal("(3.18) assures : (a) AS2 exclu pour risque_en_cours : arrêt parametre_non_determine (CT2) ; (b) exclu pour engagement : 4 786,6205305652 exact ; (c) arrêté 2027-01-01, AS2 exclu : 0 exact (fin de couverture par date_terme)",
+              list(excl_ligne(b2_base_p3(), table = "assures", lignes = 1L),
+                   excl_ligne(b2_base_p3(), table = "assures", lignes = 1L, famille = "engagement"),
+                   excl_ligne(b_27, p_27, "assures", 1L)),
+              list(arret_p3(), calcule_p3(v_t1), calcule_p3(0)), tolerance = TOL)
+verifier_egal("(3.18) sinistres : (d) SI2 deces retenu : 0 exact (témoin) ; (e) SI2 deces exclu pour risque_en_cours : arrêt (CT2) ; (f) exclu pour engagement : 0 exact ; (g) SI2 et copie SI2B, SI2B seul exclu : 0 exact (sinistre connu) ; (h) arrêté 2027-01-01, SI2 exclu : 0 exact",
+              list(excl_ligne(avec_si2(b2_base_p3())), excl_ligne(avec_si2(b2_base_p3()), table = "sinistres", lignes = 1L),
+                   excl_ligne(avec_si2(b2_base_p3()), table = "sinistres", lignes = 1L, famille = "engagement"),
+                   excl_ligne(avec_si2(b2_base_p3(), copie = TRUE), table = "sinistres", lignes = 2L),
+                   excl_ligne(avec_si2(b_27), p_27, "sinistres", 1L)),
+              list(calcule_p3(0), arret_p3(), calcule_p3(0), calcule_p3(0), calcule_p3(0)))
+verifier_egal("(3.18) (i) SI2 arret_travail retenu : 4 786,6205305652 exact ; exclu pour risque_en_cours : arrêt (CT2, nature inconnue)",
+              list(excl_ligne(avec_si2(b2_base_p3(), "arret_travail")),
+                   excl_ligne(avec_si2(b2_base_p3(), "arret_travail"), table = "sinistres", lignes = 1L)),
+              list(calcule_p3(v_t1), arret_p3()), tolerance = TOL)

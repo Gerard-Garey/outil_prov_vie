@@ -150,7 +150,11 @@ provisions_individuelles <- function(vue, plan, tables, temoin) {
   id_gs <- as.character(vv("garanties_souscrites", "id_garantie_souscrite")[gs])
   id_ct <- as.character(vv("contrats", "id_contrat")[i_ct])
   assure <- as.character(vv("contrats", "id_assure")[i_ct])
-  naissance <- vv("assures", "date_naissance")[match(assure, as.character(vv("assures", "id_assure")), incomparables = NA)]
+  # ligne de assures exclue pour risque_en_cours : date de naissance inconnue, traitée comme
+  # manquante (erratum v1.0.10, #82)
+  i_as <- match(assure, as.character(vv("assures", "id_assure")), incomparables = NA)
+  naissance <- vv("assures", "date_naissance")[i_as]
+  naissance[!is.na(i_as) & exclu$assures[i_as]] <- NA
   effet <- as.numeric(vv("contrats", "date_effet"))[i_ct]
   terme <- as.numeric(vv("contrats", "date_terme"))[i_ct]
   fin_ct <- as.numeric(vv("contrats", "date_fin"))[i_ct]
@@ -170,14 +174,20 @@ provisions_individuelles <- function(vue, plan, tables, temoin) {
   date_age[ok_age] <- as.numeric(date_atteinte_age(naissance[ok_age], as.integer(age_fin$valeur[ok_age]), conventions$age))
   fin_contractuelle <- pmin(ifelse(is.na(terme), Inf, terme), date_age)
   fin <- pmin(fin_contractuelle, ifelse(is.na(fin_ct), Inf, fin_ct))
-  # couverture en cours ; aucun sinistre deces ou iad retenu de l'assuré survenu au plus l'arrêté
-  s <- which(vue$retenu$sinistres & vv("sinistres", "nature_sinistre") %in% c("deces", "iad") &
+  # couverture en cours ; aucun sinistre deces ou iad retenu, non exclu pour risque_en_cours, de
+  # l'assuré survenu au plus l'arrêté. Lecture de Kleene stricte (erratum v1.0.10, #82, Q-82) :
+  # un sinistre retenu exclu pour risque_en_cours a une nature et une date inconnues ; le
+  # contrat de son assuré, sauf s'il sort de la population par une condition connue, arrête
+  # le poste (parametre_non_determine)
+  s_id <- as.character(vv("sinistres", "id_assure"))
+  s <- which(vue$retenu$sinistres & !exclu$sinistres & vv("sinistres", "nature_sinistre") %in% c("deces", "iad") &
                as.numeric(vv("sinistres", "date_survenance")) <= a)
-  sinistre <- assure %in% as.character(vv("sinistres", "id_assure")[s])
+  sinistre <- assure %in% s_id[s]
+  sinistre_inconnu <- !is.na(assure) & assure %in% s_id[vue$retenu$sinistres & exclu$sinistres]
   en_cours <- fin > a & !sinistre
   if (!any(en_cours)) return(vide)
   k <- which(en_cours)
-  manque <- k[is.na(capital$valeur[k]) | capital$ambigu[k] | capital$exclu[k] | is.na(age_fin$valeur[k]) |
+  manque <- k[sinistre_inconnu[k] | is.na(capital$valeur[k]) | capital$ambigu[k] | capital$exclu[k] | is.na(age_fin$valeur[k]) |
                 age_fin$ambigu[k] | is.na(naissance[k]) | is.infinite(fin[k]) |
                 (methode == "prospective_prime_declaree" & !is.na(periode[k]) & (is.na(prime_p$valeur[k]) | prime_p$ambigu[k])) |
                 (methode == "prospective_prime_declaree" & prime_p$exclu[k])]
