@@ -1594,6 +1594,8 @@ encore écrits. Il ne peut appeler que \code{dictionnaire} et
 \code{vue\_a\_date()} & \code{donnees}, \code{arrete}, \code{declarations}, \code{conventions} & Construit une fois la vue à l'arrêté (classe \code{vue\_provie}), seule lecture de la base par les familles de calcul~: bilan de \code{controler\_base()}, lignes retenues, parties de ligne connues, lignes exclues par famille de calcul, hypothèses par défaut appliquées\fsp; mêmes refus d'appel que \code{controler\_base()}. Non exportée. \\
 \code{valeurs\_vue()} & \code{vue}, \code{table}, \code{colonne} & Rend les valeurs d'une colonne dans la vue\fsp; \code{NA} signifie «~hors de la vue~», jamais «~absente~». Non exportée. \\
 \code{etats\_a\_date()} & \code{vue}, \code{garanties}, \code{famille} & Rend l'état à l'arrêté de chaque dossier des garanties demandées (B2~: \code{deces}), pour une famille de calcul exigée~: état, montant en vigueur, état du dossier (\code{ouvert}, \code{capital\_du}, \code{clos}) par l'automate du dossier, instruction\fsp; les dossiers exclus pour la famille sont rendus, et l'appelant les filtre. Non exportée. \\
+\code{garanties\_couverture\_exclue()} & \code{vue}, \code{famille} & Rend les identifiants des garanties souscrites retenues dont la ligne, ou celle de leur contrat, est exclue pour la famille de calcul\fsp; seule implémentation de la règle de population sous couverture exclue, appelée par les familles \code{engagement} et \code{risque\_en\_cours}. Non exportée. \\
+\code{segments\_vue()} & \code{vue}, \code{segmentations}, \code{garanties} & Rend les segments des unités de calcul de la vue (dossiers et contrats des garanties demandées) pour les segmentations déclarées du plan\fsp; règles admises en B2, contrôlées par \code{valider\_plan()}~: \code{contrat}, \code{nature\_contrat}, \code{annee\_survenance}, \code{ligne\_activite}. Non exportée. \\
 \code{parties\_ligne()} & Aucun & Rend les parties de ligne (table, colonnes)\fsp; une colonne d'une partie vaut pour toute la partie. Non exportée, passée par les familles de calcul à \code{postes\_a\_arreter()}. \\
 \end{tabular}
 \end{center}
@@ -2836,7 +2838,9 @@ sauf \code{lecture}. Ce module n'a pas encore de fonction.
 \begin{tabular}{@{}p{3.9cm}>{\raggedright\arraybackslash}p{3.0cm}p{8.2cm}@{}}
 \rowcolor{tableheader}
 \textcolor{financeblue}{\textbf{Fonction}} & \textcolor{financeblue}{\textbf{Arguments}} & \textcolor{financeblue}{\textbf{Rôle}} \\
-\multicolumn{3}{@{}l@{}}{Aucune fonction.} \\
+\code{representation\_resultat()} & \code{resultat} & Rend la représentation du résultat~: les champs hors \code{fiche}, chaque \code{data.frame} réduit à la liste de ses colonnes. Non exportée. \\
+\code{empreinte\_resultat()} & \code{resultat} & Rend l'empreinte du résultat, MD5 des octets de la représentation écrite par le sérialiseur. Non exportée. \\
+\code{empreinte\_code()} & --- & Rend l'empreinte du code, MD5 des fonctions de l'espace de noms. Non exportée. \\
 \end{tabular}
 \end{center}
 
@@ -3097,7 +3101,10 @@ calcul. Il ne calcule aucun poste. Il peut appeler tous les modules, sauf
 \begin{tabular}{@{}p{3.9cm}>{\raggedright\arraybackslash}p{3.0cm}p{8.2cm}@{}}
 \rowcolor{tableheader}
 \textcolor{financeblue}{\textbf{Fonction}} & \textcolor{financeblue}{\textbf{Arguments}} & \textcolor{financeblue}{\textbf{Rôle}} \\
-\multicolumn{3}{@{}l@{}}{Aucune fonction.} \\
+\code{calculer\_provisions()} & \code{donnees}, \code{plan}, \code{tables = list()}, \code{provenance = NULL} & Point d'entrée unique~: exécute le plan de calcul selon \code{ETAPES} et rend un objet \code{resultat\_provie}. Exportée. \\
+\code{rejouer\_fiche()} & \code{donnees}, \code{fiche}, \code{tables = list()} & Contrôle les entrées du rejeu, puis appelle \code{calculer\_provisions()} sur le plan de la fiche\fsp; rend le résultat et les signalements de version. Exportée. \\
+\code{format.resultat\_provie()} & \code{x}, \code{...} & Décrit un résultat en lignes de texte, par des décomptes seuls. \\
+\code{print.resultat\_provie()} & \code{x}, \code{...} & Imprime \code{format(x)} et rend le résultat, invisible. \\
 \end{tabular}
 \end{center}
 
