@@ -2958,7 +2958,7 @@ cause (dossier ou contrat) dans les paramètres retenus du poste~:
 \code{hors\_axes} & Table lue hors de ses axes sous la déclaration \code{refus} (provision mathématique de la temporaire décès). \\
 \code{affiliation\_non\_determinee} & Sinistres déclarés non réglés et capitaux non réclamés~: affiliation qui porte l'assiette d'un capital à reconstituer non déterminée (section~\ref{sec:engagement-capital}). \\
 \code{assiette\_non\_determinee} & Mêmes postes~: salaire de référence de l'affiliation retenue manquant. \\
-\code{parametre\_non\_determine} & Mêmes postes~: paramètre du capital absent, à plusieurs valeurs ou exclu pour la famille «~engagement~»\fsp; provision mathématique de la temporaire décès~: paramètre manquant, à plusieurs valeurs ou exclu pour la famille «~risque en cours~», date de naissance manquante ou fin de couverture indéterminée (section~\ref{sec:risque-en-cours-p3}). \\
+\code{parametre\_non\_determine} & Mêmes postes~: paramètre du capital absent, à plusieurs valeurs ou exclu pour la famille «~engagement~»\fsp; provision mathématique de la temporaire décès~: paramètre manquant, à plusieurs valeurs ou exclu pour la famille «~risque en cours~», date de naissance manquante ou d'un assuré exclu, sinistre de l'assuré exclu, fin de couverture indéterminée, sauf contrat hors de la population par une condition connue (section~\ref{sec:risque-en-cours-p3}). \\
 \code{famille\_non\_determinee} & Sinistres déclarés non réglés et capitaux non réclamés~: majoration familiale inconnue d'un dossier instruit. \\
 \end{tabular}
 \end{center}
@@ -3253,6 +3253,42 @@ la règle une exclusion pour une autre famille de calcul,
 \code{prime\_periodique} sous \code{prospective\_prime\_pure}, et les
 paramètres d'un contrat hors de la population. Le champ collectif ne lit
 aucun paramètre.
+
+\textbf{Champ individuel~: assuré et sinistres exclus.} Le champ individuel
+lit la date de naissance de l'assuré du contrat et les sinistres de cet
+assuré~; une ligne exclue pour la famille «~risque en cours~» n'est jamais
+lue comme retenue (issue~82 du dépôt ; décision du mainteneur du
+11~novembre~2026). Une exclusion pour une autre famille de calcul est sans
+effet. Comme pour un \code{age\_fin\_garantie} exclu, un contrat sort
+d'abord de la population par une condition \textbf{connue}~: fin de
+couverture au plus l'arrêté par le terme ou la fin du contrat, ou par l'âge
+si \code{age\_fin\_garantie} et la date de naissance sont connus\fsp;
+sinistre \code{deces} ou \code{iad} retenu, non exclu, de l'assuré, survenu
+au plus l'arrêté. Sinon, une inconnue arrête le poste
+(\code{parametre\_non\_determine}, premier contrat en cause)~:
+
+\begin{itemize}[itemsep=2pt]
+\item \textbf{assuré exclu}~: la date de naissance d'une ligne de
+  \code{assures} exclue est inconnue, et traitée exactement comme une date
+  de naissance manquante~; sa valeur n'est jamais lue\fsp;
+\item \textbf{sinistre exclu}~: une ligne de \code{sinistres} retenue et
+  exclue, rattachée à l'assuré d'un contrat du champ, est inconnue en toutes
+  ses colonnes autres que ce rattachement (lecture de Kleene stricte). La
+  date de survenance d'une ligne exclue n'est pas lue, y compris lorsqu'elle
+  est postérieure à l'arrêté~; seul compte le rattachement à l'assuré. Le
+  prédicat «~sinistre \code{deces} ou \code{iad} de l'assuré survenu au plus
+  l'arrêté~» est donc inconnu, et l'appartenance du contrat à la population
+  aussi.
+\end{itemize}
+
+\noindent Motif de la lecture stricte~: l'absence d'un sinistre a un sens
+(l'assuré est couvert et vivant à l'arrêté)\fsp; lire la ligne exclue comme
+absente produirait un montant \code{exact} fondé sur l'hypothèse que la
+ligne écartée est fausse, et un double compte avec les sinistres déclarés
+non réglés si le même sinistre y est retenu~; la lire comme retenue
+emploierait les valeurs d'une ligne écartée. L'alternative «~ligne exclue
+égale ligne absente~» a été écartée par le mainteneur (spécification,
+version~1.0.10).
 
 \textbf{Champ individuel~: échéancier.} Les bornes sont l'arrêté, chaque
 date de pas postérieure (années ou mois d'assurance, comptés depuis la date
