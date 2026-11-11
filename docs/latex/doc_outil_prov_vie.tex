@@ -819,17 +819,18 @@ indéfini, il lève un
 \textbf{refus d'appel}, qui interrompt l'appel sans rendre d'objet et porte
 un motif d'une liste fermée (section~\ref{sec:outils}).
 
-Dans l'état du code, le package exporte quinze fonctions, avec les
+Dans l'état du code, le package exporte dix-sept fonctions, avec les
 méthodes \code{format()} et \code{print()} des classes \code{jeu\_simule},
-\code{plan\_calcul} et \code{fiche\_calcul}~:
+\code{table\_provie}, \code{plan\_calcul} et \code{fiche\_calcul}~:
 
 {\raggedright
 \begin{itemize}[itemsep=2pt]
 \item module \code{dictionnaire}~: \code{dictionnaire()},
   \code{controler\_types()}\fsp;
 \item module \code{lecture}~: \code{lire\_base()}, \code{ecrire\_base()},
-  \code{ecrire\_jeu()}, \code{lire\_jeu()}\fsp;
+  \code{ecrire\_jeu()}, \code{lire\_jeu()}, \code{lire\_table()}\fsp;
 \item module \code{donnees}~: \code{controler\_base()}\fsp;
+\item module \code{tables}~: \code{formats\_tables()}\fsp;
 \item module \code{garanties}~: \code{catalogue\_garanties()}\fsp;
 \item module \code{plan}~: \code{valider\_plan()}, \code{canoniser\_plan()},
   \code{ecrire\_plan()}, \code{lire\_plan()}, \code{ecrire\_fiche()},
@@ -991,23 +992,23 @@ documentera avec eux.
 \textcolor{financeblue}{\textbf{Motif}} & \textcolor{financeblue}{\textbf{Levé, dans l'état du code, par}} \\
 \endhead
 \code{plan\_incomplet} & \code{controler\_base()}~: date d'arrêté absente\fsp; \code{valider\_plan()}, et par elle \code{canoniser\_plan()}, \code{ecrire\_plan()} et \code{construire\_fiche()}~: entrée du plan exigée et absente, le message nommant son chemin (section~\ref{sec:plan-schema}). \\
-\code{plan\_invalide} & \code{controler\_base()}~: date d'arrêté mal formée, déclaration ou convention mal formée ou hors de sa liste fermée\fsp; \code{calculer\_age()} et \code{date\_atteinte\_age()}~: convention hors de \code{CONVENTIONS\_AGE}\fsp; \code{valider\_plan()}, et par elle les mêmes fonctions que pour \code{plan\_incomplet}~: entrée du plan mal formée, hors de son domaine ou inconnue du schéma (section~\ref{sec:plan-schema}). \\
+\code{plan\_invalide} & \code{controler\_base()}~: date d'arrêté mal formée, déclaration ou convention mal formée ou hors de sa liste fermée\fsp; \code{calculer\_age()} et \code{date\_atteinte\_age()}~: convention hors de \code{CONVENTIONS\_AGE}\fsp; \code{valider\_plan()}, et par elle les mêmes fonctions que pour \code{plan\_incomplet}~: entrée du plan mal formée, hors de son domaine ou inconnue du schéma (section~\ref{sec:plan-schema})\fsp; \code{resoudre\_tables()}~: statut ou nature d'une table autres que ceux que déclarent le plan et l'usage. \\
 \code{liste\_invalide} & \code{ecrire\_valeurs()}, \code{ecrire\_liste()} et \code{lire\_liste()}~: valeur, liste ou texte que l'écriture canonique ou le format de liste n'admet pas (sections~\ref{sec:ecriture} et~\ref{sec:format-liste})\fsp; \code{controler\_types()}, \code{constater\_forme()} et \code{controler\_base()}~: base qui n'est pas une liste nommée de \code{data.frame} aux tables connues\fsp; \code{ecrire\_base()}~: valeur que le CSV ne relirait pas à l'identique\fsp; \code{construire\_fiche()}, \code{ecrire\_fiche()}, \code{lire\_fiche()} et les contrôles du rejeu~: objet ou liste qui n'a pas la forme d'une fiche de calcul. \\
 \code{fichier\_invalide} & \code{lire\_base()}, \code{ecrire\_base()}, \code{ecrire\_jeu()} et \code{lire\_jeu()}~: chemin qui n'est pas une chaîne unique, dossier introuvable, non vide ou impossible à créer, fichier inconnu du dictionnaire, fichier dont la lecture ne rendrait pas le texte exact (section~\ref{sec:lecture-base})\fsp; pour \code{lire\_jeu()}, disposition d'un jeu, liste d'empreintes, volumétrie ou tables de vérité non conformes (section~\ref{sec:lecture-jeu}). \\
 \code{table\_base\_absente} & \code{controler\_base()}~: table obligatoire absente. \\
 \code{colonne\_absente} & \code{controler\_types()}, et par elle \code{ecrire\_base()}~: colonne obligatoire ou conditionnelle absente\fsp; \code{lire\_base()} et \code{controler\_base()}, pour la seule table \code{extraction}. \\
 \code{colonne\_inconnue} & Mêmes fonctions que \code{colonne\_absente}~: colonne inconnue du dictionnaire. \\
-\code{type\_incompatible} & Mêmes fonctions que \code{colonne\_absente}~: colonne d'un autre type que son type déclaré. \\
+\code{type\_incompatible} & Mêmes fonctions que \code{colonne\_absente}~: colonne d'un autre type que son type déclaré\fsp; \code{construire\_table()} et \code{lire\_table()}~: colonne d'une table d'un autre type que celui de son format. \\
 \code{extraction\_invalide} & \code{controler\_version\_extraction()}, et par elle \code{controler\_types()}, \code{ecrire\_base()}, \code{lire\_base()} et \code{controler\_base()}~: version du dictionnaire autre que \code{VERSION\_DICTIONNAIRE\_ATTENDUE}\fsp; \code{controler\_types()} et \code{controler\_base()}~: table \code{extraction} qui n'a pas exactement une ligne, et, pour \code{controler\_base()} seule, valeur manquante ou hors domaine, date antérieure au 1er~janvier~1901 ou début d'historique qui ne précède pas la date d'extraction. \\
 \code{arrete\_posterieur\_extraction} & \code{controler\_base()}~: date d'arrêté postérieure à la date d'extraction. \\
 \code{declaration\_manquante} & Aucune fonction. \\
-\code{table\_absente} & Contrôles du rejeu d'une fiche~: table importée de la fiche non reçue (section~\ref{sec:plan-fiche}). \\
-\code{empreinte\_discordante} & \code{lire\_jeu()}~: fichier d'un jeu dont le MD5 diffère de celui de \code{empreintes.md5}, avec l'empreinte attendue et l'empreinte reçue\fsp; contrôles du rejeu d'une fiche~: table de la base ou table importée dont l'empreinte diffère de celle de la fiche (section~\ref{sec:plan-fiche}). \\
+\code{table\_absente} & \code{resoudre\_tables()}~: usage exigé sans entrée dans le plan, ou sans table reçue sous l'identifiant déclaré (section~\ref{sec:tables-indicateurs})\fsp; contrôles du rejeu d'une fiche~: table importée de la fiche non reçue (section~\ref{sec:plan-fiche}). \\
+\code{empreinte\_discordante} & \code{lire\_jeu()}~: fichier d'un jeu dont le MD5 diffère de celui de \code{empreintes.md5}, avec l'empreinte attendue et l'empreinte reçue\fsp; \code{resoudre\_tables()}~: table reçue dont l'empreinte diffère de celle du plan\fsp; contrôles du rejeu d'une fiche~: table de la base ou table importée dont l'empreinte diffère de celle de la fiche (section~\ref{sec:plan-fiche}). \\
 \code{version\_discordante} & \code{lire\_liste()}, et par elle \code{lire\_plan()} et \code{lire\_fiche()}~: en-tête d'une autre version du format de liste, avec la version attendue (\code{attendu}) et la version reçue (\code{recu})\fsp; contrôles du rejeu d'une fiche (module \code{plan})~: fiche d'une autre version que \code{VERSION\_FICHE} (section~\ref{sec:plan-fiche}). \\
 \code{lien\_non\_declare} & \code{valider\_plan()}~: lien du catalogue entre deux garanties du périmètre absent de la section \code{liens} du plan (sans objet tant que le catalogue ne porte que la garantie \code{deces}). \\
 \code{catalogue\_invalide} & \code{catalogue\_garanties()}, et par elle \code{valider\_plan()}~: catalogue des garanties dont la forme lue n'est pas celle attendue\fsp; \code{methodes\_poste()}~: champ ou méthode inconnus, méthode en double\fsp; \code{valider\_plan()}~: poste du catalogue sans schéma de paramètres dans le module \code{plan} (section~\ref{sec:garanties-catalogue}). \\
 \code{dictionnaire\_invalide} & \code{dictionnaire()}, et par elle toute fonction qui lit le dictionnaire~: dictionnaire embarqué incohérent (par exemple d'une autre version, d'une empreinte discordante ou d'une référence interne invalide). \\
-\code{format\_table\_inconnu} & Aucune fonction. \\
+\code{format\_table\_inconnu} & \code{construire\_table()}, et par elle \code{lire\_table()}~: contenu qui ne respecte pas son format\fsp; \code{lire\_table()}~: format hors de \code{formats\_tables()}, colonnes autres que celles du format (section~\ref{sec:tables-indicateurs}). \\
 \code{jeu\_invalide} & \code{simuler\_base()}~: argument qui ne définit pas un jeu simulé (loi vraie, graines, date d'extraction, nom, description, date de visa, déclarations) ou contraire aux contrôles d'entrée (section~\ref{sec:simulation-tirage})\fsp; \code{ecrire\_jeu()}~: objet qui n'a pas la forme d'un jeu simulé ou que \code{lire\_jeu()} ne relirait pas identique. \\
 \end{longtable}
 }
@@ -2607,7 +2608,10 @@ Les constantes du module sont citées d'après le code (\code{R/donnees.R})~:
 Le module \code{tables} traite les tables en entrée~: formats admis,
 conversion vers une représentation commune, catalogue des tables
 embarquées, courbes des taux sans risque de l'EIOPA, série de taux des
-plafonds réglementaires, plafonds réglementaires. Le calcul de l'âge n'en
+plafonds réglementaires, plafonds réglementaires. Dans l'état du code, il
+porte les formats, la représentation commune, la résolution des tables par
+usage et les indicateurs \code{R132\_3\_1} et \code{A132\_1}, sans aucune
+table embarquée (section~\ref{sec:tables-indicateurs}). Le calcul de l'âge n'en
 fait pas partie~: il est dans le module \code{outils}, qui sert aussi
 \code{donnees} et le simulateur (section~\ref{sec:age}). Le module \code{tables} ne
 peut appeler que \code{outils}. Sa fonction \code{formats\_tables()} est exportée.
@@ -2625,12 +2629,128 @@ peut appeler que \code{outils}. Sa fonction \code{formats\_tables()} est export�
 \code{convertir\_pourcent()} & \code{mois}, \code{taux\_pourcent} & Convertit le format \code{serie\_tme\_mensuelle}~: valeur divisée par 100, au pas mensuel. \\
 \code{probabilite()} & \code{table}, \code{...}, \code{hors\_axes} & Seul accès aux valeurs d'une \code{table\_provie}, vectorisé sur les axes\fsp; hors des axes, applique la déclaration \code{hors\_axes} (\code{refus}~: \code{NA}\fsp; \code{derniere\_valeur}), sans défaut, et rend les indices des points hors des axes en attribut. \\
 \code{resoudre\_tables()} & \code{plan\_tables}, \code{tables\_recues}, \code{usages\_exiges} & Résout la table de chaque usage exigé et rend ces tables avec les lignes des paramètres retenus des tables\fsp; refus \code{table\_absente}, \code{liste\_invalide}, \code{empreinte\_discordante} ou \code{plan\_invalide}. \\
-\code{minimum\_r132\_3\_1()} & \code{serie}, \code{annee}, \code{decalage} & Minimum de l'article R132-3-1 pour des années civiles~: le moins élevé de la moyenne des douze derniers mois disponibles au 1er~novembre de l'année précédente et du dernier mois disponible\fsp; sans plancher\fsp; \code{NA} si un mois manque. \\
+\code{minimum\_r132\_3\_1()} & \code{serie}, \code{annee}, \code{decalage} & Minimum de l'article R132-3-1 pour des années civiles~: le moins élevé de la moyenne des douze derniers mois, lus comme les derniers disponibles, au 1er~novembre de l'année précédente et du dernier mois disponible\fsp; sans plancher\fsp; \code{NA} si un mois manque. \\
 \code{plafond\_a132\_1()} & \code{serie}, \code{date}, \code{nature\_primes}, \code{duree\_au\_plus\_\allowbreak 8\_ans}, \code{decalage} & Taux de référence de l'article A132-1 à des dates (75~\% du TME semestriel en prime unique sur huit ans au plus, sinon le minimum de 3,5~\% et de 60~\% de ce taux) et bornes de l'échelle de l'article A132-1-1. \\
-\code{indicateur\_r132\_3\_1()} & \code{serie}, \code{annee}, \code{decalage}, \code{taux\_retenu}, \code{poste}, \code{garantie}, \code{type\_organisme} & Rend une ligne d'indicateur \code{R132\_3\_1} par année~: minimum de \code{minimum\_r132\_3\_1()}, taux retenu, dépassement si le taux retenu est inférieur au minimum. \\
+\code{indicateur\_r132\_3\_1()} & \code{serie}, \code{annee}, \code{decalage}, \code{taux\_retenu}, \code{poste}, \code{garantie}, \code{type\_organisme} & Rend une ligne d'indicateur \code{R132\_3\_1} par année~: minimum de \code{minimum\_r132\_3\_1()}, taux retenu, et \code{depassement} vrai si le taux retenu est inférieur au minimum de plus de $10^{-12}$ (faux à l'égalité, manquant si le minimum l'est). \\
 \code{indicateur\_a132\_1()} & \code{serie}, \code{date}, \code{nature\_primes}, \code{date\_effet}, \code{date\_terme}, \code{decalage}, \code{taux\_tarif}, \code{id\_contrat}, \code{poste}, \code{garantie}, \code{type\_organisme}, \code{approximation\_\allowbreak arrete} & Rend une ligne d'indicateur \code{A132\_1} par contrat~: taux de référence de \code{plafond\_a132\_1()}, taux du tarif, dépassement à trois valeurs (certain, exclu, indéterminé) au regard des bornes de l'échelle. \\
 \code{format.table\_provie()} & \code{x}, \code{...} & Décrit une table en lignes de texte~: identifiant, nature, statut, pas, nombre de points par axe, format natif, conversion, empreinte. \\
 \code{print.table\_provie()} & \code{x}, \code{...} & Imprime \code{format(x)} et rend la table, invisible. \\
+\end{tabular}
+\end{center}
+
+% =============================================================================
+\section{Formats, représentation et indicateurs}
+\label{sec:tables-indicateurs}
+% =============================================================================
+
+\textbf{Aucune table embarquée.} Par décision du mainteneur du 10~novembre
+2026, aucune table réglementaire n'est embarquée dans l'état du code~: les
+valeurs des tables homologuées n'ont pas été lues sur le fac-similé du
+Journal officiel, et la licence de la série des taux n'est pas établie
+(spécification de la branche B2, §~3.1). La fonction de chargement d'une
+table embarquée n'existe donc pas~; toute table est importée par
+\code{lire\_table()} (module \code{lecture}) ou construite en mémoire, puis
+passée au point d'entrée. Les tests et les jeux emploient des tables
+fictives déclarées, au statut \code{fictive}.
+
+\textbf{Formats admis.} \code{formats\_tables()} en rend deux~:
+\code{lx\_age} (mortalité~: âges entiers consécutifs croissants, $l_x$ fini,
+positif ou nul, non croissant, premier terme strictement positif), converti
+par \code{convertir\_lx\_qx()} en $q_x = 1 - l_{x+1}/l_x$ pour chaque âge
+sauf le dernier, un $l_x$ nul mettant hors des axes les âges suivants
+(résultat exact)\fsp; \code{serie\_tme\_mensuelle} (taux~: mois consécutifs
+\code{AAAA-MM} sans doublon, valeurs finies, négatives admises), converti
+par \code{convertir\_pourcent()} (valeur divisée par 100). Un contenu qui ne
+respecte pas son format, ou un format hors de la liste, est refusé
+(\code{format\_table\_inconnu}).
+
+\textbf{Représentation commune.} Une table est un objet
+\code{table\_provie} (ADR~0010, point~15), dont le statut est pris dans
+\code{STATUTS\_TABLE}~: le statut \code{fictive} distingue une table de
+test, qui ne doit jamais se présenter comme une table d'expérience. Son
+empreinte est le MD5 de l'écriture canonique du contenu lu (colonnes du
+format, dans leur ordre, noms compris), indépendante de la mise en forme du
+fichier~: une même table lue d'un fichier ou construite en mémoire a la
+même empreinte. \code{probabilite()} est le seul accès aux valeurs~; hors
+des axes, elle applique la déclaration du plan (\code{refus}~: valeur
+manquante et indices des points hors des axes, que la famille de calcul
+traduit en arrêt du poste\fsp; \code{derniere\_valeur}~: valeur de l'axe la
+plus proche). \code{resoudre\_tables()} rend la table de chaque usage exigé
+et refuse une table absente (\code{table\_absente}), une empreinte
+différente de celle du plan (\code{empreinte\_discordante}), un statut ou
+une nature qui ne sont pas ceux du plan ou de l'usage
+(\code{plan\_invalide})\fsp; elle produit les lignes des tables retenues
+de la fiche de calcul.
+
+\textbf{Indicateurs réglementaires.} Les indicateurs sont des
+signalements~: ils n'arrêtent aucun poste et ne modifient aucun montant.
+Chaque ligne porte les colonnes de \code{COLONNES\_INDICATEURS}. Le dernier
+mois disponible de la série à une date est le mois de cette date diminué
+du décalage de publication déclaré par le plan, hypothèse à statut
+d'approximation, faute d'un calendrier de publication établi.
+
+\begin{itemize}[itemsep=2pt]
+\item \code{R132\_3\_1} (Code des assurances, art.~R132-3-1)~: pour
+  l'année civile~$N$, le minimum est le moins élevé de la moyenne des douze
+  derniers mois du taux, calculée au 1er~novembre de l'année $N-1$ (lue
+  comme celle des douze derniers mois disponibles à cette date, le texte ne
+  précisant «~disponible~» que pour le dernier taux~: interprétation), et du
+  dernier mois disponible à cette date, sans plancher, et manquant si un mois
+  manque (\code{minimum\_r132\_3\_1()}). La ligne compare à ce minimum
+  (\code{valeur\_regle}) le taux de revalorisation retenu par le plan pour
+  l'année (\code{valeur\_retenue}). \textbf{Le champ \code{depassement}
+  signale un taux retenu inférieur au minimum}~: il vaut \code{TRUE} quand
+  le taux retenu est inférieur au minimum de plus de $10^{-12}$,
+  \code{FALSE} à l'égalité et au-dessus (le texte admet un taux égal au
+  minimum), et \code{NA} si le minimum est incalculable. Le mot
+  «~dépassement~» y désigne donc un écart sous le minimum, de sens inverse
+  à celui de l'indicateur \code{A132\_1}~; le champ \code{detail}
+  (\code{annee=AAAA;minimum}) le rappelle, et porte en outre
+  \code{indicateur\_negatif} pour un minimum négatif,
+  \code{ip\_renvoi\_L932-23\_incertain} pour une institution de prévoyance et
+  \code{serie\_incomplete} pour un minimum incalculable. L'assimilation de
+  la série importée au taux moyen des emprunts de l'État visé par le texte
+  est une hypothèse déclarée (approximation).
+\item \code{A132\_1} (Code des assurances, art.~A132-1 et A132-1-1)~: la
+  valeur de la règle est 75~\% du taux moyen sur six mois en prime unique
+  pour une durée d'au plus huit ans, sinon le moins élevé de 3,5~\% et de
+  60~\% de ce taux (\code{plafond\_a132\_1()}~; le code applique le plafond de
+  3,5~\% avant l'échelle, alors qu'A132-1-1 ne nomme «~taux de référence
+  mensuel~» que le produit par 60~\% ou 75~\%~: écart signalé (issue~88),
+  sans effet sur une provision). L'historique du plafond
+  étant inconnu, la ligne l'encadre par les points extrêmes de l'échelle
+  d'A132-1-1 au pas de 0,25~point compatibles avec la référence, sans
+  descendre sous zéro~; \code{depassement} a trois valeurs~: \code{TRUE} si
+  le taux du tarif dépasse la borne haute (dépassement certain),
+  \code{FALSE} s'il est au plus la borne basse (dépassement exclu), \code{NA}
+  entre les deux. Le délai de trois mois de l'article A132-1-1 n'est pas
+  pris en compte (\code{delai\_3\_mois\_non\_pris\_en\_compte} dans
+  \code{detail})~: un \code{TRUE} peut être un faux positif pour un contrat
+  souscrit dans les trois mois qui suivent une baisse du plafond. Le texte
+  vise un taux que la série unique importée ne restitue qu'approximativement
+  (deux lectures du texte, décrites par la spécification, §~3.5, ne sont
+pas tranchées). En
+  primes périodiques, un terme absent n'empêche pas le calcul
+  (\code{terme\_absent})~; en prime unique, la ligne est alors manquante,
+  sans hypothèse par défaut.
+\end{itemize}
+
+Les comparaisons des deux indicateurs se font à $10^{-12}$ près~: c'est une
+approximation numérique, le seuil étant très au-dessus de l'erreur
+d'arrondi binaire et très au-dessous de la résolution des taux\fsp; aucun
+arrondi n'est prescrit par les textes cités.
+
+Les constantes du module sont citées d'après le code (\code{R/tables.R})~:
+
+\begin{center}
+\small
+\rowcolors{2}{tablerow}{white}
+\begin{tabular}{@{}p{5.6cm}p{9.5cm}@{}}
+\rowcolor{tableheader}
+\textcolor{financeblue}{\textbf{Constante}} & \textcolor{financeblue}{\textbf{Valeur et objet}} \\
+\code{STATUTS\_TABLE} & \code{homologuee}, \code{certifiee}, \code{experience}, \code{loi\_anc}, \code{fictive}~: statuts d'une table, lus aussi par le module \code{plan}. \\
+\code{HORS\_AXES} & \code{refus}, \code{derniere\_valeur}~: comportements hors des axes, déclarés par le plan. \\
+\code{COLONNES\_INDICATEURS} & \code{regle}, \code{poste}, \code{garantie}, \code{valeur\_regle}, \code{valeur\_retenue}, \code{depassement}, \code{detail}~: colonnes d'une ligne d'indicateur. \\
 \end{tabular}
 \end{center}
 
