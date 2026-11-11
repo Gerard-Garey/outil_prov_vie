@@ -2958,7 +2958,7 @@ cause (dossier ou contrat) dans les paramètres retenus du poste~:
 \code{hors\_axes} & Table lue hors de ses axes sous la déclaration \code{refus} (provision mathématique de la temporaire décès). \\
 \code{affiliation\_non\_determinee} & Sinistres déclarés non réglés et capitaux non réclamés~: affiliation qui porte l'assiette d'un capital à reconstituer non déterminée (section~\ref{sec:engagement-capital}). \\
 \code{assiette\_non\_determinee} & Mêmes postes~: salaire de référence de l'affiliation retenue manquant. \\
-\code{parametre\_non\_determine} & Mêmes postes~: paramètre du capital absent, à plusieurs valeurs ou exclu pour la famille «~engagement~»\fsp; provision mathématique de la temporaire décès~: paramètre, date de naissance ou fin de couverture indéterminés (section~\ref{sec:risque-en-cours-p3}). \\
+\code{parametre\_non\_determine} & Mêmes postes~: paramètre du capital absent, à plusieurs valeurs ou exclu pour la famille «~engagement~»\fsp; provision mathématique de la temporaire décès~: paramètre manquant, à plusieurs valeurs ou exclu pour la famille «~risque en cours~», date de naissance manquante ou fin de couverture indéterminée (section~\ref{sec:risque-en-cours-p3}). \\
 \code{famille\_non\_determinee} & Sinistres déclarés non réglés et capitaux non réclamés~: majoration familiale inconnue d'un dossier instruit. \\
 \end{tabular}
 \end{center}
@@ -2992,7 +2992,7 @@ n'est exportée.
 \code{facteur\_revalorisation()} & \code{debut}, \code{fin}, \code{taux\_par\_annee}, \code{prorata}, \code{conventions}, \code{arrete}, \code{taux\_futur} & Facteur de revalorisation légale entre deux dates, produit sur les années civiles, au prorata simple ou composé\fsp; refus \code{plan\_incomplet} pour une année sans taux. Seule implémentation du package. \\
 \code{valeur\_actuelle\_probable()} & \code{echeancier}, \code{actualisation}, \code{conventions} & Seule fonction de valeur actuelle probable du package~: flux $\times$ probabilité $\times$ facteur d'actualisation, sommés par clé. Lue aussi par \code{risque\_en\_cours}. \\
 \code{duree\_annees()} & \code{debut}, \code{fin}, \code{conventions} & Durée en années entre deux dates selon la convention de décompte des jours (\code{exact\_exact} ou \code{exact\_365}). \\
-\code{parametre\_vue()} & \code{vue}, \code{nom}, \code{gs}, \code{famille = NULL} & Rend un paramètre de chaque garantie souscrite dans la vue\fsp; \code{NA} s'il manque, \code{ambigu} s'il porte plusieurs valeurs\fsp; si une famille de calcul est donnée, \code{exclu} signale une ligne retenue du paramètre exclue pour cette famille. Seule lecture des paramètres d'une garantie souscrite. \\
+\code{parametre\_vue()} & \code{vue}, \code{nom}, \code{gs}, \code{famille = NULL} & Rend un paramètre de chaque garantie souscrite dans la vue\fsp; \code{NA} s'il manque, \code{ambigu} s'il porte plusieurs valeurs\fsp; si une famille de calcul est donnée, \code{exclu} signale une ligne retenue du paramètre exclue pour cette famille. Seule lecture des paramètres d'une garantie souscrite, appelée par les familles «~engagement~» et «~risque en cours~». \\
 \code{statut\_le\_plus\_faible()} & \code{statuts} & Rend le plus faible d'un ensemble de statuts de résultat (\code{exact} sans élément). \\
 \code{statut\_methode\_catalogue()} & \code{catalogue}, \code{garantie}, \code{poste}, \code{champ}, \code{methode} & Rend le statut d'une méthode au catalogue~: la première méthode du champ est recommandée, les suivantes alternatives. \\
 \end{tabular}
@@ -3233,6 +3233,26 @@ prime déclarée pour un contrat à primes périodiques,
 \code{prime\_periodique}), une date de naissance manquante ou une fin de
 couverture indéterminée arrêtent le poste
 (\code{parametre\_non\_determine}, premier contrat en cause).
+
+\textbf{Champ individuel~: paramètres exclus.} Les paramètres lus sont ceux
+de la méthode déclarée, pour chaque contrat de la population, quel que soit
+le chemin des données~: \code{capital\_forfaitaire} et
+\code{age\_fin\_garantie} sous les deux méthodes, et, en plus, sous la
+méthode de la prime déclarée, \code{prime\_periodique}, quelle que soit la
+périodicité du contrat (jugement d'expert de la
+spécification, version~1.0.9). Un paramètre lu dont une ligne retenue est
+exclue pour la famille «~risque en cours~» n'est pas déterminé, comme un
+paramètre manquant~: le poste est arrêté (\code{parametre\_non\_determine},
+premier contrat en cause), et la valeur exclue ne vaut jamais zéro ni
+absente (issue~78 du dépôt). Un \code{age\_fin\_garantie} exclu est inconnu
+avant le calcul de la fin de couverture (lecture de Kleene)~: le contrat
+sort de la population si le terme ou la fin du contrat placent seuls la fin
+de couverture au plus l'arrêté\fsp; sinon le poste est arrêté, même si la
+valeur exclue placerait la fin de couverture au plus l'arrêté. Sont hors de
+la règle une exclusion pour une autre famille de calcul,
+\code{prime\_periodique} sous \code{prospective\_prime\_pure}, et les
+paramètres d'un contrat hors de la population. Le champ collectif ne lit
+aucun paramètre.
 
 \textbf{Champ individuel~: échéancier.} Les bornes sont l'arrêté, chaque
 date de pas postérieure (années ou mois d'assurance, comptés depuis la date
