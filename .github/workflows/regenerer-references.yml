@@ -1,0 +1,60 @@
+name: Régénération des références
+
+# Workflow de régénération des références de non-régression (ADR 0011, points 16 à 22 ;
+# ADR 0010, point 27, annoté). Lancé à la main seulement (workflow_dispatch), par la session
+# principale ou par le mainteneur à sa demande, jamais par un sous-agent ni par un circuit ;
+# jamais sur main. En lecture seule : il produit un candidat (artefact) et n'écrit jamais
+# dans le dépôt. Régénérer, c'est commiter le candidat, après visa, par un commit de référence
+# de la session principale, enfant direct du commit calculé (ADR 0011, points 18 à 20).
+# Plateforme de référence : même conteneur, au même digest, que le job « Tests (R 4.3.3) » de
+# ci.yml (contrôlé par tests/controles/image_reference.R, avec CONTEXT.md, « Plateforme de
+# référence »). Ce workflow n'est pas un contrôle requis du ruleset.
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  candidat:
+    name: Candidat de références (R 4.3.3)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    container: rocker/r-ver:4.3.3@sha256:732d15020af326da9e919c07f70ca32bf5d3e409220af32e0a4b6d0a89437309
+    env:
+      PROVIE_IMAGE: rocker/r-ver:4.3.3@sha256:732d15020af326da9e919c07f70ca32bf5d3e409220af32e0a4b6d0a89437309
+    steps:
+      - name: Refus de main
+        run: |
+          if [ "$GITHUB_REF" = "refs/heads/main" ]; then
+            echo "::error::le workflow de régénération ne tourne pas sur main (ADR 0011, point 16)"; exit 1
+          fi
+          echo "Branche : $GITHUB_REF"
+      # git peut manquer dans l'image : l'action télécharge alors l'archive par l'API.
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - name: Plateforme (R, bibliothèques d'algèbre linéaire)
+        run: Rscript -e 'sessionInfo(); print(extSoftVersion()); print(La_version())'
+      # Une batterie rouge arrête : on ne fige pas un état cassé (ADR 0011, point 16).
+      - name: Batterie unitaire
+        run: Rscript tests/test_unitaires.R
+      # Dossier du candidat : chemin relatif à l'espace de travail, le même dans les étapes run:
+      # et dans path: d'upload-artifact ($RUNNER_TEMP et ${{ runner.temp }} divergent dans un job
+      # conteneurisé). Hors de tests/reference/ (refusé par regenerer_references.R).
+      - name: Candidat (deux calculs par couple, rejeu de la fiche)
+        env:
+          PROVIE_REGENERATION: "1"
+        run: Rscript tests/regenerer_references.R candidat-references
+      - name: Résumé du run (totaux, avant / après, empreinte de l'arbre, plateforme)
+        run: cat candidat-references/rapport/resume.md >> "$GITHUB_STEP_SUMMARY"
+      # actions/upload-artifact est une action de GitHub, admise par la limitation des actions
+      # du dépôt ; épinglée par SHA (étiquette v4.6.2, relevée par git ls-remote).
+      - name: Dépôt du candidat en artefact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: candidat-references-${{ github.run_id }}-${{ github.run_attempt }}
+          path: candidat-references
+          if-no-files-found: error
+          retention-days: 30
