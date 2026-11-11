@@ -2958,7 +2958,7 @@ cause (dossier ou contrat) dans les paramètres retenus du poste~:
 \code{hors\_axes} & Table lue hors de ses axes sous la déclaration \code{refus} (provision mathématique de la temporaire décès). \\
 \code{affiliation\_non\_determinee} & Sinistres déclarés non réglés et capitaux non réclamés~: affiliation qui porte l'assiette d'un capital à reconstituer non déterminée (section~\ref{sec:engagement-capital}). \\
 \code{assiette\_non\_determinee} & Mêmes postes~: salaire de référence de l'affiliation retenue manquant. \\
-\code{parametre\_non\_determine} & Mêmes postes~: paramètre du capital absent ou à plusieurs valeurs\fsp; provision mathématique de la temporaire décès~: paramètre, date de naissance ou fin de couverture indéterminés (section~\ref{sec:risque-en-cours-p3}). \\
+\code{parametre\_non\_determine} & Mêmes postes~: paramètre du capital absent, à plusieurs valeurs ou exclu pour la famille «~engagement~»\fsp; provision mathématique de la temporaire décès~: paramètre, date de naissance ou fin de couverture indéterminés (section~\ref{sec:risque-en-cours-p3}). \\
 \code{famille\_non\_determinee} & Sinistres déclarés non réglés et capitaux non réclamés~: majoration familiale inconnue d'un dossier instruit. \\
 \end{tabular}
 \end{center}
@@ -2992,7 +2992,7 @@ n'est exportée.
 \code{facteur\_revalorisation()} & \code{debut}, \code{fin}, \code{taux\_par\_annee}, \code{prorata}, \code{conventions}, \code{arrete}, \code{taux\_futur} & Facteur de revalorisation légale entre deux dates, produit sur les années civiles, au prorata simple ou composé\fsp; refus \code{plan\_incomplet} pour une année sans taux. Seule implémentation du package. \\
 \code{valeur\_actuelle\_probable()} & \code{echeancier}, \code{actualisation}, \code{conventions} & Seule fonction de valeur actuelle probable du package~: flux $\times$ probabilité $\times$ facteur d'actualisation, sommés par clé. Lue aussi par \code{risque\_en\_cours}. \\
 \code{duree\_annees()} & \code{debut}, \code{fin}, \code{conventions} & Durée en années entre deux dates selon la convention de décompte des jours (\code{exact\_exact} ou \code{exact\_365}). \\
-\code{parametre\_vue()} & \code{vue}, \code{nom}, \code{gs} & Rend un paramètre de chaque garantie souscrite dans la vue\fsp; \code{NA} s'il manque, \code{ambigu} s'il porte plusieurs valeurs. \\
+\code{parametre\_vue()} & \code{vue}, \code{nom}, \code{gs}, \code{famille = NULL} & Rend un paramètre de chaque garantie souscrite dans la vue\fsp; \code{NA} s'il manque, \code{ambigu} s'il porte plusieurs valeurs\fsp; si une famille de calcul est donnée, \code{exclu} signale une ligne retenue du paramètre exclue pour cette famille. Seule lecture des paramètres d'une garantie souscrite. \\
 \code{statut\_le\_plus\_faible()} & \code{statuts} & Rend le plus faible d'un ensemble de statuts de résultat (\code{exact} sans élément). \\
 \code{statut\_methode\_catalogue()} & \code{catalogue}, \code{garantie}, \code{poste}, \code{champ}, \code{methode} & Rend le statut d'une méthode au catalogue~: la première méthode du champ est recommandée, les suivantes alternatives. \\
 \end{tabular}
@@ -3028,9 +3028,20 @@ pas sont des sinistres tardifs, qui ne relèvent d'aucun de ces postes
 montant en vigueur (résultat exact). Pour un dossier \code{ouvert}, il est
 reconstitué à partir des paramètres de la garantie souscrite du
 dossier~: \code{capital\_forfaitaire} s'il est présent, sinon l'assiette
-multipliée par \code{taux\_capital}, plus les majorations. Un paramètre lu
-à plusieurs valeurs, ou l'absence simultanée de \code{capital\_forfaitaire}
-et de \code{taux\_capital}, arrête le poste (\code{parametre\_non\_determine}).
+multipliée par \code{taux\_capital}, plus les majorations. Les paramètres
+lus sont \code{capital\_forfaitaire}, \code{taux\_capital},
+\code{majoration\_conjoint} et \code{majoration\_enfant}, quel que soit le
+chemin du calcul. Un paramètre lu à plusieurs valeurs, ou dont une ligne
+retenue est exclue pour la famille «~engagement~», n'est pas déterminé, et
+arrête le poste (\code{parametre\_non\_determine}, premier dossier en
+cause), comme l'absence simultanée de \code{capital\_forfaitaire} et de
+\code{taux\_capital} (issue~76 du dépôt). Une valeur exclue ne vaut jamais
+zéro et n'est jamais lue comme absente~: une ligne
+\code{capital\_forfaitaire} exclue ne fait pas passer le calcul à
+l'assiette multipliée par \code{taux\_capital}. Une exclusion pour une
+autre famille de calcul est sans effet, et les paramètres que la
+reconstitution ne lit pas (\code{age\_fin\_garantie},
+\code{prime\_periodique}) sont hors de la règle.
 
 L'assiette est le salaire de référence de l'affiliation retenue, non
 exclue pour la famille «~engagement~», de clé (assuré du sinistre, contrat
@@ -3064,7 +3075,8 @@ comptée pour zéro. Non instruit, la majoration est l'espérance sous la
 structure familiale du plan, assiette $\times$ (\code{majoration\_conjoint}
 $\times$ taux de conjoint $+$ \code{majoration\_enfant} $\times$ nombre
 d'enfants), jugement d'expert. Une majoration absente des paramètres vaut
-zéro, son absence ayant ce sens dans le dictionnaire.
+zéro, son absence ayant ce sens dans le dictionnaire~; une majoration
+exclue n'est pas absente, et arrête le poste comme ci-dessus.
 
 \textbf{Facteur d'issue.} Le capital est pondéré par le complément à~1 de
 \code{taux\_sans\_suite} pour un dossier ouvert d'un sinistre décès,
