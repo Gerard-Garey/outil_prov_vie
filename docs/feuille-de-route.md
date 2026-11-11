@@ -202,6 +202,7 @@ Tenue par `architect`, après chaque série de PR fusionnées. Chaque mise à jo
 
 ### 1.6 Branche du capital décès : `claude/capital-deces` (B2, ouverte)
 
+- **Mise à jour du 11 novembre 2026 (vingt-deuxième série)** (`architect` ; `main` à **`913ae6c`**, fusion de la PR #73, contenue dans la branche, *vérifié* par `git merge-base --is-ancestor` ; branche poussée, **PR #61 en brouillon** (ouverte le 2026-11-10T22:22:18Z), tête **`6a00a06`**, trois check runs `success`, *vérifié* par `gh api` ; arbre de travail : diff de #76 en cours dans `R/engagement.R` et `tests/unitaires/engagement.R`, non commité). Étape 0 faite (0c : ADR 0011 accepté, M256) ; #27, #64, #65 et #66 commitées ; **périmètre porté à sept issues** par le mainteneur (M262 : #76 et #69) ; décisions des 10 et 11 novembre consignées en **M245 à M262** ; ADR 0010 annoté (vingt-deuxième série), ADR 0007 annoté (point 10). Les cases et SHA ci-dessous sont relevés par `git log 7cee7aa..HEAD`.
 - **Branche** : `claude/capital-deces`, partie de `main` à `7cee7aa` (fusion de Bdk). Décidée le 10 novembre 2026 (M233, Q1 (b) du point d'étape de la vingt et unième série). Branche locale créée sur `7cee7aa`, **non poussée** (*vérifié* : `git rev-parse HEAD` = `7cee7aa`, absente de `git ls-remote origin`). `main` est passée à **`348877f`** (fusion de la PR #57, version `0.4.0`) ; la session la fusionne dans la branche après le commit de la présente mise à jour (commit de fusion, `repo:` seul, résultats strictement identiques par construction). **PR brouillon à ouvrir par la session au premier push**, corps à cinq lignes `Closes #N` : `Closes #27`, puis une ligne par issue créée à l'étape 0d, dans l'ordre des commits. #51 et #54 n'y figurent pas (décompte (i), M234) : la session les ferme après la fusion, par un commentaire qui renvoie à l'issue (3), et vérifie leur fermeture comme celle des autres (forme de fermeture choisie par `architect`). B2 est la branche prévue depuis le cadrage (M3, M66) ; aucun écart nouveau à M66.
 - **Objet** : les **premiers montants** de l'outil, ceux du capital décès des garanties décès de la v1 en comptes sociaux. La branche livre :
   - le plan de calcul et la fiche (ADR 0007) ;
@@ -226,8 +227,9 @@ Tenue par `architect`, après chaque série de PR fusionnées. Chaque mise à jo
     2. dix-neuvième série, (b) : la règle de lecture d'une partie de ligne illisible par les modules lecteurs de la vue, que précise la lecture (a) de M234 (partie marquée `NA` dans `.visibilite_a()$parties`, logique de Kleene) ;
     3. dixième série, (d) : l'exigence de `conventions$limite_age`, conditionnée aux garanties du plan.
   - **ADR 0011** (références de non-régression, M240) : rédigé à l'étape 0c ; son routage est à confirmer par le mainteneur (M240).
+  - *Vingt-deuxième série (11 novembre 2026)* : **ADR 0011 accepté** (M256 à M260 ; routage M253, Fable 2/3). **ADR 0010 annoté** (vingt-deuxième série) : les trois annotations prévues ci-dessus, les points 1, 6, 13 à 17 selon la spécification, § 9 (dont le point 14 : `etats_a_date(vue, garanties, famille)`), M236 soldée (annotation du 8 novembre, questions renvoyées à #27), arête `lecture` → `tables`, et les précisions de l'ADR 0011 aux points 22, 25, 26 et 27. **ADR 0007 annoté** (point 10, lu comme une couverture). **Reste** : annotation de l'ADR 0009 (points 3 et 5, M249 ; spécification, § 9), non faite à cette série.
 - **Étape 0, avant tout code** (exception de la règle 9 : le document porte la décision et précède le code) :
-  - [ ] **0a — `regulatory-approfondi`** (**lancée le 10 novembre 2026**, selon la session). Textes du périmètre de B2 :
+  - [x] **0a — `regulatory-approfondi`** (**lancée le 10 novembre 2026**, selon la session ; faite : lectures LEGI et CELLAR, commentaires sur #10 et #13 ; tables non lues sur le fac-similé, licence TME non trouvée, d'où M249). Textes du périmètre de B2 :
     - revalorisation légale des capitaux non réclamés : L132-5, dernier alinéa, et loi n° 2014-617 (#14, point 5 ; #13) ;
     - A132-1 « souscription » ;
     - ANC 142-4 et A132-18-1 (#13) ;
@@ -235,7 +237,7 @@ Tenue par `architect`, après chaque série de PR fusionnées. Chaque mise à jo
     - licence de la série TME (#10), sinon import.
 
     Livrable : matrice de conformité et provenances, chaque fait *vérifié* contre sa source ; les statuts « incertain » et « non trouvé » sont écrits tels quels.
-  - [ ] **0b — `actuary-approfondi`**, puis **visa du mainteneur** et commit `docs:` préparatoire de la session. **Spécification de B2**, tirée du recensement visé de #20 (M131) et de la lecture de 0a :
+  - [x] **0b — `actuary-approfondi`** (faite : `814216c`, visa délégué M245, validé a posteriori M252 ; errata v1.0.1 `186356b`, v1.0.2 `18ade56`, v1.0.3 `de16bd2`, v1.0.4 `d864e60`, v1.0.5 `7291d4a` et `1b2b2a5`, v1.0.6 `b9ae558`, v1.0.7 `6a00a06` pour #76), puis **visa du mainteneur** et commit `docs:` préparatoire de la session. **Spécification de B2**, tirée du recensement visé de #20 (M131) et de la lecture de 0a :
     - contenu des sections du plan de la v1 (ADR 0010, point 17 ; sous-schéma `donnees` inchangé) ;
     - états et transitions du capital décès (`etats.csv`, `transitions.csv`, point 14) et entrée du catalogue (point 16) ;
     - sortie de `etats_a_date()`, dont la lecture des parties de ligne (#51), avec **confirmation que « illisible » vaut « inconnu »** (condition de M234) ;
@@ -245,7 +247,7 @@ Tenue par `architect`, après chaque série de PR fusionnées. Chaque mise à jo
     - critères d'acceptation des quatre issues (1) à (4), avec des **cas à valeurs en dur**.
 
     Après le visa, `architect` annote l'ADR 0010 (ci-dessus, « ADR »).
-  - [ ] **0c — `architect-approfondi`** (routage à confirmer par le mainteneur, M240) : **ADR 0011, références de non-régression** (modèle : ADR 0009 d'`outil_tables`). Il fixe :
+  - [x] **0c — `architect-approfondi`** (faite : sur Fable, M253 ; ADR 0011 accepté le 11 novembre 2026, M256 à M260, commit de la vingt-deuxième série) : **ADR 0011, références de non-régression** (modèle : ADR 0009 d'`outil_tables`). Il fixe :
     - les grandeurs comparées et leur tolérance : comparaison valeur par valeur, à tolérance, des provisions et du **contenu du bilan** de `controler_base()` ;
     - l'exclusion de `version_provie` ;
     - les dates d'arrêté : **chaque** jeu versionné (`v1-modeste-01`, `v1-modeste-02`) aux deux arrêtés, 2025-12-31 (égal à l'extraction) et 2024-12-31 (antérieur) (M240) ;
@@ -253,17 +255,17 @@ Tenue par `architect`, après chaque série de PR fusionnées. Chaque mise à jo
     - la disposition sous `tests/reference/` et les cas de régénération annoncés (dictionnaire `1.6` en Bdr, M238).
 
     Rédigé après 0b, dont il lit la forme de l'objet ; avec lui, les annotations de l'ADR 0010.
-  - [ ] **0d — création des quatre issues** (1) à (4) par la session, sur accord du mainteneur :
+  - [x] **0d — création des quatre issues** (1) à (4) par la session, sur accord du mainteneur (faite : **#64** (1), **#65** (2), **#66** (3), **#67** (4), `ready-for-agent` ; issue de transcription des tables **#68**, hors périmètre) :
     - corps commençant par `> *Rédigé par l'agent architect (IA).*`, critères renvoyant à la spécification visée ;
     - libellés `needs-triage`, puis `ready-for-agent` sur ordre du mainteneur ;
     - #27 passe à `ready-for-agent` sur le même ordre (ses trois questions sont tranchées, M236).
-- **Périmètre** (fermé, M244 ; cinq issues), dans l'ordre des commits. Un commit par issue, plus les commits `donnees:` des tables embarquées (un par table, rattachés à (2)), plus le relèvement de version en dernier commit (M241) :
-  - [ ] **#27 — Durcissement des scripts de contrôle** (`tests/controles/`, `avec_graine()`) — `coder`, circuit 3 (workflow `circuit-technique`), `audit`. En tête, parce que `graphe_modules.R` contrôlera les modules nouveaux. Critères :
+- **Périmètre** (fermé, M244 ; cinq issues ; **sept depuis M262** : #76 et #69 ajoutées par le mainteneur, au-delà du plafond), dans l'ordre des commits. Un commit par issue, plus les commits `donnees:` des tables embarquées (un par table, rattachés à (2)), plus le relèvement de version en dernier commit (M241) :
+  - [x] **#27 — Durcissement des scripts de contrôle** (`79e2c91` `moteur:` N7, `f95cf1a` `tests:` ; arbitrages validés, M252) (`tests/controles/`, `avec_graine()`) — `coder`, circuit 3 (workflow `circuit-technique`), `audit`. En tête, parce que `graphe_modules.R` contrôlera les modules nouveaux. Critères :
     - N1 à N7 remesurés, chacun corrigé avec un **témoin négatif** (N7 selon M108 et M115) ;
     - trois questions appliquées (M236) : `environment()` sans argument **reste interdit** dans `R/` (témoin) ; l'analyse de portée par fonction a une **limite documentée** dans le script, protégée par un **témoin** du cas non détecté ; les **commentaires accentués** sont admis (exemption de `frontiere_calcul_affichage.R` confirmée et documentée).
 
     Résultats : aucun.
-  - [ ] **(1) Module `plan`** (issue à créer, 0d) — `coder-approfondi`, circuit 1 (d'office), `audit` léger, `actuary` valide. Critères :
+  - [x] **(1) Module `plan`** (**#64** ; `911a9a7` `moteur:`, `1b43189` et `b02f8de` `docs:` de concordance ; fusion de `main` `5aa5fd5`) — `coder-approfondi`, circuit 1 (d'office), `audit` léger, `actuary` valide. Critères :
     - schéma du plan de la v1, sans valeur par défaut dans `valider_plan()` ;
     - canonisation ;
     - fiche et sérialisation par `ecrire_liste()`, **aller-retour octet pour octet** ;
@@ -274,14 +276,14 @@ Tenue par `architect`, après chaque série de PR fusionnées. Chaque mise à jo
     - sous-schéma `donnees` inchangé (point 17).
 
     Résultats : aucun (aucune provision calculée).
-  - [ ] **(2) Module `tables`** (issue à créer, 0d) — `coder-approfondi`, circuit 1, `audit` léger, `regulatory` contrôle la conformité, `actuary` valide. Critères :
+  - [x] **(2) Module `tables`** (**#65** ; `26293f4` `moteur:`, `688a67d` `docs:` de concordance ; aucun commit `donnees:`, aucune table embarquée, M249) — `coder-approfondi`, circuit 1, `audit` léger, `regulatory` contrôle la conformité, `actuary` valide. Critères :
     - formats admis et représentation `table_provie` (ADR 0009, point 8 ; ADR 0010, point 15) ;
     - provenance établie sur le fac-similé du JO, **un commit `donnees:` par table embarquée** ;
     - indicateur A132-1 / TME (M85, M128), embarqué si la licence TME est établie (#10), sinon importé ;
     - refus `table_absente` et `empreinte_discordante` testés.
 
     Résultats : aucun.
-  - [ ] **(3) Familles « engagement » et « risque en cours », capital décès, `etats_a_date()`, avec #51 et #54** (issue à créer, 0d) — `coder-approfondi`, circuit 1, `audit` léger, `regulatory` sur la revalorisation, `actuary` valide. Critères :
+  - [x] **(3) Familles « engagement » et « risque en cours », capital décès, `etats_a_date()`, avec #51 et #54** (**#66** ; `c7535d8` commit (3.1), tableau visé par `actuary` ; `60751ac` `moteur:` ; `9d2404d` `docs:` de concordance ; réserves d'`actuary` : #76, contre-vérification `lifecontingencies` non faite, #75) — `coder-approfondi`, circuit 1, `audit` léger, `regulatory` sur la revalorisation, `actuary` valide. Critères :
     - PSAP vie des sinistres déclarés non réglés, dossier par dossier (M81) ;
     - capitaux non réclamés, avec revalorisation acquise seule en comptes sociaux (M122) ;
     - provision mathématique de la temporaire dans `risque_en_cours` (M118) ;
@@ -291,7 +293,8 @@ Tenue par `architect`, après chaque série de PR fusionnées. Chaque mise à jo
     - **contre-vérification `lifecontingencies`** : valeurs en dur dans les tests, produites par un script hors CI qui consigne les versions.
 
     **Bilan existant inchangé attendu** (tableau avant / après sur les bases des tests et les deux jeux, aux deux arrêtés ; une ligne changée est une régression ou demande un commit `moteur:` distinct en tête de (3), avec son propre visa). Les provisions sont nouvelles : elles n'ont pas d'« avant ».
-  - [ ] **(4) `calculer_provisions()`, `resultat_provie` et workflow de régénération** (issue à créer, 0d ; workflow en commit `repo:`) — `coder-approfondi`, circuit 1, `audit` léger, `actuary` valide, **visa du mainteneur sur les premiers totaux** (provision totale par garantie et par référentiel). Critères :
+  - [ ] **#76 — Exclusions de famille de calcul sur `parametres` dans la reconstitution du capital** (M262 ; avant #67) — circuit 1 : erratum v1.0.7 d'`actuary` (`6a00a06`, commit `docs:` préparatoire), `coder-approfondi` (diff en cours), `audit` léger, `actuary` valide. Critères : ceux de l'issue et du critère (3.15) de la spécification ; l'échec attendu de #66 devient un test ordinaire. Résultats : poste arrêté au lieu d'un montant `exact` sur des bases construites des tests ; bilan, jeux versionnés inchangés ; aucun total (avant #67).
+  - [ ] **(4) `calculer_provisions()`, `resultat_provie` et workflow de régénération** (**#67** ; workflow en commit `repo:`) — `coder-approfondi`, circuit 1, `audit` léger, `actuary` valide, **visa du mainteneur sur les premiers totaux** (provision totale par garantie et par référentiel). Critères :
     - signature à quatre arguments (ADR 0010, point 5 ; M87) ;
     - table `ETAPES` et invariants du point 7 ;
     - total arrêté (spécification de B2, § 6, point 1) ;
@@ -301,16 +304,21 @@ Tenue par `architect`, après chaque série de PR fusionnées. Chaque mise à jo
     - refus d'appel et arrêt de poste distingués (point 11) ;
     - aucune dépendance à Shiny ;
     - **références** produites selon l'ADR 0011, par la session, sur la CI seule, après le visa.
+    - *Précisé par l'ADR 0011 accepté* : `representation_resultat()` dans `rapport` ; `tests/references.R` (`COUPLES_REFERENCE`, plans `recommandees` et `alternatives`, `comparer_feuilles()`), `tests/regenerer_references.R`, `informer()` dans le harnais ; `.github/workflows/regenerer-references.yml` ; `tests/controles/image_reference.R` et `commit_reference.sh` (job « Contrôles du dépôt ») ; dix couples déclarés, `a_produire` jusqu'au premier commit de référence (M259) ; base construite `construite-deces-01` dans `tests/b2_bases.R`, après l'erratum d'`actuary` qui en fixe la composition, les hypothèses des plans et le tableau de recoupement (ADR 0011, point 13).
+  - [ ] **#69 — Jeu versionné `v1-modeste-03`** (M254, M262) — circuit 1 : `actuary` spécifie (loi vraie, table de mortalité fictive couvrant les âges du jeu), `coder-approfondi` (extension additive du simulateur), `audit` léger ; jeu écrit par la session en commit `donnees:`, visé par le mainteneur (`date_visa`, M188). Critères : ADR 0011, point 14 ; `v1-modeste-01` et `v1-modeste-02` régénérés à l'octet, sinon `VERSION_SIMULATEUR` relevée. Ordre relatif à #67 fixé par la session. Résultats : jeu nouveau ; couples V1 et V2 sous référence.
 - **Ce qui précède les premières références** (commit de référence) :
   - commits 1 à 5 faits, et corrections de la revue finale ;
-  - ADR 0011 visé ;
-  - visa des premiers totaux ;
-  - workflow de régénération en place ;
+  - ADR 0011 visé (fait : M256) ;
+  - erratum d'`actuary` sur la base construite et spécification du jeu de #69 ; #69 commitée (jeu visé) ;
+  - workflow de régénération en place (correctif rapide `repo:` vers `main` si GitHub l'exige, ADR 0011, point 16) ;
+  - candidat du workflow, puis visa des premiers totaux du résumé du run (M255, M260), commentaire de visa dans la PR (ADR 0011, point 19) ;
+  - commit de référence enfant direct du commit calculé, puis commit `tests:` qui lève les marques `a_produire` (M259) ;
   - décision explicite sur le dictionnaire `1.6` (prise : M238).
 
   **Assumé** (M238) : le dictionnaire `1.6` et les reliquats de Bdr qui changent un contenu du bilan (Bdr-a : #53, #49, #50, #48 ; Bdr-b : #60, parts de #34, possiblement #56) obligeront à **régénérer les références de B2** dans Bdr, après visa, avec leur tableau avant / après. D'où Bdr-b plutôt tôt (§ 2).
 - **Dépendances** (ajoutées par le présent plan) :
   - (1) à (4) → spécification visée (0b) ; (4) → ADR 0011 (0c) ;
+  - *ajoutées le 11 novembre 2026* (ADR 0011, « Conséquences » ; M262) : #76 → erratum v1.0.7 (fait) ; #67 → #76 (même reconstitution du capital, totaux à viser sur un code corrigé) ; #69 → spécification du jeu (`actuary`) ; test de recoupement et couples C1 à C4 → erratum d'`actuary` sur la base construite ; commit de référence → #67 et #69 ;
   - (1) → #27 (scripts durcis avant les modules nouveaux) ;
   - (3) → (1) et (2) (paramètres et tables lus) ; (4) → (1), (2) et (3) ;
   - part #51 / #54 de (3) → Bdk (fusion, faite).
@@ -328,22 +336,20 @@ Tenue par `architect`, après chaque série de PR fusionnées. Chaque mise à jo
 
   `app-review` sans objet (`app/` non touchée).
 - **Critères de fin** :
-  - cinq issues commitées dans l'ordre ;
-  - spécification de B2 visée ; ADR 0011 accepté ; ADR 0010 annoté (points 11 (b) et 24, lecture des parties de ligne, `limite_age`) ;
+  - sept issues commitées dans l'ordre (M262) ;
+  - spécification de B2 visée ; ADR 0011 accepté ; ADR 0010 annoté (points 11 (b) et 24, lecture des parties de ligne, `limite_age`) (faits : M252, M256, vingt-deuxième série) ; couverture des sept méthodes du capital décès (ADR 0011, point 15) ;
   - premiers totaux visés par le mainteneur ; références produites par la CI ;
   - trois batteries vertes, `graphe_modules.R` vert, concordance `--strict` verte ;
   - jeux versionnés inchangés à l'octet ;
   - version `0.5.0` ;
   - un `Closes #N` par ligne, issues vérifiées fermées après la fusion, #51 et #54 fermées avec renvoi à (3).
 - **Questions au mainteneur** :
-  - routage de l'ADR 0011 (`architect-approfondi`, ou Fable selon le § 4.1.3 s'il s'agit d'un ADR d'architecture ; soumis par la session) ;
-  - visa de la spécification de B2 (0b) ;
-  - acceptation de l'ADR 0011 (0c) ;
-  - accord sur la création des quatre issues et le passage des libellés (0d) ;
-  - visa des premiers totaux (4).
+  - ~~routage de l'ADR 0011~~ (M253) ; ~~visa de la spécification de B2~~ (M245, M252) ; ~~acceptation de l'ADR 0011~~ (M256) ; ~~création des quatre issues~~ (M250) ;
+  - visa des premiers totaux (4) (M255 : en session, sur le résumé du run) ;
+  - *ouvertes le 11 novembre 2026* : rattachement de **#78** (P3, pendant de #76 ; recommandation d'`architect` : B2, avec #76) ; lancement de la contre-vérification `lifecontingencies` hors CI (`tests/contre_verification/b2_lifecontingencies.R`, critère (3.11)) ; #75 (D03c, D03a) ; A4 (TME, lecture (α) ou (β)) ; `CLAUDE.md`, double sens du mot « workflow » (ADR 0011, « Conséquences »).
 
   La coupe (b) du point d'étape (B2 en deux branches) reste **en réserve** (M244) : elle ne se rouvre que sur décision du mainteneur.
-- **Consultations Fable** : 0/3.
+- **Consultations Fable** : 2/3 (1 : `actuary-approfondi`, I1 à I3, 10 novembre 2026, M246 ; 2 : `architect-approfondi`, ADR 0011, 11 novembre 2026, M253).
 
 ## 2. Branches suivantes
 
@@ -472,6 +478,8 @@ Mise à jour du 10 novembre 2026 (vingt et unième série, point d'étape après
 Pistes de Bdr (point d'étape, à arrêter après la fusion de B2) : **Bdr-a** #53, #49, #52, #50, #48 ; **Bdr-b** #60, #56, #32, parts de #34, puis #59 et #55 ; #41 sans piste.
 
 Dépendances ajoutées : #55 → #59 ; #60, #34 (parts `donnees`), #48, #49, #50, #53 → B2 (fusion, références à régénérer) ; #52 → #49 (même version de la spécification). Retirées : #49, #50, #51 → Bdk (fusion faite) ; #51, #54 comme dépendances des premières références (absorbées par (3)). **Inchangées** : #9, #10 (licence TME, lue en 0a de B2), #11, #13 et #14 (lus en 0a de B2 : point 5 de #14, A132-18-1 et ANC 142-4 de #13), #23, #26, #28.
+
+Mise à jour du 11 novembre 2026 (vingt-deuxième série) : **#76** et **#69** → **B2** (M262) ; **#78** (P3, pendant de #76) et **#79** (`verifier_egal()`, issue proposée par l'ADR 0011) créées, `needs-triage`, **non rattachées** (M261 ; recommandation d'`architect` pour #78 : B2, avec #76). Les issues #59 à #62, #68, #70 à #75 et #77, créées pendant la session des 10 et 11 novembre, sont à ranger au prochain point d'étape.
 
 ## 4. Décisions du mainteneur
 
@@ -743,6 +751,24 @@ Décisions du 8 novembre 2026, transmises par la session principale.
 | M242 | 10/11/2026 | **Q10 : issues créées.** **#58** (réserve de l'audit de #46) en correctif rapide `tests:`, en cours ; **#59** (départage à rang égal, indépendant de l'ordre d'exécution) dans Bdr, **avant #55** (décision du mainteneur du 10/11/2026, point d'étape après Bdk, Q10) | issues #58, #59 ; § 3 |
 | M243 | 10/11/2026 | **Q11 : renvois de ligne de la spécification du module `donnees`.** Les huit renvois `R/donnees.R:NNN` (dont l. 525 et l. 246) deviendront des **noms de fonctions** à la prochaine version de la spécification, dans Bdr, avec #49 et #52 (décision du mainteneur du 10/11/2026, point d'étape après Bdk, Q11) | § 2 (ligne Bdr) ; § 3 |
 | M244 | 10/11/2026 | **Q12 (a) : une seule branche B2 à cinq issues** (#27, (1) plan, (2) tables, (3) engagement et risque en cours avec #51 et #54, (4) `calculer_provisions()` et références) ; la coupe (b) (B2 en deux branches) est **gardée en réserve** (décision du mainteneur du 10/11/2026, point d'étape après Bdk, Q12) | § 1.6 ; § 2 |
+| M245 | 10/11/2026 | **Visa délégué de la spécification de B2** : la spécification d'`actuary-approfondi` vaut visa si elle suit les décisions du même jour ; elle est commitée avec la mention « visa délégué, à confirmer a posteriori » ; une question de fond nouvelle, ou un désaccord entre agents, arrête le circuit. Appliqué à la v1.0 (`814216c`) et aux errata v1.0.1 à v1.0.6. **Confirmé a posteriori par M252** (décision du mainteneur du 10/11/2026, avant son absence, commentaire « Décisions du mainteneur du 10 novembre 2026, avant son absence » de la PR #61, point 1) | `docs/specifications/b2-capital-deces-v1.md` (en-tête) ; § 1.6 (0b) |
+| M246 | 10/11/2026 | **I1, I2 et I3** : avis de `regulatory`, puis d'`actuary-approfondi` sur **Fable** (accord du mainteneur ; consultation Fable 1/3 de B2) ; la session se range à l'avis d'`actuary`. Tranchées ainsi (avis Fable, **validation a posteriori du mainteneur**, M252) : **I1** revalorisation acquise à l'arrêté, méthode recommandée ; revalorisation jusqu'au règlement en méthode alternative sur P1 et P2 (M247) ; **I2** lecture (i), contrats de plus de huit ans, une ligne `A132_1` par contrat et par date d'évaluation ; **I3** lecture (b), primes périodiques, sans effet en B2 (décision du mainteneur du 10/11/2026, avant son absence, commentaire « Décisions du mainteneur du 10 novembre 2026, avant son absence » de la PR #61, point 2) | spécification de B2, § 1.1 à § 1.3, § 10.1 ; corps de la PR #61, « Escalades » |
+| M247 | 10/11/2026 | **M122 amendée** (conséquence de I1, M246 ; proposition de l'avis Fable, spécification de B2, § 1.1 ; validée a posteriori par M252) : « Capitaux décès de la PSAP vie (P1, P2, coût des tardifs) : en comptes sociaux, revalorisation acquise à l'arrêté, méthode recommandée ; revalorisation jusqu'au règlement attendu ou au dépôt, non actualisée, méthode alternative ouverte sur chaque poste, au statut de point prudent ; choix = jugement d'expert déclaré dans le plan, le texte ne tranchant pas. » « À revoir sur mesure en B2 » est remplacé par une sensibilité sur un jeu qui porte des capitaux non réclamés (issue #70, après #69). Méthodes `capital_dossier_reglement` et `capital_revalorise_reglement` au catalogue (`inst/extdata/garanties/postes.csv`) | spécification de B2, § 1.1, § 5.4 ; issue #70 ; M122 |
+| M248 | 10/11/2026 | **I4, I5 et I6 : recommandations de `regulatory` retenues** : **I4** indicateur `R132_3_1` négatif restitué et signalé ; **I5** R132-3-1 appliqué aux institutions de prévoyance par L932-23, hypothèse déclarée au statut incertain ; **I6** année N+1 dans les limites du contrat sous reconduction tacite, sous réserve du préavis (décision du mainteneur du 10/11/2026, avant son absence, commentaire « Décisions du mainteneur du 10 novembre 2026, avant son absence » de la PR #61, point 3) | spécification de B2, § 1.4 à § 1.6 |
+| M249 | 10/11/2026 | **Aucune table réglementaire embarquée en B2** : import seulement, avec une table de mortalité fictive et une série TME fictive, déclarées ; motifs : la valeur des tables n'a pas pu être lue sur le fac-similé du JO, la licence de la série TME n'est pas trouvée. `charger_table()` reporté à la première table embarquée ; aucun commit `donnees:` de table en B2 (décision du mainteneur du 10/11/2026, avant son absence, commentaire « Décisions du mainteneur du 10 novembre 2026, avant son absence » de la PR #61, point 4) | spécification de B2, § 3.1, § 3.6 ; ADR 0010, vingt-deuxième série, (a) 5 ; ADR 0009, points 3 et 5 (annotation à faire) ; issue #68 |
+| M250 | 10/11/2026 | **Autorisations GitHub** : créer les issues (1) à (4) (#64 à #67) et les issues de suite (`needs-triage`) ; commenter #10 et #13 (fait) ; fusionner la PR du correctif rapide #58 si `audit` est conforme et la CI verte (fait : PR #73, commit de fusion `913ae6c`) (décision du mainteneur du 10/11/2026, avant son absence, commentaire « Décisions du mainteneur du 10 novembre 2026, avant son absence » de la PR #61, point 5) | issues #58 à #77 ; handoff de la PR #61 du 11/11/2026 |
+| M251 | 10/11/2026 | **Seconde reprise `coder` → `audit` autorisée** quand l'audit reste non conforme après l'unique reprise, **par dérogation au principe 4** des circuits (`CLAUDE.md`, « Workflows ») ; employée pour #65 et #66 (décision du mainteneur du 10/11/2026, avant son absence, commentaire « Décisions du mainteneur du 10 novembre 2026, avant son absence » de la PR #61, point 6) | corps de la PR #61, « Escalades » |
+| M252 | 11/11/2026 | **Validation a posteriori, en bloc**, de tout ce qui a été pris sous délégation (handoff de la PR #61, points 1 à 6) : visa délégué de la spécification de B2 et errata v1.0.1 (`186356b`), v1.0.2 (`18ade56`), v1.0.3 (`de16bd2`), v1.0.4 (`d864e60`), v1.0.5 (`7291d4a`, `1b2b2a5`) et v1.0.6 (`b9ae558`) ; I1, I2 et I3 (M246, M247) ; erratum v1.0.2 (échelle d'A132-1-1 au pas de 0,25 point avec plafond nul, primes périodiques calculées même sans terme, tolérance de 1e-12 aux bornes, deux lignes `A132_1` par contrat) ; errata v1.0.4 à v1.0.6 (T3, T4 et T6 recalculés, 2024 bissextile ; colonne d'une partie de ligne valant pour toute la partie ; réouverture vers `capital_du` ; `etats_a_date(vue, garanties, famille)` ; motifs d'arrêt `parametre_non_determine`, `assiette_non_determinee` et `famille_non_determinee`) ; arbitrages de la session sur #27 (`output$` et `session$` exemptés quand ils sont locaux ; correction « cible seule » de `graphe_modules.R` ; N4b, N4c, N4e et la famille `parent.frame` renvoyés en #62) ; décisions de forme sur #64 (auxiliaires appelés hors de leur module renommés sans point, ADR 0010, quatrième série (c) ; `echeanciers` canonisé comme un ensemble ; postes de `frais` triés). **Solde M245.** L'erratum v1.0.7 (`6a00a06`, #76) est postérieur et n'est pas couvert : règle décidée sur #76, validée par la session sur avis d'`actuary` (aucune provision totale ni verdict touché) (décision du mainteneur du 11/11/2026, commentaire « Décisions du mainteneur du 11 novembre 2026, à l'ouverture de la session suivante » de la PR #61, point 1) | spécification de B2 (en-tête) ; ADR 0010, vingt-deuxième série ; issue #62 |
+| M253 | 11/11/2026 | **Routage de l'ADR 0011** : rédigé par `architect-approfondi` sur **Fable**, avec l'accord du mainteneur (`docs/agents/routage.md`, § 4.1.3) ; **consultation Fable 2/3** de B2. **Solde le routage laissé ouvert par M240** (décision du mainteneur du 11/11/2026, commentaire « Décisions du mainteneur du 11 novembre 2026, à l'ouverture de la session suivante » de la PR #61, point 2) | ADR 0011 (en-tête) ; § 1.6 |
+| M254 | 11/11/2026 | **A1 (premiers totaux sans contenu) : options (i) et (ii) retenues ensemble** : (i) un plan de référence sur une **base construite** à partir des cas du § 7.4 de la spécification de B2, intégré aux références de l'ADR 0011 ; (ii) le **jeu versionné de #69** (`v1-modeste-03`), qui entre dans le périmètre de B2 (M262) (décision du mainteneur du 11/11/2026, commentaire « Décisions du mainteneur du 11 novembre 2026, à l'ouverture de la session suivante » de la PR #61, point 3) | ADR 0011, points 11, 13 et 14 ; spécification de B2, § 10.2 ; issue #69 ; § 1.6 |
+| M255 | 11/11/2026 | **Visa des premiers totaux pendant la session** : le mainteneur est disponible pour viser les premiers totaux de #67 (provision totale par garantie et par référentiel), sur le résumé du run du workflow de régénération (M260) (décision du mainteneur du 11/11/2026, commentaire « Décisions du mainteneur du 11 novembre 2026, à l'ouverture de la session suivante » de la PR #61, point 4) | issue #67 ; ADR 0011, points 18 (b) et 19 ; § 1.6 |
+| M256 | 11/11/2026 | **ADR 0011 accepté tel que proposé** (références de non-régression : résultat entier et fiche sous `tests/reference/`, sérialiseur unique, comparaison feuille par feuille à tolérance mixte 1e-10, dix couples, workflow de régénération manuel en lecture seule, commit de référence par la session après visa, enfant direct du commit calculé) (décision du mainteneur du 11/11/2026, transmise par la session) | ADR 0011, annotation d'acceptation ; ADR 0010, vingt-deuxième série, (c) ; ADR 0007, annotation du 11/11/2026 ; `CONTEXT.md` |
+| M257 | 11/11/2026 | **Couple C2 gardé** (base construite au 2025-01-01, plan `recommandees` : P3 individuel recoupé à T1 et T3), au-delà de la lettre de A1 (décision du mainteneur du 11/11/2026, transmise par la session) | ADR 0011, point 11 et annotation d'acceptation |
+| M258 | 11/11/2026 | **Couples C3 et C4 gardés** (plan `alternatives` sur la base construite, au 2025-12-31 et au 2025-01-01) : les trois méthodes alternatives du capital décès sont sous référence dès B2, sans échec attendu de couverture (ADR 0007, point 10, annoté) (décision du mainteneur du 11/11/2026, transmise par la session) | ADR 0011, points 11, 12 et 15 ; ADR 0007, annotation du 11/11/2026 |
+| M259 | 11/11/2026 | **Deux états transitoires du point 25 de l'ADR 0011 acceptés** : (i) couple déclaré `a_produire` rendu `[ATTENDU]` jusqu'au premier commit de référence, marques levées par le commit `tests:` qui suit ; (ii) batterie de reproductibilité rouge sur le commit d'une issue, pour les seuls écarts visés, jusqu'au commit de référence qui le suit sans intercalaire ; la PR ne sort pas du brouillon dans l'un de ces états (décision du mainteneur du 11/11/2026, transmise par la session) | ADR 0011, point 25 et annotation d'acceptation |
+| M260 | 11/11/2026 | **Lecture de `CLAUDE.md` confirmée** (« Changements de résultats et reproductibilité ») : pour les premières références (couple sans « avant »), la **CI calcule d'abord** (candidat du workflow de régénération), **puis le mainteneur vise les totaux produits par la CI**, ceux-là mêmes qui seront commités ; « sans visa, rien n'est commité » porte sur le commit de référence (décision du mainteneur du 11/11/2026, transmise par la session) | ADR 0011, point 18 (b) et annotation d'acceptation |
+| M261 | 11/11/2026 | **Issues #78 et #79 créées** sur accord du mainteneur, `needs-triage` : **#78** (exclusions de famille de calcul sur `parametres` dans P3, `risque_en_cours` ; rédigée par `actuary` ; pendant de #76 pour P3) ; **#79** (`verifier_egal()` à tolérance n'est pas une comparaison valeur par valeur ; rédigée par `architect`, issue proposée par l'ADR 0011 ; libellé `bug`). **Aucun rattachement décidé** (décision du mainteneur du 11/11/2026, transmise par la session ; dates de création 2026-11-11T08:13:35Z et 08:13:40Z) | issues #78, #79 ; § 3 |
+| M262 | 11/11/2026 | **#76 et #69 rattachées au périmètre de B2, au-delà du plafond de cinq issues** (M244 ; `CLAUDE.md`, « Git et GitHub », trois à cinq issues) : **sept issues** (#27, #64, #65, #66, #76, #67, #69), écart décidé par le mainteneur, à noter dans la PR #61 avec les lignes `Closes #76` et `Closes #69`. #76 (exclusions sur `parametres` dans la reconstitution du capital) se traite avant la sortie du brouillon (erratum v1.0.7 `6a00a06`) ; #69 suit M254 (décision du mainteneur du 11/11/2026, transmise par la session) | § 1.6 ; issues #69, #76 ; corps de la PR #61 |
 
 **En attente du mainteneur, non numérotée** (9 novembre 2026, quinzième série) : visa de la **spécification du module `donnees` v1.4** (`befba4e`, compléments du visa d'`actuary` sur #33), qui précise M200 (b) en tranchant une double lecture (règle P en logique de Kleene : verdict vrai, faux ou inconnu ; seule la ligne de verdict inconnu est écartée de la détection, au lieu de toute ligne dont une colonne lue porte une valeur refusée). Versée par la session ; **non visée** à cette série. Le visa reçoit son numéro M à sa date. *Soldée le 9 novembre 2026 (seizième série) par M213.*
 
