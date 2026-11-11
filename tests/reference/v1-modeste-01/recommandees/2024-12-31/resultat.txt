@@ -1,0 +1,106 @@
+provie-liste 1
+provisions/garantie	character	deces	deces	deces	deces
+provisions/referentiel	character	comptes_sociaux	comptes_sociaux	comptes_sociaux	comptes_sociaux
+provisions/poste	character	capitaux_non_reclames	provision_mathematique_temporaire_deces	sinistres_declares_non_regles	total
+provisions/famille	character	engagement	risque_en_cours	engagement	\N
+provisions/provision	character	psap_vie	provision_mathematique_vie	psap_vie	\N
+provisions/segmentation	character	ensemble	ensemble	ensemble	ensemble
+provisions/segment	character	ensemble	ensemble	ensemble	ensemble
+provisions/niveau	character	calcul	calcul	calcul	agregat
+provisions/montant	double	0	0	0	0
+provisions/nombre_dossiers	integer	0	0	0	0
+provisions/methode	character	capital_revalorise	individuel:prospective_prime_pure;collectif:prorata_cotisation	capital_dossier	\N
+provisions/statut_methode	character	recommandee	recommandee	recommandee	\N
+provisions/statut_resultat	character	exact	exact	exact	exact
+provisions/statut_calcul	character	calcule	calcule	calcule	calcule
+provisions/motif_arret	character	\N	\N	\N	\N
+dossiers/id_dossier	character
+dossiers/id_sinistre	character
+dossiers/garantie	character
+dossiers/referentiel	character
+dossiers/poste	character
+dossiers/etat	character
+dossiers/date_entree_etat	date
+dossiers/montant	double
+dossiers/methode	character
+dossiers/statut_resultat	character
+dossiers/hypotheses_defaut	character
+echeanciers	null
+triangles	null
+passage	null
+indicateurs/regle	character
+indicateurs/poste	character
+indicateurs/garantie	character
+indicateurs/valeur_regle	double
+indicateurs/valeur_retenue	double
+indicateurs/depassement	logical
+indicateurs/detail	character
+donnees/controles/code	character
+donnees/controles/table	character
+donnees/controles/colonne	character
+donnees/controles/detection	character
+donnees/controles/nombre	integer
+donnees/controles/identifiants	character
+donnees/controles_non_executes/code	character	D03h	D09	D03d	D09	D14	D08	D11	D10e	D07	D09	D10d	D10f	D12	D09	D09
+donnees/controles_non_executes/table	character	garanties_souscrites	parametres	assures	affiliations	famille	sinistres	sinistres	beneficiaires	evenements	evenements	evenements	evenements	evenements	prestations	cotisations
+donnees/controles_non_executes/colonne	character	\N	\N	situation_familiale	\N	\N	\N	date_survenance	qualite	\N	\N	\N	\N	type_evenement	\N	\N
+donnees/controles_non_executes/cause	character	non_lisible	non_implemente	non_implemente	non_implemente	non_implemente	non_implemente	non_implemente	non_implemente	non_implemente	non_implemente	non_implemente	non_implemente	non_implemente	non_implemente	non_implemente
+donnees/refus_tables/table	character
+donnees/refus_tables/colonne	character
+donnees/refus_tables/motif	character
+donnees/refus_tables/portee	character
+donnees/refus_tables/origine	character
+donnees/refus_tables/nombre	integer
+donnees/refus_tables/nombre_visibles	integer
+donnees/refus_tables/identifiants	character
+donnees/refus_tables/nombre_dossiers	integer
+donnees/refus_tables/postes_arretes	character
+donnees/exclusions/motif	character
+donnees/exclusions/famille	character
+donnees/exclusions/action	character
+donnees/exclusions/nombre_lignes	integer
+donnees/exclusions/nombre_dossiers	integer
+donnees/hypotheses_defaut/motif	character
+donnees/hypotheses_defaut/referentiel	character
+donnees/hypotheses_defaut/poste	character
+donnees/hypotheses_defaut/valeur	character
+donnees/hypotheses_defaut/nombre	integer
+donnees/signalements/code	character
+donnees/signalements/table	character
+donnees/signalements/colonne	character
+donnees/signalements/detection	character
+donnees/signalements/nombre	integer
+donnees/signalements/identifiants	character
+donnees/declarations_requises/rubrique	character
+donnees/declarations_requises/motif	character
+donnees/declarations_requises/cle	character
+donnees/declarations_requises/traitements_admis	character
+donnees/declarations_requises/nombre_lignes	integer
+donnees/enjeu/table	character
+donnees/enjeu/colonne	character
+donnees/enjeu/motif	character
+donnees/enjeu/famille	character
+donnees/enjeu/action	character
+donnees/enjeu/garantie	character
+donnees/enjeu/poste	character
+donnees/enjeu/composante	character
+donnees/enjeu/unite	character
+donnees/enjeu/montant	double
+donnees/enjeu/nombre_dossiers	integer
+donnees/enjeu/nombre_valeurs	integer
+donnees/enjeu/cause	character
+donnees/vue/date_arrete	date	2024-12-31
+donnees/vue/date_extraction	date	2025-12-31
+donnees/vue/visibilite_non_determinee/table	character
+donnees/vue/visibilite_non_determinee/colonne	character
+donnees/vue/visibilite_non_determinee/motif	character
+donnees/vue/visibilite_non_determinee/origine	character
+donnees/vue/visibilite_non_determinee/nombre	integer
+donnees/vue/visibilite_non_determinee/identifiants	character
+donnees/vue/provisoire	logical	F
+donnees/segments/id_dossier	character
+donnees/segments/id_sinistre	character
+donnees/segments/id_contrat	character
+donnees/segments/segmentation	character
+donnees/segments/segment	character
+donnees/tables_absentes	character	catastrophes	victimes	evaluations_gestion	designations	ayants_droit_sante

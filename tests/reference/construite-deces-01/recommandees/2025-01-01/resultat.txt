@@ -1,0 +1,115 @@
+provie-liste 1
+provisions/garantie	character	deces	deces	deces	deces	deces	deces	deces	deces	deces	deces
+provisions/referentiel	character	comptes_sociaux	comptes_sociaux	comptes_sociaux	comptes_sociaux	comptes_sociaux	comptes_sociaux	comptes_sociaux	comptes_sociaux	comptes_sociaux	comptes_sociaux
+provisions/poste	character	capitaux_non_reclames	capitaux_non_reclames	provision_mathematique_temporaire_deces	provision_mathematique_temporaire_deces	provision_mathematique_temporaire_deces	sinistres_declares_non_regles	sinistres_declares_non_regles	total	total	total
+provisions/famille	character	engagement	engagement	risque_en_cours	risque_en_cours	risque_en_cours	engagement	engagement	\N	\N	\N
+provisions/provision	character	psap_vie	psap_vie	provision_mathematique_vie	provision_mathematique_vie	provision_mathematique_vie	psap_vie	psap_vie	\N	\N	\N
+provisions/segmentation	character	ensemble	nature_contrat	ensemble	nature_contrat	nature_contrat	ensemble	nature_contrat	ensemble	nature_contrat	nature_contrat
+provisions/segment	character	ensemble	collectif_obligatoire	ensemble	collectif_obligatoire	individuel	ensemble	collectif_obligatoire	ensemble	collectif_obligatoire	individuel
+provisions/niveau	character	calcul	calcul	calcul	calcul	calcul	calcul	calcul	agregat	agregat	agregat
+provisions/montant	double	101506.67397260273	101506.67397260273	8038.5636343609849	562.19178082191786	7476.3718535390672	369590.87526794517	369590.87526794517	479136.1128749089	471659.74102136982	7476.3718535390672
+provisions/nombre_dossiers	integer	1	1	0	0	0	4	4	5	5	0
+provisions/methode	character	capital_revalorise	capital_revalorise	individuel:prospective_prime_pure;collectif:prorata_cotisation	collectif:prorata_cotisation	individuel:prospective_prime_pure	capital_dossier	capital_dossier	\N	\N	\N
+provisions/statut_methode	character	recommandee	recommandee	recommandee	recommandee	recommandee	recommandee	recommandee	\N	\N	\N
+provisions/statut_resultat	character	exact	exact	approximation_numerique	approximation_numerique	exact	jugement_expert	jugement_expert	jugement_expert	jugement_expert	exact
+provisions/statut_calcul	character	calcule	calcule	calcule	calcule	calcule	calcule	calcule	calcule	calcule	calcule
+provisions/motif_arret	character	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N
+dossiers/id_dossier	character	DOR4	DOR1	DOR3	DOR5A	DOR5B
+dossiers/id_sinistre	character	SIR4	SIR1	SIR3	SIR5A	SIR5B
+dossiers/garantie	character	deces	deces	deces	deces	deces
+dossiers/referentiel	character	comptes_sociaux	comptes_sociaux	comptes_sociaux	comptes_sociaux	comptes_sociaux
+dossiers/poste	character	capitaux_non_reclames	sinistres_declares_non_regles	sinistres_declares_non_regles	sinistres_declares_non_regles	sinistres_declares_non_regles
+dossiers/etat	character	deces	deces	deces	deces	deces
+dossiers/date_entree_etat	date	2024-07-01	2024-07-01	2024-07-01	2024-07-01	2024-07-01
+dossiers/montant	double	101506.67397260273	102521.74071232876	102521.74071232876	84580.436087671231	79966.957755616429
+dossiers/methode	character	capital_revalorise	capital_dossier	capital_dossier	capital_dossier	capital_dossier
+dossiers/statut_resultat	character	exact	exact	exact	exact	jugement_expert
+dossiers/hypotheses_defaut	character					
+echeanciers/cle	character	DOR4	DOR4	CTI1	CTI1	CTI1	CTI3	CTI3	CTI3	DOR1	DOR1	DOR3	DOR3	DOR5A	DOR5A	DOR5B	DOR5B
+echeanciers/referentiel	character	comptes_sociaux	comptes_sociaux	comptes_sociaux	comptes_sociaux	comptes_sociaux	comptes_sociaux	comptes_sociaux	comptes_sociaux	comptes_sociaux	comptes_sociaux	comptes_sociaux	comptes_sociaux	comptes_sociaux	comptes_sociaux	comptes_sociaux	comptes_sociaux
+echeanciers/poste	character	capitaux_non_reclames	capitaux_non_reclames	provision_mathematique_temporaire_deces	provision_mathematique_temporaire_deces	provision_mathematique_temporaire_deces	provision_mathematique_temporaire_deces	provision_mathematique_temporaire_deces	provision_mathematique_temporaire_deces	sinistres_declares_non_regles	sinistres_declares_non_regles	sinistres_declares_non_regles	sinistres_declares_non_regles	sinistres_declares_non_regles	sinistres_declares_non_regles	sinistres_declares_non_regles	sinistres_declares_non_regles
+echeanciers/date	date	2025-01-02	2025-01-02	2026-01-01	2026-01-01	2027-01-01	2026-01-01	2026-01-01	2027-01-01	2025-01-02	2025-01-02	2025-01-02	2025-01-02	2025-01-02	2025-01-02	2025-01-02	2025-01-02
+echeanciers/etat	character	deces	deces	actif	actif	actif	actif	actif	actif	deces	deces	deces	deces	deces	deces	deces	deces
+echeanciers/type_flux	character	capital_unique	frais	capital_unique	frais	capital_unique	capital_unique	prime_periodique	capital_unique	capital_unique	frais	capital_unique	frais	capital_unique	frais	capital_unique	frais
+echeanciers/flux	double	101506.67397260273	0	100000	100	100000	100000	-2282.45570586032	100000	101506.67397260273	1015.0667397260273	101506.67397260273	1015.0667397260273	83743.006027397263	837.43006027397269	79175.205698630132	791.75205698630134
+echeanciers/probabilite	double	1	1	0.020000000000000018	0.97999999999999998	0.029400000000000093	0.020000000000000018	0.97999999999999998	0.029400000000000093	1	1	1	1	1	1	1	1
+echeanciers/actualisation	double	1	1	0.98039215686274506	0.98039215686274506	0.96116878123798533	0.98039215686274506	0.98039215686274506	0.96116878123798533	1	1	1	1	1	1	1	1
+echeanciers/valeur_actuelle	double	101506.67397260273	0	1960.784313725492	96.078431372549019	2825.8362168396857	1960.784313725492	-2192.9476389638367	2825.8362168396857	101506.67397260273	1015.0667397260273	101506.67397260273	1015.0667397260273	83743.006027397263	837.43006027397269	79175.205698630132	791.75205698630134
+triangles	null
+passage	null
+indicateurs/regle	character	R132_3_1	R132_3_1	R132_3_1	R132_3_1	tarif_vie	tarif_vie	A132_1	A132_1	A132_1	A132_1
+indicateurs/poste	character	sinistres_declares_non_regles	sinistres_declares_non_regles	capitaux_non_reclames	capitaux_non_reclames	provision_mathematique_temporaire_deces	provision_mathematique_temporaire_deces	provision_mathematique_temporaire_deces	provision_mathematique_temporaire_deces	provision_mathematique_temporaire_deces	provision_mathematique_temporaire_deces
+indicateurs/garantie	character	deces	deces	deces	deces	deces	deces	deces	deces	deces	deces
+indicateurs/valeur_regle	double	NA	0.030166666666666665	NA	0.030166666666666665	0.02	0.02	0.022499999999999999	0.017999999999999999	0.022749999999999999	0.018200000000000001
+indicateurs/valeur_retenue	double	0.029999999999999999	0.024	0.029999999999999999	0.024	0.02	0.02	0.02	0.02	0.02	0.02
+indicateurs/depassement	logical	NA	T	NA	T	F	F	F	T	F	T
+indicateurs/detail	character	annee=2024;minimum;serie_incomplete	annee=2025;minimum	annee=2024;minimum;serie_incomplete	annee=2025;minimum	id_contrat=CTI1	id_contrat=CTI3	id_contrat=CTI1;date=2024-01-01;nature_primes=unique;borne_basse=0.02;borne_haute=0.0225;type_organisme=societe_assurance;delai_3_mois_non_pris_en_compte	id_contrat=CTI3;date=2024-01-01;nature_primes=periodique;borne_basse=0.015;borne_haute=0.0175;type_organisme=societe_assurance;delai_3_mois_non_pris_en_compte	id_contrat=CTI1;date=2025-01-01;nature_primes=unique;borne_basse=0.02;borne_haute=0.0225;type_organisme=societe_assurance;delai_3_mois_non_pris_en_compte;approximation_arrete	id_contrat=CTI3;date=2025-01-01;nature_primes=periodique;borne_basse=0.015;borne_haute=0.0175;type_organisme=societe_assurance;delai_3_mois_non_pris_en_compte;approximation_arrete
+donnees/controles/code	character
+donnees/controles/table	character
+donnees/controles/colonne	character
+donnees/controles/detection	character
+donnees/controles/nombre	integer
+donnees/controles/identifiants	character
+donnees/controles_non_executes/code	character	D03h	D09	D03d	D09	D14	D08	D11	D10e	D07	D09	D10d	D10f	D12	D09	D09
+donnees/controles_non_executes/table	character	garanties_souscrites	parametres	assures	affiliations	famille	sinistres	sinistres	beneficiaires	evenements	evenements	evenements	evenements	evenements	prestations	cotisations
+donnees/controles_non_executes/colonne	character	\N	\N	situation_familiale	\N	\N	\N	date_survenance	qualite	\N	\N	\N	\N	type_evenement	\N	\N
+donnees/controles_non_executes/cause	character	non_lisible	non_implemente	non_implemente	non_implemente	non_implemente	non_implemente	non_implemente	non_implemente	non_implemente	non_implemente	non_implemente	non_implemente	non_implemente	non_implemente	non_implemente
+donnees/refus_tables/table	character
+donnees/refus_tables/colonne	character
+donnees/refus_tables/motif	character
+donnees/refus_tables/portee	character
+donnees/refus_tables/origine	character
+donnees/refus_tables/nombre	integer
+donnees/refus_tables/nombre_visibles	integer
+donnees/refus_tables/identifiants	character
+donnees/refus_tables/nombre_dossiers	integer
+donnees/refus_tables/postes_arretes	character
+donnees/exclusions/motif	character
+donnees/exclusions/famille	character
+donnees/exclusions/action	character
+donnees/exclusions/nombre_lignes	integer
+donnees/exclusions/nombre_dossiers	integer
+donnees/hypotheses_defaut/motif	character
+donnees/hypotheses_defaut/referentiel	character
+donnees/hypotheses_defaut/poste	character
+donnees/hypotheses_defaut/valeur	character
+donnees/hypotheses_defaut/nombre	integer
+donnees/signalements/code	character
+donnees/signalements/table	character
+donnees/signalements/colonne	character
+donnees/signalements/detection	character
+donnees/signalements/nombre	integer
+donnees/signalements/identifiants	character
+donnees/declarations_requises/rubrique	character
+donnees/declarations_requises/motif	character
+donnees/declarations_requises/cle	character
+donnees/declarations_requises/traitements_admis	character
+donnees/declarations_requises/nombre_lignes	integer
+donnees/enjeu/table	character
+donnees/enjeu/colonne	character
+donnees/enjeu/motif	character
+donnees/enjeu/famille	character
+donnees/enjeu/action	character
+donnees/enjeu/garantie	character
+donnees/enjeu/poste	character
+donnees/enjeu/composante	character
+donnees/enjeu/unite	character
+donnees/enjeu/montant	double
+donnees/enjeu/nombre_dossiers	integer
+donnees/enjeu/nombre_valeurs	integer
+donnees/enjeu/cause	character
+donnees/vue/date_arrete	date	2025-01-01
+donnees/vue/date_extraction	date	2026-03-31
+donnees/vue/visibilite_non_determinee/table	character
+donnees/vue/visibilite_non_determinee/colonne	character
+donnees/vue/visibilite_non_determinee/motif	character
+donnees/vue/visibilite_non_determinee/origine	character
+donnees/vue/visibilite_non_determinee/nombre	integer
+donnees/vue/visibilite_non_determinee/identifiants	character
+donnees/vue/provisoire	logical	F
+donnees/segments/id_dossier	character	\N	DOR1	DOR3	DOR4	DOR5A	DOR5B	\N	\N
+donnees/segments/id_sinistre	character	\N	SIR1	SIR3	SIR4	SIR5A	SIR5B	\N	\N
+donnees/segments/id_contrat	character	CTC1	CTC1	CTC1	CTC1	CTC1	CTC1	CTI1	CTI3
+donnees/segments/segmentation	character	nature_contrat	nature_contrat	nature_contrat	nature_contrat	nature_contrat	nature_contrat	nature_contrat	nature_contrat
+donnees/segments/segment	character	collectif_obligatoire	collectif_obligatoire	collectif_obligatoire	collectif_obligatoire	collectif_obligatoire	collectif_obligatoire	individuel	individuel
+donnees/tables_absentes	character	catastrophes	victimes	evaluations_gestion	designations	ayants_droit_sante

@@ -1,0 +1,149 @@
+provie-liste 1
+plan/version_plan	integer	1
+plan/arrete	date	2024-12-31
+plan/perimetre/garanties	character	deces
+plan/perimetre/referentiels	character	comptes_sociaux
+plan/perimetre/segmentations	liste
+plan/tables/mortalite_tarif/identifiant	character	mortalite_fictive_v1_03
+plan/tables/mortalite_tarif/empreinte	character	4eb68f9af5835cad25255f14232f5df0
+plan/tables/mortalite_tarif/statut	character	fictive
+plan/tables/mortalite_tarif/hors_axes	character	refus
+plan/tables/serie_tme/identifiant	character	tme_fictive_v1_03
+plan/tables/serie_tme/empreinte	character	a5b4c1cf5cf86afc6ac166504fe808d7
+plan/tables/serie_tme/statut	character	fictive
+plan/tables/serie_tme/hors_axes	character	refus
+plan/tables/serie_tme/decalage_publication_mois	integer	1
+plan/taux/deces/provision_mathematique_temporaire_deces/comptes_sociaux	character	taux_tarif
+plan/frais/deces/capitaux_non_reclames/comptes_sociaux/taux_chargement_psap	double	0.01
+plan/frais/deces/provision_mathematique_temporaire_deces/comptes_sociaux/taux_chargement_gestion	double	0.001
+plan/frais/deces/provision_mathematique_temporaire_deces/comptes_sociaux/taux_chargement_acquisition	double	0.01
+plan/frais/deces/provision_mathematique_temporaire_deces/comptes_sociaux/taux_chargement_cotisation	double	0.050000000000000003
+plan/frais/deces/sinistres_declares_non_regles/comptes_sociaux/taux_chargement_psap	double	0.01
+plan/revalorisation/capital_deces/taux_par_annee/2016	double	0.02
+plan/revalorisation/capital_deces/taux_par_annee/2017	double	0.02
+plan/revalorisation/capital_deces/taux_par_annee/2018	double	0.02
+plan/revalorisation/capital_deces/taux_par_annee/2019	double	0.02
+plan/revalorisation/capital_deces/taux_par_annee/2020	double	0.02
+plan/revalorisation/capital_deces/taux_par_annee/2021	double	0.01
+plan/revalorisation/capital_deces/taux_par_annee/2022	double	0.01
+plan/revalorisation/capital_deces/taux_par_annee/2023	double	0.0167
+plan/revalorisation/capital_deces/taux_par_annee/2024	double	0.029999999999999999
+plan/revalorisation/capital_deces/taux_par_annee/2025	double	0.029999999999999999
+plan/revalorisation/capital_deces/prorata	character	simple
+plan/conventions/age	character	revolu
+plan/conventions/instant_date	character	fin_journee
+plan/conventions/repartition_annee	character	uniforme
+plan/conventions/fractionnement	character	echeances_exactes
+plan/conventions/decompte_jours	character	exact_exact
+plan/conventions/limite_age/regle	character	depassement
+plan/conventions/limite_age/age	character	revolu
+plan/postes/deces/capitaux_non_reclames/methode	character	capital_revalorise
+plan/postes/deces/capitaux_non_reclames/parametres/critere	character	beneficiaire_non_identifie
+plan/postes/deces/capitaux_non_reclames/parametres/taux_sans_suite	double	0
+plan/postes/deces/capitaux_non_reclames/parametres/probabilite_reconnaissance_iad	double	1
+plan/postes/deces/capitaux_non_reclames/parametres/structure_familiale/taux_conjoint	double	0.55000000000000004
+plan/postes/deces/capitaux_non_reclames/parametres/structure_familiale/nombre_enfants	double	0
+plan/postes/deces/capitaux_non_reclames/parametres/age_limite_enfant_majoration	integer	26
+plan/postes/deces/capitaux_non_reclames/parametres/liens_conjoint_majoration	character	concubin	conjoint	partenaire_pacs
+plan/postes/deces/provision_mathematique_temporaire_deces/individuel/methode	character	prospective_prime_pure
+plan/postes/deces/provision_mathematique_temporaire_deces/individuel/parametres/pas	character	an
+plan/postes/deces/provision_mathematique_temporaire_deces/individuel/parametres/paiement_capital	character	fin_pas
+plan/postes/deces/provision_mathematique_temporaire_deces/individuel/parametres/plancher	character	par_contrat
+plan/postes/deces/provision_mathematique_temporaire_deces/collectif/methode	character	prorata_cotisation
+plan/postes/deces/provision_mathematique_temporaire_deces/collectif/parametres	liste
+plan/postes/deces/sinistres_declares_non_regles/methode	character	capital_dossier
+plan/postes/deces/sinistres_declares_non_regles/parametres/taux_sans_suite	double	0
+plan/postes/deces/sinistres_declares_non_regles/parametres/probabilite_reconnaissance_iad	double	1
+plan/postes/deces/sinistres_declares_non_regles/parametres/structure_familiale/taux_conjoint	double	0.55000000000000004
+plan/postes/deces/sinistres_declares_non_regles/parametres/structure_familiale/nombre_enfants	double	0
+plan/postes/deces/sinistres_declares_non_regles/parametres/age_limite_enfant_majoration	integer	26
+plan/postes/deces/sinistres_declares_non_regles/parametres/liens_conjoint_majoration	character	concubin	conjoint	partenaire_pacs
+plan/donnees/seuils/d02c_age_max/assures_affiliation	integer	70
+plan/donnees/seuils/d02c_age_max/assures_sinistre	integer	75
+plan/donnees/seuils/d02c_age_max/famille	integer	110
+plan/donnees/seuils/d02c_age_min/assures_affiliation	integer	16
+plan/donnees/seuils/d02c_age_min/assures_sinistre	integer	16
+plan/donnees/seuils/d02c_age_min/famille	integer	0
+plan/donnees/seuils/d03g_delai_jours/affiliations	integer	15
+plan/donnees/seuils/d03g_delai_jours/beneficiaires	integer	3
+plan/donnees/seuils/d03g_delai_jours/contrats	integer	30
+plan/donnees/seuils/d03g_delai_jours/evenements	integer	7
+plan/donnees/seuils/d03g_delai_jours/famille	integer	3
+plan/donnees/seuils/d03g_delai_jours/prestations	integer	0
+plan/donnees/seuils/d03g_delai_jours/rentes	integer	2
+plan/donnees/seuils/d03g_delai_jours/sinistres	integer	5
+plan/restitution/echeanciers	character	aucun
+plan/restitution/triangles	character	aucun
+plan/liens	liste
+plan/graine	integer	1
+parametres_retenus/postes/garantie	character	deces	deces	deces	deces
+parametres_retenus/postes/referentiel	character	comptes_sociaux	comptes_sociaux	comptes_sociaux	comptes_sociaux
+parametres_retenus/postes/poste	character	sinistres_declares_non_regles	capitaux_non_reclames	provision_mathematique_temporaire_deces	total
+parametres_retenus/postes/famille	character	engagement	engagement	risque_en_cours	\N
+parametres_retenus/postes/methode	character	capital_dossier	capital_revalorise	individuel:prospective_prime_pure;collectif:prorata_cotisation	\N
+parametres_retenus/postes/statut_methode	character	recommandee	recommandee	recommandee	\N
+parametres_retenus/postes/parametres	character	provie-liste 1\ndeclaration/methode\tcharacter\tcapital_dossier\ndeclaration/parametres/taux_sans_suite\tdouble\t0\ndeclaration/parametres/probabilite_reconnaissance_iad\tdouble\t1\ndeclaration/parametres/structure_familiale/taux_conjoint\tdouble\t0.55000000000000004\ndeclaration/parametres/structure_familiale/nombre_enfants\tdouble\t0\ndeclaration/parametres/age_limite_enfant_majoration\tinteger\t26\ndeclaration/parametres/liens_conjoint_majoration\tcharacter\tconcubin\tconjoint\tpartenaire_pacs\nidentifiant_arret\tnull\n	provie-liste 1\ndeclaration/methode\tcharacter\tcapital_revalorise\ndeclaration/parametres/critere\tcharacter\tbeneficiaire_non_identifie\ndeclaration/parametres/taux_sans_suite\tdouble\t0\ndeclaration/parametres/probabilite_reconnaissance_iad\tdouble\t1\ndeclaration/parametres/structure_familiale/taux_conjoint\tdouble\t0.55000000000000004\ndeclaration/parametres/structure_familiale/nombre_enfants\tdouble\t0\ndeclaration/parametres/age_limite_enfant_majoration\tinteger\t26\ndeclaration/parametres/liens_conjoint_majoration\tcharacter\tconcubin\tconjoint\tpartenaire_pacs\nidentifiant_arret\tnull\n	provie-liste 1\ndeclaration/individuel/methode\tcharacter\tprospective_prime_pure\ndeclaration/individuel/parametres/pas\tcharacter\tan\ndeclaration/individuel/parametres/paiement_capital\tcharacter\tfin_pas\ndeclaration/individuel/parametres/plancher\tcharacter\tpar_contrat\ndeclaration/collectif/methode\tcharacter\tprorata_cotisation\ndeclaration/collectif/parametres\tliste\nidentifiant_arret\tnull\n	provie-liste 1\npostes\tcharacter\tsinistres_declares_non_regles\tcapitaux_non_reclames\tprovision_mathematique_temporaire_deces\n
+parametres_retenus/postes/usages_tables	character	tme_fictive_v1_03	tme_fictive_v1_03	mortalite_fictive_v1_03;tme_fictive_v1_03	
+parametres_retenus/tables/usage	character	mortalite_tarif	serie_tme
+parametres_retenus/tables/garantie	character	deces	deces
+parametres_retenus/tables/identifiant	character	mortalite_fictive_v1_03	tme_fictive_v1_03
+parametres_retenus/tables/statut	character	fictive	fictive
+parametres_retenus/tables/format_natif	character	lx_age	serie_tme_mensuelle
+parametres_retenus/tables/provenance	character	table fictive, sans source (jeux de la v1, plans de référence)	série fictive, sans source (jeux de la v1, plans de référence)
+parametres_retenus/tables/conversion	character	convertir_lx_qx	convertir_pourcent
+parametres_retenus/tables/empreinte	character	4eb68f9af5835cad25255f14232f5df0	a5b4c1cf5cf86afc6ac166504fe808d7
+parametres_retenus/hypotheses_defaut/motif	character
+parametres_retenus/hypotheses_defaut/referentiel	character
+parametres_retenus/hypotheses_defaut/poste	character
+parametres_retenus/hypotheses_defaut/valeur	character
+parametres_retenus/hypotheses_defaut/nombre	integer
+parametres_retenus/exclusions/motif	character
+parametres_retenus/exclusions/famille	character
+parametres_retenus/exclusions/action	character
+parametres_retenus/exclusions/nombre_lignes	integer
+parametres_retenus/exclusions/nombre_dossiers	integer
+parametres_retenus/plafonds/regle	character
+parametres_retenus/plafonds/garantie	character
+parametres_retenus/plafonds/poste	character
+parametres_retenus/plafonds/valeur	double
+parametres_retenus/colonnes_ecrasees/table	character
+parametres_retenus/colonnes_ecrasees/colonne	character
+parametres_retenus/tables_absentes/table	character	catastrophes	victimes	evaluations_gestion	designations	ayants_droit_sante
+empreintes/donnees/extraction	character	f6fe5266ada3c78309c2e15316cad2ed
+empreintes/donnees/adherents	character	cf93816e106a831dba5403454e6b4731
+empreintes/donnees/contrats	character	a43075d5499d3c98c71cfe0b39197d77
+empreintes/donnees/garanties_souscrites	character	84c9be235c12a5e44c753bd50addf114
+empreintes/donnees/parametres	character	ef3c7ca87f961df700735284bb274784
+empreintes/donnees/assures	character	25c5a2ccaae4db8450d15305407a1e9e
+empreintes/donnees/affiliations	character	3f538d1188c3c22bf8fab495124ad1d7
+empreintes/donnees/famille	character	5ae857f78e12db8216381ec90687c881
+empreintes/donnees/sinistres	character	93dcbafad202c505770a75a427b870d1
+empreintes/donnees/dossiers	character	09a7348faab939c23c4c2f4a62549fd2
+empreintes/donnees/beneficiaires	character	fadcd36c4c3509da44baa12d1fd9d4f9
+empreintes/donnees/rentes	character	216b1fadbc7514ba679901c9b3f31486
+empreintes/donnees/evenements	character	cb90bacc95b8195f04a2d976cb6f1a55
+empreintes/donnees/prestations	character	6c60df7239b33df78c03941c6f362204
+empreintes/donnees/cotisations	character	8b6504db0a9ff78dd22d6e5801512bc3
+empreintes/fichiers	null
+empreintes/tables/mortalite_fictive_v1_03	character	4eb68f9af5835cad25255f14232f5df0
+empreintes/tables/tme_fictive_v1_03	character	a5b4c1cf5cf86afc6ac166504fe808d7
+empreintes/resultat	character	2e24c389ba979dc753b02427e4c3e3dc
+empreintes/code	character	667d17c334357ba12a15d30d94de3599
+empreintes/representation	character	provie-resultat-1
+versions/r	character	4.3.3
+versions/provie	character	0.5.0
+versions/fiche	integer	1
+versions/dictionnaire	character	1.5
+plateforme/r	character	R version 4.3.3 (2024-02-29)
+plateforme/plateforme	character	x86_64-pc-linux-gnu
+plateforme/systeme	character	Linux
+plateforme/version_systeme	character	7.0.0-1017-azure
+plateforme/machine	character	x86_64
+plateforme/boutisme	character	little
+plateforme/blas	character	/usr/lib/x86_64-linux-gnu/openblas-pthread/libblas.so.3
+plateforme/lapack	character	/usr/lib/x86_64-linux-gnu/openblas-pthread/libopenblasp-r0.3.20.so
+plateforme/lapack_version	character	3.10.0
+plateforme/pcre	character	10.39 2021-10-29
+plateforme/icu	character	70.1
+graine/valeur	integer	1
+graine/generateur	character	Mersenne-Twister	Inversion	Rejection
