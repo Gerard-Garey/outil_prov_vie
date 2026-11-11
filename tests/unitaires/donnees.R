@@ -238,7 +238,7 @@ LUES <- rbind(paires("D04a", "dossiers"), paires("D08", c("dossiers", "evenement
               paires("D10", c("garanties_souscrites", "sinistres")), paires("D11", c("contrats", "affiliations")))
 reference <- do.call(rbind, lapply(seq_len(nrow(d$defauts)), function(i) {
   if (d$defauts$code[i] == "D10") return(SOUS_CAS_D10)
-  paires(d$defauts$code[i], ns$.eclater_champ(d$defauts$tables[i]))
+  paires(d$defauts$code[i], ns$eclater_champ(d$defauts$tables[i]))
 }))
 reference <- reference[!(paste(reference$code, reference$table) %in% paste(LUES$code, LUES$table)), , drop = FALSE]
 manquantes_de <- function(tr) {
@@ -252,7 +252,7 @@ verifier("couverture (code, table) : LUES et D10 tirés du CSV (chaque paire de 
          all(paste(LUES$code, LUES$table) %in% paste(rep(d$defauts$code, lengths(strsplit(d$defauts$tables, ";"))),
                                                      unlist(strsplit(d$defauts$tables, ";")))) &&
            setequal(c(SOUS_CAS_D10$table, LUES$table[LUES$code == "D10"]),
-                    ns$.eclater_champ(d$defauts$tables[d$defauts$code == "D10"])))
+                    ns$eclater_champ(d$defauts$tables[d$defauts$code == "D10"])))
 verifier("couverture (code, table) : les tables lues sans constat d'un défaut écrit le sont bien par une de ses règles (D04a, D10)",
          all(c("garanties_souscrites", "sinistres") %in% tr$lue[tr$defaut == "D10"]) && "dossiers" %in% tr$lue[tr$code == "D04a"])
 verifier_egal("couverture (code, table) : témoins, la suppression d'une règle écrite est vue (D02b sur catastrophes, D10b)",
@@ -1081,7 +1081,7 @@ verifier("D02b, hypothèse déclarée pour un seul référentiel : vue inchangé
          identical(r$vue, r_nd$vue) && identical(r$declarations_requises$cle[r$declarations_requises$motif == "D02b"], "solvabilite_2"))
 ctx_h <- function(b, arrete, declarations) {
   ctx <- ns$.contexte(b, d, list(date_extraction = A), arrete)
-  ctx$declarations <- ns$.lire_declarations(declarations, d)
+  ctx$declarations <- ns$lire_declarations(declarations, d)
   ns$.refus_regle_b(ctx); ns$.initialiser_visibilite(ctx); ns$.regle_prealable(ctx); ns$.construire_vue(ctx)
   ctx
 }
@@ -1622,7 +1622,7 @@ nd_de <- function(r) with(r$vue$visibilite_non_determinee, paste(table, colonne,
 # contexte complet jusqu'à la vue (règle B, refus, règle P, vue), sans déclaration
 ctx_complet <- function(b, arrete, declarations = NULL) {
   ctx <- ns$.contexte(b, d, list(date_extraction = A), arrete)
-  ctx$declarations <- ns$.lire_declarations(declarations, d)
+  ctx$declarations <- ns$lire_declarations(declarations, d)
   ctx$conventions <- ns$.lire_conventions(NULL)
   for (f in c(".regle_forme", ".regle_domaine", ".regle_cles", ".refus_induits", ".refus_regle_b", ".regle_p",
               ".construire_vue")) ns[[f]](ctx)
@@ -2695,7 +2695,7 @@ verifier("#40, performance : D01b avec lignes non déterminées, travail de cont
 # ainsi née a ses déclarations dans declarations_requises (D02b ou D03g).
 ctx40 <- function(b, arrete, declarations = NULL, conventions = NULL) {
   ctx <- ns$.contexte(b, d, list(date_extraction = A), arrete)
-  ctx$declarations <- ns$.lire_declarations(declarations, d)
+  ctx$declarations <- ns$lire_declarations(declarations, d)
   ctx$conventions <- ns$.lire_conventions(conventions)
   for (f in c(".regle_forme", ".regle_domaine", ".regle_cles", ".refus_induits", ".refus_regle_b", ".regle_p",
               ".construire_vue")) ns[[f]](ctx)

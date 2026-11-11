@@ -31,3 +31,25 @@ export(simuler_base)
 # Méthodes de la classe jeu_simule (ADR 0010, point 13) : décomptes seuls.
 S3method(format, jeu_simule)
 S3method(print, jeu_simule)
+# Module `garanties` (#64) : catalogue_garanties(), appelée hors du package par l'application
+# (onglet Plan : garanties, postes et méthodes proposés à la saisie du plan) et par
+# l'utilisateur sans Shiny (lecture du catalogue avant d'écrire un plan) (ADR 0010, points 13
+# et 16 ; spécification de B2, § 2.9).
+export(catalogue_garanties)
+# Module `plan` (#64) : valider_plan(), canoniser_plan(), ecrire_plan() et lire_plan(),
+# appelées hors du package par l'application (onglet Plan : validation, export, import) et par
+# l'utilisateur sans Shiny (plan écrit, contrôlé et relu sans calcul) ; ecrire_fiche() et
+# lire_fiche(), par l'application (onglet Rapport : fiche) et par l'utilisateur sans Shiny
+# (fiche écrite et relue pour le rejeu) (ADR 0007, point 5 ; ADR 0010, point 13 ;
+# spécification de B2, § 2.9).
+export(valider_plan)
+export(canoniser_plan)
+export(ecrire_plan)
+export(lire_plan)
+export(ecrire_fiche)
+export(lire_fiche)
+# Méthodes des classes plan_calcul et fiche_calcul (ADR 0010, point 13) : décomptes seuls.
+S3method(format, plan_calcul)
+S3method(print, plan_calcul)
+S3method(format, fiche_calcul)
+S3method(print, fiche_calcul)

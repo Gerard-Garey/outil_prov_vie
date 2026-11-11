@@ -1,0 +1,5 @@
+code_garantie,flux,type_flux,etat_payeur,parametres
+deces,capital,capital_unique,deces,taux_capital;capital_forfaitaire;majoration_conjoint;majoration_enfant;age_fin_garantie
+deces,capital_iad,capital_unique,iad,taux_capital;capital_forfaitaire;majoration_conjoint;majoration_enfant
+deces,prime,prime_periodique,actif,prime_periodique;taux_cotisation;cotisation_forfaitaire
+deces,frais,frais,actif,

@@ -43,12 +43,13 @@ ACTIONS_EXCLUSION <- c("exclure", "conserver")
 # 0010, neuvième série) : le constat va dans `signalements`.
 .VALEUR_SIGNALEMENT <- "signalement"
 # Seuil du délai de D03g (décision du mainteneur, D5 ; nom provisoire) : liste nommée par
-# table de `seuils`, en jours, sans valeur par défaut, commune aux deux référentiels.
-.SEUIL_DELAI_D03G <- "d03g_delai_jours"
+# table de `seuils`, en jours, sans valeur par défaut, commune aux deux référentiels. Sans
+# point : lue aussi par `plan` (ADR 0010, quatrième série, (c)).
+SEUIL_DELAI_D03G <- "d03g_delai_jours"
 # Bornes de vraisemblance de l'âge de D02c (spécification, § 5.4 ; ADR 0010, neuvième série) :
 # deux listes nommées par emploi de `seuils`, en années entières, sans valeur par défaut ;
-# table de la personne de chaque emploi.
-.SEUILS_AGE_D02C <- c("d02c_age_min", "d02c_age_max")
+# table de la personne de chaque emploi. Sans point : lue aussi par `plan`.
+SEUILS_AGE_D02C <- c("d02c_age_min", "d02c_age_max")
 .EMPLOIS_D02C <- c(assures_sinistre = "assures", assures_affiliation = "assures", famille = "famille",
                    designations = "designations", ayants_droit_sante = "ayants_droit_sante")
 # Âge non défini (date de référence antérieure à la naissance, spécification, § 5.2) : le
@@ -89,10 +90,11 @@ COMPOSANTES_ENJEU <- data.frame(
 # Sous-éléments admis des arguments `declarations` (sous-schéma `donnees` du plan, ADR 0010,
 # point 17) et `conventions` (section `conventions` du plan, M153).
 RUBRIQUES_DECLARATIONS <- c("exclusions", "hypotheses", "seuils", "evaluations_gestion")
-# `instant_date`, `repartition_annee` et `fractionnement` sont admises sans contrôle de valeur :
-# leur domaine n'est écrit ni dans l'ADR 0010 (point 17 : noms seuls) ni dans la
-# spécification ; valider_plan() le fixera en B2.
-ENTREES_CONVENTIONS <- c("age", "instant_date", "repartition_annee", "fractionnement", "limite_age")
+# `instant_date`, `repartition_annee`, `fractionnement` et `decompte_jours` (entrée nouvelle de
+# B2) sont admises sans contrôle de valeur : leur domaine est contrôlé par valider_plan()
+# (spécification de B2, docs/specifications/b2-capital-deces-v1.md, § 2.6).
+ENTREES_CONVENTIONS <- c("age", "instant_date", "repartition_annee", "fractionnement", "decompte_jours",
+                         "limite_age")
 
 # Contrôles prévus par la spécification (§ 2.4) et reportés (décision du mainteneur : #18 se
 # ferme avec un report déclaré ; #34) : rendus dans
@@ -248,7 +250,7 @@ controler_base <- function(donnees, arrete, declarations = NULL, conventions = N
             recu = format(arrete))
   }
   conventions <- .lire_conventions(conventions)
-  declarations <- .lire_declarations(declarations, dico)
+  declarations <- lire_declarations(declarations, dico)
 
   ctx <- .contexte(donnees, dico, extraction, arrete)
   ctx$declarations <- declarations
@@ -345,7 +347,7 @@ controler_base <- function(donnees, arrete, declarations = NULL, conventions = N
     if (colonnes$type[i] == "Date" && as.numeric(x) < as.numeric(as.Date("1901-01-01"))) {
       refus(paste0("colonne ", colonne, " ant\u00e9rieure au 1901-01-01"), colonne = colonne, recu = format(x))
     }
-    modalites <- .eclater_champ(colonnes$modalites[i])
+    modalites <- eclater_champ(colonnes$modalites[i])
     if (length(modalites) > 0L && !(x %in% modalites)) {
       refus(paste0("colonne ", colonne, " hors domaine : \u00ab ", x, " \u00bb"), colonne = colonne,
             attendu = paste(modalites, collapse = ";"), recu = x)
@@ -358,7 +360,8 @@ controler_base <- function(donnees, arrete, declarations = NULL, conventions = N
   list(date_extraction = extraction$date_extraction, debut_historique = extraction$debut_historique)
 }
 
-.eclater_champ <- function(x) if (identical(x, "") || is.na(x)) character(0) else strsplit(x, ";", fixed = TRUE)[[1L]]
+# Éclate un champ « a;b » d'un CSV du dictionnaire ; sans point : appelée aussi par `plan`.
+eclater_champ <- function(x) if (identical(x, "") || is.na(x)) character(0) else strsplit(x, ";", fixed = TRUE)[[1L]]
 
 .refus_plan <- function(message) {
   refuser(paste0("controler_base() : ", message), "plan_invalide", module = "donnees")
@@ -411,8 +414,9 @@ controler_base <- function(donnees, arrete, declarations = NULL, conventions = N
 # unique (.MOTIFS_TRAITEMENT_UNIQUE) ne se déclare pas dans les deux rubriques (D8).
 # `seuils` : liste nommée ; seul d03g_delai_jours est lu (liste nommée par table de D03g,
 # jours entiers positifs ou nuls) ; `evaluations_gestion` : liste réduite à `diagnostics`
-# (logical), lue par les diagnostics (B2), jamais par le bilan.
-.lire_declarations <- function(declarations, dico) {
+# (logical), lue par les diagnostics (B2), jamais par le bilan. Sans point : appelée aussi par
+# valider_plan() (`plan`), non exportée.
+lire_declarations <- function(declarations, dico) {
   if (is.null(declarations)) declarations <- list()
   nommee <- function(x) {
     is.list(x) && !is.data.frame(x) &&
@@ -433,15 +437,15 @@ controler_base <- function(donnees, arrete, declarations = NULL, conventions = N
                        length(eg$diagnostics) != 1L || is.na(eg$diagnostics))) {
     .refus_plan("declarations$evaluations_gestion doit porter `diagnostics` (TRUE ou FALSE), et lui seul")
   }
-  dl <- declarations$seuils[[.SEUIL_DELAI_D03G]]
+  dl <- declarations$seuils[[SEUIL_DELAI_D03G]]
   if (!is.null(dl)) {
     jours <- function(x) is.numeric(x) && length(x) == 1L && is.finite(x) && x >= 0 && x == round(x)
     if (!nommee(dl) || length(dl) == 0L || !all(names(dl) %in% .TABLES_D03G) || !all(vapply(dl, jours, NA))) {
-      .refus_plan(paste0("declarations$seuils$", .SEUIL_DELAI_D03G, " : liste nomm\u00e9e par table de D03g (",
+      .refus_plan(paste0("declarations$seuils$", SEUIL_DELAI_D03G, " : liste nomm\u00e9e par table de D03g (",
                          paste(.TABLES_D03G, collapse = ", "), "), d\u00e9lai en jours (nombre entier positif ou nul)"))
     }
   }
-  for (nom in .SEUILS_AGE_D02C) {
+  for (nom in SEUILS_AGE_D02C) {
     sa <- declarations$seuils[[nom]]
     if (is.null(sa)) next
     age <- function(x) is.numeric(x) && length(x) == 1L && is.finite(x) && x >= 0 && x == round(x)
@@ -450,8 +454,8 @@ controler_base <- function(donnees, arrete, declarations = NULL, conventions = N
                          paste(names(.EMPLOIS_D02C), collapse = ", "), "), \u00e2ge en ann\u00e9es enti\u00e8res positif ou nul"))
     }
   }
-  amin <- declarations$seuils[[.SEUILS_AGE_D02C[1L]]]
-  amax <- declarations$seuils[[.SEUILS_AGE_D02C[2L]]]
+  amin <- declarations$seuils[[SEUILS_AGE_D02C[1L]]]
+  amax <- declarations$seuils[[SEUILS_AGE_D02C[2L]]]
   communs <- intersect(names(amin), names(amax))
   if (any(vapply(communs, function(e) amin[[e]] > amax[[e]], NA))) {
     .refus_plan("declarations$seuils : d02c_age_min sup\u00e9rieur \u00e0 d02c_age_max pour un emploi")
@@ -521,7 +525,7 @@ controler_base <- function(donnees, arrete, declarations = NULL, conventions = N
   hy <- ctx$declarations$hypotheses
   if (is.na(partie) && all(FAMILLES_CALCUL %in% ex$famille[ex$motif == "D03g"])) return("X")
   if (all(REFERENTIELS %in% hy$referentiel[hy$motif == "D03g"]) &&
-      !is.null(ctx$declarations$seuils[[.SEUIL_DELAI_D03G]][[table]])) return("H")
+      !is.null(ctx$declarations$seuils[[SEUIL_DELAI_D03G]][[table]])) return("H")
   NA_character_
 }
 
@@ -532,7 +536,7 @@ controler_base <- function(donnees, arrete, declarations = NULL, conventions = N
   sous_cas <- motif %in% names(.TRAITEMENTS_SOUS_CAS_D10)
   traitements <- ifelse(sous_cas, .TRAITEMENTS_SOUS_CAS_D10[motif], dico$defauts$traitements[match(motif, dico$defauts$code)])
   connu <- motif %in% dico$defauts$code | sous_cas
-  connu & !is.na(traitements) & vapply(traitements, function(x) t %in% .eclater_champ(x), NA, USE.NAMES = FALSE)
+  connu & !is.na(traitements) & vapply(traitements, function(x) t %in% eclater_champ(x), NA, USE.NAMES = FALSE)
 }
 
 # Rubrique `exclusions` ou `hypotheses` du sous-schéma `donnees` (« liste de triplets »,
@@ -814,7 +818,7 @@ controler_base <- function(donnees, arrete, declarations = NULL, conventions = N
   if (table == "evaluations_gestion" || code == "D10a" || is.na(colonne)) return("table")
   portee <- dico$controles$portee[dico$controles$code == code]
   if (length(portee) == 1L && portee %in% c("table", "colonne")) return(portee)
-  cle <- .eclater_champ(dico$tables$cle_primaire[dico$tables$table == table])
+  cle <- eclater_champ(dico$tables$cle_primaire[dico$tables$table == table])
   ref <- dico$colonnes$reference[dico$colonnes$table == table & dico$colonnes$colonne == colonne]
   if (colonne %in% cle || (length(ref) == 1L && nzchar(ref))) "table" else "colonne"
 }
@@ -931,7 +935,7 @@ controler_base <- function(donnees, arrete, declarations = NULL, conventions = N
   col <- col[col$colonne == colonne, , drop = FALSE]
   d <- if (table == "evenements" && colonne == "type_evenement") {
     ctx$dico$types_evenements$type_evenement
-  } else if (col$type == "logical") c(TRUE, FALSE) else .eclater_champ(col$modalites)
+  } else if (col$type == "logical") c(TRUE, FALSE) else eclater_champ(col$modalites)
   if (length(d) == 0L) stop("erreur interne de provie : domaine de ", table, ".", colonne, " non \u00e9num\u00e9r\u00e9",
                             call. = FALSE)
   if (col$obligatoire != "O") d <- c(d, NA)
@@ -1187,7 +1191,7 @@ controler_base <- function(donnees, arrete, declarations = NULL, conventions = N
       if (col$type == "character") {
         .regle(ctx, "chaine_vide", table, colonne, character(0), "R", "exacte",
                function() !is.na(x) & x == "")
-        modalites <- .eclater_champ(col$modalites)
+        modalites <- eclater_champ(col$modalites)
         if (length(modalites) > 0L) {
           .regle(ctx, "hors_domaine", table, colonne, character(0), "R", "exacte",
                  function() !is.na(x) & x != "" & !(x %in% modalites))
@@ -1212,7 +1216,7 @@ controler_base <- function(donnees, arrete, declarations = NULL, conventions = N
         .regle(ctx, "hors_domaine", table, colonne, character(0), "R", "exacte",
                function() is.nan(x) | is.infinite(x))
       }
-      if (col$obligatoire == "O" && !any(.eclater_champ(col$defauts) %in% .DEFAUTS_MANQUANT)) {
+      if (col$obligatoire == "O" && !any(eclater_champ(col$defauts) %in% .DEFAUTS_MANQUANT)) {
         .regle(ctx, "manquant_obligatoire", table, colonne, character(0), "R", "exacte",
                function() is.na(x) & !is.nan(x))
       }
@@ -1241,7 +1245,7 @@ controler_base <- function(donnees, arrete, declarations = NULL, conventions = N
   prog <- te$programmable[match(.valeurs(ctx, "evenements", "type_evenement"), te$type_evenement)]
   par_motif <- vapply(seq_along(prog), function(i) {
     !is.na(prog[i]) && startsWith(prog[i], "oui:") && !is.na(motif[i]) &&
-      motif[i] %in% .eclater_champ(substring(prog[i], 5L))
+      motif[i] %in% eclater_champ(substring(prog[i], 5L))
   }, NA)
   !is.na(prog) & (prog == "oui" | par_motif)
 }
@@ -1524,14 +1528,14 @@ controler_base <- function(donnees, arrete, declarations = NULL, conventions = N
       sinistre_seul <- !is.na(niveau) & niveau == "sinistre"
       hors_nature <- sinistre_seul & !is.na(x$nat) & x$nat != "arret_travail"
       hors_garantie <- !sinistre_seul & !is.na(x$g) & !is.na(garanties) & garanties != "toutes" &
-        !mapply(function(gg, liste) gg %in% .eclater_champ(liste), x$g, garanties)
+        !mapply(function(gg, liste) gg %in% eclater_champ(liste), x$g, garanties)
       hors_nature | hors_garantie
     })
   }, partiel = TRUE)
   requiert <- function(type, colonne) {
     k <- match(type, te$type_evenement)
     ifelse(is.na(k), NA, vapply(te$colonnes_requises[ifelse(is.na(k), 1L, k)],
-                                function(r) colonne %in% .eclater_champ(r), NA))
+                                function(r) colonne %in% eclater_champ(r), NA))
   }
   .regle_condition(ctx, "evenements", "categorie_invalidite", "evenements.type_evenement",
                    function(x) requiert(x$type, "categorie_invalidite"), type3, defaut_manquant = TRUE)
@@ -1546,7 +1550,7 @@ controler_base <- function(donnees, arrete, declarations = NULL, conventions = N
     .verdict3(list(motif = soi("evenements.motif"), type = e3("evenements.type_evenement")), function(x) {
       k <- match(x$type, te$type_evenement)
       !is.na(x$motif) & !is.na(k) &
-        !mapply(function(m, liste) m %in% .eclater_champ(liste), x$motif, te$motifs[ifelse(is.na(k), 1L, k)])
+        !mapply(function(m, liste) m %in% eclater_champ(liste), x$motif, te$motifs[ifelse(is.na(k), 1L, k)])
     })
   }, partiel = TRUE)
   .regle(ctx, "manquant_obligatoire", "evenements", "motif",
@@ -1626,7 +1630,7 @@ controler_base <- function(donnees, arrete, declarations = NULL, conventions = N
 .regle_cles <- function(ctx) {
   dico <- ctx$dico
   for (table in setdiff(ctx$tables, "extraction")) {
-    cle <- .eclater_champ(dico$tables$cle_primaire[dico$tables$table == table])
+    cle <- eclater_champ(dico$tables$cle_primaire[dico$tables$table == table])
     lit <- paste(table, cle, sep = ".")
     .regle(ctx, "D01a", table, cle[1L], lit, "R", "exacte", function() {
       duplicated(as.data.frame(lapply(cle, function(c1) .valeurs(ctx, table, c1)), stringsAsFactors = FALSE))
@@ -1691,7 +1695,7 @@ controler_base <- function(donnees, arrete, declarations = NULL, conventions = N
     colonnes <- .colonnes_dico(ctx, table)
     for (i in which(nzchar(colonnes$reference))) {
       colonne <- colonnes$colonne[i]
-      cibles <- strsplit(.eclater_champ(colonnes$reference[i]), ".", fixed = TRUE)
+      cibles <- strsplit(eclater_champ(colonnes$reference[i]), ".", fixed = TRUE)
       table_cible <- cibles[[1L]][1L]
       cols_cible <- vapply(cibles, `[`, "", 2L)
       locales <- if (length(cibles) == 1L) colonne else cols_cible
@@ -1727,7 +1731,7 @@ controler_base <- function(donnees, arrete, declarations = NULL, conventions = N
             peut <- r %in% TRUE & cle_l %in% cle_c
             for (m in s) {
               col_cible <- .colonnes_dico(ctx, table_cible)
-              domaine <- .eclater_champ(col_cible$modalites[col_cible$colonne == cols_cible[m]])
+              domaine <- eclater_champ(col_cible$modalites[col_cible$colonne == cols_cible[m]])
               if (length(domaine) > 0L) peut <- peut & valeurs_locales[[m]] %in% domaine
             }
             if (any(peut)) {
@@ -1818,7 +1822,7 @@ controler_base <- function(donnees, arrete, declarations = NULL, conventions = N
     if (k$traitement != "R") next
     if (.portee_effective(ctx$dico, k$code, k$table, k$colonne) == "table") {
       if (is.null(tables[[k$table]])) tables[[k$table]] <- k$code
-      if (k$code == "refus_induit") origines[[k$table]] <- .eclater_champ(k$origine)
+      if (k$code == "refus_induit") origines[[k$table]] <- eclater_champ(k$origine)
       else directs[[k$table]] <- rbind(directs[[k$table]], data.frame(code = k$code, colonne = k$colonne,
                                                                        stringsAsFactors = FALSE))
     } else {
@@ -2282,7 +2286,7 @@ controler_base <- function(donnees, arrete, declarations = NULL, conventions = N
   lisible <- function(t, c1) is.na(.cause(ctx, t, c1, forme_seule = TRUE))
   # une valeur refusée n'est pas lue (M199) : inconnue
   lire <- function(t, c1) .date_connue(ctx, t, c1)
-  delai <- ctx$declarations$seuils[[.SEUIL_DELAI_D03G]]
+  delai <- ctx$declarations$seuils[[SEUIL_DELAI_D03G]]
   tables <- setdiff(ctx$tables, "extraction")
   # date de saisie retenue (NA hors hypothèse) ; dates propres de visibilité de chaque ligne
   for (t in tables) ctx$date_g[[t]] <- rep(NA_real_, nrow(ctx$base[[t]]))
@@ -2580,7 +2584,7 @@ controler_base <- function(donnees, arrete, declarations = NULL, conventions = N
 .regle_vue <- function(ctx, code, table, colonne, lit, traitement, detection, f, colonne_ne = colonne,
                        vue = character(0)) {
   if (is.null(ctx$base[[table]])) return(invisible(integer(0)))
-  cle <- paste(table, .eclater_champ(ctx$dico$tables$cle_primaire[ctx$dico$tables$table == table])[1L], sep = ".")
+  cle <- paste(table, eclater_champ(ctx$dico$tables$cle_primaire[ctx$dico$tables$table == table])[1L], sep = ".")
   # à l'arrêté égal à l'extraction, aucune ligne n'est non déterminée (spécification, § 2.2,
   # (g)) : les colonnes lues pour la vue (famille : version valable) sont lues comme valeurs
   totale <- .vue_totale(ctx)
@@ -2995,7 +2999,7 @@ controler_base <- function(donnees, arrete, declarations = NULL, conventions = N
   for (table in names(.CONTENUS_D01B)) {
     colonnes <- .CONTENUS_D01B[[table]]
     date <- .DATES_VISIBILITE[[table]][1L]
-    cle <- .eclater_champ(ctx$dico$tables$cle_primaire[ctx$dico$tables$table == table])[1L]
+    cle <- eclater_champ(ctx$dico$tables$cle_primaire[ctx$dico$tables$table == table])[1L]
     copies <- function() {
       retenu <- ctx$retenu[[table]]
       o <- order(as.numeric(.valeurs(ctx, table, date)), .valeurs(ctx, table, cle), method = "radix", na.last = TRUE)
@@ -3259,7 +3263,7 @@ controler_base <- function(donnees, arrete, declarations = NULL, conventions = N
     if (!present(t)) next
     manque <- is.null(conv)
     sans_convention <- sans_convention || manque
-    for (nom in .SEUILS_AGE_D02C) {
+    for (nom in SEUILS_AGE_D02C) {
       if (is.null(seuils[[nom]][[emploi]])) {
         .requerir(ctx, "seuils", "D02c", paste0(nom, "$", emploi))
         manque <- TRUE
@@ -3270,8 +3274,8 @@ controler_base <- function(donnees, arrete, declarations = NULL, conventions = N
       next
     }
     e <- emplois[[emploi]]
-    mini <- seuils[[.SEUILS_AGE_D02C[1L]]][[emploi]]
-    maxi <- seuils[[.SEUILS_AGE_D02C[2L]]][[emploi]]
+    mini <- seuils[[SEUILS_AGE_D02C[1L]]][[emploi]]
+    maxi <- seuils[[SEUILS_AGE_D02C[2L]]][[emploi]]
     invraisemblable <- function() {
       r <- e$ref()
       naissance <- vv(t, "date_naissance")[r$p]
@@ -3757,7 +3761,7 @@ controler_base <- function(donnees, arrete, declarations = NULL, conventions = N
                                     c("victimes", "id_assure"), c("ayants_droit_sante", "id_assure_membre")))
   for (t in intersect(names(references), tables)) {
     if (totale) next
-    cle_t <- .eclater_champ(ctx$dico$tables$cle_primaire[ctx$dico$tables$table == t])[1L]
+    cle_t <- eclater_champ(ctx$dico$tables$cle_primaire[ctx$dico$tables$table == t])[1L]
     if (!lisible(t, cle_t)) { statut[[t]] <- rep(NA, n_de(t)); next }
     cle <- as.character(.valeurs(ctx, t, cle_t))
     vrai <- character(0)
@@ -3988,7 +3992,7 @@ controler_base <- function(donnees, arrete, declarations = NULL, conventions = N
   # comptent qu'une fois (D10, réserve M1) ; celles qui divergent rendent la composante sans
   # valeur (.divergences_d01a()) ; un identifiant manquant n'est pas regroupé
   distinctes <- function(table, l, p) {
-    cle <- .eclater_champ(ctx$dico$tables$cle_primaire[ctx$dico$tables$table == table])
+    cle <- eclater_champ(ctx$dico$tables$cle_primaire[ctx$dico$tables$table == table])
     vc <- lapply(cle, function(c1) as.character(.valeurs(ctx, table, c1))[l][p$i])
     id <- do.call(paste, c(vc, list(p$j), sep = "\r"))
     manque <- Reduce(`|`, lapply(vc, is.na))
@@ -4122,7 +4126,7 @@ controler_base <- function(donnees, arrete, declarations = NULL, conventions = N
   ajouter <- function(liste, x) { liste[[length(liste) + 1L]] <- x; liste }
   for (n in seq_along(constats)) {
     k <- constats[[n]]
-    t <- .eclater_champ(k$traitement)
+    t <- eclater_champ(k$traitement)
     base_ecart <- list(table = k$table, colonne = k$colonne, motif = k$code)
     if (identical(t, "R")) {
       if (k$code != "refus_induit") {
@@ -4197,8 +4201,8 @@ controler_base <- function(donnees, arrete, declarations = NULL, conventions = N
       }
     }
     # délai de D03g : lu par l'application de l'hypothèse, tant que l'exclusion ne couvre pas
-    if (k$code == "D03g" && !x_ok && is.null(ctx$declarations$seuils[[.SEUIL_DELAI_D03G]][[k$table]])) {
-      requises <- ajouter(requises, list(rubrique = "seuils", motif = k$code, cle = paste0(.SEUIL_DELAI_D03G, "$", k$table),
+    if (k$code == "D03g" && !x_ok && is.null(ctx$declarations$seuils[[SEUIL_DELAI_D03G]][[k$table]])) {
+      requises <- ajouter(requises, list(rubrique = "seuils", motif = k$code, cle = paste0(SEUIL_DELAI_D03G, "$", k$table),
                                          traitements_admis = NA_character_, table = k$table, lignes = lignes))
     }
   }
@@ -4556,7 +4560,7 @@ controler_base <- function(donnees, arrete, declarations = NULL, conventions = N
 # écart D01a, porte des valeurs différentes de `colonne` entre ses lignes en double (D10) ;
 # integer(0) si toutes concordent (doublons à l'identique : chiffrés).
 .divergences_d01a <- function(ctx, table, lignes, colonne) {
-  cle <- .eclater_champ(ctx$dico$tables$cle_primaire[ctx$dico$tables$table == table])
+  cle <- eclater_champ(ctx$dico$tables$cle_primaire[ctx$dico$tables$table == table])
   if (colonne %in% cle) return(integer(0))
   k <- do.call(paste, c(lapply(cle, function(c1) as.character(.valeurs(ctx, table, c1))), sep = "\r"))
   grp <- which(k %in% k[lignes])
@@ -4722,7 +4726,7 @@ controler_base <- function(donnees, arrete, declarations = NULL, conventions = N
 # si la clé n'est pas lisible.
 .identifiants <- function(ctx, table, lignes) {
   if (length(lignes) == 0L) return("")
-  cle <- .eclater_champ(ctx$dico$tables$cle_primaire[ctx$dico$tables$table == table])
+  cle <- eclater_champ(ctx$dico$tables$cle_primaire[ctx$dico$tables$table == table])
   if (length(cle) == 0L || any(!is.na(vapply(cle, function(c1) .cause(ctx, table, c1, forme_seule = TRUE), "")))) return("")
   valeurs <- lapply(cle, function(c1) .valeurs(ctx, table, c1)[lignes])
   ordre <- do.call(order, c(valeurs, list(method = "radix", na.last = TRUE)))
