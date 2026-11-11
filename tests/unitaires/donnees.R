@@ -293,6 +293,31 @@ verifier_egal("sans conventions : D02c (âge) et D07 (c) non exécutés, cause d
                    ligne(r$controles_non_executes, "D07", "evenements", NA)$cause),
               list(c("assures", "famille", "designations", "ayants_droit_sante"), "declaration_absente",
                    rep("declaration_absente", 2L), "non_implemente"))
+# conventions$limite_age conditionnée (spécification de B2, § 6.3, niveau 1) : exigée seulement
+# s'il existe une ligne candidate de D07 (c) dans la vue (rente d'une garantie rente_education,
+# dossier double_effet, retenus ou de visibilité non déterminée ; jointure illisible : candidate)
+d07_exige <- function(r) {
+  ne <- r$controles_non_executes
+  ne <- ne[ne$code == "D07" & ne$table %in% c("rentes", "dossiers") & ne$cause == "declaration_absente", , drop = FALSE]
+  list(sort(paste(ne$table, ne$cause)), r$declarations_requises$cle[r$declarations_requises$motif == "D07"])
+}
+exige_d07 <- list(c("dossiers declaration_absente", "rentes declaration_absente"), c("limite_age$age", "limite_age$regle"))
+sans_candidat <- avec(function(b) { b$garanties_souscrites$code_garantie[3L] <- "rente_conjoint"; b })   # RE1 rente_conjoint
+rente_nd <- avec(function(b) { b$rentes$date_saisie <- D(NA); b })   # RE1 non déterminée à A0 (manquant_obligatoire)
+illisible_d07 <- avec(function(b) { b$garanties_souscrites$code_garantie[3L] <- "rente_conjoint"; b$rentes$id_dossier <- 2L; b })
+verifier_egal("limite_age conditionnée (§ 6.3) : sans ligne candidate (RE1 d'une garantie rente_conjoint), aucune ligne D07 declaration_absente ni déclaration requise, aux deux arrêtés ; témoin base de référence (RE1 rente_education) : exigée",
+              list(d07_exige(controler_base(sans_candidat, A)), d07_exige(controler_base(sans_candidat, A0)),
+                   d07_exige(controler_base(base_ref, A))),
+              list(list(character(0), character(0)), list(character(0), character(0)), exige_d07))
+verifier_egal("limite_age conditionnée (§ 6.3) : candidate de visibilité non déterminée (RE1 sans date de saisie, A0), candidate par jointure illisible (rentes.id_dossier en entier), dossier double_effet : exigée",
+              list(d07_exige(controler_base(rente_nd, A0)), d07_exige(controler_base(illisible_d07, A)),
+                   d07_exige(controler_base(avec(function(b) {
+                     b$garanties_souscrites$code_garantie[3L] <- "rente_conjoint"
+                     b$garanties_souscrites$code_garantie[1L] <- "double_effet"; b }), A))),
+              list(exige_d07, exige_d07, exige_d07))
+verifier("limite_age conditionnée (§ 6.3) : ligne candidate invisible de façon déterminée (RE1 saisie après A0) : aucune exigence",
+         identical(d07_exige(controler_base(avec(function(b) { b$rentes$date_saisie <- D("2025-09-01"); b }), A0)),
+                   list(character(0), character(0))))
 verifier_egal("vue : date d'arrêté et date d'extraction", r0$vue[c("date_arrete", "date_extraction")],
               list(date_arrete = A, date_extraction = A))
 verifier("la base n'est pas modifiée (aucune correction silencieuse)", {

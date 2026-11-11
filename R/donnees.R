@@ -3325,13 +3325,17 @@ lire_declarations <- function(declarations, dico) {
 # détection (dossiers : aucun autre enfant non éteint de façon déterminée ; rentes : un seul
 # enfant, toujours). Traitement
 # H ou S. Sans conventions$limite_age : non exécuté (cause declaration_absente) et
-# déclaration requise (rubrique conventions, cles limite_age$regle et limite_age$age).
+# déclaration requise (rubrique conventions, cles limite_age$regle et limite_age$age), s'il
+# existe au moins une ligne candidate (.candidats_d07c()) ; sans ligne candidate, exécuté à
+# vide, sans exigence (spécification de B2, docs/specifications/b2-capital-deces-v1.md,
+# § 6.3, niveau 1 : une déclaration qui ne peut changer aucune ligne du bilan ne bloque pas).
 # Constat sur la table qui porte la charge (rentes, dossiers), colonne NA ; D07 (a) et (b),
 # sur evenements, restent déclarés non implémentés (report).
 .regle_v_limite_age <- function(ctx) {
   tables <- intersect(c("rentes", "dossiers"), names(ctx$base))
   la <- ctx$conventions$limite_age
   if (is.null(la)) {
+    if (!.candidats_d07c(ctx)) return(invisible(NULL))
     for (t in tables) .ajouter_non_execute(ctx, "D07", t, NA_character_, "declaration_absente")
     if (length(tables) > 0L) {
       .requerir(ctx, "conventions", "D07", "limite_age$regle", paste(REGLES_LIMITE_AGE, collapse = ";"))
@@ -3566,6 +3570,33 @@ lire_declarations <- function(declarations, dico) {
            function(x) x$de & !x$clos & x$e)
   }, vue = vue_commun)
   invisible(NULL)
+}
+
+# Existence d'au moins une ligne candidate de D07 (c) (spécification de B2, § 6.3, niveau 1) :
+# une ligne de rentes, dans la vue (retenue ou de visibilité non déterminée, .nd_vue()), dont
+# le dossier relève d'une garantie souscrite rente_education, ou une ligne de dossiers, dans la
+# vue, de garantie souscrite double_effet (jointure sur les valeurs brutes, comme D07 (c)). Si
+# une colonne de la jointure ne se lit pas (refus de forme, de valeur ou de portée table,
+# .cause()), chaque ligne de la table compte comme candidate (sens prudent : la déclaration
+# est demandée). Rend TRUE ou FALSE.
+.candidats_d07c <- function(ctx) {
+  code_lus <- c("garanties_souscrites.id_garantie_souscrite", "garanties_souscrites.code_garantie")
+  candidats <- function(table, lus, code, gs_de) {
+    n <- NROW(ctx$base[[table]])
+    if (n == 0L) return(FALSE)
+    if (!is.null(.cause_lecture(ctx, c(lus, code_lus)))) return(TRUE)
+    dans_vue <- ctx$retenu[[table]] | .nd_vue(ctx, table)
+    gs <- gs_de()
+    any(dans_vue & .joindre(ctx, "garanties_souscrites", "id_garantie_souscrite", "code_garantie", gs) %in% code)
+  }
+  gs_rentes <- function() {
+    dossier <- .valeurs(ctx, "rentes", "id_dossier")
+    .joindre(ctx, "dossiers", "id_dossier", "id_garantie_souscrite", dossier)
+  }
+  candidats("rentes", c("rentes.id_dossier", "dossiers.id_dossier", "dossiers.id_garantie_souscrite"),
+            "rente_education", gs_rentes) ||
+    candidats("dossiers", "dossiers.id_garantie_souscrite", "double_effet",
+              function() .valeurs(ctx, "dossiers", "id_garantie_souscrite"))
 }
 
 # --- Placement des constats et enjeu -----------------------------------------------------
