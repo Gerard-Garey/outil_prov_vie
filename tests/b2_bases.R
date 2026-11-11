@@ -38,7 +38,7 @@ b2_tables <- function() {
   taux[mois == "2024-10"] <- 3.2
   taux[mois == "2025-10"] <- 2.4
   tme <- b2_ns$construire_table(data.frame(mois = mois, taux_pourcent = taux, stringsAsFactors = FALSE),
-                                "serie_tme_mensuelle", "tme_fictive_b2", "fictive", "série fictive, sans source (tests B2)")
+                                "serie_tme_mensuelle", "tme_fictive_b2", "fictive", "s\u00e9rie fictive, sans source (tests B2)")
   list(mortalite_tarif = mort, serie_tme = tme)
 }
 
@@ -57,12 +57,12 @@ b2_tables_v1_03 <- function() {
           74226.0, 72751.9, 71242.3, 69699.2, 68124.7, 66521.0, 64890.6, 63235.9, 61559.5, 59864.2, 58152.6,
           56427.8, 54692.7, 52950.2, 51203.3, 49455.3, 47709.0, 45967.6, 44234.2)
   mort <- b2_ns$construire_table(data.frame(age = 18:80, lx = lx), "lx_age", "mortalite_fictive_v1_03", "fictive",
-                                 "table fictive, sans source (jeux de la v1, plans de référence)")
+                                 "table fictive, sans source (jeux de la v1, plans de r\u00e9f\u00e9rence)")
   mois <- sprintf("%04d-%02d", rep(2014:2025, each = 12L), rep(1:12, 12L))
   taux <- ifelse(mois <= "2019-12", 2, ifelse(mois <= "2022-06", 1, 3))
   tme <- b2_ns$construire_table(data.frame(mois = mois, taux_pourcent = taux, stringsAsFactors = FALSE),
                                 "serie_tme_mensuelle", "tme_fictive_v1_03", "fictive",
-                                "série fictive, sans source (jeux de la v1, plans de référence)")
+                                "s\u00e9rie fictive, sans source (jeux de la v1, plans de r\u00e9f\u00e9rence)")
   list(mortalite_tarif = mort, serie_tme = tme)
 }
 
@@ -233,4 +233,71 @@ b2_base_p3 <- function(periodicite = "unique", prime = NA_real_, tarif = 0.02, c
 # Vue à l'arrêté d'une base de test (vue_a_date(), conventions du plan).
 b2_vue <- function(base, arrete, declarations = NULL, conventions = list(age = "revolu")) {
   b2_ns$vue_a_date(base, arrete, declarations, conventions)
+}
+
+# Base construite `construite-deces-01` (spécification de B2, § 7.8.1, erratum v1.0.8 ; ADR
+# 0011, points 11 à 13) : base fictive écrite à la main, sans loi vraie ni graine, qui réunit
+# sous des identifiants distincts (suffixe = nom du cas) les dossiers de R1, R3, R4, R5 (a) et
+# R5 (b) (contrat collectif CTC1, garantie GSC1), les contrats individuels de T1 (CTI1, prime
+# unique) et de T3 / T5 (CTI3, primes annuelles, prime_periodique 2 300), les cotisations de T7
+# (COC1) et T7 bis (COC2) ; valeurs de b2_base_capital() et de b2_base_p3(). Quinze tables du
+# dictionnaire 1.5. Elle ne change jamais en place : une base modifiée prend le numéro 02.
+b2_base_construite_deces_01 <- function() {
+  cas <- c("R1", "R3", "R4", "R5A", "R5B")
+  fixes <- c("R1", "R3", "R4")
+  n <- length(cas)
+  list(
+    extraction = b2_tab("extraction", date_extraction = D("2026-03-31"), debut_historique = D("2017-01-01"),
+                        type_organisme = "societe_assurance", version_dictionnaire = "1.5", devise = "EUR"),
+    adherents = b2_tab("adherents", id_adherent = "ADC1"),
+    contrats = b2_tab("contrats", id_contrat = c("CTC1", "CTI1", "CTI3"),
+                      nature_contrat = c("collectif_obligatoire", "individuel", "individuel"),
+                      id_adherent = c("ADC1", NA, NA), id_assure = c(NA, "ASI1", "ASI3"),
+                      date_effet = D(c("2020-01-01", "2024-01-01", "2024-01-01")),
+                      date_terme = D(c(NA, "2027-01-01", "2027-01-01")), mois_echeance = 1L, jour_echeance = 1L,
+                      preavis_mois = 2L, tacite_reconduction = c(TRUE, FALSE, FALSE), gestionnaire = "interne",
+                      date_debut_gestion = D(c("2020-01-01", "2024-01-01", "2024-01-01"))),
+    garanties_souscrites = b2_tab("garanties_souscrites", id_garantie_souscrite = c("GSC1", "GSI1", "GSI3"),
+                                  id_contrat = c("CTC1", "CTI1", "CTI3"), code_garantie = "deces", college = "ensemble",
+                                  date_effet = D(c("2020-01-01", "2024-01-01", "2024-01-01")),
+                                  type_assiette = c("salaire_reference", "forfait", "forfait"), option_iad = FALSE,
+                                  periodicite_cotisation = c("annuelle", "unique", "annuelle"),
+                                  taux_technique_tarif = c(NA, 0.02, 0.02),
+                                  clause_type_beneficiaire = "conjoint_enfants_heritiers"),
+    parametres = b2_tab("parametres",
+                        id_garantie_souscrite = c(rep("GSC1", 4L), rep("GSI1", 2L), rep("GSI3", 3L)),
+                        parametre = c("taux_capital", "age_fin_garantie", "majoration_conjoint", "majoration_enfant",
+                                      "capital_forfaitaire", "age_fin_garantie",
+                                      "capital_forfaitaire", "age_fin_garantie", "prime_periodique"),
+                        valeur = c(2, 67, 0.5, 0.25, 100000, 70, 100000, 70, 2300)),
+    assures = b2_tab("assures", id_assure = c(paste0("AS", cas), "ASI1", "ASI3"), sexe = "M",
+                     date_naissance = D(c(rep("1980-01-01", n), "1984-01-01", "1984-01-01"))),
+    affiliations = b2_tab("affiliations", id_affiliation = paste0("AF", cas), id_assure = paste0("AS", cas),
+                          id_contrat = "CTC1", college = "ensemble", type_affiliation = "cotisant",
+                          date_debut = D("2020-01-01"), date_saisie = D("2020-01-05"), salaire_reference = 30000),
+    famille = b2_tab("famille", id_membre = paste0("ME", rep(cas, each = 3L), 1:3), id_assure = paste0("AS", rep(cas, each = 3L)),
+                     lien = rep(c("conjoint", "enfant", "enfant"), n), sexe = rep(c("F", "M", "F"), n),
+                     date_naissance = D(rep(c("1982-05-01", "2014-01-01", "1997-01-01"), n)),
+                     id_sinistre = paste0("SI", rep(cas, each = 3L)), date_saisie = D("2024-09-10")),
+    sinistres = b2_tab("sinistres", id_sinistre = paste0("SI", cas), id_assure = paste0("AS", cas), nature_sinistre = "deces",
+                       date_survenance = D("2024-07-01"), date_declaration = D("2024-09-01"),
+                       date_instruction = D(ifelse(cas == "R5B", NA, "2024-09-10")), canal_declaration = "beneficiaire",
+                       gestionnaire = "interne", date_saisie = D("2024-09-02")),
+    dossiers = b2_tab("dossiers", id_dossier = paste0("DO", cas), id_sinistre = paste0("SI", cas),
+                      id_garantie_souscrite = "GSC1", date_ouverture = D("2024-09-03")),
+    beneficiaires = b2_tab("beneficiaires", id_beneficiaire = paste0("BE", cas), id_dossier = paste0("DO", cas),
+                           id_membre = ifelse(cas == "R4", NA, paste0("ME", cas, "1")),
+                           qualite = ifelse(cas == "R4", "non_identifie", "conjoint_survivant"), part = 1,
+                           date_saisie = D("2024-09-10")),
+    rentes = b2_tab("rentes"),
+    evenements = b2_tab("evenements", id_evenement = paste0("EV", fixes), id_sinistre = paste0("SI", fixes),
+                        id_dossier = paste0("DO", fixes), type_evenement = "fixation_capital",
+                        date_effet = D("2024-09-15"), date_saisie = D("2024-09-16"), montant = 100000),
+    prestations = b2_tab("prestations", id_prestation = "PRR3", id_dossier = "DOR3", type_prestation = "capital",
+                         nature_mouvement = "paiement", date_reglement = D("2025-03-01"), montant = 40000,
+                         date_saisie = D("2025-03-01")),
+    cotisations = b2_tab("cotisations", id_cotisation = c("COC1", "COC2"), id_garantie_souscrite = "GSC1",
+                         nature_mouvement = "emission", debut_periode = D(c("2025-07-01", "2024-07-01")),
+                         fin_periode = D(c("2026-06-30", "2025-06-30")),
+                         date_mouvement = D(c("2025-07-01", "2024-07-01")), montant = 1200))
 }
