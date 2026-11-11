@@ -37,9 +37,6 @@ EXCLUSIONS_FICHE <- c("versions/provie", "versions/r", "plateforme", "empreintes
 # Clés d'alignement des lignes (invariant (d) de l'ADR 0010, point 7).
 CLES_PROVISIONS <- c("garantie", "referentiel", "poste", "segmentation", "segment")
 CLES_DOSSIERS <- c("garantie", "referentiel", "poste", "id_dossier")
-# Champs de la plateforme de référence comparés à ceux de chaque fiche.txt (ADR 0011, point 23
-# (v)) ; version_systeme (noyau de l'hôte) exclue.
-CHAMPS_PLATEFORME_REFERENCE <- c("r", "plateforme", "boutisme", "blas", "lapack", "lapack_version")
 
 chemin_couple <- function(i) {
   file.path(COUPLES_REFERENCE$donnees[i], COUPLES_REFERENCE$plan[i], COUPLES_REFERENCE$arrete[i])
@@ -248,14 +245,18 @@ comparer_feuilles <- function(obtenu, reference, chemin = "", exclusions = chara
 }
 
 # Visa requis par un écart (ADR 0011, point 10) : `mainteneur` pour montant, statut_calcul ou
-# motif_arret d'une cellule total / agregat / ensemble de provisions, et pour l'apparition ou la
-# disparition d'une telle cellule ; `actuary` sinon.
+# motif_arret d'une cellule total / agregat / ensemble de provisions, pour l'apparition ou la
+# disparition d'une telle cellule, et pour tout écart de structure de provisions (colonne
+# renommée ou retirée, table absente, type changé, NA contre valeur : la provision totale peut
+# changer sans que la cellule total soit nommée) ; `actuary` sinon.
 visa_requis <- function(ecarts) {
   if (nrow(ecarts) == 0L) return(character(0))
   total <- grepl("\\|total\\|ensemble\\|ensemble$", ecarts$cle)
   colonne <- sub("^provisions/?", "", ecarts$chemin)
-  ifelse(startsWith(ecarts$chemin, "provisions") & total &
-           (colonne %in% c("montant", "statut_calcul", "motif_arret") | ecarts$nature %in% c("ligne_ajoutee", "ligne_retiree")),
+  provisions <- startsWith(ecarts$chemin, "provisions")
+  ifelse(provisions & (ecarts$nature == "structure" |
+                         (total & (colonne %in% c("montant", "statut_calcul", "motif_arret") |
+                                     ecarts$nature %in% c("ligne_ajoutee", "ligne_retiree")))),
          "mainteneur", "actuary")
 }
 

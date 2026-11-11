@@ -37,6 +37,32 @@ verifier_egal("provisions alignées sur leurs clés : ligne retirée nommée par
               data.frame(chemin = c("provisions", "provisions/montant"),
                          cle = c("deces|comptes_sociaux|capitaux_non_reclames|ensemble|ensemble", "deces|comptes_sociaux|total|ensemble|ensemble"),
                          nature = c("ligne_retiree", "valeur"), visa = c("actuary", "mainteneur"), stringsAsFactors = FALSE))
+# Écarts de structure de provisions : visa du mainteneur (m1 de la revue finale) ; témoin : un
+# écart de structure hors de provisions (dossiers) reste à actuary.
+visa_de <- function(r_x, lr_ref = lr) {
+  e <- comparer_feuilles(liste_resultat(r_x), lr_ref, tables = list(provisions = CLES_PROVISIONS, dossiers = CLES_DOSSIERS))
+  e$visa <- visa_requis(e)
+  e
+}
+r_ren <- r_c1
+names(r_ren$provisions)[names(r_ren$provisions) == "statut_resultat"] <- "statut_resultat_x"
+r_typ <- r_c1
+r_typ$provisions$nombre_dossiers <- as.double(r_typ$provisions$nombre_dossiers)
+lr_sans <- lr
+lr_sans$provisions <- NULL
+r_dos <- r_c1
+r_dos$dossiers$montant <- as.character(r_dos$dossiers$montant)
+e_ren <- visa_de(r_ren)
+e_typ <- visa_de(r_typ)
+e_abs <- visa_de(r_c1, lr_sans)
+e_dos <- visa_de(r_dos)
+verifier_egal("écart de structure de provisions : colonne renommée, type changé (entier contre réel), table absente de la référence : visa du mainteneur ; type changé dans dossiers : actuary",
+              list(e_ren[c("chemin", "nature", "visa")], e_typ[c("chemin", "nature", "visa")], e_abs[c("chemin", "nature", "visa")],
+                   unique(e_dos$visa)),
+              list(data.frame(chemin = "provisions", nature = "structure", visa = "mainteneur", stringsAsFactors = FALSE),
+                   data.frame(chemin = "provisions/nombre_dossiers", nature = "structure", visa = "mainteneur", stringsAsFactors = FALSE),
+                   data.frame(chemin = "provisions", nature = "structure", visa = "mainteneur", stringsAsFactors = FALSE),
+                   "actuary"))
 fl <- liste_fiche(r_c1$fiche)
 fm <- r_c1$fiche
 fm$versions$provie <- "9.9.9"
