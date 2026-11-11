@@ -3098,7 +3098,10 @@ selon la convention de décompte des jours, et $r_y$ le taux retenu par le
 plan pour l'année. Une année antérieure ou égale à celle de l'arrêté sans
 taux est refusée (\code{plan\_incomplet}, le message nommant l'année et le
 premier dossier). Un solde nul ou négatif donne une provision nulle, et le
-dossier n'est pas restitué. Les frais sont le chargement déclaré appliqué
+dossier n'est pas restitué. Un capital payé au nominal après la
+survenance laisse ainsi un solde égal à la revalorisation non payée,
+revalorisée jusqu'à l'arrêté, tant que la clôture du dossier n'est pas
+retenue à l'arrêté. Les frais sont le chargement déclaré appliqué
 au montant. La revalorisation d'avant la connaissance du décès suit les
 mêmes taux~: c'est une limite, le dictionnaire ne portant aucune clause
 contractuelle de revalorisation.
@@ -3633,7 +3636,7 @@ les deux méthodes de la classe \code{jeu\_simule} sont exportées.
 \begin{tabular}{@{}p{3.9cm}>{\raggedright\arraybackslash}p{3.0cm}p{8.2cm}@{}}
 \rowcolor{tableheader}
 \textcolor{financeblue}{\textbf{Fonction}} & \textcolor{financeblue}{\textbf{Arguments}} & \textcolor{financeblue}{\textbf{Rôle}} \\
-\code{simuler\_base()} & \code{loi\_vraie}, \code{graines}, \code{date\_extraction}, \code{nom}, \code{description}, \code{declarations = NULL}, \code{date\_visa = NULL} & Tire une base brute fictive sous la loi vraie, en flux séparés (population, famille, sinistres, information), chacun sous sa graine, puis injecte chaque défaut de données paramétré sous la graine des défauts augmentée de son rang\fsp; rend un objet \code{jeu\_simule} (base, loi vraie, tables de vérité dont le registre des défauts, manifeste avec la version du simulateur, déclarations facultatives) sans écrire de fichier\fsp; refuse (\code{jeu\_invalide}), avant tout tirage, une loi vraie, des graines ou des arguments mal formés, une loi vraie à clé inconnue ou à valeur hors de son domaine, et une entrée qui ne satisfait pas les deux préconditions du tirage (section~\ref{sec:simulation-tirage}). \\
+\code{simuler\_base()} & \code{loi\_vraie}, \code{graines}, \code{date\_extraction}, \code{nom}, \code{description}, \code{declarations = NULL}, \code{date\_visa = NULL} & Tire une base brute fictive sous la loi vraie, en flux séparés (population, famille, sinistres, information, et, sous une loi vraie de version~2, contrats individuels et suites des décès), chacun sous sa graine, puis injecte chaque défaut de données paramétré sous la graine des défauts augmentée de son rang\fsp; rend un objet \code{jeu\_simule} (base, loi vraie, tables de vérité dont le registre des défauts, manifeste avec la version du simulateur, déclarations facultatives) sans écrire de fichier\fsp; refuse (\code{jeu\_invalide}), avant tout tirage, une loi vraie, des graines ou des arguments mal formés, une loi vraie à clé inconnue ou à valeur hors de son domaine, et une entrée qui ne satisfait pas les deux préconditions du tirage (section~\ref{sec:simulation-tirage}). \\
 \code{format.jeu\_simule()} & \code{x}, \code{...} & Décrit un jeu simulé en lignes de texte, par des décomptes seuls~: nom, date d'extraction, versions du dictionnaire, du simulateur et du package, date de visa, lignes par table, lignes du registre des défauts par code, déclarations. \\
 \code{print.jeu\_simule()} & \code{x}, \code{...} & Imprime \code{format(x)} et rend le jeu, invisible. \\
 \end{tabular}
@@ -3699,7 +3702,9 @@ supérieur.
 ordre~: \code{population} (contrats, assurés, affiliations),
 \code{famille} (conjoints vrais), \code{sinistres} (trajectoires vraies des
 assurés et des arrêts) et \code{information} (délais de déclaration, de
-saisie, d'instruction et de règlement). Chaque flux est tiré par un seul
+saisie, d'instruction et de règlement). Une loi vraie de version~2 en
+ajoute deux, tirés ensuite, avant les défauts~: \code{individuels} et
+\code{suites\_deces} (paragraphe suivant). Chaque flux est tiré par un seul
 appel d'\code{avec\_graine()} (section~\ref{sec:graine}), sous sa graine,
 en tableaux d'uniformes de taille fixe par unité (contrat, assuré, arrêt,
 sinistre), transformés ensuite par inversion. Le nombre d'uniformes d'un
@@ -3709,6 +3714,36 @@ unité ne dépend pas de ce qui arrive aux autres, et le flux
 \code{information} ne change aucun tirage des flux qui le précèdent. Les
 bornes de taille (ainsi le nombre maximal d'arrêts par assuré) sont des
 paramètres de la loi vraie.
+
+\textbf{Loi vraie de version~2.} Le format de loi vraie de version~2
+(\code{VERSION\_LOI\_VRAIE}) est additif (spécification de la branche B2,
+§~7.9.2)~: une loi vraie de version~1 reste lue, avec une sortie
+inchangée, et une clé de la version~2 y est refusée\fsp; une loi vraie de
+version~2 porte toutes les clés de la version~1, de même sens, et toutes
+les clés nouvelles, sans valeur par défaut. Elle ajoute~:
+
+\begin{itemize}[itemsep=2pt]
+\item des temporaires décès individuelles (flux \code{individuels},
+  uniformes de taille fixe par contrat)~: effet au premier du mois,
+  âge à la souscription, prime unique ou primes annuelles ou
+  trimestrielles, durée, capital, taux du tarif par palier d'années d'effet,
+  tarif commercial déclaré, résiliation des contrats à primes périodiques,
+  décès seul par pas de 30~jours jusqu'à la fin de garantie (terme ou âge
+  de fin de garantie), délais d'information\fsp;
+\item les suites des décès (flux \code{suites\_deces}, trois uniformes par
+  décès, collectif puis individuel)~: capital non réclamé (bénéficiaire
+  \code{non\_identifie}, ni prestation ni clôture, dépôt nominal porté par
+  la vérité à la date de déclaration plus dix ans) et fixation différée du
+  capital\fsp;
+\item pour le collectif, la majoration du conjoint et des périodes de
+  cotisation à l'anniversaire du contrat.
+\end{itemize}
+
+\noindent Les contrôles d'entrée s'étendent aux clés nouvelles (période de
+cotisation dans sa liste fermée, âges de souscription ordonnés et âge
+maximal augmenté de 28~jours inférieur à l'âge de fin de garantie, durées
+d'au moins un an, paliers du taux du tarif cohérents, dernière souscription
+au plus tôt au début de l'historique).
 
 \textbf{Défauts injectés.} Chaque défaut du catalogue
 \code{DEFAUTS\_SIMULES} d'intensité non nulle est ensuite injecté sous la
@@ -3778,8 +3813,10 @@ refusé dans la loi vraie.
   lues.
 \end{itemize}
 
-Les graines forment une liste nommée de cinq entiers, une par flux et une
-pour les défauts (\code{GRAINES\_SIMULATION}). À loi vraie, graines et
+Les graines forment une liste nommée d'entiers, une par flux et une pour
+les défauts~: cinq pour une loi vraie de version~1
+(\code{GRAINES\_SIMULATION}), sept pour une loi vraie de version~2
+(\code{GRAINES\_SIMULATION\_V2}). À loi vraie, graines et
 arguments identiques, \code{simuler\_base()} rend un jeu identique~; c'est
 ce que vérifie, sur la plateforme où elle tourne, la batterie de
 reproductibilité.
@@ -3801,7 +3838,11 @@ admet ce changement sans incrément, aucun jeu n'ayant été publié hors de
 cette branche, et les jeux versionnés n'étant pas changés (la batterie de
 reproductibilité les rejoue à l'identique)~: la version reste~1. La sémantique des intensités de défauts de la loi vraie de
 version~1 est figée~: ajouter un sous-cas demande une nouvelle version de
-la loi vraie et du simulateur.
+la loi vraie et du simulateur. Le format de loi vraie de version~2 n'a pas
+relevé \code{VERSION\_SIMULATEUR}~: étant additif, il ne change la sortie
+d'aucune entrée admise, et les jeux \code{v1-modeste-01} et
+\code{v1-modeste-02} sont régénérés à l'octet, hors de la version du
+package qui les a produits.
 
 \textbf{Jeux versionnés.} Un jeu versionné est écrit par
 \code{ecrire\_jeu()} sous \code{inst/extdata/jeux/<nom>/}, après le visa du
@@ -3814,11 +3855,32 @@ champ, hors de la version du package qui l'a produit, contrôlée à part (au
 plus la version installée)\fsp; elle compare aussi les empreintes, et
 vérifie que les entrées du jeu sont celles du script de provenance
 \code{tests/jeux\_v1.R}, qui porte en commentaire le statut et la
-justification de chaque paramètre. Deux jeux sont versionnés~:
-\code{v1-modeste-01}, jeu propre d'un portefeuille modeste à garanties
-liées décès et arrêt de travail, et \code{v1-modeste-02}, même jeu propre
-avec les douze défauts du catalogue, jeu de contrôle et non de calcul. Ils
-servent aux tests fonctionnels, sans portée statistique.
+justification de chaque paramètre. Trois jeux sont versionnés~:
+
+\begin{itemize}[itemsep=2pt]
+\item \code{v1-modeste-01}, jeu propre d'un portefeuille modeste à
+  garanties liées décès et arrêt de travail\fsp;
+\item \code{v1-modeste-02}, même jeu propre avec les douze défauts du
+  catalogue, jeu de contrôle et non de calcul\fsp;
+\item \code{v1-modeste-03}, jeu propre du capital décès, tiré sous une loi
+  vraie de version~2 (spécification de la branche B2, §~7.9)~: six contrats
+  collectifs (cotisations à l'anniversaire, majoration du conjoint) et deux
+  cents temporaires décès individuelles à prime unique ou périodique,
+  capitaux non réclamés et fixations différées à des intensités de test,
+  sans aucun défaut injecté\fsp; son objet est un montant non nul des trois
+  postes du capital décès. Ses graines sont déclarées sans sélection~:
+  aucune n'a été choisie d'après le résultat d'un critère (décision du
+  mainteneur du 11~novembre~2026). Il a été visé le 11~novembre~2026. Ses
+  limites sont écrites dans sa description~; l'une d'elles est un écart de
+  modèle entre la loi vraie et la méthode~: le simulateur paie le capital au
+  nominal, sans la revalorisation légale de la survenance au règlement, si
+  bien qu'un dossier payé dont la clôture n'est pas saisie à l'arrêté garde
+  un solde égal à cette revalorisation, que la vérité ne porte pas
+  (section~\ref{sec:engagement-capital})~; ce n'est pas une erreur du
+  moteur.
+\end{itemize}
+
+\noindent Ils servent aux tests fonctionnels, sans portée statistique.
 
 \textbf{Affichage.} \code{format()} et \code{print()} décrivent un jeu par
 des décomptes seuls, sans aucune somme.
@@ -3833,7 +3895,9 @@ Les constantes du module sont citées d'après le code
 \rowcolor{tableheader}
 \textcolor{financeblue}{\textbf{Constante}} & \textcolor{financeblue}{\textbf{Valeur et objet}} \\
 \code{FLUX\_SIMULATION} & \code{population}, \code{famille}, \code{sinistres}, \code{information}~: flux du jeu propre, dans leur ordre de tirage. \\
-\code{GRAINES\_SIMULATION} & Les quatre flux, puis \code{defauts}~: noms de l'argument \code{graines}. \\
+\code{GRAINES\_SIMULATION} & Les quatre flux, puis \code{defauts}~: noms de l'argument \code{graines} pour une loi vraie de version~1. \\
+\code{FLUX\_SIMULATION\_V2} & \code{individuels}, \code{suites\_deces}~: flux ajoutés par une loi vraie de version~2, tirés après les précédents. \\
+\code{GRAINES\_SIMULATION\_V2} & \code{population}, \code{famille}, \code{sinistres}, \code{information}, \code{individuels}, \code{suites\_deces}, \code{defauts}~: noms de l'argument \code{graines} pour une loi vraie de version~2, dans l'ordre des tirages. \\
 \code{VERSION\_LOI\_VRAIE} & Entier \code{2}~: version du format de la loi vraie (la version~1 reste lue). \\
 \code{VERSION\_SIMULATEUR} & Entier \code{1}~: version du simulateur, consignée au manifeste. \\
 \code{DEFAUTS\_SIMULES} & Catalogue des défauts injectables (rang, code, paramètre, table, lignes éligibles), douze lignes. \\
