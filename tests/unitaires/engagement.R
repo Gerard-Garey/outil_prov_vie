@@ -574,3 +574,31 @@ verifier_egal("(3.17) Kleene : collège inconnu non refusé de GSC (garantie du 
               tolerance = TOL)
 verifier_egal("(3.17) témoin : R5 (a), collège ensemble partout : 85 747,20 exact",
               cel(eng(r5a, pB)), calcule(85747.2, "exact"), tolerance = TOL)
+
+# Plan canonique (#67) : canoniser_plan() porte revalorisation$capital_deces$taux_par_annee en
+# liste nommée de doubles (forme de la fiche de calcul et du rejeu) ; les familles le lisent
+# comme le double nommé d'un plan seulement validé. Avant la correction, calculer_engagement()
+# d'un dossier valorisé sur le plan canonique s'arrêtait sur l'erreur de facteur_revalorisation()
+# « taux_par_annee doit être un double nommé par année ». Bases R1, R3, R5 (a), R4 (P2) et P3
+# (T1, T3), plans minimal et « règlement » (taux_futur, delai_reglement_jours) : résultats
+# identiques (identical) avec le plan validé et avec le plan canonique.
+verifier("plan canonique : taux_par_annee en liste nommée triée par année",
+         is.list(canoniser_plan(p)$revalorisation$capital_deces$taux_par_annee))
+meme_resultat <- function(base, plan, arrete = A) {
+  cp <- canoniser_plan(plan)
+  v <- b2_vue(base, arrete)
+  all(vapply(c(P1, P2), function(po) identical(ns$calculer_engagement(v, plan, tb, cat_g, "deces", po),
+                                               ns$calculer_engagement(v, cp, tb, cat_g, "deces", po)), NA)) &&
+    identical(ns$calculer_risque_en_cours(v, plan, tb, cat_g, "deces", "provision_mathematique_temporaire_deces"),
+              ns$calculer_risque_en_cours(v, cp, tb, cat_g, "deces", "provision_mathematique_temporaire_deces"))
+}
+verifier("plan canonique (#67) : P1, P2 et P3 identiques au plan validé (R1, R3, R5 (a), R4 en P2 ; plans minimal et règlement)",
+         meme_resultat(b2_base_capital(), p) &&
+           meme_resultat(b2_base_capital(paiements = data.frame(date = D("2025-03-01"), montant = 40000)), p) &&
+           meme_resultat(b2_base_capital(capital = NA), p) && meme_resultat(non_reclame, p_depot()) &&
+           meme_resultat(b2_base_capital(), p_reglement()))
+verifier_egal("plan canonique (#67) : R1 sur le plan canonique, 103 936 (cas R1)",
+              eng(b2_base_capital(), canoniser_plan(p))$cellules$montant, 103936, tolerance = TOL)
+verifier("plan canonique (#67) : P3 (T1, T3) identique au plan validé",
+         meme_resultat(b2_base_p3(), b2_plan(tb, D("2025-01-01")), D("2025-01-01")) &&
+           meme_resultat(b2_base_p3("annuelle", 2300), b2_plan(tb, D("2025-01-01")), D("2025-01-01")))

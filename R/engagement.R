@@ -393,7 +393,7 @@ parametre_vue <- function(vue, nom, gs, famille = NULL) {
 capital_deces_dossier <- function(vue, plan, etats, methode, parametres, prestations) {
   horizon <- .HORIZONS[[methode]]
   a <- vue$bilan$vue$date_arrete
-  rv <- plan$revalorisation$capital_deces
+  rv <- .revalorisation_plan(plan)
   conventions <- plan$conventions
   n <- nrow(etats)
   rec <- .reconstituer_capital(vue, etats[etats$etat_dossier == "ouvert", , drop = FALSE], parametres, conventions)
@@ -583,7 +583,7 @@ calculer_engagement <- function(vue, plan, tables, catalogue, garantie, poste) {
   }
   etats <- etats[if (poste == "capitaux_non_reclames") non_reclame else !non_reclame, , drop = FALSE]
   # couverture de taux_par_annee : chaque année de la survenance la plus ancienne à l'arrêté
-  rv <- plan$revalorisation$capital_deces
+  rv <- .revalorisation_plan(plan)
   if (nrow(etats) > 0L) {
     annee_a <- as.POSIXlt(a)$year + 1900L
     debut <- as.POSIXlt(etats$date_entree_etat)$year + 1900L
@@ -650,6 +650,19 @@ calculer_engagement <- function(vue, plan, tables, catalogue, garantie, poste) {
   cel <- .cellule(garantie, poste, ligne_cat$famille, ligne_cat$provision_comptes_sociaux, total, nv, methode,
                   statut_methode, statut_le_plus_faible(statut), NA_character_)
   list(cellules = cel, dossiers = dossiers, echeanciers = echeanciers, indicateurs = indicateurs)
+}
+
+# Section revalorisation$capital_deces du plan, `taux_par_annee` lu en double nommé par année :
+# le plan canonique (canoniser_plan(), fiche de calcul, rejeu) le porte en liste nommée de
+# doubles triée par année (ecrire_liste() n'écrit pas un vecteur portant des noms), un plan
+# seulement validé en double nommé ; les deux formes donnent le même vecteur (#67).
+.revalorisation_plan <- function(plan) {
+  rv <- plan$revalorisation$capital_deces
+  t <- rv$taux_par_annee
+  if (is.list(t)) {
+    rv$taux_par_annee <- stats::setNames(vapply(t, function(x) x, 0, USE.NAMES = FALSE), names(t))
+  }
+  rv
 }
 
 # Années de taux_par_annee employées par les facteurs de revalorisation du poste : années
