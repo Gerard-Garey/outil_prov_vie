@@ -4,6 +4,8 @@
 >
 > *Statut : **visa délégué par le mainteneur le 10/11/2026, à confirmer a posteriori**. La délégation vaut pour une spécification qui suit les décisions du mainteneur du 10 novembre 2026 : I4, I5 et I6 tranchées selon les recommandations de `regulatory` ; I1, I2 et I3 tranchées le 10/11/2026 (avis Fable d'`actuary-approfondi`, auquel la session s'est rangée), validation a posteriori du mainteneur ; échelle d'A132-1-1 établie par `regulatory` ; aucune table réglementaire embarquée en B2 ; issues (1) à (4) créées en `ready-for-agent` avec les corps du § 8.*
 >
+> *Version `1.0.5` : erratum d'`actuary` du 11/11/2026 après l'audit léger de #66 : une colonne d'une partie de ligne vaut pour toute la partie dans les règles (ii) et (iii) du § 6.2 (constat 2 : provision fausse marquée exact sur une affiliation de fin non déterminée) ; réouverture vers `capital_du` si un montant est en vigueur (§ 4.2, Q-a) ; `etats_a_date(vue, garanties, famille)` applique `vue$exclu` (§ 4.2, Q-b). Résultats : provisions nouvelles (aucun « avant »). Visa délégué, validation a posteriori du mainteneur.*
+>
 > *Version `1.0.4` : erratum d'`actuary` du 11/11/2026 sur les questions de #66 : valeurs attendues de T3, T4 et T6 recalculées selon la règle écrite (`exact_exact`, découpage du § 2.5 ; 2024 bissextile) au lieu de durées entières (§ 7.4, § 7.6) ; motifs d'arrêt nés d'une famille complétés (§ 6.2) ; règle (iii) du § 6.2 précisée pour une partie de ligne. Résultats : valeurs attendues de provisions nouvelles (écart ≈ 1,5e-7 relatif), aucun total sous visa. Visa délégué, validation a posteriori du mainteneur.*
 >
 > *Version `1.0.3` : correction de la valeur attendue du cas X13 (b) (`NA`, et non `FALSE` : taux du tarif égal à la borne haute, relevé par `coder-approfondi` à l'implémentation de #65 ; la règle du § 3.5 est inchangée).*
@@ -341,7 +343,7 @@ Fonction du module `donnees` (ADR 0010, point 14). **Décision de forme** (annot
 
 - `vue_a_date(donnees, arrete, declarations, conventions)` (interne à `donnees`) rend une liste `vue_provie` : `bilan` (la liste que rend `controler_base()`, **identique à l'octet**, `controler_base()` devenant `vue_a_date(...)$bilan`) ; `retenu` (par table, logique) ; `parties` (par table à partie, logique de Kleene, `.visibilite_a(ctx, "vue")$parties`) ; `exclu` (par famille de calcul puis par table, logique : lignes exclues par une déclaration `X` d'action `exclure` pour cette famille, cascade du dictionnaire, § 1.10, comprise) ; `hypotheses` (déclarations `H` appliquées, avec leurs lignes : D03h et les autres motifs qui entrent dans un calcul) ; l'environnement interne nécessaire à `valeurs_vue()` ;
 - `valeurs_vue(vue, table, colonne)` (interne) : `.valeurs_vue()` sur cette vue ;
-- `etats_a_date(vue, garanties)` rend un `data.frame`, une ligne par **dossier retenu à l'arrêté** dont la garantie souscrite a un `code_garantie` de `garanties` (B2 : `deces` seule ; tout autre code est une erreur de programmation, `stop()` interne et test) ; colonnes, dans cet ordre :
+- `etats_a_date(vue, garanties, famille)` (`famille` exigée, sans valeur par défaut ; B2 : `engagement` ; erratum v1.0.5) rend un `data.frame`, une ligne par **dossier retenu à l'arrêté** dont la garantie souscrite a un `code_garantie` de `garanties` (B2 : `deces` seule ; tout autre code est une erreur de programmation, `stop()` interne et test) ; colonnes, dans cet ordre :
 
 | Colonne | Contenu (B2) |
 |---|---|
@@ -349,13 +351,13 @@ Fonction du module `donnees` (ADR 0010, point 14). **Décision de forme** (annot
 | `etat` | état du sinistre (`etats.csv`) : `deces` pour `nature_sinistre = deces`, `iad` pour `iad` |
 | `date_entree_etat` | `sinistres.date_survenance` |
 | `categorie_invalidite` | `NA` (B5) |
-| `montant_en_vigueur` | montant du dernier `fixation_capital` retenu du dossier (date d'effet, puis ordre du § 4 du dictionnaire, puis date de saisie, puis `id_evenement`) ; `NA` sans fixation |
+| `montant_en_vigueur` | montant du dernier `fixation_capital` retenu et non exclu pour la famille (date d'effet, puis ordre du § 4 du dictionnaire, puis date de saisie, puis `id_evenement`) ; `NA` sans fixation |
 | `etat_dossier` | `ouvert`, `capital_du`, `clos` (automate ci-dessous) |
 | `date_etat_dossier` | date d'effet de l'événement qui a fixé `etat_dossier` ; `date_ouverture` pour `ouvert` initial |
 | `motif_cloture` | motif du `cloture_dossier` en vigueur si `clos`, `NA` sinon |
 | `instruit` | logique de Kleene : `TRUE` instruit à l'arrêté ; `FALSE` non instruit de façon déterminée ; `NA` inconnu (lecture de la partie, § 4.3) |
 
-**Automate du dossier `deces`** (événements retenus du dossier, dans l'ordre ci-dessus) : départ `ouvert` ; `fixation_capital` : `ouvert` → `capital_du` (montant mis à jour ; sur un dossier `clos`, le montant est mis à jour et l'état reste `clos`) ; `cloture_dossier` : → `clos` (motif) ; `reouverture_dossier` : `clos` → état d'avant la clôture ; `demande_mise_a_jour`, `mise_a_jour` : sans effet. Un événement de type incompatible avec le dossier relève de D10 (a), refusé par `donnees` : la famille ne le voit pas. L'état « réglé » de `CONTEXT.md` n'est pas un état de l'automate : un dossier `capital_du` entièrement payé a un solde nul (§ 5.4).
+**Automate du dossier `deces`** (événements retenus du dossier et non exclus pour la famille appelante, `vue$exclu[[famille]]$evenements`, dans l'ordre ci-dessus ; erratum v1.0.5) : départ `ouvert` ; `fixation_capital` : `ouvert` → `capital_du` (montant mis à jour ; sur un dossier `clos`, le montant est mis à jour et l'état reste `clos`) ; `cloture_dossier` : → `clos` (motif) ; `reouverture_dossier` : `clos` → `capital_du` si un montant est en vigueur (fixation retenue antérieure à la réouverture, saisie avant ou pendant la clôture), `ouvert` sinon (erratum v1.0.5) ; `demande_mise_a_jour`, `mise_a_jour` : sans effet. Un événement de type incompatible avec le dossier relève de D10 (a), refusé par `donnees` : la famille ne le voit pas. L'état « réglé » de `CONTEXT.md` n'est pas un état de l'automate : un dossier `capital_du` entièrement payé a un solde nul (§ 5.4).
 
 ### 4.3 Lecture des parties de ligne : #51 et #54 (M234)
 
@@ -488,10 +490,12 @@ La cellule `poste = "total"`, `niveau = "agregat"` d'une garantie × référenti
 | Règle | Source du bilan | Postes arrêtés | `motif_arret` |
 |---|---|---|---|
 | (i) | ligne de `refus_tables` de portée `table` (refus induit compris) sur la table T | postes qui lisent une colonne de T | `motif` de la ligne |
-| (ii) | ligne de `refus_tables` de portée `colonne` sur (T, c) | postes qui lisent (T, c) | `motif` de la ligne |
-| (iii) (M204, M239) | ligne de `vue$visibilite_non_determinee` dont le `motif` est un motif de refus (`manquant_obligatoire`, `hors_domaine`, `chaine_vide`, `D02c`, ou tout motif `R`) sur la table T | ligne entière (`colonne` manquante) : postes qui lisent T **ou une descendante de T** ; partie de ligne (`colonne` renseignée) : postes qui lisent (T, `colonne`) (la ligne reste visible, ses descendantes aussi ; § 4.3 ; erratum v1.0.4) | `motif` de la ligne |
+| (ii) | ligne de `refus_tables` de portée `colonne` sur (T, c) | postes qui lisent (T, c) ; si c est une colonne d'une partie de ligne de T (§ 4.3), postes qui lisent une colonne de cette partie (erratum v1.0.5) | `motif` de la ligne |
+| (iii) (M204, M239) | ligne de `vue$visibilite_non_determinee` dont le `motif` est un motif de refus (`manquant_obligatoire`, `hors_domaine`, `chaine_vide`, `D02c`, ou tout motif `R`) sur la table T | ligne entière (`colonne` manquante) : postes qui lisent T **ou une descendante de T** ; partie de ligne (`colonne` renseignée) : postes qui lisent une colonne de la partie de ligne de T qui contient `colonne` (la ligne reste visible, ses descendantes aussi ; § 4.3 ; erratum v1.0.4, v1.0.5) | `motif` de la ligne |
 
 La ligne de `refus_tables` qui porte `postes_arretes` est, pour (i) et (ii), la ligne elle-même ; pour (iii), la ligne de `refus_tables` de même `table`, de `colonne` égale à celle de l'`origine` et de même `motif` (son existence est un invariant de la spécification `donnees`, § 3.2). **Aucune colonne nouvelle** (M239). `postes_arretes` = `<garantie>/<poste>` joints par « ; », triés ; `NA` si la ligne n'arrête aucun poste du périmètre (elle reste au bilan, ADR 0010, point 11 (b)). Plusieurs règles sur un poste : `motif_arret` = motif de la première ligne dans l'ordre du bilan (`refus_tables`, puis `vue$visibilite_non_determinee`). Une cellule arrêtée : `montant = NA`, `statut_calcul = "arrete"`, `nombre_dossiers = NA`.
+
+Parties de ligne (§ 4.3) : `contrats` et `affiliations` : `date_fin`, `motif_fin`, `date_saisie_fin` ; `sinistres` : `date_instruction`. La date de la partie gouverne la visibilité de toute la partie : une colonne de la partie, inconnue ou refusée, rend inconnue toute la partie (erratum v1.0.5).
 
 Quatre motifs d'arrêt naissent dans une famille, hors du bilan : `hors_axes` (table lue hors de ses axes sous `hors_axes = "refus"`, § 3.3), `affiliation_non_determinee` (§ 5.3), `parametre_non_determine` (P1, P2 : ni `taux_capital` ni `capital_forfaitaire`, ou paramètre à plusieurs valeurs pour la garantie souscrite ; P3 : `capital_forfaitaire`, `age_fin_garantie`, `date_naissance` ou, avec `prospective_prime_declaree`, `prime_periodique` manquant ou ambigu, ou fin de couverture indéterminée) et `assiette_non_determinee` (salaire de l'affiliation retenue manquant ; la lecture du défaut D03c par P1 et P2 est une question ouverte au mainteneur, erratum v1.0.4). Ils n'ont pas de ligne de `refus_tables` ; la cellule porte le motif, et `fiche$parametres_retenus$postes` le premier identifiant en cause dans `parametres` (annotation, § 9).
 
