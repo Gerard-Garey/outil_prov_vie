@@ -329,13 +329,28 @@ provisions_individuelles <- function(vue, plan, tables, temoin) {
 # jours de la période postérieurs à l'arrêté / (fin - début + 1) ; jours postérieurs = fin -
 # A, au plus fin - début + 1 (période entièrement postérieure à l'arrêté ; convention
 # instant_date, § 2.6). Statut : approximation (restituée approximation_numerique, § 5.5).
-# Rend un data.frame (id_contrat, montant), contrats triés. Sans point : lue par les tests
-# du module (cas T7) et par calculer_risque_en_cours() ; non exportée.
+# Période couverte manquante (D03f, erratum v1.0.15) : `exclure` pour risque_en_cours : ligne
+# hors du calcul (vue$exclu) ; hypothèse H (comptes_sociaux, poste P3 ou `tous`) appliquée à la
+# ligne : les deux bornes sont celles de periode_cotisation_regle() (`donnees`), contrat sous
+# hypothèse ; règle non applicable (périodicité `unique` ou non lisible, mouvement manquant) :
+# arrêt parametre_non_determine ; sans hypothèse (conserver) : lecture de Kleene stricte, la
+# cotisation sort du calcul si fin_periode est connue et au plus A, sinon arrêt
+# parametre_non_determine. Identifiant en cause : premier contrat (ordre des lignes de
+# cotisations de la vue). Aucun NA n'entre dans une somme : une part NA résiduelle est une
+# erreur interne. Rend un data.frame (id_contrat, montant), contrats triés, d'attributs
+# `arret` (motif ou NA), `identifiant` (contrat en cause ou NA) et `hypothese_d03f` (contrats
+# dont une cotisation est valorisée sous l'hypothèse D03f). Sans point : lue par les tests du
+# module (cas T7) et par calculer_risque_en_cours() ; non exportée.
 provisions_collectives <- function(vue, plan) {
   vv <- function(t, c1) valeurs_vue(vue, t, c1)
   a <- as.numeric(vue$bilan$vue$date_arrete)
   exclu <- vue$exclu$risque_en_cours
   taux_c <- plan$frais$deces[[.POSTE_P3]][[.REFERENTIEL_P3]]$taux_chargement_cotisation
+  resultat <- function(id_contrat, montant, arret = NA_character_, identifiant = NA_character_,
+                       hypothese = character(0)) {
+    structure(data.frame(id_contrat = id_contrat, montant = montant, stringsAsFactors = FALSE),
+              arret = arret, identifiant = identifiant, hypothese_d03f = hypothese)
+  }
   # couverture exclue (erratum v1.0.13) : garantie souscrite, ou contrat, exclu pour risque_en_cours
   # hors du champ (garanties_couverture_exclue(), seule implémentation), avant toute lecture du contrat
   gs <- which(vue$retenu$garanties_souscrites & vv("garanties_souscrites", "code_garantie") %in% "deces")
@@ -348,18 +363,43 @@ provisions_collectives <- function(vue, plan) {
   co <- which(vue$retenu$cotisations & !exclu$cotisations & vv("cotisations", "nature_mouvement") %in% .NATURES_PRORATA &
                 as.character(vv("cotisations", "id_garantie_souscrite")) %in%
                 as.character(vv("garanties_souscrites", "id_garantie_souscrite")[gs]))
-  fin <- as.numeric(vv("cotisations", "fin_periode"))[co]
-  co <- co[fin > a]
-  if (length(co) == 0L) return(data.frame(id_contrat = character(0), montant = numeric(0), stringsAsFactors = FALSE))
+  i_gs <- match(as.character(vv("cotisations", "id_garantie_souscrite")[co]),
+                as.character(vv("garanties_souscrites", "id_garantie_souscrite")))
+  contrat <- as.character(vv("garanties_souscrites", "id_contrat"))[i_gs]
   debut <- as.numeric(vv("cotisations", "debut_periode"))[co]
   fin <- as.numeric(vv("cotisations", "fin_periode"))[co]
+  # période couverte manquante (D03f) : hypothèse H appliquée aux deux bornes, sinon Kleene
+  manque <- is.na(debut) | is.na(fin)
+  lignes_h <- unlist(lapply(Filter(function(x) x$motif == "D03f" && x$referentiel == .REFERENTIEL_P3 &&
+                                     x$table == "cotisations" && x$poste %in% c(.POSTE_P3, "tous"), vue$hypotheses),
+                            function(x) x$lignes))
+  sous_h <- manque & co %in% lignes_h
+  if (any(sous_h)) {
+    regle <- periode_cotisation_regle(vv("cotisations", "date_mouvement")[co[sous_h]],
+                                      vv("garanties_souscrites", "periodicite_cotisation")[i_gs[sous_h]])
+    debut[sous_h] <- as.numeric(regle$debut)
+    fin[sous_h] <- as.numeric(regle$fin)
+  }
+  echue <- !is.na(fin) & fin <= a
+  inconnue <- (is.na(debut) | is.na(fin)) & !echue
+  if (any(inconnue)) {
+    return(resultat(character(0), numeric(0), "parametre_non_determine", contrat[which(inconnue)[1L]]))
+  }
+  garde <- !echue
+  co <- co[garde]
+  if (length(co) == 0L) return(resultat(character(0), numeric(0)))
+  contrat <- contrat[garde]
+  debut <- debut[garde]
+  fin <- fin[garde]
+  hypothese <- sort(unique(contrat[sous_h[garde]]), method = "radix")
   longueur <- fin - debut + 1
   part <- vv("cotisations", "montant")[co] * (1 - taux_c) * pmin(fin - a, longueur) / longueur
-  contrat <- as.character(vv("garanties_souscrites", "id_contrat"))[
-    match(as.character(vv("cotisations", "id_garantie_souscrite")[co]), as.character(vv("garanties_souscrites", "id_garantie_souscrite")))]
+  if (anyNA(part) || anyNA(contrat)) {
+    stop("erreur interne de provie : part NA dans provisions_collectives() (prorata_cotisation)", call. = FALSE)
+  }
   o <- order(contrat, part, method = "radix")
   s <- rowsum(part[o], contrat[o], reorder = TRUE)
-  data.frame(id_contrat = rownames(s), montant = unname(s[, 1L]), stringsAsFactors = FALSE)
+  resultat(rownames(s), unname(s[, 1L]), hypothese = hypothese)
 }
 
 # --- Point d'appel de la famille -----------------------------------------------------
@@ -375,9 +415,11 @@ provisions_collectives <- function(vue, plan) {
 # de la restitution par segment, #67)). Une seule cellule pour le poste (champs individuel et collectif réunis) :
 # méthode « individuel:<méthode>;collectif:<méthode> », statut_methode `alternative` si l'une
 # l'est, statut_resultat le plus faible des contrats (jugement_expert si D03h entre dans le
-# montant ; approximation_numerique pour un contrat collectif), nombre_dossiers 0. Poste
-# arrêté (bilan, ou hors_axes, parametre_non_determine) : cellule `arrete`, premier contrat
-# en cause dans l'attribut `identifiant_arret`.
+# montant ; approximation_numerique pour un contrat collectif, jugement_expert sous
+# l'hypothèse D03f), nombre_dossiers 0. Poste arrêté (bilan, ou hors_axes,
+# parametre_non_determine, dont la période couverte non déterminée d'une cotisation du champ
+# (b)) : cellule `arrete`, premier contrat en cause dans l'attribut `identifiant_arret`. Un
+# montant NA dans le total est une erreur interne.
 calculer_risque_en_cours <- function(vue, plan, tables, catalogue, garantie, poste) {
   if (!identical(garantie, "deces") || !identical(poste, .POSTE_P3)) {
     stop("erreur interne de provie : calculer_risque_en_cours() ne calcule que P3 de la garantie deces", call. = FALSE)
@@ -425,10 +467,14 @@ calculer_risque_en_cours <- function(vue, plan, tables, catalogue, garantie, pos
   ind <- provisions_individuelles(vue, plan, tables, FALSE)
   if (!is.na(ind$arret)) return(arreter(ind$arret, ind$identifiant))
   col <- provisions_collectives(vue, plan)
+  if (!is.na(attr(col, "arret"))) return(arreter(attr(col, "arret"), attr(col, "identifiant")))
   ct <- ind$contrats
-  statuts <- c(if (!is.null(ct)) ifelse(ct$hypothese_d03h, "jugement_expert", "exact"),
-               if (nrow(col)) rep("approximation_numerique", nrow(col)))
-  total <- sum(sort(c(if (!is.null(ct)) ct$montant, col$montant)))
+  # statut d'un contrat collectif : jugement_expert sous l'hypothèse D03f (erratum v1.0.15)
+  statut_col <- ifelse(col$id_contrat %in% attr(col, "hypothese_d03f"), "jugement_expert", "approximation_numerique")
+  statuts <- c(if (!is.null(ct)) ifelse(ct$hypothese_d03h, "jugement_expert", "exact"), statut_col)
+  montants <- c(if (!is.null(ct)) ct$montant, col$montant)
+  if (anyNA(montants)) stop("erreur interne de provie : montant NA dans le total de P3", call. = FALSE)
+  total <- sum(sort(montants))
   indicateurs <- vide_ind
   echeanciers <- echeancier_vide
   if (!is.null(ct)) {
@@ -458,8 +504,7 @@ calculer_risque_en_cours <- function(vue, plan, tables, catalogue, garantie, pos
                                                  statut_resultat = ifelse(ct$hypothese_d03h, "jugement_expert", "exact"),
                                                  stringsAsFactors = FALSE),
                     if (nrow(col)) data.frame(id_contrat = col$id_contrat, champ = rep("collectif", nrow(col)),
-                                              montant = col$montant,
-                                              statut_resultat = rep("approximation_numerique", nrow(col)),
+                                              montant = col$montant, statut_resultat = statut_col,
                                               stringsAsFactors = FALSE))
   contrats <- contrats[order(contrats$id_contrat, contrats$champ, method = "radix"), , drop = FALSE]
   rownames(contrats) <- NULL

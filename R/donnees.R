@@ -492,6 +492,34 @@ garanties_couverture_exclue <- function(vue, famille) {
   sort(unique(as.character(vv("garanties_souscrites", "id_garantie_souscrite"))[gs_exclue]), method = "radix")
 }
 
+# Mois de la période d'une cotisation par périodicité (dictionnaire, § 9, D03f ; spécification de
+# B2, § 5.5, erratum v1.0.15) : `unique` et toute autre valeur n'ont pas de période.
+.MOIS_PERIODE_COTISATION <- c(annuelle = 12L, semestrielle = 6L, trimestrielle = 3L, mensuelle = 1L)
+
+# Période couverte d'une cotisation sous l'hypothèse D03f (règle du dictionnaire, § 9 : période
+# de la périodicité de la garantie souscrite qui commence au premier jour du mois du
+# mouvement ; spécification de B2, § 5.5, champ (b), erratum v1.0.15) : `date_mouvement`
+# (Date) et `periodicite` (periodicite_cotisation, character), de même longueur ; début =
+# premier jour du mois de date_mouvement, fin = début + p mois - 1 jour, p = 12, 6, 3, 1
+# (annuelle, semestrielle, trimestrielle, mensuelle). Rend list(debut, fin) (Date) ; NA pour
+# une date NA, la périodicité `unique` ou une valeur non lisible (règle non applicable). Seule
+# implémentation de la règle : lue par `risque_en_cours` (P3, prorata_cotisation), et par
+# toute lecture future de cotisations (PPNA). Sans point ; non exportée.
+periode_cotisation_regle <- function(date_mouvement, periodicite) {
+  n <- .longueur_commune(length(date_mouvement), length(periodicite), "periode_cotisation_regle")
+  d <- rep_len(as.numeric(date_mouvement), n)
+  mois <- unname(.MOIS_PERIODE_COTISATION[rep_len(as.character(periodicite), n)])
+  ok <- !is.na(d) & !is.na(mois)
+  debut <- rep(NA_real_, n)
+  fin <- rep(NA_real_, n)
+  if (any(ok)) {
+    c0 <- .composantes_date(d[ok])
+    debut[ok] <- .jour_de(c0$annee, c0$mois, 1L)
+    fin[ok] <- ajouter_mois(debut[ok], mois[ok]) - 1
+  }
+  list(debut = structure(debut, class = "Date"), fin = structure(fin, class = "Date"))
+}
+
 # --- Segments ----------------------------------------------------------------------
 
 # Règles de segmentation admises en B2 (spécification de B2, § 2.2, erratum v1.0.12), parmi

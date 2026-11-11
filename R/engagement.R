@@ -418,7 +418,6 @@ capital_deces_dossier <- function(vue, plan, etats, methode, parametres, prestat
   f <- function(debut, fin) facteur_revalorisation(debut, fin, rv$taux_par_annee, rv$prorata, conventions, a, taux_futur)
   solde <- capital[ok] * f(etats$date_entree_etat[ok], a)
   # prestations capital retenues du dossier (paiements et régularisations, signées)
-  pid <- valeurs_vue(vue, "prestations", "id_dossier")[prestations]
   ptype <- valeurs_vue(vue, "prestations", "type_prestation")[prestations]
   k <- prestations[ptype %in% "capital"]
   if (length(k)) {

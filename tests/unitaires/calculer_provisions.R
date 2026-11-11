@@ -571,6 +571,94 @@ verifier("(4.1) (e) témoins : sans exclusion, les cellules de la base construit
          egal_mixte(vapply(c(P1, P2, P3, "total"), function(po) cel_x(r_c1, po)$montant, 0),
                     c(337225.9591013698, 103936, 4275.9860504871, 445437.9451518568)))
 
+section("période couverte manquante d'une cotisation de P3 (critère (4.5), § 5.5, § 5.6, § 6.2, erratum v1.0.15)")
+# Base construite, plan recommandees à A = 2025-12-31 ; D03f déclaré pour risque_en_cours (les
+# trois autres familles en conserver), ou en hypothèse H (deux référentiels, poste tous) ; sans
+# segmentation, puis avec nature_contrat et contrat. Valeurs en dur : § 7.7, critère (4.5).
+hyp_x <- function(m) lapply(ns$REFERENTIELS, function(r) list(motif = m, referentiel = r, poste = "tous", valeur = "regle"))
+plan_45 <- function(seg, ex = NULL, h = NULL) {
+  q <- p_c1
+  q$perimetre$segmentations <- seg
+  if (!is.null(ex)) q$donnees$exclusions <- ex
+  if (!is.null(h)) q$donnees$hypotheses <- h
+  q
+}
+segs_45 <- list(sans = list(), avec = list(nc = list(regle = "nature_contrat"), ct = list(regle = "contrat")))
+b_cf <- base   # fin_periode de COC1 manquante
+b_cf$cotisations$fin_periode[b_cf$cotisations$id_cotisation == "COC1"] <- as.Date(NA)
+b_cf2 <- base  # debut_periode de COC1 manquante, mouvement au 2025-08-20
+b_cf2$cotisations$debut_periode[b_cf2$cotisations$id_cotisation == "COC1"] <- as.Date(NA)
+b_cf2$cotisations$date_mouvement[b_cf2$cotisations$id_cotisation == "COC1"] <- D("2025-08-20")
+b_un <- b_cf   # périodicité unique : règle H non applicable
+b_un$garanties_souscrites$periodicite_cotisation[b_un$garanties_souscrites$id_garantie_souscrite == "GSC1"] <- "unique"
+b_k <- base    # témoin de Kleene : debut_periode de COC2 manquante, fin 2025-06-30 au plus A
+b_k$cotisations$debut_periode[b_k$cotisations$id_cotisation == "COC2"] <- as.Date(NA)
+id_arret <- function(r) {
+  pr <- r$fiche$parametres_retenus$postes
+  ns$lire_liste(charToRaw(pr$parametres[pr$poste == P3]))$identifiant_arret
+}
+for (nom_s in names(segs_45)) {
+  sg <- segs_45[[nom_s]]
+  et <- paste0(" (", nom_s, " segmentation)")
+  r_45a <- calculer_provisions(b_cf, plan_45(sg, ex = excl_x("D03f", "risque_en_cours")), tid)
+  verifier(paste0("(4.5) (a) b_cf, D03f exclure : P3 3 710,670981993908, total 444 872,630083363678 ; exclusions D03f risque_en_cours exclure, 1 ligne", et),
+           egal_mixte(c(cel_x(r_45a, P3)$montant, cel_x(r_45a, "total")$montant), c(3710.670981993908, 444872.630083363678)) &&
+             identical(r_45a$donnees$exclusions$nombre_lignes[r_45a$donnees$exclusions$motif == "D03f" &
+                                                                r_45a$donnees$exclusions$action == "exclure"], 1L))
+  r_45b <- motif_de(r_45b_r <- calculer_provisions(b_cf, plan_45(sg, ex = excl_x("D03f", "aucune")), tid))
+  q_b <- r_45b_r$provisions
+  verifier_egal(paste0("(4.5) (b) b_cf, D03f conserver : P3 arrêté (parametre_non_determine, CTC1), total arrêté ; P1 et P2 inchangés ; P3 arrêté dans chaque segment restitué", et),
+                list(r_45b, unique(q_b$motif_arret[q_b$poste == P3]), unique(q_b$statut_calcul[q_b$poste == P3]),
+                     unique(q_b$motif_arret[q_b$poste == "total"]), id_arret(r_45b_r),
+                     egal_mixte(c(cel_x(r_45b_r, P1)$montant, cel_x(r_45b_r, P2)$montant), c(337225.959101369779, 103936))),
+                list("aucun", "parametre_non_determine", "arrete", "poste_arrete:provision_mathematique_temporaire_deces", "CTC1",
+                     TRUE))
+  r_45c <- calculer_provisions(b_cf, plan_45(sg, h = hyp_x("D03f")), tid)
+  verifier(paste0("(4.5) (c) b_cf, D03f H (période 2025-07-01 au 2026-06-30) : P3 4 275,986050487058, total 445 437,945151856809, P3 jugement_expert ; hypotheses_defaut D03f, 1 ligne par référentiel", et),
+           egal_mixte(c(cel_x(r_45c, P3)$montant, cel_x(r_45c, "total")$montant), c(4275.986050487058, 445437.945151856809)) &&
+             identical(cel_x(r_45c, P3)$statut_resultat, "jugement_expert") &&
+             identical(r_45c$donnees$hypotheses_defaut$nombre[r_45c$donnees$hypotheses_defaut$motif == "D03f"], c(1L, 1L)))
+  r_45d_x <- calculer_provisions(b_cf2, plan_45(sg, ex = excl_x("D03f", "risque_en_cours")), tid)
+  r_45d <- calculer_provisions(b_cf2, plan_45(sg, h = hyp_x("D03f")), tid)
+  verifier(paste0("(4.5) (d) b_cf2 : D03f exclure : P3 3 710,670981993908 ; D03f H (période 2025-08-01 au 2026-07-31, fin_periode présente non lue) : P3 4 372,8079682953, total 445 534,7670696651, CTC1 662,1369863014", et),
+           egal_mixte(c(cel_x(r_45d_x, P3)$montant, cel_x(r_45d, P3)$montant, cel_x(r_45d, "total")$montant),
+                      c(3710.670981993908, 4372.8079682953, 445534.7670696651)) &&
+             egal_mixte(cel_x(r_45d, P3)$montant - 3710.670981993908, 1200 * 0.95 * 212 / 365))
+  r_45e <- calculer_provisions(b_un, plan_45(sg, h = hyp_x("D03f")), tid)
+  verifier_egal(paste0("(4.5) (e) périodicité unique, D03f H : P3 arrêté, parametre_non_determine, CTC1", et),
+                list(cel_x(r_45e, P3)$montant, unique(r_45e$provisions$motif_arret[r_45e$provisions$poste == P3]), id_arret(r_45e)),
+                list(NA_real_, "parametre_non_determine", "CTC1"))
+  r_45f <- calculer_provisions(b_k, plan_45(sg, ex = excl_x("D03f", "aucune")), tid)
+  verifier(paste0("(4.5) (f) témoin de Kleene : debut_periode de COC2 manquante, fin 2025-06-30 au plus A, D03f conserver : P3 4 275,986050487058, calculé", et),
+           egal_mixte(cel_x(r_45f, P3)$montant, 4275.986050487058) &&
+             all(r_45f$provisions$statut_calcul[r_45f$provisions$poste == P3] == "calcule"))
+}
+v_g <- b2_vue(base, A1, p_c1$donnees, p_c1$conventions)
+v_g$ctx$base$cotisations$montant[v_g$ctx$base$cotisations$id_cotisation == "COC1"] <- NA_real_
+verifier("(4.5) (g) provisions_collectives() : une cotisation de montant NA dans la vue est une erreur interne explicite, jamais un montant amputé",
+         startsWith(motif_de(ns$provisions_collectives(v_g, p_c1)), "autre : erreur interne de provie"))
+verifier_egal("(4.5) periode_cotisation_regle() : premier jour du mois du mouvement, p = 12, 6, 3, 1 mois ; unique, valeur illisible ou mouvement manquant : NA",
+              lapply(ns$periode_cotisation_regle(D(c("2025-08-20", "2025-01-31", "2024-02-29", "2025-12-05", "2025-08-20", "2025-08-20", NA)),
+                                                 c("annuelle", "semestrielle", "trimestrielle", "mensuelle", "unique", "bimestrielle",
+                                                   "annuelle")), format),
+              list(debut = c("2025-08-01", "2025-01-01", "2024-02-01", "2025-12-01", NA, NA, NA),
+                   fin = c("2026-07-31", "2025-06-30", "2024-04-30", "2025-12-31", NA, NA, NA)))
+# (h) Limite connue #90 (partie (B), § 5.6) : D02a sous H n'est appliquée par aucun module en B2 ;
+# comportement visé : la date rejetée tenue pour manquante change P2 (126 906,734629181941 sous
+# conserver).
+b_h90 <- base
+b_h90$sinistres$date_declaration[3L] <- D("2024-06-01")
+p_alt <- b2_plan_reference("alternatives", A1, tb)
+p_h90 <- p_alt
+p_h90$donnees$hypotheses <- c(p_h90$donnees$hypotheses, hyp_x("D02a"))
+p_c90 <- p_alt
+p_c90$donnees$exclusions <- rbind(p_c90$donnees$exclusions, excl_x("D02a", "aucune"))
+verifier("(4.5) (h) témoin : D02a sur sinistres.date_declaration (SIR4 au 2024-06-01), plan alternatives, D02a conserver : P2 126 906,734629181941",
+         egal_mixte(cel_x(calculer_provisions(b_h90, p_c90, tid), P2)$montant, 126906.734629181941))
+attendu_echec("(4.5) (h) D02a sous H : la date rejetée est tenue pour manquante, P2 diffère de sa valeur sous conserver (126 906,734629181941)",
+              "#90",
+              !isTRUE(all.equal(cel_x(calculer_provisions(b_h90, p_h90, tid), P2)$montant, 126906.734629181941, tolerance = 1e-12)))
+
 section("échec attendu #83 (critère (4.4), § 5.3, « Limite connue »)")
 b_ge <- base   # GSC1 : effet postérieur à l'arrêté, invisible à A, ses dossiers aussi (règle 1)
 b_ge$garanties_souscrites$date_effet[1L] <- D("2026-03-01")

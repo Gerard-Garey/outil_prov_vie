@@ -216,6 +216,13 @@ invalide("doublon dans perimetre$garanties", avec(plan_min(), c("perimetre", "ga
          "perimetre$garanties")
 invalide("garantie hors du catalogue de B2", avec(plan_min(), c("perimetre", "garanties"), "incapacite"), "perimetre$garanties")
 invalide("entrée inconnue au premier niveau", avec(plan_min(), "options", list()), "options")
+# série TME : hors_axes `refus` seul (§ 2.2, § 3.5, erratum v1.0.15) ; témoin : derniere_valeur
+# reste admise pour une autre table (mortalite_tarif).
+invalide("tables$serie_tme$hors_axes = derniere_valeur (aucune valeur supposée hors de la série)",
+         avec(plan_min(), c("tables", "serie_tme", "hors_axes"), "derniere_valeur"), "tables$serie_tme$hors_axes")
+verifier("tables$mortalite_tarif$hors_axes = derniere_valeur : admise (témoin) ; tables$serie_tme$hors_axes = refus : admise",
+         inherits(valider_plan(avec(plan_min(), c("tables", "mortalite_tarif", "hors_axes"), "derniere_valeur")), "plan_calcul") &&
+           inherits(valider_plan(plan_min()), "plan_calcul"))
 invalide("entrée inconnue dans les paramètres d'un poste", avec(plan_min(), c(P1, "parametres", "taux_sans_suite_bis"), 0),
          "postes$deces$sinistres_declares_non_regles$parametres$taux_sans_suite_bis")
 invalide("entrée inconnue : taux d'un poste hors du schéma de B2",

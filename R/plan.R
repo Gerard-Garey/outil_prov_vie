@@ -418,7 +418,13 @@ COLONNES_TABLES_RETENUES <- c("usage", "garantie", "identifiant", "statut", "for
   entree <- function(usage) {
     enfants <- list(identifiant = .v_chaine(), empreinte = .v_empreinte(), statut = .v_chaine(STATUTS_TABLE),
                     hors_axes = .v_chaine(HORS_AXES))
-    if (usage == USAGE_SERIE_TME) enfants$decalage_publication_mois <- .v_entier(1L, 2L)
+    if (usage == USAGE_SERIE_TME) {
+      enfants$decalage_publication_mois <- .v_entier(1L, 2L)
+      # série TME : `refus` seul, la fenêtre de R132-3-1 et d'A132-1 ne suppose aucune valeur
+      # (spécification de B2, § 2.2 et § 3.5, erratum v1.0.15)
+      enfants$hors_axes <- .v_chaine("refus", paste0("seule la valeur refus est admise pour l'usage ", USAGE_SERIE_TME,
+                                                     " (aucune valeur suppos\u00e9e hors de la s\u00e9rie)"))
+    }
     .v_noeud(enfants)
   }
   .v_libre(sort(unique(c(catalogue$usages_tables$usage, USAGE_SERIE_TME)), method = "radix"), exigees, entree)
