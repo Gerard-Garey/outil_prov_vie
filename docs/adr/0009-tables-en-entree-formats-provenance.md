@@ -55,3 +55,13 @@ Issues : #4 (ADR de cadrage) ; créées le 7 novembre 2026 : #9 (licence du recu
 ## Annotation du 7 novembre 2026 — validation finale d'`actuary`
 
 Le point 2 écrit que « l'original est conservé dans la fiche de calcul (ADR 0007, point 4) » : depuis la décision M67, la fiche porte l'empreinte, la provenance et le format natif de chaque table, jamais sa copie, et le rejeu redemande la table (ADR 0007, point 4, réécrit avant commit ; E2.7). Le point 2 se lit ainsi. Aucun effet sur les résultats.
+
+## Annotation du 11 novembre 2026 (vingt-troisième série) — aucune table embarquée en B2 (points 3 et 5), décision M249
+
+*Rédigée par `architect` ; annotation appelée par la spécification de B2 (`docs/specifications/b2-capital-deces-v1.md`, § 9 et § 3.1). Le texte accepté ci-dessus est inchangé.*
+
+- **Point 3** : par décision du mainteneur du 10 novembre 2026 (M249, sur la lecture de l'étape 0a de B2), **aucune table réglementaire n'est embarquée en B2** : les valeurs des tables homologuées n'ont pas été lues sur le fac-similé du JO. En B2, donc : ni `inst/extdata/tables/`, ni commit `donnees:` de table, ni fichier de provenance de table embarquée ; `charger_table()` (ADR 0010, point 13) n'est pas exporté et entre avec la première table embarquée (issue de transcription #68). Les tests et les jeux versionnés emploient une **table de mortalité fictive déclarée**, au statut `fictive` (spécification de B2, § 3.6 ; ADR 0010, point 15), qui ne se présente jamais comme une table homologuée ou d'expérience. Le point 3 reste la règle d'entrée d'une table embarquée (provenance, contre-vérification, un commit `donnees:` par table) ; il est seulement différé.
+- **Point 5** : la **série TME est importée** en B2, sa licence de réutilisation n'ayant pas été trouvée à l'étape 0a (statut « non trouvé », #10) ; ni `inst/extdata/taux/` ni fichier de provenance de série. Le plan déclare la série par usage commun `serie_tme`, avec son empreinte obligatoire (spécification de B2, § 2.2) ; tests et jeux emploient une **série TME fictive déclarée** (§ 3.6). La règle de passage d'« importée » à « embarquée » par annotation datée, licence établie, est inchangée.
+- **Effet sur les résultats** : aucun (décision de livraison, sans changement de méthode).
+
+Renvois : M249 (`docs/feuille-de-route.md`, § 4) ; issues #10, #68.
