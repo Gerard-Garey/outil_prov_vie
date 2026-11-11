@@ -1587,6 +1587,8 @@ encore écrits. Il ne peut appeler que \code{dictionnaire} et
 \rowcolor{tableheader}
 \textcolor{financeblue}{\textbf{Fonction}} & \textcolor{financeblue}{\textbf{Arguments}} & \textcolor{financeblue}{\textbf{Rôle}} \\
 \code{controler\_base()} & \code{donnees}, \code{arrete}, \code{declarations = NULL}, \code{conventions = NULL} & Contrôle la base entière et la vue à la date d'arrêté, sans rien modifier, sous les déclarations du sous-schéma \code{donnees} du plan et la section \code{conventions} du plan, et rend le bilan en onze éléments (section~\ref{sec:donnees-bilan})\fsp; chaque contrôle prévu et reporté figure dans les contrôles non exécutés avec la cause \code{non\_implemente}\fsp; refuse l'appel pour un arrêté absent ou mal formé, une liste mal formée, une table inconnue ou obligatoire absente, une anomalie de la table \code{extraction}, un arrêté postérieur à l'extraction, une déclaration ou une convention mal formée ou hors de sa liste fermée. \\
+\code{eclater\_champ()} & \code{x} & Éclate un champ «~a;b~» d'un CSV du dictionnaire en vecteur de chaînes (vide pour une chaîne vide ou \code{NA}). Non exportée, appelée aussi par \code{plan}. \\
+\code{lire\_declarations()} & \code{declarations}, \code{dico} & Contrôle le sous-schéma \code{donnees} du plan (rubriques, motifs, familles, référentiels, seuils, \code{evaluations\_gestion}) et le rend, \code{exclusions} et \code{hypotheses} mises en \code{data.frame}\fsp; refus \code{plan\_invalide}. Non exportée, appelée aussi par \code{valider\_plan()}. \\
 \end{tabular}
 \end{center}
 
@@ -2556,7 +2558,7 @@ Les constantes du module sont citées d'après le code (\code{R/donnees.R})~:
 \code{REFERENTIELS} & \code{comptes\_sociaux}, \code{solvabilite\_2}~: référentiels d'une hypothèse par défaut. \\
 \code{ACTIONS\_EXCLUSION} & \code{exclure}, \code{conserver}~: actions d'une exclusion déclarée. \\
 \code{RUBRIQUES\_DECLARATIONS} & \code{exclusions}, \code{hypotheses}, \code{seuils}, \code{evaluations\_gestion}~: rubriques admises de \code{declarations}. \\
-\code{ENTREES\_CONVENTIONS} & \code{age}, \code{instant\_date}, \code{repartition\_annee}, \code{fractionnement}, \code{limite\_age}~: entrées admises de \code{conventions}\fsp; seules \code{age} et \code{limite\_age} sont contrôlées et lues. \\
+\code{ENTREES\_CONVENTIONS} & \code{age}, \code{instant\_date}, \code{repartition\_annee}, \code{fractionnement}, \code{decompte\_jours}, \code{limite\_age}~: entrées admises de \code{conventions}\fsp; seules \code{age} et \code{limite\_age} sont contrôlées et lues. \\
 \code{REGLES\_LIMITE\_AGE} & \code{atteinte}, \code{depassement}~: règle de limite d'âge du défaut D07~(c). \\
 \code{CONVENTIONS\_LIMITE\_AGE} & \code{revolu}, \code{millesime}~: conventions d'âge admises pour le défaut D07~(c). \\
 \code{COMPOSANTES\_ENJEU} & Tableau des composantes de l'enjeu (composante, unité, définition), dix lignes. \\
@@ -2604,8 +2606,8 @@ peut appeler que \code{outils}. Ce module n'a pas encore de fonction.
 Le module \code{garanties} lit et valide le catalogue des configurations de
 garanties~: états, transitions, flux, postes, usages de tables, liens entre
 garanties. Une configuration est une donnée, jamais une fonction. Le module
-ne peut appeler que \code{dictionnaire} et \code{outils}. Ce module n'a pas
-encore de fonction.
+ne peut appeler que \code{dictionnaire} et \code{outils}. Sa fonction
+\code{catalogue\_garanties()} est exportée.
 
 \begin{center}
 \small
@@ -2614,7 +2616,8 @@ encore de fonction.
 \begin{tabular}{@{}p{3.9cm}>{\raggedright\arraybackslash}p{3.0cm}p{8.2cm}@{}}
 \rowcolor{tableheader}
 \textcolor{financeblue}{\textbf{Fonction}} & \textcolor{financeblue}{\textbf{Arguments}} & \textcolor{financeblue}{\textbf{Rôle}} \\
-\multicolumn{3}{@{}l@{}}{Aucune fonction.} \\
+\code{catalogue\_garanties()} & Aucun & Lit et valide, à chaque appel, le catalogue des garanties du package installé (\code{inst/extdata/garanties/})\fsp; rend une liste nommée d'un \code{data.frame} par fichier (\code{garanties}, \code{etats}, \code{transitions}, \code{flux}, \code{usages\_tables}, \code{postes}, \code{liens}, \code{lectures})\fsp; refus \code{catalogue\_invalide} si la forme lue n'est pas celle attendue. \\
+\code{methodes\_poste()} & \code{x}, \code{poste}, \code{colonne} & Lit le champ \code{methodes} ou \code{temoins} d'un poste de \code{postes.csv} et rend un \code{data.frame} (\code{champ}, \code{methode})\fsp; refus \code{catalogue\_invalide} pour un champ ou une méthode inconnus, ou une méthode en double. Non exportée, appelée aussi par \code{plan}. \\
 \end{tabular}
 \end{center}
 
@@ -2756,7 +2759,9 @@ de fonction.
 Le module \code{plan} valide et met sous forme canonique le plan de calcul,
 établit la fiche de calcul et sérialise l'un et l'autre en texte. Il ne
 peut appeler que \code{tables}, \code{garanties}, \code{dictionnaire},
-\code{donnees} et \code{outils}. Ce module n'a pas encore de fonction.
+\code{donnees} et \code{outils}. Ses fonctions \code{valider\_plan()},
+\code{canoniser\_plan()}, \code{ecrire\_plan()}, \code{lire\_plan()},
+\code{ecrire\_fiche()} et \code{lire\_fiche()} sont exportées.
 
 \begin{center}
 \small
@@ -2765,7 +2770,17 @@ peut appeler que \code{tables}, \code{garanties}, \code{dictionnaire},
 \begin{tabular}{@{}p{3.9cm}>{\raggedright\arraybackslash}p{3.0cm}p{8.2cm}@{}}
 \rowcolor{tableheader}
 \textcolor{financeblue}{\textbf{Fonction}} & \textcolor{financeblue}{\textbf{Arguments}} & \textcolor{financeblue}{\textbf{Rôle}} \\
-\multicolumn{3}{@{}l@{}}{Aucune fonction.} \\
+\code{valider\_plan()} & \code{plan} & Valide le plan de calcul, sans valeur par défaut, et le rend inchangé avec la classe \code{plan\_calcul}\fsp; refus \code{plan\_incomplet} (le message nomme le chemin manquant) ou \code{plan\_invalide}. \\
+\code{canoniser\_plan()} & \code{plan} & Rend le plan validé sous forme canonique (ordre des sections et des clés, ensembles triés, types canoniques), de classe \code{plan\_calcul}~: deux plans de même sens donnent le même objet. \\
+\code{ecrire\_plan()} & \code{plan} & Rend les octets du plan canonique\fsp; le fichier est écrit par l'appelant. \\
+\code{lire\_plan()} & \code{octets} & Relit des octets écrits par \code{ecrire\_plan()}, sans évaluation et sans validation, et rend un objet de classe \code{plan\_calcul}. \\
+\code{format.plan\_calcul()} & \code{x}, \code{...} & Décrit un plan en lignes de texte, par des décomptes seuls~: version, arrêté, garanties, référentiels, segmentations, tables par usage, méthodes déclarées, graine. \\
+\code{print.plan\_calcul()} & \code{x}, \code{...} & Imprime \code{format(x)} et rend le plan, invisible. \\
+\code{construire\_fiche()} & \code{plan}, \code{donnees}, \code{parametres\_retenus}, \code{tables = list()}, \code{provenance = NULL} & Construit la fiche de calcul, de classe \code{fiche\_calcul}~: plan canonique, paramètres retenus, empreintes des données et des tables reçues, provenance, versions, plateforme, graine\fsp; les empreintes du résultat et du code restent à \code{NA}\fsp; refus \code{liste\_invalide}. Non exportée. \\
+\code{ecrire\_fiche()} & \code{fiche} & Rend les octets d'une fiche de calcul\fsp; le fichier est écrit par l'appelant\fsp; refus \code{liste\_invalide} si l'objet n'est pas une fiche. \\
+\code{lire\_fiche()} & \code{octets} & Relit des octets écrits par \code{ecrire\_fiche()}, sans évaluation, et rend un objet \code{fiche\_calcul}\fsp; refus \code{liste\_invalide} si la liste lue n'a pas la forme d'une fiche. \\
+\code{format.fiche\_calcul()} & \code{x}, \code{...} & Décrit une fiche en lignes de texte, par des décomptes seuls~: versions, arrêté, graine, lignes des paramètres retenus, nombre d'empreintes, plateforme. \\
+\code{print.fiche\_calcul()} & \code{x}, \code{...} & Imprime \code{format(x)} et rend la fiche, invisible. \\
 \end{tabular}
 \end{center}
 
