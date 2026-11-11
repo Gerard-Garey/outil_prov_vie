@@ -1,5 +1,5 @@
 # Tests unitaires du module `risque_en_cours` (R/risque_en_cours.R) ; spécification de B2,
-# § 5.5 et § 7.3, critère (3.6), cas T1 à T7 du § 7.4 (#66). Exécuté par
+# § 5.5 et § 7.3, critères (3.6) et (3.16), cas T1 à T7 du § 7.4 (#66). Exécuté par
 # tests/test_unitaires.R : le package est installé et chargé, le harnais est sourcé, `racine`
 # est défini. Bases, tables fictives et plan minimal : tests/b2_bases.R.
 # Valeurs en dur : cas T1 à T7 du § 7.4 (mesure m7 de la spécification ; T3, T4 et T6 selon
@@ -160,3 +160,71 @@ verifier_egal("témoin rétrospectif calculé seulement à la demande (temoin = 
                      tryCatch({ ns$provisions_individuelles(b2_vue(b2_base_p3(), A1), plan_p3(), tb, NA); "aucune" },
                               error = function(e) grepl("erreur interne", conditionMessage(e)))) },
               list(NA_real_, NA_real_, 2924.6224668679, TRUE), tolerance = TOL)
+
+section("risque_en_cours : paramètre de P3 exclu pour risque_en_cours (erratum v1.0.9, critère (3.16), § 5.5), #78")
+
+# Exclusion posée sur la vue (vue$exclu[[famille]]$parametres, D09 présomptif n'étant pas
+# implémenté), lignes de `parametres` désignées par (garantie souscrite, paramètre). Valeurs
+# recalculées par un chemin indépendant : T1 à l'arrêté 2025-01-01, q_41 = 0,02, q_42 = 0,03,
+# 100 000 x (0,02 / 1,02 + 0,98 x 0,03 / 1,02^2) ; à l'arrêté 2025-12-31 (s = 364/365,
+# répartition uniforme), même formule que l'arrêté en cours d'année ci-dessus ; T7 : 1 200 x
+# 0,90 x 181 / 365.
+excl_p3 <- function(base, plan, exclusions = list(), famille = "risque_en_cours") {
+  v <- b2_vue(base, plan$arrete)
+  for (x in exclusions) {
+    v$exclu[[famille]]$parametres[which(v$retenu$parametres & base$parametres$id_garantie_souscrite == x[1L] &
+                                          base$parametres$parametre == x[2L])] <- TRUE
+  }
+  r <- ns$calculer_risque_en_cours(v, plan, tb, cat_g, "deces", P3)
+  list(r$cellules$montant, r$cellules$nombre_dossiers, r$cellules$statut_resultat, r$cellules$motif_arret,
+       attr(r$cellules, "identifiant_arret"))
+}
+arret_p3 <- function(id = "CT2") list(NA_real_, NA_integer_, NA_character_, "parametre_non_determine", id)
+calcule_p3 <- function(montant, statut = "exact") list(montant, 0L, statut, NA_character_, NULL)
+v_t1 <- 100000 * (0.02 / 1.02 + 0.98 * 0.03 / 1.02^2)
+GS2_CF <- c("GS2", "capital_forfaitaire")
+GS2_AF <- c("GS2", "age_fin_garantie")
+GS2_PP <- c("GS2", "prime_periodique")
+p_dec <- plan_p3(cotisation = 0.05, methode = "prospective_prime_declaree")
+verifier_egal("(3.16) arrêt parametre_non_determine (CT2) : (a) T1, capital_forfaitaire exclu ; (b) T1, age_fin_garantie exclu ; (c) T3, capital_forfaitaire exclu ; (d) T5 (prospective_prime_declaree), prime_periodique exclu",
+              list(excl_p3(b2_base_p3(), plan_p3(), list(GS2_CF)), excl_p3(b2_base_p3(), plan_p3(), list(GS2_AF)),
+                   excl_p3(b2_base_p3("annuelle"), plan_p3(acquisition = 0.01), list(GS2_CF)),
+                   excl_p3(b2_base_p3("annuelle", prime = 2300), p_dec, list(GS2_PP))),
+              rep(list(arret_p3()), 4L))
+verifier_egal("(3.16) (e) base de T5 sous prospective_prime_pure, prime_periodique exclu (non lu) : 2 593,6728916013 (T3) exact ; (f) T1 avec prime_periodique 2 300 sous prospective_prime_declaree : sans exclusion 4 786,6205305652 exact, prime_periodique exclu : arrêt (CT2, quelle que soit la périodicité) ; (g) capital_forfaitaire exclu pour engagement, puis pour triangle : 4 786,6205305652 exact",
+              list(excl_p3(b2_base_p3("annuelle", prime = 2300), plan_p3(acquisition = 0.01), list(GS2_PP)),
+                   excl_p3(b2_base_p3(prime = 2300), p_dec), excl_p3(b2_base_p3(prime = 2300), p_dec, list(GS2_PP)),
+                   excl_p3(b2_base_p3(), plan_p3(), list(GS2_CF), "engagement"),
+                   excl_p3(b2_base_p3(), plan_p3(), list(GS2_CF), "triangle")),
+              list(calcule_p3(2593.6728916013), calcule_p3(v_t1), arret_p3(), calcule_p3(v_t1), calcule_p3(v_t1)),
+              tolerance = TOL)
+t1_40 <- local({ b <- b2_base_p3(); b$parametres$valeur[b$parametres$parametre == "age_fin_garantie" &
+                                                         b$parametres$id_garantie_souscrite == "GS2"] <- 40; b })
+verifier_egal("(3.16) (h) age_fin_garantie 40 (atteint le 2024-01-01) : sans exclusion, hors de la population, 0 exact ; exclu : arrêt CT2 (Kleene, et non 0) ; (i) arrêté 2027-01-01 (terme), age_fin_garantie exclu : 0 exact (fin de couverture par date_terme)",
+              list(excl_p3(t1_40, plan_p3()), excl_p3(t1_40, plan_p3(), list(GS2_AF)),
+                   excl_p3(b2_base_p3(extraction = D("2027-06-30")), plan_p3(D("2027-01-01")), list(GS2_AF))),
+              list(calcule_p3(0), arret_p3(), calcule_p3(0)))
+base_j <- b2_base_p3(cotisation = data.frame(debut = D("2025-07-01"), fin = D("2026-06-30"), montant = 1200))
+p_j <- plan_p3(D("2025-12-31"), cotisation = 0.10)
+s_j <- 364 / 365
+p_sj <- 1 - s_j * 0.02
+v_j <- 100000 * ((1 - 0.98 / p_sj) * 1.02^(-1 / 365) + (0.98 / p_sj) * 0.03 * 1.02^(-(1 / 365 + 1))) + 1200 * 0.9 * 181 / 365
+verifier_egal("(3.16) (j) T1 et cotisation T7, arrêté 2025-12-31 : taux_capital et age_fin_garantie de GS3 (collectif) exclus : 3 482,0047792826 approximation_numerique, comme sans exclusion ; capital_forfaitaire de GS2 exclu : arrêt CT2 (cellule unique du poste)",
+              list(excl_p3(base_j, p_j), excl_p3(base_j, p_j, list(c("GS3", "taux_capital"), c("GS3", "age_fin_garantie"))),
+                   excl_p3(base_j, p_j, list(GS2_CF))),
+              list(calcule_p3(v_j, "approximation_numerique"), calcule_p3(v_j, "approximation_numerique"), arret_p3()),
+              tolerance = TOL)
+deux_ind <- local({ b <- b2_base_p3()
+  b$contrats <- b$contrats[c(1L, 1L, 2L), ]
+  b$contrats$id_contrat[2L] <- "CT4"
+  b$contrats$id_assure[2L] <- "AS4"
+  b$garanties_souscrites <- b$garanties_souscrites[c(1L, 1L, 2L), ]
+  b$garanties_souscrites$id_garantie_souscrite[2L] <- "GS4"
+  b$garanties_souscrites$id_contrat[2L] <- "CT4"
+  b$parametres <- rbind(b$parametres[1:2, ], transform(b$parametres[1:2, ], id_garantie_souscrite = "GS4"), b$parametres[3:4, ])
+  b$assures <- rbind(b$assures, transform(b$assures, id_assure = "AS4"))
+  b })
+verifier_egal("(3.16) (k) deux contrats individuels identiques (CT2 / GS2, CT4 / GS4) : sans exclusion 9 573,2410611304 (2 x T1) exact ; capital_forfaitaire de GS4 exclu : arrêt CT4 ; de GS2 et GS4 : arrêt CT2 (premier contrat)",
+              list(excl_p3(deux_ind, plan_p3()), excl_p3(deux_ind, plan_p3(), list(c("GS4", "capital_forfaitaire"))),
+                   excl_p3(deux_ind, plan_p3(), list(GS2_CF, c("GS4", "capital_forfaitaire")))),
+              list(calcule_p3(2 * v_t1), arret_p3("CT4"), arret_p3()), tolerance = TOL)

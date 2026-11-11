@@ -228,9 +228,9 @@ valeur_actuelle_probable <- function(echeancier, actualisation, conventions) {
 # unique, NA s'il manque ; `ambigu` s'il porte plusieurs valeurs distinctes (aucune n'est
 # choisie) ; si `famille` (famille de calcul) est donnée, `exclu` : une ligne retenue du
 # paramètre pour la garantie souscrite est exclue pour cette famille (vue$exclu[[famille]]
-# $parametres ; spécification de B2, § 5.3, erratum v1.0.7). Sans point : seule lecture des
-# paramètres d'une garantie souscrite, lue aussi par `risque_en_cours` (sans `famille`) ; non
-# exportée.
+# $parametres ; spécification de B2, § 5.3, erratum v1.0.7 ; § 5.5, erratum v1.0.9). Sans
+# point : seule lecture des paramètres d'une garantie souscrite, lue aussi par
+# `risque_en_cours` (famille « risque_en_cours ») ; non exportée.
 parametre_vue <- function(vue, nom, gs, famille = NULL) {
   id <- valeurs_vue(vue, "parametres", "id_garantie_souscrite")
   k <- which(valeurs_vue(vue, "parametres", "parametre") %in% nom & !is.na(id))

@@ -154,9 +154,14 @@ provisions_individuelles <- function(vue, plan, tables, temoin) {
   effet <- as.numeric(vv("contrats", "date_effet"))[i_ct]
   terme <- as.numeric(vv("contrats", "date_terme"))[i_ct]
   fin_ct <- as.numeric(vv("contrats", "date_fin"))[i_ct]
-  param <- function(nom) parametre_vue(vue, nom, id_gs)
+  # paramètres lus par P3 (erratum v1.0.9, #78) : une ligne retenue exclue pour risque_en_cours
+  # rend le paramètre non déterminé (jamais 0 ni absent) ; age_fin_garantie exclu est inconnu
+  # avant le calcul de la fin de couverture (lecture de Kleene : la sortie de la population ne
+  # se décide que par date_terme ou date_fin)
+  param <- function(nom) parametre_vue(vue, nom, id_gs, "risque_en_cours")
   capital <- param("capital_forfaitaire")
   age_fin <- param("age_fin_garantie")
+  age_fin$valeur[age_fin$exclu] <- NA_real_
   prime_p <- param("prime_periodique")
   periodicite <- vv("garanties_souscrites", "periodicite_cotisation")[gs]
   periode <- unname(.MOIS_PERIODICITE[periodicite])
@@ -172,9 +177,10 @@ provisions_individuelles <- function(vue, plan, tables, temoin) {
   en_cours <- fin > a & !sinistre
   if (!any(en_cours)) return(vide)
   k <- which(en_cours)
-  manque <- k[is.na(capital$valeur[k]) | capital$ambigu[k] | is.na(age_fin$valeur[k]) | age_fin$ambigu[k] |
-                is.na(naissance[k]) | is.infinite(fin[k]) |
-                (methode == "prospective_prime_declaree" & !is.na(periode[k]) & (is.na(prime_p$valeur[k]) | prime_p$ambigu[k]))]
+  manque <- k[is.na(capital$valeur[k]) | capital$ambigu[k] | capital$exclu[k] | is.na(age_fin$valeur[k]) |
+                age_fin$ambigu[k] | is.na(naissance[k]) | is.infinite(fin[k]) |
+                (methode == "prospective_prime_declaree" & !is.na(periode[k]) & (is.na(prime_p$valeur[k]) | prime_p$ambigu[k])) |
+                (methode == "prospective_prime_declaree" & prime_p$exclu[k])]
   if (length(manque)) return(list(contrats = NULL, echeancier = NULL, arret = "parametre_non_determine",
                                   identifiant = id_ct[manque[1L]]))
   # taux du tarif ; hypothèse D03h déclarée s'il manque
