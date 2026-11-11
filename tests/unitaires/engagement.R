@@ -1,5 +1,5 @@
 # Tests unitaires du module `engagement` (R/engagement.R) ; spécification de B2, § 5.1 à § 5.4
-# et § 7.3, critères (3.6), (3.7), (3.9), (3.12) à (3.14), cas R1 à R7 du § 7.4 (#66).
+# et § 7.3, critères (3.6), (3.7), (3.9), (3.12) à (3.15), cas R1 à R7 du § 7.4 (#66).
 # Exécuté par tests/test_unitaires.R : le package est installé et chargé, le harnais est
 # sourcé, `racine` est défini. Bases, tables fictives et plan minimal : tests/b2_bases.R.
 # Valeurs en dur : cas R1 à R7 du § 7.4 (mesure m7 de la spécification, recoupement par un
@@ -408,12 +408,69 @@ verifier_egal("affiliation : fin le jour du décès (2024-07-01, borne incluse) 
                    cel(eng(af_debut_deces, pB)), cel(eng(deux_af, pB))),
               list(calcule(85747.2, "exact"), "affiliation_non_determinee", calcule(85747.2, "exact"),
                    list(NA_real_, NA_integer_, NA_character_, "affiliation_non_determinee", "DO1")), tolerance = TOL)
-# #76 : un paramètre lu dont la ligne est exclue pour engagement doit donner
-# parametre_non_determine ; D09 aux seuils (présomptif) n'est pas implémenté
-# (CONTROLES_NON_IMPLEMENTES) : l'exclusion est posée sur la vue. Aujourd'hui la valeur exclue
-# entre dans le capital.
-attendu_echec("#76 : ligne de parametres (taux_capital) exclue pour engagement : arrêt parametre_non_determine",
-              "#76",
-              { v <- b2_vue(b2_base_capital(capital = NA), A)
-                v$exclu$engagement$parametres[which(v$retenu$parametres)[1L]] <- TRUE
-                identical(ns$calculer_engagement(v, pB, tb, cat_g, "deces", P1)$cellules$motif_arret, "parametre_non_determine") })
+# (3.15) #76, erratum v1.0.7 (§ 5.3, § 6.2) : un paramètre lu (capital_forfaitaire,
+# taux_capital, majoration_conjoint, majoration_enfant) dont une ligne retenue est exclue pour
+# engagement n'est pas déterminé : arrêt parametre_non_determine, jamais 0 ni absent. D09 aux
+# seuils (présomptif) n'est pas implémenté (CONTROLES_NON_IMPLEMENTES) : l'exclusion est posée
+# sur la vue, lignes de `parametres` de b2_base_capital() : 1 taux_capital, 2 age_fin_garantie,
+# 3 majoration_conjoint, 4 majoration_enfant (5 capital_forfaitaire, base `forfait`).
+excl_par <- function(b, lignes, famille = "engagement", plan = pB, poste = P1) {
+  v <- b2_vue(b, A)
+  v$exclu[[famille]]$parametres[which(v$retenu$parametres)[lignes]] <- TRUE
+  cel(ns$calculer_engagement(v, plan, tb, cat_g, "deces", poste))
+}
+arret_par <- list(NA_real_, NA_integer_, NA_character_, "parametre_non_determine", "DO1")
+r5a <- b2_base_capital(capital = NA)
+forfait <- local({ b <- r5a
+  b$parametres <- b2_tab("parametres", id_garantie_souscrite = "GS1",
+                         parametre = c("taux_capital", "age_fin_garantie", "majoration_conjoint", "majoration_enfant",
+                                       "capital_forfaitaire"), valeur = c(2, 67, 0.5, 0.25, 50000))
+  b })
+verifier_egal("(3.15) ligne de parametres exclue pour engagement : (a) taux_capital, (b) majoration_conjoint, (c) majoration_enfant : arrêt parametre_non_determine (DO1) ; (d) taux_capital exclu pour triangle seulement : 85 747,20 exact ; (e) age_fin_garantie exclu : 85 747,20 exact ; (f) capital fixé (R1), taux_capital exclu : 103 936 exact",
+              list(excl_par(r5a, 1L), excl_par(r5a, 3L), excl_par(r5a, 4L), excl_par(r5a, 1L, "triangle"), excl_par(r5a, 2L),
+                   excl_par(b2_base_capital(), 1L)),
+              list(arret_par, arret_par, arret_par, calcule(85747.2, "exact"), calcule(85747.2, "exact"),
+                   calcule(103936, "exact")), tolerance = TOL)
+verifier_egal("(3.15) arrêt parametre_non_determine (DO1) : (g) non instruit, majoration_enfant exclue ; (h) sans conjoint (ME1 décédé avant la survenance), majoration_conjoint exclue ; (i) capital_forfaitaire (50 000) exclu (pas de repli sur assiette x taux) ; (j) forfait présent, taux_capital exclu ; (k) P2 (beneficiaire_non_identifie), taux_capital exclu",
+              list(excl_par(local({ b <- r5a; b$sinistres$date_instruction <- D(NA); b }), 4L),
+                   excl_par(local({ b <- r5a; b$famille$date_deces <- D(c("2020-01-01", NA, NA)); b }), 3L),
+                   excl_par(forfait, 5L), excl_par(forfait, 1L),
+                   excl_par(b2_base_capital(capital = NA, qualite = "non_identifie"), 1L, plan = p, poste = P2)),
+              rep(list(arret_par), 5L))
+verifier_egal("(3.15) témoins sans exclusion : (g) non instruit 81 070,08 jugement_expert ; (h) sans conjoint 70 156,80 exact ; (i) et (j) forfait 51 968 exact ; (k) P2 85 747,20 exact",
+              list(excl_par(local({ b <- r5a; b$sinistres$date_instruction <- D(NA); b }), integer(0)),
+                   excl_par(local({ b <- r5a; b$famille$date_deces <- D(c("2020-01-01", NA, NA)); b }), integer(0)),
+                   excl_par(forfait, integer(0)),
+                   excl_par(b2_base_capital(capital = NA, qualite = "non_identifie"), integer(0), plan = p, poste = P2)),
+              list(calcule(81070.08, "jugement_expert"), calcule(70156.8, "exact"), calcule(51968, "exact"),
+                   calcule(85747.2, "exact")), tolerance = TOL)
+# (3.15) portée : l'exclusion ne vaut que pour la garantie souscrite de sa ligne. Deux
+# garanties (GS1 taux 2, GS2 taux 3, collège cadres), dossiers DO1 (GS1) et DO2 (GS2) du même
+# sinistre ; sans exclusion, 85 747,20 et 116 928 (112 500 x 1,03936) ; taux_capital de l'une
+# exclu pour engagement : arrêt sur son dossier, capital reconstitué de l'autre inchangé
+# (82 500 ; 112 500).
+deux_gs <- local({ b <- r5a
+  b$garanties_souscrites <- b$garanties_souscrites[c(1L, 1L), ]
+  b$garanties_souscrites$id_garantie_souscrite <- c("GS1", "GS2")
+  b$garanties_souscrites$college[2L] <- "cadres"
+  b$parametres <- rbind(b$parametres, transform(b$parametres, id_garantie_souscrite = "GS2", valeur = c(3, 67, 0.5, 0.25)))
+  b$dossiers <- rbind(b$dossiers, transform(b$dossiers, id_dossier = "DO2", id_garantie_souscrite = "GS2"))
+  b$beneficiaires <- rbind(b$beneficiaires, transform(b$beneficiaires, id_beneficiaire = "BE2", id_dossier = "DO2"))
+  b })
+excl_gs <- function(gs) {
+  v <- b2_vue(deux_gs, A)
+  v$exclu$engagement$parametres[which(v$retenu$parametres & deux_gs$parametres$parametre == "taux_capital" &
+                                        deux_gs$parametres$id_garantie_souscrite %in% gs)] <- TRUE
+  e <- ns$etats_a_date(v, "deces", "engagement")
+  e <- e[e$etat_dossier == "ouvert", , drop = FALSE]
+  rc <- ns$.reconstituer_capital(v, e, pB$postes$deces[[P1]]$parametres, pB$conventions)
+  r <- ns$calculer_engagement(v, pB, tb, cat_g, "deces", P1)
+  list(r$cellules$motif_arret, attr(r$cellules, "identifiant_arret"), rc$capital[match(c("DO1", "DO2"), e$id_dossier)],
+       rc$arret[match(c("DO1", "DO2"), e$id_dossier)])
+}
+verifier_egal("(3.15) portée par garantie souscrite : sans exclusion, DO1 85 747,20 et DO2 116 928 exact ; taux_capital de GS2 exclu : arrêt DO2, capital de DO1 82 500 ; taux_capital de GS1 exclu : arrêt DO1, capital de DO2 112 500",
+              list(eng(deux_gs, pB)$dossiers[c("id_dossier", "montant", "statut_resultat")], excl_gs("GS2"), excl_gs("GS1")),
+              list(data.frame(id_dossier = c("DO1", "DO2"), montant = c(85747.2, 116928), statut_resultat = "exact",
+                              stringsAsFactors = FALSE),
+                   list("parametre_non_determine", "DO2", c(82500, NA), c(NA, "parametre_non_determine")),
+                   list("parametre_non_determine", "DO1", c(NA, 112500), c("parametre_non_determine", NA))), tolerance = TOL)

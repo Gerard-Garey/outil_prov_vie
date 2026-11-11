@@ -226,16 +226,23 @@ valeur_actuelle_probable <- function(echeancier, actualisation, conventions) {
 
 # Paramètre `nom` de chaque garantie souscrite `gs` (identifiants), dans la vue : valeur
 # unique, NA s'il manque ; `ambigu` s'il porte plusieurs valeurs distinctes (aucune n'est
-# choisie). Sans point : seule lecture des paramètres d'une garantie souscrite, lue aussi
-# par `risque_en_cours` ; non exportée.
-parametre_vue <- function(vue, nom, gs) {
+# choisie) ; si `famille` (famille de calcul) est donnée, `exclu` : une ligne retenue du
+# paramètre pour la garantie souscrite est exclue pour cette famille (vue$exclu[[famille]]
+# $parametres ; spécification de B2, § 5.3, erratum v1.0.7). Sans point : seule lecture des
+# paramètres d'une garantie souscrite, lue aussi par `risque_en_cours` (sans `famille`) ; non
+# exportée.
+parametre_vue <- function(vue, nom, gs, famille = NULL) {
   id <- valeurs_vue(vue, "parametres", "id_garantie_souscrite")
   k <- which(valeurs_vue(vue, "parametres", "parametre") %in% nom & !is.na(id))
   z <- lapply(split(valeurs_vue(vue, "parametres", "valeur")[k], as.character(id[k])), unique)
   i <- match(as.character(gs), names(z))
   n <- lengths(z, use.names = FALSE)[i]
   valeur <- vapply(z, function(x) if (length(x) == 1L) as.numeric(x) else NA_real_, 0, USE.NAMES = FALSE)[i]
-  list(valeur = valeur, ambigu = !is.na(i) & n > 1L)
+  res <- list(valeur = valeur, ambigu = !is.na(i) & n > 1L)
+  if (!is.null(famille)) {
+    res$exclu <- as.character(gs) %in% as.character(id[k][vue$exclu[[famille]]$parametres[k]])
+  }
+  res
 }
 
 # Capital reconstitué des dossiers `ouvert` (spécification de B2, § 5.3) : `etats` (lignes de
@@ -252,7 +259,8 @@ parametre_vue <- function(vue, nom, gs) {
 # identifiant) : `structure` vrai si la structure familiale du plan entre dans le montant ;
 # `arret` : motif d'arrêt du poste né du dossier (affiliation_non_determinee : aucune ou
 # plusieurs affiliations couvrent la survenance ; parametre_non_determine : taux_capital et
-# capital_forfaitaire absents, ou paramètre à plusieurs valeurs ; assiette_non_determinee :
+# capital_forfaitaire absents, ou paramètre lu à plusieurs valeurs ou dont une ligne retenue
+# est exclue pour engagement, erratum v1.0.7 ; assiette_non_determinee :
 # salaire de l'affiliation manquant ; famille_non_determinee : dossier instruit dont une ligne
 # de famille rattachée au sinistre est exclue pour engagement, ou dont un enfant vivant a un
 # âge inconnu sans situation a_naitre ou handicape, erratum v1.0.6), NA sinon.
@@ -269,14 +277,17 @@ parametre_vue <- function(vue, nom, gs) {
   survenance <- as.numeric(etats$date_entree_etat)
   contrat <- vv("garanties_souscrites", "id_contrat")[match(gs, vv("garanties_souscrites", "id_garantie_souscrite"),
                                                             incomparables = NA)]
-  forfait <- parametre_vue(vue, "capital_forfaitaire", gs)
-  taux <- parametre_vue(vue, "taux_capital", gs)
-  mc <- parametre_vue(vue, "majoration_conjoint", gs)
-  me <- parametre_vue(vue, "majoration_enfant", gs)
-  ambigu <- forfait$ambigu | taux$ambigu | mc$ambigu | me$ambigu
-  avec_forfait <- !is.na(forfait$valeur) & !ambigu
+  forfait <- parametre_vue(vue, "capital_forfaitaire", gs, "engagement")
+  taux <- parametre_vue(vue, "taux_capital", gs, "engagement")
+  mc <- parametre_vue(vue, "majoration_conjoint", gs, "engagement")
+  me <- parametre_vue(vue, "majoration_enfant", gs, "engagement")
+  # paramètre lu non déterminé : plusieurs valeurs, ou ligne retenue exclue pour engagement
+  # (erratum v1.0.7 : une valeur exclue ne vaut jamais 0 et n'est jamais lue comme absente)
+  indetermine <- forfait$ambigu | taux$ambigu | mc$ambigu | me$ambigu |
+    forfait$exclu | taux$exclu | mc$exclu | me$exclu
+  avec_forfait <- !is.na(forfait$valeur) & !indetermine
   res$capital[avec_forfait] <- forfait$valeur[avec_forfait]
-  res$arret[ambigu | (is.na(forfait$valeur) & is.na(taux$valeur))] <- "parametre_non_determine"
+  res$arret[indetermine | (is.na(forfait$valeur) & is.na(taux$valeur))] <- "parametre_non_determine"
   a_calculer <- which(is.na(res$arret) & !avec_forfait)
   if (length(a_calculer) == 0L) return(res)
   # assiette : affiliation retenue, non exclue pour la famille, de l'assuré sous le contrat,
