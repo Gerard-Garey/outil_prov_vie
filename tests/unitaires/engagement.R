@@ -1,5 +1,5 @@
 # Tests unitaires du module `engagement` (R/engagement.R) ; spécification de B2, § 5.1 à § 5.4
-# et § 7.3, critères (3.6), (3.7), (3.9), (3.12) à (3.15), cas R1 à R7 du § 7.4 (#66).
+# et § 7.3, critères (3.6), (3.7), (3.9), (3.12) à (3.15) et (3.17), cas R1 à R7 du § 7.4 (#66).
 # Exécuté par tests/test_unitaires.R : le package est installé et chargé, le harnais est
 # sourcé, `racine` est défini. Bases, tables fictives et plan minimal : tests/b2_bases.R.
 # Valeurs en dur : cas R1 à R7 du § 7.4 (mesure m7 de la spécification, recoupement par un
@@ -466,16 +466,21 @@ verifier_egal("(3.15) témoins sans exclusion : (g) non instruit 81 070,08 jugem
                    calcule(85747.2, "exact")), tolerance = TOL)
 # (3.15) portée : l'exclusion ne vaut que pour la garantie souscrite de sa ligne. Deux
 # garanties (GS1 taux 2, GS2 taux 3, collège cadres), dossiers DO1 (GS1) et DO2 (GS2) du même
-# sinistre ; sans exclusion, 85 747,20 et 116 928 (112 500 x 1,03936) ; taux_capital de l'une
-# exclu pour engagement : arrêt sur son dossier, capital reconstitué de l'autre inchangé
+# sinistre ; affiliations AF1 (ensemble) et AF2 (cadres, mêmes dates et salaire 30 000 ;
+# erratum v1.0.10, critère (3.17) : le collège de la garantie entre dans la clé de
+# l'affiliation) ; sans exclusion, 85 747,20 et 116 928 (112 500 x 1,03936) ; taux_capital de
+# l'une exclu pour engagement : arrêt sur son dossier, capital reconstitué de l'autre inchangé
 # (82 500 ; 112 500).
-deux_gs <- local({ b <- r5a
+deux_gs_sans_af2 <- local({ b <- r5a
   b$garanties_souscrites <- b$garanties_souscrites[c(1L, 1L), ]
   b$garanties_souscrites$id_garantie_souscrite <- c("GS1", "GS2")
   b$garanties_souscrites$college[2L] <- "cadres"
   b$parametres <- rbind(b$parametres, transform(b$parametres, id_garantie_souscrite = "GS2", valeur = c(3, 67, 0.5, 0.25)))
   b$dossiers <- rbind(b$dossiers, transform(b$dossiers, id_dossier = "DO2", id_garantie_souscrite = "GS2"))
   b$beneficiaires <- rbind(b$beneficiaires, transform(b$beneficiaires, id_beneficiaire = "BE2", id_dossier = "DO2"))
+  b })
+deux_gs <- local({ b <- deux_gs_sans_af2
+  b$affiliations <- rbind(b$affiliations, transform(b$affiliations, id_affiliation = "AF2", college = "cadres"))
   b })
 excl_gs <- function(gs) {
   v <- b2_vue(deux_gs, A)
@@ -494,3 +499,78 @@ verifier_egal("(3.15) portée par garantie souscrite : sans exclusion, DO1 85 74
                               stringsAsFactors = FALSE),
                    list("parametre_non_determine", "DO2", c(82500, NA), c(NA, "parametre_non_determine")),
                    list("parametre_non_determine", "DO1", c(NA, 112500), c("parametre_non_determine", NA))), tolerance = TOL)
+verifier_egal("(3.17) base deux_gs sans AF2 : DO2 (GS2, collège cadres) sans affiliation de son collège : arrêt affiliation_non_determinee (DO2)",
+              cel(eng(deux_gs_sans_af2, pB)), list(NA_real_, NA_integer_, NA_character_, "affiliation_non_determinee", "DO2"))
+
+section("engagement : collège de l'affiliation (erratum v1.0.10, critère (3.17), § 5.3, § 6.2), #66")
+
+# Base R5 (a) dont la garantie souscrite est dédoublée en GSN (non_cadres, taux_capital 2) et
+# GSC (cadres, taux_capital 3), mêmes autres paramètres, au même contrat CT1 ; affiliations de
+# AS1 à CT1 (2020-01-01, sans fin) aux collèges et salaires indiqués ; DO1 sur la garantie
+# indiquée. Valeurs recalculées : facteur 1,015 x 1,024 = 1,03936 (2024 : 183/366 de 3 % ;
+# 2025 : 2,4 %) ; instruit, conjoint ME1 et enfant ME2 (10 ans) : taux + 0,5 + 0,25 ; GSC :
+# 3,75 ; GSN : 2,75. (b) 30 000 x 3,75 x 1,03936 = 116 928 ; (c) 50 000 x 3,75 x 1,03936 =
+# 194 880 ; (d) 30 000 x 2,75 x 1,03936 = 85 747,20.
+base_college <- function(gs_dossier, college, salaire, qualite = "conjoint_survivant") {
+  b <- b2_base_capital(capital = NA, qualite = qualite)
+  g <- b$garanties_souscrites[c(1L, 1L), ]
+  g$id_garantie_souscrite <- c("GSN", "GSC")
+  g$college <- c("non_cadres", "cadres")
+  b$garanties_souscrites <- g
+  b$parametres <- b2_tab("parametres", id_garantie_souscrite = rep(c("GSN", "GSC"), each = 4L),
+                         parametre = rep(c("taux_capital", "age_fin_garantie", "majoration_conjoint", "majoration_enfant"), 2L),
+                         valeur = c(2, 67, 0.5, 0.25, 3, 67, 0.5, 0.25))
+  b$affiliations <- b2_tab("affiliations", id_affiliation = paste0("AF", seq_along(college)), id_assure = "AS1",
+                           id_contrat = "CT1", college = college, type_affiliation = "cotisant", date_debut = D("2020-01-01"),
+                           date_saisie = D("2020-01-05"), salaire_reference = salaire)
+  b$dossiers$id_garantie_souscrite <- gs_dossier
+  b
+}
+arret_af <- list(NA_real_, NA_integer_, NA_character_, "affiliation_non_determinee", "DO1")
+fac <- 1.015 * 1.024
+col_c <- base_college("GSC", c("non_cadres", "cadres"), c(30000, 50000))
+verifier_egal("(3.17) (a) DO1 sur GSC, affiliation non_cadres seule : arrêt affiliation_non_determinee (DO1) ; (b) affiliation cadres : 116 928 exact ; (c) non_cadres (30 000) et cadres (50 000) : 194 880 exact ; (d) DO1 sur GSN, mêmes affiliations : 85 747,20 exact",
+              list(cel(eng(base_college("GSC", "non_cadres", 30000), pB)), cel(eng(base_college("GSC", "cadres", 30000), pB)),
+                   cel(eng(col_c, pB)), cel(eng(base_college("GSN", c("non_cadres", "cadres"), c(30000, 50000)), pB))),
+              list(arret_af, calcule(30000 * 3.75 * fac, "exact"), calcule(50000 * 3.75 * fac, "exact"),
+                   calcule(30000 * 2.75 * fac, "exact")), tolerance = TOL)
+verifier_egal("(3.17) (e) cas (c), affiliation cadres exclue pour engagement : arrêt (la non_cadres n'est jamais prise à sa place) ; (f) deux affiliations cadres couvrant la survenance : arrêt",
+              list({ v <- b2_vue(col_c, A); v$exclu$engagement$affiliations[2L] <- TRUE
+                     cel(ns$calculer_engagement(v, pB, tb, cat_g, "deces", P1)) },
+                   cel(eng(base_college("GSC", c("non_cadres", "cadres", "cadres"), c(30000, 50000, 50000)), pB))),
+              list(arret_af, arret_af))
+col_b <- base_college("GSC", "cadres", 30000)
+verifier_egal("(3.17) (g) college de GSC à NA : refus de colonne (garanties_souscrites, college) qui arrête P1 et P2 (règle (ii), motif de la ligne) ; college de l'affiliation à NA : P1 arrêté type_incompatible (témoin)",
+              { b <- col_b; b$garanties_souscrites$college[2L] <- NA
+                v <- b2_vue(b, A)
+                rt <- ns$postes_a_arreter(cat_g, v$bilan, p$postes, ns$parties_ligne())$refus_tables
+                l <- rt[rt$table == "garanties_souscrites" & rt$colonne %in% "college", , drop = FALSE]
+                bp <- b; bp$beneficiaires$qualite <- "non_identifie"; bp$beneficiaires$id_membre <- NA_character_
+                b2 <- col_b; b2$affiliations$college <- NA   # NA logique : type de colonne incompatible
+                list(l$portee, l$motif, l$postes_arretes, cel(eng(b, pB)), cel(eng(bp, p, P2)), eng(b2, pB)$cellules$motif_arret) },
+              list("colonne", "manquant_obligatoire", "deces/capitaux_non_reclames;deces/sinistres_declares_non_regles",
+                   list(NA_real_, NA_integer_, NA_character_, "manquant_obligatoire", NA_character_),
+                   list(NA_real_, NA_integer_, NA_character_, "manquant_obligatoire", NA_character_), "type_incompatible"))
+verifier_egal("(3.17) (h) P2 (beneficiaire_non_identifie) : cas (a) arrêt affiliation_non_determinee (DO1) ; cas (c) 194 880 exact",
+              list(cel(eng(base_college("GSC", "non_cadres", 30000, "non_identifie"), p, P2)),
+                   cel(eng(base_college("GSC", c("non_cadres", "cadres"), c(30000, 50000), "non_identifie"), p, P2))),
+              list(arret_af, calcule(50000 * 3.75 * fac, "exact")), tolerance = TOL)
+# Lecture de Kleene (§ 5.3) : un collège inconnu non refusé, de la garantie souscrite du dossier
+# ou d'une affiliation de l'assuré au contrat couvrant la survenance, arrête le poste. Un NA
+# dans la base est refusé (cas (g)) : le collège inconnu est posé dans la base de la vue, après
+# les contrôles.
+kleene_college <- function(b, table, ligne) {
+  v <- b2_vue(b, A)
+  v$ctx$base[[table]]$college[ligne] <- NA_character_
+  cel(ns$calculer_engagement(v, pB, tb, cat_g, "deces", P1))
+}
+verifier_egal("(3.17) Kleene : collège inconnu non refusé de GSC (garantie du dossier) : arrêt ; de l'affiliation non_cadres couvrant la survenance, cas (c) : arrêt (et non 194 880) ; de GSN (autre garantie du contrat) : 194 880 exact ; affiliation non_cadres de collège inconnu terminée avant la survenance : 194 880 exact",
+              list(kleene_college(col_c, "garanties_souscrites", 2L), kleene_college(col_c, "affiliations", 1L),
+                   kleene_college(col_c, "garanties_souscrites", 1L),
+                   kleene_college(local({ b <- col_c; b$affiliations$date_fin[1L] <- D("2023-12-31")
+                                          b$affiliations$motif_fin[1L] <- "autre"; b$affiliations$date_saisie_fin[1L] <- D("2024-01-05")
+                                          b }), "affiliations", 1L)),
+              list(arret_af, arret_af, calcule(50000 * 3.75 * fac, "exact"), calcule(50000 * 3.75 * fac, "exact")),
+              tolerance = TOL)
+verifier_egal("(3.17) témoin : R5 (a), collège ensemble partout : 85 747,20 exact",
+              cel(eng(r5a, pB)), calcule(85747.2, "exact"), tolerance = TOL)

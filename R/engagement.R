@@ -248,7 +248,8 @@ parametre_vue <- function(vue, nom, gs, famille = NULL) {
 # Capital reconstitué des dossiers `ouvert` (spécification de B2, § 5.3) : `etats` (lignes de
 # etats_a_date()) ; `parametres` : paramètres du poste (plan). capital_forfaitaire s'il est
 # présent ; sinon assiette (salaire_reference de l'affiliation retenue de l'assuré du sinistre
-# sous le contrat de la garantie, dont [date_debut ; date_fin] contient la survenance) x
+# sous le contrat et au collège de la garantie, erratum v1.0.10, dont [date_debut ; date_fin]
+# contient la survenance) x
 # taux_capital + majorations (affiliations exclues pour la famille « engagement »,
 # vue$exclu$engagement$affiliations, hors du choix : une affiliation exclue ne couvre rien) :
 # instruit, famille retenue rattachée au sinistre (un conjoint
@@ -258,7 +259,8 @@ parametre_vue <- function(vue, nom, gs, famille = NULL) {
 # d'expert) ; une majoration absente vaut 0. Rend data.frame (capital, structure, arret,
 # identifiant) : `structure` vrai si la structure familiale du plan entre dans le montant ;
 # `arret` : motif d'arrêt du poste né du dossier (affiliation_non_determinee : aucune ou
-# plusieurs affiliations couvrent la survenance ; parametre_non_determine : taux_capital et
+# plusieurs affiliations de ce collège couvrent la survenance, ou collège inconnu de la
+# garantie ou d'une affiliation de l'assuré au contrat couvrant la survenance ; parametre_non_determine : taux_capital et
 # capital_forfaitaire absents, ou paramètre lu à plusieurs valeurs ou dont une ligne retenue
 # est exclue pour engagement, erratum v1.0.7 ; assiette_non_determinee :
 # salaire de l'affiliation manquant ; famille_non_determinee : dossier instruit dont une ligne
@@ -290,10 +292,16 @@ parametre_vue <- function(vue, nom, gs, famille = NULL) {
   res$arret[indetermine | (is.na(forfait$valeur) & is.na(taux$valeur))] <- "parametre_non_determine"
   a_calculer <- which(is.na(res$arret) & !avec_forfait)
   if (length(a_calculer) == 0L) return(res)
-  # assiette : affiliation retenue, non exclue pour la famille, de l'assuré sous le contrat,
-  # couvrant la survenance ; jointure par clé (assuré, contrat), sans produit croisé
+  # assiette : affiliation retenue, non exclue pour la famille, de l'assuré sous le contrat et
+  # au collège de la garantie souscrite du dossier, couvrant la survenance (erratum v1.0.10) ;
+  # jointure par clé (assuré, contrat), sans produit croisé, puis filtre sur le collège.
+  # Lecture de Kleene : un collège inconnu de la garantie souscrite, ou d'une affiliation de
+  # l'assuré au contrat couvrant la survenance, rend l'affiliation non déterminée.
+  college <- vv("garanties_souscrites", "college")[match(gs, vv("garanties_souscrites", "id_garantie_souscrite"),
+                                                         incomparables = NA)]
   af_assure <- as.character(vv("affiliations", "id_assure"))
   af_contrat <- as.character(vv("affiliations", "id_contrat"))
+  af_college <- as.character(vv("affiliations", "college"))
   af_debut <- as.numeric(vv("affiliations", "date_debut"))
   af_fin <- as.numeric(vv("affiliations", "date_fin"))
   af_fin[is.na(af_fin)] <- Inf
@@ -305,12 +313,15 @@ parametre_vue <- function(vue, nom, gs, famille = NULL) {
   ii <- rep(seq_along(a_calculer), lengths(cand))
   kk <- unlist(cand, use.names = FALSE)
   couvre <- af_debut[kk] <= survenance[a_calculer][ii] & af_fin[kk] >= survenance[a_calculer][ii]
+  college_inconnu <- is.na(college[a_calculer]) |
+    tabulate(ii[couvre & is.na(af_college[kk])], nbins = length(a_calculer)) > 0L
+  couvre <- couvre & (af_college[kk] == as.character(college[a_calculer][ii])) %in% TRUE
   nb <- tabulate(ii[couvre], nbins = length(a_calculer))
   k1 <- rep(NA_integer_, length(a_calculer))
   k1[ii[couvre]] <- kk[couvre]
   assiette <- rep(NA_real_, n)
-  res$arret[a_calculer[nb != 1L]] <- "affiliation_non_determinee"
-  un <- nb == 1L
+  res$arret[a_calculer[nb != 1L | college_inconnu]] <- "affiliation_non_determinee"
+  un <- nb == 1L & !college_inconnu
   sal <- salaire[k1[un]]
   res$arret[a_calculer[un][is.na(sal)]] <- "assiette_non_determinee"
   assiette[a_calculer[un]] <- sal

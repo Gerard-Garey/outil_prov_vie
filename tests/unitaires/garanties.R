@@ -49,8 +49,11 @@ verifier_egal("états lus en B2 : actif, deces, iad", k$etats$etat, c("actif", "
 verifier_egal("absorbant et meilleure_estimation lus en logical",
               list(k$etats$absorbant, k$postes$meilleure_estimation), list(c(FALSE, TRUE, TRUE), c(TRUE, TRUE, FALSE)))
 verifier_egal("liens.csv : en-tête seul en B2", nrow(k$liens), 0L)
-verifier_egal("lectures.csv : 55, 56 et 32 colonnes lues par P1, P2 et P3",
-              as.integer(table(factor(k$lectures$poste, levels = k$postes$poste))), c(55L, 56L, 32L))
+verifier_egal("lectures.csv : 57, 58 et 32 colonnes lues par P1, P2 et P3 (erratum v1.0.10 : college des garanties souscrites et des affiliations lu par P1 et P2)",
+              as.integer(table(factor(k$lectures$poste, levels = k$postes$poste))), c(57L, 58L, 32L))
+verifier_egal("(3.17) lectures.csv : (garanties_souscrites, college) et (affiliations, college) lus par P1 et par P2, pas par P3",
+              lapply(k$postes$poste, function(po) sort(k$lectures$table[k$lectures$poste == po & k$lectures$colonne == "college"])),
+              list(c("affiliations", "garanties_souscrites"), c("affiliations", "garanties_souscrites"), character(0)))
 verifier("lectures.csv : P2 lit les colonnes de P1 et sinistres.canal_declaration",
          identical(setdiff(paste(k$lectures$table, k$lectures$colonne)[k$lectures$poste == "capitaux_non_reclames"],
                            paste(k$lectures$table, k$lectures$colonne)[k$lectures$poste == "sinistres_declares_non_regles"]),
