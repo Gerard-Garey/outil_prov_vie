@@ -48,13 +48,16 @@ echec <- function(message, chemin = NA_character_, ligne = NA_integer_) {
 fin <- function() quit(save = "no", status = if (.n_echec > 0L) 1L else 0L)
 
 # --- Le graphe de l'ADR 0010, point 1 (colonne "Peut appeler"), en dur -----------------
+# Arete lecture -> tables : annotation appelee par la specification de B2, sections 3.3 et 9
+# (lire_table() construit la table_provie par tables::construire_table() ; hors de la chaine
+# du moteur, aucun module du moteur n'appelant lecture).
 TOUS_LES_MODULES_AMONT <- c("outils", "dictionnaire", "donnees", "tables", "garanties",
                             "engagement", "triangle", "risque_en_cours", "regles_comptables",
                             "projection", "plan")
 AUTORISE <- list(
   outils             = character(0),
   dictionnaire       = c("outils"),
-  lecture            = c("dictionnaire", "outils"),
+  lecture            = c("dictionnaire", "outils", "tables"),
   donnees            = c("dictionnaire", "outils"),
   tables             = c("outils"),
   garanties          = c("dictionnaire", "outils"),

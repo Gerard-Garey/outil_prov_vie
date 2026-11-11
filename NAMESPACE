@@ -53,3 +53,17 @@ S3method(format, plan_calcul)
 S3method(print, plan_calcul)
 S3method(format, fiche_calcul)
 S3method(print, fiche_calcul)
+# Module `lecture` (#65) : lire_table(), appelée hors du package par l'utilisateur sans Shiny
+# (lecture d'une table importée, mortalité ou série TME, en table_provie à passer au moteur
+# par l'argument `tables` de calculer_provisions()) et par l'application (import d'une table)
+# (ADR 0010, points 5 et 13 ; spécification de B2, § 3.7).
+export(lire_table)
+# Module `tables` (#65) : formats_tables(), appelée hors du package par l'application (formats
+# proposés à l'import d'une table) et par l'utilisateur sans Shiny (colonnes et types attendus
+# d'un fichier de table avant lire_table()) (ADR 0010, point 13 ; spécification de B2, § 3.7).
+# charger_table() n'existe pas en B2 : aucune table n'est embarquée (décision du mainteneur du
+# 10 novembre 2026, spécification de B2, § 3.1).
+export(formats_tables)
+# Méthodes de la classe table_provie (ADR 0010, point 13) : décomptes seuls.
+S3method(format, table_provie)
+S3method(print, table_provie)

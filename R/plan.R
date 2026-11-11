@@ -3,7 +3,8 @@
 # valeur par défaut, canonisation, sérialisation du plan et de la fiche de calcul en texte
 # aplati (outils::ecrire_liste()), construction de la fiche et contrôles d'entrée du rejeu.
 # Appelle `garanties` (catalogue), `donnees` (sous-schéma `donnees` du plan, listes fermées
-# des référentiels et des conventions de limite d'âge), `dictionnaire` et `outils` (graphe
+# des référentiels et des conventions de limite d'âge), `tables` (listes fermées des
+# statuts de table et du comportement hors des axes), `dictionnaire` et `outils` (graphe
 # du point 1). Ne parle pas (point 12), hors des méthodes print.* et format.*. Code ASCII
 # hors commentaires (M112).
 # Convention de ce fichier : une fonction dont le nom commence par un point est un
@@ -22,9 +23,8 @@ VERSION_PLAN <- 1L
 # Sections du plan, dans l'ordre canonique (ADR 0010, point 17).
 SECTIONS_PLAN <- c("version_plan", "arrete", "perimetre", "tables", "taux", "frais", "revalorisation",
                    "conventions", "postes", "donnees", "restitution", "liens", "graine")
-# Listes fermées du plan de B2 (spécification de B2, § 2.2 à § 2.7).
-STATUTS_TABLE <- c("homologuee", "certifiee", "experience", "loi_anc", "fictive")
-HORS_AXES <- c("refus", "derniere_valeur")
+# Listes fermées du plan de B2 (spécification de B2, § 2.2 à § 2.7) ; celles des entrées de
+# `tables` (STATUTS_TABLE, HORS_AXES) sont tenues par le module `tables`, qui les lit aussi.
 REGLES_SEGMENTATION <- c("contrat", "adherent", "college", "gestionnaire", "nature_contrat",
                          "secteur_activite", "annee_survenance", "ligne_activite")
 INSTANTS_DATE <- "fin_journee"
