@@ -1393,12 +1393,12 @@ imposés par le dictionnaire de la base\fsp; une valeur n'est jamais
 convertie dans un autre type que le sien. Le module transmet des
 \code{data.frame}. Dans l'état du code, il lit et écrit la base en CSV
 (section~\ref{sec:lecture-base}) et les jeux simulés
-(section~\ref{sec:lecture-jeu})\fsp; la lecture des
-tables importées et la provenance des fichiers lus ne sont pas encore
-écrites. Il est hors de la chaîne du moteur~: aucun module du
+(section~\ref{sec:lecture-jeu}) et lit une table importée
+(\code{lire\_table()})\fsp; la provenance des fichiers lus n'est pas encore
+écrite. Il est hors de la chaîne du moteur~: aucun module du
 moteur ne l'appelle. Le format xlsx est lu par l'application, hors du
-package. Il ne peut appeler que \code{dictionnaire} et \code{outils}.
-Ses quatre fonctions sont exportées.
+package. Il ne peut appeler que \code{dictionnaire}, \code{outils} et
+\code{tables}. Ses cinq fonctions sont exportées.
 
 \begin{center}
 \small
@@ -1411,6 +1411,7 @@ Ses quatre fonctions sont exportées.
 \code{ecrire\_base()} & \code{donnees}, \code{dossier} & Écrit une base contrôlée par \code{controler\_types()} en CSV UTF-8, un fichier par table, dans un dossier neuf ou vide, au format que relit \code{lire\_base()}\fsp; refuse (\code{liste\_invalide}) avant toute écriture la chaîne vide, hors domaine, et ce que le CSV ne relirait pas à l'identique (retour chariot, réel non fini, date non entière ou hors de quatre chiffres d'année, chaîne d'encodage inconnu ou non UTF-8)\fsp; refuse (\code{fichier\_invalide}) un dossier non vide\fsp; rend le dossier. \\
 \code{ecrire\_jeu()} & \code{jeu}, \code{dossier} & Écrit un jeu simulé dans un dossier neuf ou vide, selon la disposition d'un jeu versionné~: \code{base/} (une table par fichier, au format et aux octets d'\code{ecrire\_base()}), \code{loi\_vraie.txt} et \code{manifeste.txt} (par \code{ecrire\_liste()}), \code{verite/} (une table de vérité par fichier CSV), \code{declarations.txt} si le jeu en porte, puis \code{empreintes.md5} au format de \code{md5sum -c}\fsp; refuse (\code{jeu\_invalide}) avant toute écriture, création du dossier comprise, un objet qui n'a pas la forme d'un jeu simulé ou que \code{lire\_jeu()} ne relirait pas identique, et applique avant elle aussi les refus d'\code{ecrire\_base()} et d'\code{ecrire\_liste()} (section~\ref{sec:lecture-jeu})\fsp; rend le dossier. \\
 \code{lire\_jeu()} & \code{dossier} & Relit un jeu écrit par \code{ecrire\_jeu()} et le rend identique\fsp; contrôle d'abord la disposition du dossier (\code{fichier\_invalide}) et chaque empreinte de \code{empreintes.md5} (\code{empreinte\_discordante}), puis lit la base par \code{lire\_base()} (tables et nombres de lignes égaux à la volumétrie du manifeste, sinon \code{fichier\_invalide}) et les tables de vérité dans les types que décrit le manifeste. \\
+\code{lire\_table()} & \code{chemin}, \code{format}, \code{identifiant}, \code{statut}, \code{provenance} & Lit une table au format natif \code{format} (un format de \code{formats\_tables()}) dans un fichier CSV, par la même lecture que \code{lire\_base()}, et la rend en \code{table\_provie} par \code{construire\_table()}\fsp; refuse sans convertir~: \code{format\_table\_inconnu}, \code{fichier\_invalide}, \code{type\_incompatible} (le message nomme la colonne et la première ligne), \code{liste\_invalide}. \\
 \end{tabular}
 \end{center}
 
@@ -2582,7 +2583,7 @@ embarquées, courbes des taux sans risque de l'EIOPA, série de taux des
 plafonds réglementaires, plafonds réglementaires. Le calcul de l'âge n'en
 fait pas partie~: il est dans le module \code{outils}, qui sert aussi
 \code{donnees} et le simulateur (section~\ref{sec:age}). Le module \code{tables} ne
-peut appeler que \code{outils}. Ce module n'a pas encore de fonction.
+peut appeler que \code{outils}. Sa fonction \code{formats\_tables()} est exportée.
 
 \begin{center}
 \small
@@ -2591,7 +2592,18 @@ peut appeler que \code{outils}. Ce module n'a pas encore de fonction.
 \begin{tabular}{@{}p{3.9cm}>{\raggedright\arraybackslash}p{3.0cm}p{8.2cm}@{}}
 \rowcolor{tableheader}
 \textcolor{financeblue}{\textbf{Fonction}} & \textcolor{financeblue}{\textbf{Arguments}} & \textcolor{financeblue}{\textbf{Rôle}} \\
-\multicolumn{3}{@{}l@{}}{Aucune fonction.} \\
+\code{formats\_tables()} & Aucun & Rend les formats de tables admis, en \code{data.frame} (format, nature, colonnes et types, description, conversion)\fsp; en B2~: \code{lx\_age} (mortalité) et \code{serie\_tme\_mensuelle} (taux). \\
+\code{construire\_table()} & \code{donnees}, \code{format}, \code{identifiant}, \code{statut}, \code{provenance} & Construit une \code{table\_provie} depuis le contenu d'une table au format natif, sans conversion de type, avec l'empreinte MD5 de l'écriture canonique de ce contenu\fsp; refus \code{liste\_invalide}, \code{format\_table\_inconnu} ou \code{type\_incompatible}. \\
+\code{convertir\_lx\_qx()} & \code{age}, \code{lx} & Convertit le format \code{lx\_age}~: $q_x = 1 - l_{x+1}/l_x$ pour chaque âge sauf le dernier\fsp; un $l_x$ nul met hors des axes cet âge et les suivants. \\
+\code{convertir\_pourcent()} & \code{mois}, \code{taux\_pourcent} & Convertit le format \code{serie\_tme\_mensuelle}~: valeur divisée par 100, au pas mensuel. \\
+\code{probabilite()} & \code{table}, \code{...}, \code{hors\_axes} & Seul accès aux valeurs d'une \code{table\_provie}, vectorisé sur les axes\fsp; hors des axes, applique la déclaration \code{hors\_axes} (\code{refus}~: \code{NA}\fsp; \code{derniere\_valeur}), sans défaut, et rend les indices des points hors des axes en attribut. \\
+\code{resoudre\_tables()} & \code{plan\_tables}, \code{tables\_recues}, \code{usages\_exiges} & Résout la table de chaque usage exigé et rend ces tables avec les lignes des paramètres retenus des tables\fsp; refus \code{table\_absente}, \code{liste\_invalide}, \code{empreinte\_discordante} ou \code{plan\_invalide}. \\
+\code{minimum\_r132\_3\_1()} & \code{serie}, \code{annee}, \code{decalage} & Minimum de l'article R132-3-1 pour des années civiles~: le moins élevé de la moyenne des douze derniers mois disponibles au 1er~novembre de l'année précédente et du dernier mois disponible\fsp; sans plancher\fsp; \code{NA} si un mois manque. \\
+\code{plafond\_a132\_1()} & \code{serie}, \code{date}, \code{nature\_primes}, \code{duree\_au\_plus\_\allowbreak 8\_ans}, \code{decalage} & Taux de référence de l'article A132-1 à des dates (75~\% du TME semestriel en prime unique sur huit ans au plus, sinon le minimum de 3,5~\% et de 60~\% de ce taux) et bornes de l'échelle de l'article A132-1-1. \\
+\code{indicateur\_r132\_3\_1()} & \code{serie}, \code{annee}, \code{decalage}, \code{taux\_retenu}, \code{poste}, \code{garantie}, \code{type\_organisme} & Rend une ligne d'indicateur \code{R132\_3\_1} par année~: minimum de \code{minimum\_r132\_3\_1()}, taux retenu, dépassement si le taux retenu est inférieur au minimum. \\
+\code{indicateur\_a132\_1()} & \code{serie}, \code{date}, \code{nature\_primes}, \code{date\_effet}, \code{date\_terme}, \code{decalage}, \code{taux\_tarif}, \code{id\_contrat}, \code{poste}, \code{garantie}, \code{type\_organisme}, \code{approximation\_\allowbreak arrete} & Rend une ligne d'indicateur \code{A132\_1} par contrat~: taux de référence de \code{plafond\_a132\_1()}, taux du tarif, dépassement à trois valeurs (certain, exclu, indéterminé) au regard des bornes de l'échelle. \\
+\code{format.table\_provie()} & \code{x}, \code{...} & Décrit une table en lignes de texte~: identifiant, nature, statut, pas, nombre de points par axe, format natif, conversion, empreinte. \\
+\code{print.table\_provie()} & \code{x}, \code{...} & Imprime \code{format(x)} et rend la table, invisible. \\
 \end{tabular}
 \end{center}
 
