@@ -4,6 +4,8 @@
 >
 > *Statut : **visa délégué par le mainteneur le 10/11/2026, à confirmer a posteriori**. La délégation vaut pour une spécification qui suit les décisions du mainteneur du 10 novembre 2026 : I4, I5 et I6 tranchées selon les recommandations de `regulatory` ; I1, I2 et I3 tranchées le 10/11/2026 (avis Fable d'`actuary-approfondi`, auquel la session s'est rangée), validation a posteriori du mainteneur ; échelle d'A132-1-1 établie par `regulatory` ; aucune table réglementaire embarquée en B2 ; issues (1) à (4) créées en `ready-for-agent` avec les corps du § 8. **Validé a posteriori par le mainteneur le 11/11/2026**, en bloc, avec I1 à I3 et les errata v1.0.1 à v1.0.6 (PR #61, commentaire du 11/11/2026).*
 >
+> *Version `1.0.8` : erratum d'`actuary` du 11/11/2026 pour l'ADR 0011 (accepté, M256 à M260), points 11 à 15, et pour #69 : composition de la base construite `construite-deces-01` (§ 7.8.1), plans de référence `recommandees` et `alternatives` de la base construite et des jeux (§ 7.8.2, § 7.9.6), tableau de recoupement des couples C1 à C4, recalculé par deux voies indépendantes du moteur (§ 7.8.3 à § 7.8.5), critères de test (§ 7.8.6), spécification du jeu `v1-modeste-03` (§ 7.9), table et série fictives du jeu (§ 3.6), mesures m8 à m16 (§ 0.3), point d'attention A1 soldé (§ 10.2). Écarts à la lettre du point 11 de l'ADR 0011, dans le mandat qu'il donne à `actuary`, soumis au mainteneur : T2 au lieu de T1, T7 au chargement de 0,05, T3 et T5 portés par un seul contrat, cotisation T7 bis ajoutée (§ 7.8.1, § 7.8.2). D1 à D4 tranchés par le mainteneur le 11/11/2026 (D1 accepté ; D2, D4 validés ; D3 accepté, graine suivante en cas d'échec d'un critère V). Résultats : aucun code ni aucune référence modifiés par l'erratum ; valeurs en dur nouvelles (tests de #67 et #69) ; premiers totaux de C1 à C4 sous visa du mainteneur (ADR 0011, point 18 (b)) ; jeux `v1-modeste-01` et `v1-modeste-02` inchangés à l'octet (§ 7.9.7, J.1).*
+>
 > *Version `1.0.7` : erratum d'`actuary` du 11/11/2026 pour #76, limité à `parametres` (commentaire du 11/11/2026 sur #76 ; le cas `famille` est réglé par v1.0.6) : un paramètre lu par la reconstitution du capital (`capital_forfaitaire`, `taux_capital`, `majoration_conjoint`, `majoration_enfant`) dont une ligne de `parametres` est exclue pour `engagement` n'est pas déterminé ; arrêt `parametre_non_determine`, jamais 0 ni absent ; exclusion pour une autre famille de calcul sans effet (§ 5.3, § 5.6, § 6.2, § 7.3, § 8.3). Résultats : poste arrêté au lieu d'un montant `exact` sur des bases construites des tests ; bilan, jeux versionnés et références inchangés. Règle décidée sur #76 ; validation de la session sur avis d'`actuary`.*
 >
 > *Version `1.0.6` : erratum d'`actuary` du 11/11/2026 sur le constat B de l'audit de la reprise de #66 : un enfant d'âge inconnu, ou une ligne de `famille` exclue pour `engagement`, n'est jamais compté pour zéro dans la majoration ; lecture de Kleene ; arrêt `famille_non_determinee` (§ 5.3, § 5.6, § 6.2). Résultats : provisions nouvelles. Visa délégué, validation a posteriori du mainteneur.*
@@ -47,6 +49,15 @@ La présente spécification permet à `coder-approfondi` de coder sans question 
 | m5 | Cotisations non échues à ces arrêtés | `awk` sur `cotisations.csv` des deux jeux | aucune émission dont la période dépasse un arrêté et saisie avant lui ; émissions annuelles en janvier, périodes civiles |
 | m6 | Refus de `v1-modeste-02` | `mesure_la.R` | une ligne : `prestations montant D09 colonne 1` (PR00010, indemnité journalière de signe inversé, `verite/defauts.csv`) |
 | m7 | Cas à valeurs en dur du § 7 | scripts `cas.R`, `cas2.R` (revalorisation, convention de fin de journée) et trois `Rscript -e` | valeurs du § 7.4 ; `lifecontingencies` **non installé** dans le conteneur (`requireNamespace` : `FALSE`) |
+| m8 | Base construite `construite-deces-01` aux quatre couples C1 à C4, familles appelées une à une, plan du § 7.8.2 (arbre de travail à `6a00a06`, diff de #76 compris) | script `mesure_c.R` | montants du § 7.8.3 ; bilan aux deux arrêtés : `refus_tables`, `declarations_requises`, `visibilite_non_determinee`, `exclusions`, `hypotheses_defaut`, `signalements` vides ; sans `donnees$seuils`, six lignes `declarations_requises` D02c (d'où les seuils du plan) |
+| m9 | Recoupement indépendant du moteur (Python, bibliothèque standard, durées `exact_exact` recodées) | `recoupement.py`, `cmp.py` | écart mixte max \|x − r\| / max(1, \|r\|) : dossiers 3,4e-16 ; contrats 2,6e-15 ; P3 8,3e-16 ; cotisations 0 |
+| m10 | Formules fermées du § 7.8.3 sur les valeurs du § 7.4 | script Python en ligne | concordance à 1e-10 |
+| m11 | Effet du diff de #76 sur m8 | `mesure_head.R` (`git archive HEAD`) contre l'arbre de travail | sorties identiques à 17 chiffres significatifs |
+| m12 | Plans du § 7.8.2 : `valider_plan()`, aller-retour | `plans_rt.R` | quatre plans valides ; `identical(lire_plan(ecrire_plan(p)), canoniser_plan(valider_plan(p)))` vrai ; 4 156 et 4 384 octets |
+| m13 | Dossiers `deces`, contrats individuels et cotisations des jeux 01 et 02 aux arrêtés 2025-12-31 et 2024-12-31 (`vue_a_date()`, `etats_a_date()`) | `jeux.R` | chaque jeu, chaque arrêté : 4 dossiers, tous `clos` ; 0 contrat individuel ; 0 cotisation vue de fin postérieure à l'arrêté |
+| m14 | Dimensionnement du flux collectif de `v1-modeste-03` : simulateur à `6a00a06`, loi vraie version 1 aux valeurs collectives du § 7.9.3, graines du § 7.9.4 | `proto.R`, `proto2.R`, `proto3.R` | 0,95 s ; 1 499 assurés ; 27 décès saisis au 2025-12-31 (23 au 2024-12-31) ; 27 sur 27 couverts par l'affiliation de leur assuré ; effets des six contrats en juin, novembre, juin, octobre, juillet et octobre |
+| m15 | Table et série fictives de `v1-modeste-03` (`construire_table()`, `minimum_r132_3_1()`) | `tables03.R`, `emp.R` | empreintes et minima du § 3.6 ; minima recoupés en Python |
+| m16 | Plan des jeux (§ 7.9.6) sur `v1-modeste-01` et `v1-modeste-02` aux deux arrêtés | `jeuplan.R` | plans valides ; `declarations_requises` vide ; 01 : P1, P2, P3 `calcule`, 0 ; 02 : P1 et P2 `arrete` (`D09`), P3 0 |
 
 Les scripts sont dans le scratchpad de la session, non versés.
 
@@ -269,6 +280,9 @@ Forme des lignes (ADR 0010, point 6, champ `indicateurs`) : `regle`, `poste`, `g
 
 - **Table de mortalité fictive** `mortalite_fictive_b2` (format `lx_age`, statut `fictive`) : âges 40 à 43, l_x = 100 000 ; 99 000 ; 97 020 ; 94 109,4, soit q_40 = 0,01, q_41 = 0,02, q_42 = 0,03 (exact, à l'arrondi binaire près : mesure m7, `q41 = 0.020000000000000018`). Écrite dans le fichier de test, avec sa déclaration « table fictive, sans source ».
 - **Série TME fictive** `tme_fictive_b2` (format `serie_tme_mensuelle`, statut `fictive`) : 3,00 % de 2023-01 à 2024-09 ; 3,20 % en 2024-10 ; 3,00 % de 2024-11 à 2025-09 ; 2,40 % en 2025-10 ; 3,00 % de 2025-11 à 2025-12 (36 mois). Écrite dans le fichier de test. Valeurs attendues : § 7.4, cas X1 à X8. Les cas X9 à X12 emploient des séries de test propres, décrites au § 7.4.
+- **Table de mortalité fictive** `mortalite_fictive_v1_03` (format `lx_age`, statut `fictive` ; plans des jeux, § 7.9.6) : âges 18 à 80 ; suite l_18 = 100 000, l_{x+1} = l_x × (1 − q_x), q_x = 0,0005 + 0,00001 × (x − 18) × (x − 18), calculée sans arrondi par des opérations élémentaires seulement (aucune fonction de bibliothèque mathématique), puis chaque l_x arrondi au dixième et **écrit en littéraux** dans le fichier de test, la table faisant foi et non la formule : 18:100000.0 19:99950.0 20:99899.0 21:99845.1 22:99786.2 23:99720.3 24:99645.5 25:99559.8 26:99461.3 27:99347.9 28:99217.7 29:99068.9 30:98899.5 31:98707.6 32:98491.5 33:98249.2 34:97979.0 35:97679.2 36:97348.0 37:96984.0 38:96585.4 39:96150.7 40:95678.6 41:95167.7 42:94616.7 43:94024.4 44:93389.7 45:92711.7 46:91989.5 47:91222.3 48:90409.5 49:89550.6 50:88645.2 51:87693.2 52:86694.4 53:85648.8 54:84556.8 55:83418.7 56:82235.0 57:81006.4 58:79733.8 59:78418.2 60:77060.7 61:75662.9 62:74226.0 63:72751.9 64:71242.3 65:69699.2 66:68124.7 67:66521.0 68:64890.6 69:63235.9 70:61559.5 71:59864.2 72:58152.6 73:56427.8 74:54692.7 75:52950.2 76:51203.3 77:49455.3 78:47709.0 79:45967.6 80:44234.2. Empreinte du contenu `4eb68f9af5835cad25255f14232f5df0` (m15). Âges lus par P3 sur le jeu : 25 à 69 (souscription de 25 à 60 ans, fin de garantie à 70 ans). Déclaration : « table fictive, sans source ».
+- **Série TME fictive** `tme_fictive_v1_03` (format `serie_tme_mensuelle`, statut `fictive`) : 2,00 % de 2014-01 à 2019-12 ; 1,00 % de 2020-01 à 2022-06 ; 3,00 % de 2022-07 à 2025-12 (144 mois). Empreinte `a5b4c1cf5cf86afc6ac166504fe808d7`. `R132_3_1` au décalage 1 : 0,02 de 2016 à 2020 ; 0,01 en 2021 et 2022 ; 0,016666666666666666 en 2023 ; 0,03 de 2024 à 2026 (m15, recoupé en Python). Elle couvre les indicateurs `A132_1` aux dates de souscription (depuis 2016-01) et `R132_3_1` depuis 2016.
+- Empreintes de contrôle des tables du § 7.4 (m15) : `mortalite_fictive_b2` `f369ecb1265f41af1a1f0a073c49f85a` ; `tme_fictive_b2` `ea69e98196b4c00655e931bbaefbdbc6`.
 - Le **fichier de provenance** d'une table embarquée (source, URL, date de consultation, licence, empreintes du fichier source et de la table transcrite, méthode de transcription, contre-vérification ; ADR 0009, point 3) n'est pas produit en B2 ; sa forme, alignée sur celle d'`outil_tables` (manque de 0a), est fixée par l'issue de transcription.
 
 ### 3.7 Exports de (2)
@@ -658,8 +672,380 @@ Script `tests/contre_verification/b2_lifecontingencies.R`, hors CI, lancé sur o
 - Invariants du point 7 (a) à (f) testés ; `non_declaree` jamais dans le résultat ; `declarations_requises` vide.
 - Restitution garantie × référentiel × poste × segmentation × segment, et par dossier (P1, P2) ; `statut_resultat` d'une cellule = le plus faible de ses dossiers ou contrats (`jugement_expert` > `approximation_numerique` > `exact`).
 - Refus d'appel et arrêt de poste distingués (scénarios adverses de la fiche de B2).
-- **Visa du mainteneur sur les premiers totaux** : sur les jeux versionnés, le total `deces` vaut **0 €** dans `v1-modeste-01` aux deux arrêtés (m4, m5) et est **arrêté** dans `v1-modeste-02` (m6). Voir A1 (§ 10.2).
+- **Visa du mainteneur sur les premiers totaux** : sur les jeux versionnés, le total `deces` vaut **0 €** dans `v1-modeste-01` aux deux arrêtés (m4, m5) et est **arrêté** dans `v1-modeste-02` (m6). Voir A1 (§ 10.2). Sur la base construite, les totaux de C1 à C4 sont adossés au recoupement du § 7.8.4 (test à valeurs en dur, critère R.3) ; sur `v1-modeste-03`, ils sont non nuls par construction (critères de visa du § 7.9.7).
 - Références selon l'ADR 0011 (0c), par la session, sur la CI seule, après visa.
+
+### 7.8 Base construite `construite-deces-01` et plans de référence de la base (ADR 0011, points 11 à 15 ; erratum v1.0.8)
+
+#### 7.8.1 Composition
+
+Fonction `b2_base_construite_deces_01()` de `tests/b2_bases.R`, sans argument. Elle rend les quinze tables du dictionnaire `1.5`, construites par `b2_tab()` (colonnes dans l'ordre du dictionnaire, `NA` hors des valeurs ci-dessous). C'est une base construite au sens de l'ADR 0011, point 13 : ni loi vraie ni graine ; elle ne change jamais en place (une base modifiée prend le numéro 02).
+
+Elle réunit, chacun sous ses propres identifiants (suffixe = nom du cas), avec les valeurs mêmes de `b2_base_capital()` et de `b2_base_p3()` :
+- R1, R3, R4, R5 (a) et R5 (b) (dossiers) ;
+- le contrat de T1 (prime unique ; T2 sous le plan, § 7.8.2) ;
+- le contrat de T3 et T5 (primes annuelles, `prime_periodique` 2 300 : T3 sous `recommandees`, T5 sous `alternatives`) ;
+- la cotisation de T7 ;
+- une cotisation T7 bis (période 2024-07-01 au 2025-06-30), ajoutée pour que P3 collectif soit non nul à l'arrêté 2025-01-01.
+
+Les autres cas restent unitaires (§ 7.3) : R2, R4b et R7 sont des variantes de plan ; R6 est porté par le plan `alternatives` ; T4 est le témoin, jamais restitué ; T6 est à l'arrêté de la date d'effet.
+
+| Table | Lignes (colonnes renseignées) |
+|---|---|
+| `extraction` | `date_extraction` 2026-03-31, `debut_historique` 2017-01-01, `type_organisme` `societe_assurance`, `version_dictionnaire` `1.5`, `devise` `EUR` |
+| `adherents` | `ADC1` |
+| `contrats` | `CTC1` : `collectif_obligatoire`, `id_adherent` `ADC1`, `date_effet` 2020-01-01, `tacite_reconduction` TRUE ; `CTI1` et `CTI3` : `individuel`, `id_assure` `ASI1` et `ASI3`, `date_effet` 2024-01-01, `date_terme` 2027-01-01, `tacite_reconduction` FALSE ; les trois : `mois_echeance` 1, `jour_echeance` 1, `preavis_mois` 2, `gestionnaire` `interne`, `date_debut_gestion` = `date_effet` |
+| `garanties_souscrites` | `GSC1` (`CTC1`) : `deces`, `college` `ensemble`, `date_effet` 2020-01-01, `type_assiette` `salaire_reference`, `periodicite_cotisation` `annuelle`, `taux_technique_tarif` NA ; `GSI1` (`CTI1`) : `forfait`, `unique`, 0,02 ; `GSI3` (`CTI3`) : `forfait`, `annuelle`, 0,02 ; partout `option_iad` FALSE, `clause_type_beneficiaire` `conjoint_enfants_heritiers` ; dates d'effet de `GSI1` et `GSI3` : 2024-01-01 |
+| `parametres` | `GSC1` : `taux_capital` 2, `age_fin_garantie` 67, `majoration_conjoint` 0,5, `majoration_enfant` 0,25 ; `GSI1` : `capital_forfaitaire` 100 000, `age_fin_garantie` 70 ; `GSI3` : `capital_forfaitaire` 100 000, `age_fin_garantie` 70, `prime_periodique` 2 300 |
+| `assures` | `ASR1`, `ASR3`, `ASR4`, `ASR5A`, `ASR5B` : `M`, né le 1980-01-01 ; `ASI1`, `ASI3` : `M`, né le 1984-01-01 |
+| `affiliations` | `AF<c>` pour c ∈ {R1, R3, R4, R5A, R5B} : assuré `AS<c>`, contrat `CTC1`, `college` `ensemble`, `cotisant`, `date_debut` 2020-01-01, `date_saisie` 2020-01-05, `salaire_reference` 30 000 |
+| `famille` | pour chaque c : `ME<c>1` `conjoint` `F` né le 1982-05-01 ; `ME<c>2` `enfant` `M` né le 2014-01-01 ; `ME<c>3` `enfant` `F` né le 1997-01-01 ; `id_assure` `AS<c>`, `id_sinistre` `SI<c>`, `date_saisie` 2024-09-10 |
+| `sinistres` | `SI<c>` : assuré `AS<c>`, `deces`, survenance 2024-07-01, déclaration 2024-09-01, `date_instruction` 2024-09-10 (NA pour R5B), `canal_declaration` `beneficiaire`, `gestionnaire` `interne`, `date_saisie` 2024-09-02 |
+| `dossiers` | `DO<c>` : sinistre `SI<c>`, garantie `GSC1`, ouverture 2024-09-03 |
+| `beneficiaires` | `BE<c>` : dossier `DO<c>`, `part` 1, `date_saisie` 2024-09-10 ; `conjoint_survivant` (`id_membre` `ME<c>1`), sauf R4 : `non_identifie` (`id_membre` NA) |
+| `evenements` | `EV<c>` pour c ∈ {R1, R3, R4} : `fixation_capital` du dossier `DO<c>`, effet 2024-09-15, saisie 2024-09-16, montant 100 000 ; aucun événement pour R5A et R5B (capital non fixé) |
+| `prestations` | `PRR3` : dossier `DOR3`, `capital`, `paiement`, règlement 2025-03-01, montant 40 000, saisie 2025-03-01 |
+| `cotisations` | `COC1` : `GSC1`, `emission`, 2025-07-01 au 2026-06-30, mouvement 2025-07-01, 1 200 (T7) ; `COC2` : `GSC1`, `emission`, 2024-07-01 au 2025-06-30, mouvement 2024-07-01, 1 200 (T7 bis) |
+| `rentes` | aucune ligne |
+
+**Coexistence sans interférence.** Les règles qui pourraient croiser deux cas sont les suivantes :
+- la partition P1 / P2 ne lit que la qualité `non_identifie` (seul `DOR4`) ;
+- la reconstitution du capital (`DOR5A`, `DOR5B`) lit l'affiliation de l'assuré du sinistre, une par assuré, et la famille rattachée au sinistre, propre à chaque cas ;
+- les paramètres de `GSC1` sont ceux de `GS1` du § 7.4 ;
+- la seule prestation (`PRR3`) porte sur `DOR3` ;
+- P3 individuel exclut les assurés qui ont un sinistre, or `ASI1` et `ASI3` n'en ont aucun ;
+- P3 collectif ne lit que `COC1` et `COC2` ;
+- `COC1` est hors de la vue au 2025-01-01 (mouvement postérieur) ; `COC2` est échue au 2025-12-31.
+
+Au 2025-01-01, `PRR3` est hors de la vue (saisie le 2025-03-01) : `DOR3` y vaut `DOR1`. Le critère R.4 vérifie la non-interférence.
+
+#### 7.8.2 Plans `recommandees` et `alternatives` de la base construite
+
+Les deux plans ont **les mêmes hypothèses**. Seules diffèrent les méthodes et les entrées exigées par les seules méthodes alternatives (`delai_reglement_jours`, `taux_futur`, `duree_sans_depot_annees`) : C3 − C1 et C4 − C2 ne s'expliquent donc que par les méthodes.
+
+D'où trois valeurs qui ne sont pas les valeurs littérales du § 7.4 :
+- `taux_chargement_psap` de P1 = 0,01 (valeur de R5) : R1, R3 et R6 apparaissent × 1,01 ;
+- `taux_chargement_gestion` = 0,001 : le contrat de prime unique recoupe T2 (et non T1), ce qui met le flux de frais de P3 sous référence ;
+- `taux_chargement_cotisation` = 0,05 : T5 est recoupé à sa valeur littérale ; T7 devient 1 200 × 0,95 × 181/365.
+
+Chacune est un jugement d'expert de test (valeurs du § 7.4), non une valeur proposée. Forme exacte (`tests/references.R`, fonction appelée par `plan_reference()` pour `construite-deces-01` ; `tables` = `b2_tables()`) :
+
+```r
+b2_plan_reference <- function(nom, arrete, tables) {
+  stopifnot(nom %in% c("recommandees", "alternatives"))
+  alt <- nom == "alternatives"
+  reconst <- list(taux_sans_suite = 0, probabilite_reconnaissance_iad = 1,
+                  structure_familiale = list(taux_conjoint = 0.6, nombre_enfants = 1.2),
+                  age_limite_enfant_majoration = 26L, liens_conjoint_majoration = c("concubin", "conjoint", "partenaire_pacs"))
+  p1 <- reconst
+  if (alt) p1$delai_reglement_jours <- 30L
+  rv <- list(taux_par_annee = c(`2024` = 0.03, `2025` = 0.024), prorata = "simple")
+  if (alt) { rv$taux_futur <- 0.024; rv$duree_sans_depot_annees <- 10L }
+  list(
+    version_plan = 1L, arrete = arrete,
+    perimetre = list(garanties = "deces", referentiels = "comptes_sociaux",
+                     segmentations = list(nature_contrat = list(regle = "nature_contrat"))),
+    tables = list(
+      mortalite_tarif = list(identifiant = "mortalite_fictive_b2", empreinte = tables$mortalite_tarif$origine$empreinte,
+                             statut = "fictive", hors_axes = "refus"),
+      serie_tme = list(identifiant = "tme_fictive_b2", empreinte = tables$serie_tme$origine$empreinte, statut = "fictive",
+                       hors_axes = "refus", decalage_publication_mois = 1L)),
+    taux = list(deces = list(provision_mathematique_temporaire_deces = list(comptes_sociaux = 0.02))),
+    frais = list(deces = list(
+      sinistres_declares_non_regles = list(comptes_sociaux = list(taux_chargement_psap = 0.01)),
+      capitaux_non_reclames = list(comptes_sociaux = list(taux_chargement_psap = 0)),
+      provision_mathematique_temporaire_deces = list(comptes_sociaux = list(
+        taux_chargement_gestion = 0.001, taux_chargement_acquisition = 0.01, taux_chargement_cotisation = 0.05)))),
+    revalorisation = list(capital_deces = rv),
+    conventions = list(age = "revolu", instant_date = "fin_journee", repartition_annee = "uniforme",
+                       fractionnement = "echeances_exactes", decompte_jours = "exact_exact"),
+    postes = list(deces = list(
+      sinistres_declares_non_regles = list(methode = if (alt) "capital_dossier_reglement" else "capital_dossier", parametres = p1),
+      capitaux_non_reclames = list(methode = if (alt) "capital_revalorise_reglement" else "capital_revalorise",
+                                   parametres = c(list(critere = "beneficiaire_non_identifie"), reconst)),
+      provision_mathematique_temporaire_deces = list(
+        individuel = list(methode = if (alt) "prospective_prime_declaree" else "prospective_prime_pure",
+                          parametres = list(pas = "an", paiement_capital = "fin_pas", plancher = "par_contrat")),
+        collectif = list(methode = "prorata_cotisation", parametres = list())))),
+    donnees = list(seuils = list(
+      d02c_age_min = list(assures_sinistre = 16, assures_affiliation = 16, famille = 0),
+      d02c_age_max = list(assures_sinistre = 75, assures_affiliation = 70, famille = 110))),
+    restitution = list(echeanciers = "tous", triangles = "aucun"), liens = list(), graine = 1L)
+}
+```
+
+**Motifs des valeurs.**
+- `structure_familiale` (0,6 ; 1,2), `taux_chargement_psap` 0,01 et `age_limite_enfant_majoration` 26 : valeurs de R5.
+- `taux_par_annee` et `taux_futur` 0,024 : valeurs de R1, R4 et R6 ; `taux_futur` = taux 2026 de R6, donc R6 est retrouvé sans déclarer 2026.
+- `delai_reglement_jours` 30 : valeur de R6.
+- `duree_sans_depot_annees` 10 : exigée par `capital_revalorise_reglement`, lue par aucun dossier (aucun décès antérieur à 2015) ; valeur alignée sur le délai légal de dépôt.
+- `critere` limité à `beneficiaire_non_identifie` : `sans_evenement` ferait passer R1 en P2 (dernier événement le 2024-09-15).
+- Seuils D02c : ceux des jeux. Ils sont exigés (m8 : six `declarations_requises` sans eux).
+
+Le critère `sans_evenement`, le facteur d'issue < 1 et l'horizon sans dépôt légal ne sont pas sous référence : ils restent couverts par les tests unitaires de `engagement`.
+
+#### 7.8.3 Recoupement par dossier et par contrat (m8 à m10)
+
+Montants en euros, à 1e-10 en tolérance mixte. Notations :
+- F₂ = 1,015 × (1 + 0,024/365) : facteur du 2024-07-01 au 2025-01-01 ;
+- g = 1 + 0,024 × 30/365 : de A à A + 30 jours, taux 2025 en C4, `taux_futur` en C3 ;
+- s = 364/365 ; p₁ = 0,98 / (1 − 0,02 s) ; d₁ = 1 − p₁ ; v₁ = 1,02^(−1/365) ; v₂ = 1,02^(−(1 + 1/365)) ; q₄₂ = 0,03 ;
+- P_z = 2 282,4557058603 (T3) ; 100 000 (d₁ v₁ + p₁ q₄₂ v₂) = 2 946,4431354470.
+
+| Élément | C1 (`recommandees`, 2025-12-31) | C2 (`recommandees`, 2025-01-01) | C3 (`alternatives`, 2025-12-31) | C4 (`alternatives`, 2025-01-01) | Voie indépendante |
+|---|---|---|---|---|---|
+| `DOR1` (P1) | 104 975,3600000000 | 102 521,7407123288 | 105 182,4346827397 | 102 723,9753789394 | C1 = R1 × 1,01 ; C2 = 101 000 F₂ ; C3 = R6 × 1,01 ; C4 = C2 × g |
+| `DOR3` (P1) | 63 765,1463013698 | 102 521,7407123288 | 63 890,9296036630 | 102 723,9753789394 | C1 = R3 × 1,01 ; C2 = `DOR1` (paiement hors de la vue) ; C3 = C1 × g ; C4 = C2 × g |
+| `DOR5A` (P1) | 86 604,6720000000 | 84 580,4360876712 | 86 775,5086132602 | 84 747,2796876250 | C1 = 83 325 × 1,03936 (R5 a) ; C2 = 83 325 F₂ ; C3 = C1 × g ; C4 = C2 × g |
+| `DOR5B` (P1) | 81 880,7808000000 | 79 966,9577556164 | 82 042,2990525370 | 80 124,7007955727 | C1 = 78 780 × 1,03936 (R5 b) ; C2 = 78 780 F₂ ; C3 = C1 × g ; C4 = C2 × g |
+| `DOR4` (P2) | 103 936,0000000000 | 101 506,6739726027 | 127 666,8365965362 | 127 667,0328043410 | C1 = R1 ; C2 = 100 000 F₂ ; C3 = R4 ; C4 = 100 000 F₂ (1 + 0,024 × 364/365) × 1,024⁸ × (1 + 0,024 × 244/365) |
+| `CTI1` (P3) | 3 046,4321195552 | 4 882,6989619377 | 3 046,4321195552 | 4 882,6989619377 | C2, C4 = T2 ; C1, C3 = 2 946,4431354470 + 100 p₁ v₁ |
+| `CTI3` (P3) | 664,2388624387 | 2 593,6728916013 | 761,6838326839 | 2 687,3068050750 | C2 = T3 ; C4 = T5 ; C1 = 2 946,4431354470 − P_z p₁ v₁ ; C3 = 2 946,4431354470 − 2 185 p₁ v₁ |
+| `CTC1` (P3 collectif) | 565,3150684932 | 562,1917808219 | 565,3150684932 | 562,1917808219 | 1 200 × 0,95 × 181/365 (`COC1`) ; 1 200 × 0,95 × 180/365 (`COC2`) |
+
+**Statuts.**
+- Dossiers : `exact` en C1 et C2, sauf `DOR5B` (`jugement_expert`, structure familiale) ; `jugement_expert` partout en C3 et C4 (méthodes « règlement »).
+- Contrats `exact`.
+
+**Flux et indicateurs.**
+- Date des flux de P1 et P2 : 2026-01-01 (C1) ; 2025-01-02 (C2) ; C3 : P1 le 2026-01-30, P2 le 2034-09-01 ; C4 : P1 le 2025-01-31, P2 le 2034-09-01.
+- Échéanciers : 8 lignes (P1), 2 (P2), 6 (P3).
+- Indicateurs : deux lignes `R132_3_1` par poste de P1 et de P2 (2024 `serie_incomplete`, 2025) dans les quatre couples ; six lignes pour P3 ; aucune `methode_revalorisation_mixte`, aucune `depot_cdc_echu`.
+
+#### 7.8.4 Cellules attendues (`deces`, `comptes_sociaux`)
+
+| Cellule | C1 | C2 | C3 | C4 |
+|---|---|---|---|---|
+| P1, `ensemble` (= `collectif_obligatoire`) | 337 225,9591013698 | 369 590,8752679452 | 337 891,1719521999 | 370 319,9312410764 |
+| P2, `ensemble` (= `collectif_obligatoire`) | 103 936,0000000000 | 101 506,6739726027 | 127 666,8365965362 | 127 667,0328043410 |
+| P3, `ensemble` | 4 275,9860504871 | 8 038,5636343610 | 4 373,4310207322 | 8 132,1975478346 |
+| P3, segment `individuel` | 3 710,6709819939 | 7 476,3718535391 | 3 808,1159522391 | 7 570,0057670127 |
+| P3, segment `collectif_obligatoire` | 565,3150684932 | 562,1917808219 | 565,3150684932 | 562,1917808219 |
+| `total`, `ensemble` | 445 437,9451518568 | 479 136,1128749090 | 469 931,4395694683 | 506 119,1615932522 |
+| `total`, segment `individuel` | 3 710,6709819939 | 7 476,3718535391 | 3 808,1159522391 | 7 570,0057670127 |
+| `total`, segment `collectif_obligatoire` | 441 727,2741698629 | 471 659,7410213699 | 466 123,3236172292 | 498 549,1558262394 |
+
+Détail des cellules :
+- `nombre_dossiers` : P1 4, P2 1, P3 0.
+- `statut_methode` : `recommandee` en C1 et C2 ; `alternative` pour les trois postes en C3 et C4.
+- `statut_resultat` : P1 `jugement_expert` partout ; P2 `exact` (C1, C2), `jugement_expert` (C3, C4) ; P3 `approximation_numerique` (segment `individuel` : `exact`) ; total `jugement_expert`.
+- P1 et P2 dans le segment `individuel` : aucun dossier ; montant 0 s'ils sont restitués. Leur présence ou leur absence relève de #67.
+- Les totaux sont des sommes : un écart d'ordre de sommation reste sous 1e-10.
+
+#### 7.8.5 Couverture des méthodes (ADR 0011, point 15)
+
+| Méthode | Statut | Cellules non nulles, `calcule` |
+|---|---|---|
+| `capital_dossier` | recommandée | C1 337 225,96 ; C2 369 590,88 |
+| `capital_revalorise` | recommandée | C1 103 936,00 ; C2 101 506,67 |
+| `individuel:prospective_prime_pure` | recommandée | C1 3 710,67 ; C2 7 476,37 (segment `individuel`) |
+| `collectif:prorata_cotisation` | recommandée | C1 et C3 565,32 ; C2 et C4 562,19 (segment `collectif_obligatoire`) |
+| `capital_dossier_reglement` | alternative | C3 337 891,17 ; C4 370 319,93 |
+| `capital_revalorise_reglement` | alternative | C3 127 666,84 ; C4 127 667,03 |
+| `individuel:prospective_prime_declaree` | alternative | C3 3 808,12 ; C4 7 570,01 (segment `individuel`) |
+
+Le témoin `retrospective` n'est pas restitué, donc hors de la couverture.
+
+#### 7.8.6 Critères de test
+
+1. (R.1) `b2_base_construite_deces_01()` rend exactement les lignes du § 7.8.1. Aux deux arrêtés, avec `plan$donnees` et `plan$conventions` du § 7.8.2, le bilan a `refus_tables`, `declarations_requises`, `vue$visibilite_non_determinee`, `exclusions`, `hypotheses_defaut` et `signalements` vides.
+2. (R.2) Les quatre plans passent `valider_plan()` ; aller-retour `ecrire_plan()` / `lire_plan()` `identical` et octet pour octet.
+3. (R.3) Test à valeurs en dur (nouveau fichier `tests/unitaires/base_construite.R`, ou section de `tests/unitaires/engagement.R`).
+   - Avant #67 : sur `calculer_engagement()` et `calculer_risque_en_cours()` (avec `provisions_individuelles()` et `provisions_collectives()` pour les contrats), chaque montant du § 7.8.3 et chaque cellule `ensemble` du § 7.8.4, ainsi que statuts, `nombre_dossiers`, dates de flux et nombres de lignes d'échéancier.
+   - Comparaison **élément par élément** : \|x − r\| ≤ 1e-10 × max(1, \|r\|), par `verifier()`, jamais par `verifier_egal(tolerance)` (ADR 0011, r3).
+   - Le même test évalue en R de base, sans fonction de `provie`, les formules fermées de la dernière colonne du § 7.8.3 (seconde voie en CI).
+4. (R.4) Non-interférence : chaque dossier et chaque contrat a, dans la base construite, le montant que donne sa base isolée (`b2_base_capital(...)`, `b2_base_p3(...)`) sous le même plan, à 1e-10.
+5. (R.5) Après #67 : les cellules de `calculer_provisions()` pour (poste, segmentation, segment) et `total` égalent le § 7.8.4 ; invariant (a) de l'ADR 0010, point 7.
+6. (R.6) Couverture (ADR 0011, point 15) : la batterie de reproductibilité trouve les sept méthodes du § 7.8.5.
+7. (R.7) Une modification de la base fait échouer la comparaison des empreintes de `fiche.txt` (ADR 0011, point 13).
+
+**Résultats** : valeurs en dur nouvelles ; premiers totaux de C1 à C4 sous visa du mainteneur, adossés à R.3.
+
+### 7.9 Jeu versionné `v1-modeste-03` (#69 ; ADR 0011, point 14 ; erratum v1.0.8)
+
+#### 7.9.1 Objet
+
+Jeu simulé propre (aucun défaut injecté). Il porte ce qu'énumère #69 :
+- contrats individuels temporaires décès à prime unique et à primes périodiques (annuelles et trimestrielles) ;
+- capitaux non réclamés (bénéficiaire `non_identifie`) ;
+- dossiers non fixés à l'arrêté (fixation différée) ;
+- cotisations collectives à périodes non civiles (anniversaire du contrat).
+
+Il vise des montants non nuls de P1, P2 et P3 (deux champs) aux arrêtés 2025-12-31 (égal à l'extraction, V1) et 2024-12-31 (V2), sans aucun défaut de traitement R sur une colonne lue par P1, P2 ou P3. Usage : tests fonctionnels et références, sans portée statistique ; il porte aussi la revue sur mesure de I1 (#70). Extraction : 2025-12-31.
+
+#### 7.9.2 Extension du simulateur : additive
+
+1. **Format de loi vraie version 2.** `VERSION_LOI_VRAIE` passe à 2 et la version 1 reste lue, **sortie inchangée**.
+   - La version 2 comprend toutes les clés de la version 1, avec la même sémantique, plus les clés nouvelles du § 7.9.3, **toutes obligatoires** (aucune valeur par défaut).
+   - Une clé nouvelle dans une loi de version 1 est refusée (`jeu_invalide`, clé inconnue).
+2. **Graines.**
+   - Version 1 : exactement `GRAINES_SIMULATION` (inchangé).
+   - Version 2 : `GRAINES_SIMULATION` plus `individuels` et `suites_deces`.
+   - Ordre des tirages : `population`, `famille`, `sinistres`, `information` (fonctions inchangées), puis `individuels`, puis `suites_deces`, puis les défauts.
+   - Chaque flux nouveau tient en un seul appel d'`avec_graine()`, avec des uniformes de taille fixe par unité (contrat individuel ; décès), pour que le tirage d'une unité ne dépende d'aucune autre (règle du module).
+3. **`VERSION_SIMULATEUR` reste 1** : la sortie de toute entrée admise par la version courante est inchangée, ce qui est la règle d'incrément de `R/simulation.R` (lignes 47 à 60). Les jeux `v1-modeste-01` et `v1-modeste-02` doivent être régénérés à l'octet (critère J.1).
+4. **Tableau de vérité.** `SCHEMA_VERITE`, `COLONNES_REGISTRE`, `DEFAUTS_SIMULES` et la forme du manifeste sont inchangés. Une loi de version 2 aux valeurs neutres (critère J.4) redonne exactement la base et la vérité du jeu de version 1 correspondant.
+
+#### 7.9.3 Loi vraie `LOI_VRAIE_V1_03` (dans `tests/jeux_v1.R`, sans toucher aux définitions existantes)
+
+Chaque valeur est un jugement d'expert déclaré. Base : `LOI_VRAIE_V1`, avec les substitutions et ajouts suivants.
+
+| Clé | Valeur | Motif |
+|---|---|---|
+| `version` | `2L` | format du § 7.9.2 |
+| `portefeuille/type_organisme` | `societe_assurance` | temporaires individuelles d'une entreprise d'assurance (A132-1) ; diversité avec 01 et 02 |
+| `portefeuille/debut_historique` | 2016-01-01 | dix ans d'historique : accumulation des capitaux non réclamés |
+| `portefeuille/nombre_contrats`, `assures_par_contrat` | `6L`, `250L` | volume de test (m14 : 27 décès collectifs saisis à l'extraction) |
+| `portefeuille/age_entree_min`, `age_entree_max` | 30, 58 | population plus âgée : décès en nombre suffisant |
+| autres clés de `portefeuille` | celles de `LOI_VRAIE_V1` | — |
+| `tables/mortalite/qx_femmes`, `qx_hommes` | Makeham (0,0002 ; 0,00002 ; 1,1) et (0,0002 ; 0,00004 ; 1,1) | b doublé par rapport à la v1 : **volume de test**, non réaliste |
+| `garanties/periode_cotisation` (nouvelle) | `anniversaire` | domaine `civile` (comportement de la version 1) ou `anniversaire` |
+| `garanties/deces/majoration_conjoint` (nouvelle) | 0,25 | met la majoration sous calcul avec des familles simulées |
+| `individuels/nombre_contrats` (nouvelle, entier ≥ 0) | `200L` | — |
+| `individuels/derniere_souscription` (Date) | 2025-06-01 | effets au premier du mois, uniformes de `debut_historique` à cette date |
+| `individuels/age_souscription_min`, `_max` | 25, 60 | — |
+| `individuels/part_femmes`, `part_conjoint`, `ecart_age_conjoint_max` | 0,45 ; 0,55 ; 5 | mêmes valeurs que le collectif |
+| `individuels/part_prime_unique` | 0,4 | — |
+| `individuels/duree_prime_unique_min`, `_max` (entiers, ans) | 5, 10 | — |
+| `individuels/duree_periodique_min`, `_max` | 10, 20 | — |
+| `individuels/part_trimestrielle` | 0,5 | primes périodiques trimestrielles, sinon annuelles |
+| `individuels/capitaux` (vecteur, équiprobable) | 50 000 ; 100 000 ; 150 000 ; 200 000 ; 300 000 | — |
+| `individuels/age_fin_garantie` | 70 | des contrats prennent fin par l'âge avant leur terme |
+| `individuels/taux_resiliation` (annuel, primes périodiques) | 0,04 | — |
+| `individuels/taux_tarif/annee`, `/taux` | (2016, 2020, 2023) ; (0,015 ; 0,005 ; 0,015) | taux du dernier palier dont l'année est au plus celle de l'effet ; indicateurs `A132_1` à trois valeurs |
+| `individuels/tarif/q0`, `q2`, `age_ref`, `chargement` | 0,0005 ; 0,00001 ; 18 ; 0,25 | tarif commercial déclaré sur la formule de `mortalite_fictive_v1_03` |
+| `suites_deces/part_non_reclames` (nouvelle) | 0,20 | **intensité de test** |
+| `suites_deces/part_fixation_differee` | 0,50 | **intensité de test** |
+| `suites_deces/delai_fixation_differee` (jours, moyenne) | 1 095 | **intensité de test** |
+| `defauts/*` | 0 | jeu propre (ADR 0011, point 14) |
+
+#### 7.9.4 Graines et règles des mécanismes nouveaux
+
+**Graines** : `population` 190301, `famille` 190302, `sinistres` 190303, `information` 190304, `individuels` 190305, `suites_deces` 190306, `defauts` 190400 (convention de `GRAINES_V1`).
+
+**Contrats individuels (flux `individuels`).** Uniformes de taille fixe par contrat.
+- *Tirage d'un contrat.*
+  - Effet : `.debut_mois(debut_historique, floor(u × (M + 1)))`, M = nombre de mois jusqu'à `derniere_souscription`.
+  - Âge réel uniforme ; naissance = effet − floor(âge × 365,25) − floor(u' × 28) ; sexe ; conjoint et écart d'âge comme au collectif.
+  - Nature : prime unique avec la probabilité `part_prime_unique`, sinon trimestrielle (`part_trimestrielle`) ou annuelle.
+  - Durée : entier uniforme sur la plage de la nature ; `date_terme` = effet + 12 × durée mois.
+  - Capital : tiré dans `capitaux`.
+  - Taux du tarif : palier de l'année d'effet.
+  - Tarif commercial : q_t(x) = q0 + q2 × (x − age_ref)², x = âge revolu à l'effet + durée / 2 ; taux annuel = q_t(x) × (1 + chargement).
+  - `prime_periodique` = round(capital × taux annuel / n, 2), n = 1 (annuelle) ou 4 (trimestrielle) ; prime unique = round(capital × taux annuel × durée, 2).
+- *Trajectoire.* Décès seul, par pas de 30 jours, de l'effet au plus tôt de la fin de garantie (terme, 70 ans), de la résiliation et de l'extraction, sous `tables/mortalite` du sexe, comme au collectif sans incidence.
+- *Résiliation (primes périodiques seulement).* Notification = effet + floor(−log1p(−u) / `taux_resiliation` × 365,25) ; fin à la première échéance qui suit strictement la notification, si elle précède la fin de garantie.
+- *Délais d'information du sinistre éventuel.* Mêmes rubriques que `.tirer_information()`, plus la saisie de la fin de contrat (cadence `saisie_radiation`).
+- *Lignes écrites dans les tables.*
+  - `contrats` : `individuel`, `id_assure`, `date_terme`, `mois_echeance` = mois de l'effet, `jour_echeance` 1, `preavis_mois` 2, `tacite_reconduction` FALSE, `gestionnaire` `interne`, `date_debut_gestion` = effet. Fin connue à l'extraction seulement (règle des affiliations : fin et saisie de fin au plus tard à l'extraction), de motif `terme` (terme ou âge), `resiliation_adherent` ou `deces_assure` (saisie de fin = saisie du sinistre).
+  - `garanties_souscrites` : `deces`, `college` `ensemble`, `forfait`, `option_iad` FALSE, `periodicite_cotisation`, `taux_technique_tarif`, `clause_type_beneficiaire` `conjoint_enfants_heritiers`.
+  - `parametres` : `capital_forfaitaire`, `age_fin_garantie`, `prime_periodique` (primes périodiques).
+  - `cotisations` : prime unique, une émission à l'effet + `emission_cotisation`, période de l'effet à `date_terme` − 1 ; primes périodiques, une émission par échéance antérieure à la fin. Encaissement au délai de la loi ; mouvements au plus tard à l'extraction.
+  - Décès : même chaîne que le collectif (dossier, fixation du capital = `capital_forfaitaire`, règlement, clôture, famille, bénéficiaire), suites du décès comprises.
+- *Identifiants.* Préfixes nouveaux : `CI%03d`, `GI%03d`, `AI%04d`, `MI%04d`. Tables partagées : numérotation commune, aux règles de tri actuelles.
+
+**Suites des décès (flux `suites_deces`).** Trois uniformes par décès, collectif puis individuel, dans l'ordre d'assemblage.
+- *Non réclamé* (u₁ < `part_non_reclames`) :
+  - bénéficiaire `non_identifie`, `id_membre` NA, saisi au plus tard de l'ouverture et de l'instruction ; la ligne de `famille` du conjoint est écrite s'il existe ;
+  - capital fixé (en différé si le décès est aussi tiré en fixation différée) ;
+  - aucune prestation, aucune clôture ;
+  - vérité : une ligne de `flux_futurs`, `capital`, datée du dépôt à la date de déclaration + 10 ans (anniversaire), montant nominal fixé.
+- *Fixation différée* (u₂ < `part_fixation_differee`) : fixation = max(instruction, ouverture) + `.delai(u₃, delai_fixation_differee)` ; règlement et clôture suivent (sauf non réclamé).
+- En version 1 : ni tirage ni effet.
+
+**Collectif en version 2.**
+- Capital fixé = round((`taux_capital` + `majoration_conjoint` × conjoint) × salaire, 2). Ligne `majoration_conjoint` écrite si > 0.
+- `periode_cotisation = anniversaire` : périodes [effet + 12k mois ; effet + 12(k + 1) mois − 1 jour] ; mêmes émission, encaissement et assiette (salaires des membres au début × jours / 365) ; `mois_echeance` = mois de l'effet.
+
+#### 7.9.5 Déclarations, description, limites
+
+**Déclarations** (`declarations.txt`) : celles de la v1 (`.seuils_v1`, `.conventions_v1`).
+
+**Description** proposée : « Jeu propre du capital décès et des garanties liées : six contrats collectifs (périodes de cotisation à l'anniversaire, majoration du conjoint) et deux cents temporaires décès individuelles à prime unique ou périodique ; capitaux non réclamés et fixations différées, à des intensités de test. » Elle est suivie de la phrase d'usage et des limites.
+
+**Limites.**
+- L1 à L5 de la v1 (part collective).
+- L6 : vérité d'un capital non réclamé = dépôt nominal, revalorisation légale non simulée.
+- L7 : intensités des suites des décès et mortalité relevée, volume de test.
+- L8 : tarif individuel = formule déclarée sur la table fictive, non un tarif de marché.
+- L9 : aucun défaut injecté.
+- L10 : aucun enfant (`majoration_enfant` absente).
+
+#### 7.9.6 Plan `recommandees` des jeux (couples J1 à J4, V1, V2)
+
+Même fonction pour les trois jeux : seuls changent l'arrêté et `donnees` / `conventions` (repris de `declarations.txt`). Tables : `b2_tables_v1_03()` (à ajouter à `tests/b2_bases.R`, valeurs du § 3.6).
+
+```r
+plan_reference_jeu <- function(jeu, arrete, tables) {
+  reconst <- list(taux_sans_suite = 0, probabilite_reconnaissance_iad = 1,
+                  structure_familiale = list(taux_conjoint = 0.55, nombre_enfants = 0),
+                  age_limite_enfant_majoration = 26L, liens_conjoint_majoration = c("concubin", "conjoint", "partenaire_pacs"))
+  list(version_plan = 1L, arrete = arrete,
+    perimetre = list(garanties = "deces", referentiels = "comptes_sociaux", segmentations = list()),
+    tables = list(
+      mortalite_tarif = list(identifiant = "mortalite_fictive_v1_03", empreinte = tables$mortalite_tarif$origine$empreinte,
+                             statut = "fictive", hors_axes = "refus"),
+      serie_tme = list(identifiant = "tme_fictive_v1_03", empreinte = tables$serie_tme$origine$empreinte, statut = "fictive",
+                       hors_axes = "refus", decalage_publication_mois = 1L)),
+    taux = list(deces = list(provision_mathematique_temporaire_deces = list(comptes_sociaux = "taux_tarif"))),
+    frais = list(deces = list(
+      sinistres_declares_non_regles = list(comptes_sociaux = list(taux_chargement_psap = 0.01)),
+      capitaux_non_reclames = list(comptes_sociaux = list(taux_chargement_psap = 0.01)),
+      provision_mathematique_temporaire_deces = list(comptes_sociaux = list(
+        taux_chargement_gestion = 0.001, taux_chargement_acquisition = 0.01, taux_chargement_cotisation = 0.05)))),
+    revalorisation = list(capital_deces = list(taux_par_annee = c(`2016` = 0.02, `2017` = 0.02, `2018` = 0.02,
+      `2019` = 0.02, `2020` = 0.02, `2021` = 0.01, `2022` = 0.01, `2023` = 0.0167, `2024` = 0.03, `2025` = 0.03),
+      prorata = "simple")),
+    conventions = c(list(age = "revolu", instant_date = "fin_journee", repartition_annee = "uniforme",
+                         fractionnement = "echeances_exactes", decompte_jours = "exact_exact"),
+                    jeu$declarations$conventions[setdiff(names(jeu$declarations$conventions), "age")]),
+    postes = list(deces = list(
+      sinistres_declares_non_regles = list(methode = "capital_dossier", parametres = reconst),
+      capitaux_non_reclames = list(methode = "capital_revalorise", parametres = c(list(critere = "beneficiaire_non_identifie"), reconst)),
+      provision_mathematique_temporaire_deces = list(
+        individuel = list(methode = "prospective_prime_pure", parametres = list(pas = "an", paiement_capital = "fin_pas", plancher = "par_contrat")),
+        collectif = list(methode = "prorata_cotisation", parametres = list())))),
+    donnees = jeu$declarations$declarations,
+    restitution = list(echeanciers = "aucun", triangles = "aucun"), liens = list(), graine = 1L)
+}
+```
+
+**Motifs des valeurs.**
+- `taux_tarif` : provision au taux de chaque tarif, branche non couverte par C1 à C4.
+- `taux_par_annee` : minima `R132_3_1` de `tme_fictive_v1_03` (2023 arrondi au-dessus, à 0,0167) ; il couvre de 2016, début de l'historique, à 2025.
+- `structure_familiale` (0,55 ; 0) : déclaration de type oracle (part de conjoints de la loi vraie, aucun enfant), légitime pour un test fonctionnel, comme les délais de D03g des jeux.
+- Mesure m16 (jeux 01 et 02) : plans valides ; résultats conformes à r1 de l'ADR 0011.
+
+#### 7.9.7 Critères d'acceptation (#69) et critères de visa (M188)
+
+Acceptation (`coder-approfondi`, vérifiée par `audit`) :
+1. (J.1) Avec le code nouveau, `v1-modeste-01` et `v1-modeste-02` sont régénérés à l'octet (test d'identité existant vert) ; `VERSION_SIMULATEUR` vaut 1 ; une loi de version 1 est lue.
+2. (J.2) Contrôles de la version 2 : chaque clé nouvelle est exigée ; domaines (probabilités dans [0 ; 1], durées min ≤ max, paliers croissants et de même longueur, `periode_cotisation` en liste fermée) ; clé nouvelle refusée en version 1 ; noms de graines selon la version. Un témoin par refus.
+3. (J.3) Indépendance des flux : changer la graine `individuels` ne change aucune ligne collective ; changer `suites_deces` ne change que les qualités de bénéficiaires, les dates de fixation, les prestations et les clôtures des décès touchés.
+4. (J.4) Additivité : la loi de `v1-modeste-01` passée en version 2 aux valeurs neutres (`periode_cotisation` `civile`, `majoration_conjoint` 0, `individuels/nombre_contrats` 0, parts des suites 0) rend une base et une vérité `identical` à celles de `v1-modeste-01`.
+5. (J.5) Deux appels donnent des jeux `identical` ; `ecrire_jeu()` puis `lire_jeu()` donne un aller-retour exact.
+6. (J.6) Temps de `simuler_base()` sur `v1-modeste-03` mesuré et consigné ; référence : 0,95 s pour le flux collectif seul (m14).
+
+Visa du jeu (mesuré par `coder-approfondi`, validé par `actuary`, puis visa du mainteneur, `date_visa`, M188) :
+1. (V.1) Aux arrêtés 2024-12-31 et 2025-12-31, avec `declarations.txt` : `declarations_requises`, `refus_tables` et visibilités non déterminées de motif R vides ; registre des défauts vide.
+2. (V.2) À chaque arrêté, avec le plan du § 7.9.6 : P1, P2 et P3 `calcule`, de montant > 0.
+3. (V.3) À chaque arrêté :
+   - ≥ 1 dossier de P2 ;
+   - ≥ 1 dossier de P1 `capital_du` ;
+   - ≥ 1 dossier de P1 `ouvert` reconstitué sur un contrat collectif ;
+   - P3 individuel : ≥ 1 contrat valorisé de chaque nature (prime unique, annuelle, trimestrielle) ;
+   - P3 collectif > 0, tiré d'au moins une période non civile.
+4. (V.4) Tout dossier collectif ouvert à un arrêté a une affiliation qui couvre sa survenance (m14 : 27 sur 27 sur le flux collectif).
+5. (V.5) Pour chaque dossier `capital_du` sans paiement, le montant fixé égale le montant de vérité (règlement futur ou dépôt).
+6. (V.6) ≥ 1 contrat individuel exclu de P3 par un décès ; ≥ 1 contrat dont la fin est connue.
+7. (V.7) Recoupement : pour chaque dossier de P2 en V1, montant = capital fixé × F(survenance, A) × 1,01, recalculé dans le test par une voie indépendante.
+
+**Espérances, non des mesures** (approximation de Poisson sur le flux collectif mesuré, m14 ; décès individuels en sus) :
+- capitaux non réclamés : 4,6 au 2024-12-31 et 5,4 au 2025-12-31 ;
+- dossiers de P1 ouverts hors non réclamés : 4,0 et 4,3 ;
+- probabilité d'un zéro par arrêté : 1 % à 2 %.
+
+**Échec d'un critère V** (décision du mainteneur du 11/11/2026, D3) : si un critère V échoue sous les graines déclarées, la graine `suites_deces` passe à l'entier suivant (190307, puis 190308…), la loi vraie restant inchangée ; chaque essai (graine, critère en échec) est consigné dans la description du jeu.
 
 ## 8. Corps proposés des issues (1) à (4)
 
@@ -809,7 +1195,7 @@ ADR 0009 : annotation du point 3 (aucune table embarquée en B2, décision du ma
 
 ### 10.2 Points d'attention (non bloquants pour (1) à (3) ; à voir avant (4))
 
-- **A1 — premiers totaux sans contenu.** Sur les deux jeux versionnés, aux deux arrêtés de M240, P1, P2 et P3 sont nuls dans `v1-modeste-01` (dossiers `deces` tous clos le 2024-10-09 au plus tard, cotisations à périodes civiles : m4, m5), et P1, P2 et le total sont arrêtés dans `v1-modeste-02` (m6). Les premières références ne vérifieraient donc aucune valeur non nulle du capital décès. Recommandation : (i) ajouter aux références de l'ADR 0011 un plan de référence sur une base construite des tests (cas du § 7.4 réunis) ; (ii) créer un jeu versionné qui porte des contrats individuels temporaires et des dossiers ouverts à l'arrêté (IP1). À trancher par le mainteneur avec l'ADR 0011 (M240).
+- **A1 — premiers totaux sans contenu.** Sur les deux jeux versionnés, aux deux arrêtés de M240, P1, P2 et P3 sont nuls dans `v1-modeste-01` (dossiers `deces` tous clos le 2024-10-09 au plus tard, cotisations à périodes civiles : m4, m5), et P1, P2 et le total sont arrêtés dans `v1-modeste-02` (m6). Les premières références ne vérifieraient donc aucune valeur non nulle du capital décès. Recommandation : (i) ajouter aux références de l'ADR 0011 un plan de référence sur une base construite des tests (cas du § 7.4 réunis) ; (ii) créer un jeu versionné qui porte des contrats individuels temporaires et des dossiers ouverts à l'arrêté (IP1). À trancher par le mainteneur avec l'ADR 0011 (M240). **Soldé** (ADR 0011 accepté, M256 à M260 ; erratum v1.0.8) : (i) base construite `construite-deces-01`, couples C1 à C4 (§ 7.8) ; (ii) jeu `v1-modeste-03`, couples V1 et V2 (§ 7.9).
 - **A2 — total sans tardifs.** Le total `deces` de B2 est la somme de P1, P2 et P3 ; P4 (tardifs) entre en B3. La fiche le dit par la liste des postes ; la documentation de fond et le futur rapport figé doivent le dire en clair.
 - **A3 — portée colonne d'un refus de valeur hors de la vue.** Une seule indemnité journalière de signe inversé arrête P1 et P2 du capital décès (`v1-modeste-02`, m6), parce que le refus D09 sur `prestations.montant` est de portée colonne (dictionnaire, § 1.10, règle visée). Une portée restreinte aux lignes que le poste lit relèverait du dictionnaire `1.6` (IP4).
 
