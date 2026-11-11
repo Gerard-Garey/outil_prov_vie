@@ -3,8 +3,9 @@
 # déclarations et conventions de controler_base(). Sourcé par tests/test_reproductibilite.R et
 # tests/unitaires/simulation.R.
 # La session principale écrit les jeux versionnés après le visa du mainteneur (M188), sa date
-# portée dans DATE_VISA_V1 ci-dessous, depuis la racine du dépôt, package provie installé :
-#   rm -rf inst/extdata/jeux/v1-modeste-01 inst/extdata/jeux/v1-modeste-02
+# portée dans DATE_VISA_V1 (ou DATE_VISA_V1_03) ci-dessous, depuis la racine du dépôt, package
+# provie installé (un seul jeu : remplacer names(JEUX_V1) par son nom) :
+#   rm -rf inst/extdata/jeux/v1-modeste-01 inst/extdata/jeux/v1-modeste-02 inst/extdata/jeux/v1-modeste-03
 #   Rscript -e 'library(provie); source("tests/jeux_v1.R"); for (j in names(JEUX_V1))
 #     ecrire_jeu(simuler_jeu_v1(j), file.path("inst/extdata/jeux", j))'
 # Un jeu versionné ne change jamais en place (ADR 0008) : modifier une définition ci-dessous fait
@@ -199,15 +200,107 @@ JEUX_V1 <- list(
                    cloture_sans_justificatif = 0.1, montant_aberrant = 0.05, instruction_absente = 0.5),
     declarations = list(declarations = .declarations_v1_02, conventions = .conventions_v1)))
 
-# Loi vraie d'un jeu : celle de la v1, intensités de défauts du jeu substituées.
-loi_vraie_v1 <- function(nom) {
+# --- Jeu v1-modeste-03 (#69 ; spécification de B2, § 7.9 ; ADR 0011, point 14) ------------
+# Jeu propre du capital décès : loi vraie au format version 2 (§ 7.9.2), base LOI_VRAIE_V1 avec
+# les substitutions et ajouts du § 7.9.3, chacun jugement d'expert déclaré ; intensités de test
+# et mortalité relevée (volume de test, non réaliste). Les définitions de v1-modeste-01 et
+# v1-modeste-02 ci-dessus restent inchangées.
+LOI_VRAIE_V1_03 <- local({
   lv <- LOI_VRAIE_V1
+  lv$version <- 2L                                  # format version 2 (§ 7.9.2)
+  lv$description <- .u8(paste(
+    "Portefeuille modeste du capital d\u00e9c\u00e8s (#69) : six contrats collectifs obligatoires de deux cent",
+    "cinquante assur\u00e9s \u00e0 garanties li\u00e9es d\u00e9c\u00e8s, incapacit\u00e9 et invalidit\u00e9, et deux cents temporaires",
+    "d\u00e9c\u00e8s individuelles ; dix ans d'historique."))
+  lv$statut <- .u8(paste(
+    "Jugement d'expert d\u00e9clar\u00e9, sans calibration sur une r\u00e9f\u00e9rence (sp\u00e9cification de B2, \u00a7 7.9.3) ;",
+    "intensit\u00e9s des suites des d\u00e9c\u00e8s et mortalit\u00e9 relev\u00e9e : volume de test, non r\u00e9aliste."))
+  # Portefeuille collectif (statut : jugement d'expert déclaré).
+  lv$portefeuille$type_organisme <- "societe_assurance"    # temporaires individuelles (A132-1) ; diversité avec 01 et 02
+  lv$portefeuille$debut_historique <- as.Date("2016-01-01")   # dix ans : accumulation des capitaux non réclamés
+  lv$portefeuille$nombre_contrats <- 6L             # volume de test (m14)
+  lv$portefeuille$assures_par_contrat <- 250L
+  lv$portefeuille$age_entree_min <- 30              # population plus âgée : décès en nombre suffisant
+  lv$portefeuille$age_entree_max <- 58
+  # Mortalité de Makeham, b doublé par rapport à la v1 : volume de test, non réaliste.
+  lv$tables$mortalite$qx_femmes <- .qx_makeham(.ages_mortalite, 0.0002, 0.00002, 1.1)
+  lv$tables$mortalite$qx_hommes <- .qx_makeham(.ages_mortalite, 0.0002, 0.00004, 1.1)
+  lv$garanties$periode_cotisation <- "anniversaire" # périodes de cotisation non civiles (P3 collectif)
+  lv$garanties$deces$majoration_conjoint <- 0.25    # majoration du conjoint sous calcul, familles simulées
+  lv$individuels <- list(
+    nombre_contrats = 200L,
+    derniere_souscription = as.Date("2025-06-01"),  # effets au premier du mois, de debut_historique à cette date
+    age_souscription_min = 25, age_souscription_max = 60,
+    part_femmes = 0.45, part_conjoint = 0.55, ecart_age_conjoint_max = 5,   # mêmes valeurs que le collectif
+    part_prime_unique = 0.4,
+    duree_prime_unique_min = 5L, duree_prime_unique_max = 10L,              # années entières
+    duree_periodique_min = 10L, duree_periodique_max = 20L,
+    part_trimestrielle = 0.5,                       # primes périodiques trimestrielles, sinon annuelles
+    capitaux = c(50000, 100000, 150000, 200000, 300000),   # équiprobables
+    age_fin_garantie = 70,                          # des contrats prennent fin par l'âge avant leur terme
+    taux_resiliation = 0.04,                        # annuel, primes périodiques
+    taux_tarif = list(annee = c(2016L, 2020L, 2023L), taux = c(0.015, 0.005, 0.015)),   # trois valeurs d'A132_1
+    tarif = list(q0 = 0.0005, q2 = 0.00001, age_ref = 18, chargement = 0.25))       # formule de mortalite_fictive_v1_03
+  lv$suites_deces <- list(part_non_reclames = 0.20, # intensités de test
+                          part_fixation_differee = 0.50,
+                          delai_fixation_differee = 1095)   # jours, moyenne
+  # defauts : tous nuls (jeu propre, ADR 0011, point 14), repris de LOI_VRAIE_V1
+  lv[c("version", "description", "statut", "portefeuille", "garanties", "individuels", "suites_deces", "tables",
+       "cadences", "defauts")]
+})
+
+# Graines (convention de GRAINES_V1), dans l'ordre des tirages de la version 2, déclarées sans
+# sélection (décision du mainteneur du 11 novembre 2026, option (d), erratum v1.0.11) : aucune
+# n'est choisie d'après le résultat d'un critère V ; la recherche de graine suites_deces de la
+# règle D3 (onze essais en échec sous 190306 à 190316, puis 190317 retenue à tort : son seul
+# dossier de P1 capital_du était déjà payé) est abandonnée et consignée dans la description du
+# jeu (.ESSAIS_V1_03).
+GRAINES_V1_03 <- list(population = 190301L, famille = 190302L, sinistres = 190303L, information = 190304L,
+                      individuels = 190305L, suites_deces = 190306L, defauts = 190400L)
+# Date du visa du mainteneur (M188) : visa donné le 11 novembre 2026 ; le jeu est écrit à cette date.
+DATE_VISA_V1_03 <- as.Date("2026-11-11")
+
+# Phrase d'usage et limites (spécification de B2, § 7.9.1 et § 7.9.5).
+.USAGE_V1_03 <- paste(
+  "Usage : tests fonctionnels et r\u00e9f\u00e9rences, sans port\u00e9e statistique ; revue sur mesure de I1 (#70).",
+  "Limites : celles de v1-modeste-01 pour la part collective (pas de 30 jours, tous les arr\u00eats d\u00e9clar\u00e9s,",
+  "d\u00e9lais exponentiels sans queue, volume de test, \u00e2ge de fin de garantie collectif jamais atteint) ;",
+  "v\u00e9rit\u00e9 d'un capital non r\u00e9clam\u00e9 = d\u00e9p\u00f4t nominal, revalorisation l\u00e9gale non simul\u00e9e ;",
+  "intensit\u00e9s des suites des d\u00e9c\u00e8s et mortalit\u00e9 relev\u00e9e, volume de test ; tarif individuel = formule",
+  "d\u00e9clar\u00e9e sur la table fictive, non un tarif de march\u00e9 ; aucun d\u00e9faut inject\u00e9 ; aucun enfant ;",
+  "capital pay\u00e9 au nominal par le simulateur, sans la revalorisation l\u00e9gale de la survenance au r\u00e8glement : un",
+  "dossier pay\u00e9 de cl\u00f4ture non saisie \u00e0 l'arr\u00eat\u00e9 garde sous capital_dossier un solde \u00e9gal \u00e0 cette revalorisation,",
+  "que la v\u00e9rit\u00e9 ne porte pas (\u00e9cart de mod\u00e8le, non une erreur du moteur).")
+
+# Recherche de graine abandonnée (décision du mainteneur du 11 novembre 2026, option (d),
+# erratum v1.0.11, qui remplace la règle D3 de l'erratum v1.0.8).
+.ESSAIS_V1_03 <- paste(
+  "Graines d\u00e9clar\u00e9es sans s\u00e9lection (d\u00e9cision du mainteneur du 11 novembre 2026, option (d), erratum",
+  "v1.0.11), suites_deces 190306 comprise ; la recherche de graine de la r\u00e8gle D3 (onze essais en \u00e9chec du",
+  "seul crit\u00e8re P1 capital_du, retir\u00e9 de V.3, sous 190306 \u00e0 190316, puis 190317 retenue \u00e0 tort : son",
+  "seul dossier de P1 capital_du \u00e9tait d\u00e9j\u00e0 pay\u00e9) est abandonn\u00e9e.")
+
+JEUX_V1$`v1-modeste-03` <- list(
+  description = .u8(paste(
+    "Jeu propre du capital d\u00e9c\u00e8s et des garanties li\u00e9es : six contrats collectifs (p\u00e9riodes de",
+    "cotisation \u00e0 l'anniversaire, majoration du conjoint) et deux cents temporaires d\u00e9c\u00e8s individuelles",
+    "\u00e0 prime unique ou p\u00e9riodique ; capitaux non r\u00e9clam\u00e9s et fixations diff\u00e9r\u00e9es, \u00e0 des intensit\u00e9s",
+    "de test. declarations.txt : celles de v1-modeste-01.", .USAGE_V1_03, .ESSAIS_V1_03)),
+  defauts = list(),
+  declarations = list(declarations = list(seuils = .seuils_v1), conventions = .conventions_v1))
+
+# Loi vraie, graines et date de visa d'un jeu : celles de la v1 (intensités de défauts du jeu
+# substituées) ; celles de v1-modeste-03 pour ce jeu.
+loi_vraie_v1 <- function(nom) {
+  lv <- if (identical(nom, "v1-modeste-03")) LOI_VRAIE_V1_03 else LOI_VRAIE_V1
   for (p in names(JEUX_V1[[nom]]$defauts)) lv$defauts[[p]] <- JEUX_V1[[nom]]$defauts[[p]]
   lv
 }
+graines_v1 <- function(nom) if (identical(nom, "v1-modeste-03")) GRAINES_V1_03 else GRAINES_V1
+date_visa_v1 <- function(nom) if (identical(nom, "v1-modeste-03")) DATE_VISA_V1_03 else DATE_VISA_V1
 
-simuler_jeu_v1 <- function(nom, date_visa = DATE_VISA_V1) {
+simuler_jeu_v1 <- function(nom, date_visa = date_visa_v1(nom)) {
   j <- JEUX_V1[[nom]]
-  provie::simuler_base(loi_vraie_v1(nom), GRAINES_V1, DATE_EXTRACTION_V1, nom = nom, description = j$description,
+  provie::simuler_base(loi_vraie_v1(nom), graines_v1(nom), DATE_EXTRACTION_V1, nom = nom, description = j$description,
                        declarations = j$declarations, date_visa = date_visa)
 }

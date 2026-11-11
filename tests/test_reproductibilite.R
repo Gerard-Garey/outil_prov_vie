@@ -79,8 +79,8 @@ for (nom in names(JEUX_V1)) {
   verifier_egal(paste0(nom, " : entrées versionnées = définitions de tests/jeux_v1.R (loi vraie, graines, ",
                        "extraction, description, déclarations, visa)"),
                 list(relu$loi_vraie, m$graines, m$date_extraction, m$description, relu$declarations, m$date_visa),
-                list(loi_vraie_v1(nom), GRAINES_V1, DATE_EXTRACTION_V1, JEUX_V1[[nom]]$description,
-                     JEUX_V1[[nom]]$declarations, DATE_VISA_V1))
+                list(loi_vraie_v1(nom), graines_v1(nom), DATE_EXTRACTION_V1, JEUX_V1[[nom]]$description,
+                     JEUX_V1[[nom]]$declarations, date_visa_v1(nom)))
   verifier_egal(paste0(nom, " : simuler_jeu_v1() identique au jeu versionné (hors version_provie)"),
                 sans_version(simuler_jeu_v1(nom), m$version_provie), relu)
   # octets (réserve m5) : à version égale, empreintes.md5 entier ; sinon, toutes ses lignes hors
@@ -104,9 +104,10 @@ for (nom in names(JEUX_V1)) {
     }))
   }
   # date de visa renseignée (onzième série, (d) ; M188) : le contrôle bascule de lui-même quand la
-  # session renseigne DATE_VISA_V1 et réécrit les jeux
-  if (is.na(DATE_VISA_V1)) {
-    attendu_echec(paste0(nom, " : date_visa renseignée"), "#19, visa du mainteneur en attente (M188)",
+  # session renseigne la date de visa du jeu (DATE_VISA_V1, DATE_VISA_V1_03) et réécrit le jeu
+  if (is.na(date_visa_v1(nom))) {
+    attendu_echec(paste0(nom, " : date_visa renseignée"),
+                  paste0(if (identical(nom, "v1-modeste-03")) "#69" else "#19", ", visa du mainteneur en attente (M188)"),
                   !is.na(m$date_visa))
   } else {
     verifier(paste0(nom, " : date_visa renseignée"), !is.na(m$date_visa))

@@ -560,3 +560,275 @@ for (champ in c("loi_vraie", "manifeste", "declarations")) {
   verifier(paste0("ecrire_jeu() : attribut de ", champ, " : liste_invalide (ecrire_liste()), aucun dossier créé (audit m1)"),
            motif_de(ecrire_jeu(porte, d9)) == "liste_invalide" && !file.exists(d9))
 }
+
+section("simulation : loi vraie version 2 et jeu v1-modeste-03 (#69 ; spécification de B2, § 7.9.2 et § 7.9.7, J.1 à J.5)")
+lv3 <- LOI_VRAIE_V1_03
+G3 <- GRAINES_V1_03
+sim3 <- function(loi = lv3, graines = G3, date = A) simuler_base(loi, graines, date, nom = "v1-modeste-03", description = "essai")
+avec <- function(l, chemin, valeur) { l[[strsplit(chemin, "/", fixed = TRUE)[[1L]]]] <- valeur; l }
+# J.1 : version du simulateur inchangée, version 1 lue (identité des jeux 01 et 02 :
+# tests/test_reproductibilite.R)
+verifier("J.1 : VERSION_SIMULATEUR vaut 1, VERSION_LOI_VRAIE vaut 2 ; une loi de version 1 est lue",
+         identical(ns$VERSION_SIMULATEUR, 1L) && identical(ns$VERSION_LOI_VRAIE, 2L) && inherits(j1, "jeu_simule") &&
+           identical(j1$loi_vraie$version, 1L))
+# J.2 : contrôles de la version 2, un témoin par refus
+chemins_v2 <- vapply(ns$.SCHEMA_LOI_VRAIE_V2, `[`, "", 1L)
+absente <- vapply(chemins_v2, function(ch) {
+  l <- lv3
+  parties <- strsplit(ch, "/", fixed = TRUE)[[1L]]
+  l[[parties]] <- NULL
+  motif_de(sim3(loi = l)) == "jeu_invalide"
+}, NA)
+verifier(paste0("J.2 : chaque clé nouvelle est exigée (", length(chemins_v2), " clés, aucune valeur par défaut) : jeu_invalide"),
+         all(absente))
+cas_j2 <- list(
+  list("version 3", function() sim3(loi = avec(lv3, "version", 3L))),
+  list("individuels/part_femmes > 1", function() sim3(loi = avec(lv3, "individuels/part_femmes", 1.5))),
+  list("individuels/part_conjoint > 1", function() sim3(loi = avec(lv3, "individuels/part_conjoint", 1.01))),
+  list("individuels/part_prime_unique > 1", function() sim3(loi = avec(lv3, "individuels/part_prime_unique", 2))),
+  list("individuels/part_trimestrielle > 1", function() sim3(loi = avec(lv3, "individuels/part_trimestrielle", 1.2))),
+  list("suites_deces/part_non_reclames > 1", function() sim3(loi = avec(lv3, "suites_deces/part_non_reclames", 1.1))),
+  list("suites_deces/part_fixation_differee négative", function() sim3(loi = avec(lv3, "suites_deces/part_fixation_differee", -0.1))),
+  list("individuels/taux_resiliation négatif", function() sim3(loi = avec(lv3, "individuels/taux_resiliation", -0.04))),
+  list("individuels/nombre_contrats non entier", function() sim3(loi = avec(lv3, "individuels/nombre_contrats", 200))),
+  list("durées de prime unique min > max", function() sim3(loi = avec(lv3, "individuels/duree_prime_unique_min", 11L))),
+  list("durées périodiques min > max", function() sim3(loi = avec(lv3, "individuels/duree_periodique_max", 9L))),
+  list("durée minimale nulle", function() sim3(loi = avec(lv3, "individuels/duree_prime_unique_min", 0L))),
+  list("âges de souscription min > max", function() sim3(loi = avec(lv3, "individuels/age_souscription_min", 61))),
+  list("âge de souscription maximal non inférieur à l'âge de fin de garantie",
+       function() sim3(loi = avec(lv3, "individuels/age_fin_garantie", 60))),
+  list("âge de souscription maximal à moins de 28 jours de l'âge de fin de garantie (décalage de naissance tiré)",
+       function() sim3(loi = avec(lv3, "individuels/age_souscription_max", 70 - 27 / 365.25))),
+  list("capitaux contenant NA", function() sim3(loi = avec(lv3, "individuels/capitaux", c(50000, NA, 300000)))),
+  list("paliers du taux du tarif non croissants",
+       function() sim3(loi = avec(lv3, "individuels/taux_tarif/annee", c(2016L, 2023L, 2020L)))),
+  list("paliers du taux du tarif de longueurs différentes",
+       function() sim3(loi = avec(lv3, "individuels/taux_tarif/taux", c(0.015, 0.005)))),
+  list("premier palier postérieur à l'année du début de l'historique",
+       function() sim3(loi = avec(lv3, "individuels/taux_tarif/annee", c(2017L, 2020L, 2023L)))),
+  list("periode_cotisation hors liste fermée", function() sim3(loi = avec(lv3, "garanties/periode_cotisation", "mensuelle"))),
+  list("dernière souscription postérieure à l'extraction",
+       function() sim3(loi = avec(lv3, "individuels/derniere_souscription", as.Date("2026-01-01")))),
+  list("dernière souscription antérieure au début de l'historique",
+       function() sim3(loi = avec(lv3, "individuels/derniere_souscription", as.Date("2015-12-01")))),
+  list("clé nouvelle (garanties/periode_cotisation) dans une loi de version 1",
+       function() sim(loi = avec(lv, "garanties/periode_cotisation", "civile"))),
+  list("section nouvelle (suites_deces) dans une loi de version 1", function() sim(loi = c(lv, list(suites_deces = lv3$suites_deces)))),
+  list("graines de la version 1 pour une loi de version 2", function() sim3(graines = GRAINES_V1)),
+  list("graines de la version 2 pour une loi de version 1", function() sim(graines = G3)))
+for (k in cas_j2) verifier_egal(paste0("J.2 : ", k[[1L]], " : jeu_invalide"), motif_de(k[[2L]]()), "jeu_invalide")
+verifier("J.2 : témoin : periode_cotisation civile, aucun contrat individuel, parts des suites nulles : admis",
+         inherits(sim3(loi = { l <- avec(lv3, "garanties/periode_cotisation", "civile")
+                               l <- avec(l, "individuels/nombre_contrats", 0L)
+                               avec(l, "suites_deces/part_non_reclames", 0) }), "jeu_simule"))
+
+j3 <- simuler_jeu_v1("v1-modeste-03")
+b3 <- j3$base
+# J.3 : indépendance des flux. Lignes collectives (préfixes CT, GS, AS) comparées hors des
+# identifiants en numérotation commune (sinistres, événements, prestations, cotisations) ; un
+# sinistre y est désigné par (assuré, survenance, nature).
+collectif <- function(b) {
+  cle_sin <- function(id) {
+    s <- b$sinistres[match(id, b$sinistres$id_sinistre), ]
+    paste(s$id_assure, s$date_survenance, s$nature_sinistre)
+  }
+  tri <- function(df) { df <- df[do.call(order, c(unname(lapply(df, as.character)), method = "radix")), , drop = FALSE]
+                        rownames(df) <- NULL; df }
+  s <- b$sinistres[startsWith(b$sinistres$id_assure, "AS"), ]
+  ds <- b$dossiers[b$dossiers$id_sinistre %in% s$id_sinistre, ]
+  ev <- b$evenements[b$evenements$id_sinistre %in% s$id_sinistre, setdiff(names(b$evenements), "id_evenement")]
+  ev$id_sinistre <- cle_sin(ev$id_sinistre)
+  pr <- b$prestations[b$prestations$id_dossier %in% ds$id_dossier, setdiff(names(b$prestations), "id_prestation")]
+  ds$id_sinistre <- cle_sin(ds$id_sinistre)
+  s$cle <- cle_sin(s$id_sinistre)
+  fa <- b$famille[startsWith(b$famille$id_assure, "AS"), ]
+  fa$id_sinistre <- cle_sin(fa$id_sinistre)
+  list(contrats = b$contrats[startsWith(b$contrats$id_contrat, "CT"), ],
+       garanties = b$garanties_souscrites[startsWith(b$garanties_souscrites$id_garantie_souscrite, "GS"), ],
+       parametres = b$parametres[startsWith(b$parametres$id_garantie_souscrite, "GS"), ],
+       assures = b$assures[startsWith(b$assures$id_assure, "AS"), ], affiliations = b$affiliations,
+       famille = tri(fa),
+       sinistres = tri(s[, setdiff(names(s), "id_sinistre")]), dossiers = tri(ds), evenements = tri(ev), prestations = tri(pr),
+       beneficiaires = b$beneficiaires[b$beneficiaires$id_dossier %in% ds$id_dossier, ],
+       cotisations = tri(b$cotisations[startsWith(b$cotisations$id_garantie_souscrite, "GS"),
+                                       setdiff(names(b$cotisations), "id_cotisation")]))
+}
+g_ind <- G3
+g_ind$individuels <- 1L
+autre_ind <- sim3(graines = g_ind)
+etats_sans_id <- function(j) {
+  e <- j$verite$etats_vrais[, -1L]
+  e <- e[do.call(order, c(unname(lapply(e, as.character)), method = "radix")), ]
+  rownames(e) <- NULL
+  e
+}
+verifier("J.3 : une autre graine individuels ne change aucune ligne collective (hors identifiants en numérotation commune), ni etats_vrais",
+         identical(collectif(autre_ind$base), collectif(b3)) && identical(etats_sans_id(autre_ind), etats_sans_id(j3)) &&
+           !identical(autre_ind$base$contrats, b3$contrats))
+g_sd <- G3
+g_sd$suites_deces <- 1L
+autre_sd <- sim3(graines = g_sd)
+hors_suites <- function(b) {
+  dd <- b$dossiers$id_dossier[b$dossiers$id_sinistre %in% b$sinistres$id_sinistre[b$sinistres$nature_sinistre == "deces"]]
+  ev <- b$evenements[!(b$evenements$id_dossier %in% dd & b$evenements$type_evenement %in% c("fixation_capital", "cloture_dossier")),
+                     setdiff(names(b$evenements), "id_evenement")]
+  pr <- b$prestations[b$prestations$type_prestation != "capital", setdiff(names(b$prestations), "id_prestation")]
+  rownames(ev) <- NULL
+  rownames(pr) <- NULL
+  c(b[c("extraction", "adherents", "contrats", "garanties_souscrites", "parametres", "assures", "affiliations", "famille",
+        "sinistres", "dossiers", "rentes", "cotisations")],
+    list(evenements = ev, prestations = pr, beneficiaires = b$beneficiaires[, c("id_beneficiaire", "id_dossier")]))
+}
+verifier(paste0("J.3 : une autre graine suites_deces ne change que les qualités de bénéficiaires, les fixations, les ",
+                "prestations capital et les clôtures des décès (et la vérité de leurs flux)"),
+         identical(hors_suites(autre_sd$base), hors_suites(b3)) &&
+           identical(autre_sd$verite[c("etats_vrais", "familles_vraies", "sinistres_non_declares")],
+                     j3$verite[c("etats_vrais", "familles_vraies", "sinistres_non_declares")]) &&
+           !identical(autre_sd$base$beneficiaires, b3$beneficiaires))
+# J.4 : additivité, loi de v1-modeste-01 en version 2 aux valeurs neutres
+neutre <- loi_vraie_v1("v1-modeste-01")
+neutre$version <- 2L
+neutre$garanties$periode_cotisation <- "civile"
+neutre$garanties$deces$majoration_conjoint <- 0
+neutre$individuels <- lv3$individuels
+neutre$individuels$nombre_contrats <- 0L
+neutre$individuels$derniere_souscription <- neutre$portefeuille$debut_historique
+neutre$individuels$taux_tarif$annee <- c(2018L, 2020L, 2023L)
+neutre$suites_deces <- list(part_non_reclames = 0, part_fixation_differee = 0, delai_fixation_differee = 1095)
+g_neutre <- c(GRAINES_V1[c("population", "famille", "sinistres", "information")], list(individuels = 1L, suites_deces = 2L),
+              GRAINES_V1["defauts"])
+jn <- simuler_base(neutre, g_neutre, A, nom = "v1-modeste-01", description = j1$manifeste$description)
+verifier("J.4 : loi de v1-modeste-01 en version 2 aux valeurs neutres : base et vérité identical à celles de v1-modeste-01",
+         identical(jn$base, j1$base) && identical(jn$verite, j1$verite))
+# J.5 : deux appels identiques ; aller-retour exact
+verifier_egal("J.5 : deux tirages de v1-modeste-03 : identiques", simuler_jeu_v1("v1-modeste-03"), j3)
+d3b <- tempfile("jeu-")
+verifier_egal("J.5 : lire_jeu(ecrire_jeu(v1-modeste-03)) identique", lire_jeu(ecrire_jeu(j3, d3b)), j3)
+# B1 (audit) : description du jeu, de sa loi vraie et statut sans octet écrit en clair (`<c3>`),
+# signe d'un paste() de chaînes d'encodages mêlés sous une locale C
+octets_clairs <- function(x) grepl("<[0-9a-f]{2}>", x)
+verifier("descriptions des jeux, de leurs lois vraies et statuts : aucun motif <xx> (octet écrit en clair)",
+         !any(vapply(names(JEUX_V1), function(n) {
+           j <- if (n == "v1-modeste-03") j3 else if (n == "v1-modeste-01") j1 else j2
+           any(octets_clairs(c(j$manifeste$description, j$loi_vraie$description, j$loi_vraie$statut)))
+         }, NA)))
+verifier("v1-modeste-03 : contrats individuels à prime unique, annuelle et trimestrielle ; majoration du conjoint ; capitaux non réclamés",
+         setequal(b3$garanties_souscrites$periodicite_cotisation[startsWith(b3$garanties_souscrites$id_garantie_souscrite, "GI")],
+                  c("unique", "annuelle", "trimestrielle")) &&
+           any(b3$parametres$parametre == "majoration_conjoint") && any(b3$beneficiaires$qualite == "non_identifie"))
+
+section("jeu v1-modeste-03 : critères de visa V.1 à V.7 (spécification de B2, § 7.9.7 ; M188)")
+source(file.path(racine, "tests", "b2_bases.R"), local = TRUE)
+tb3 <- b2_tables_v1_03()
+verifier_egal("tables fictives des plans des jeux : empreintes du § 3.6 (m15)",
+              c(tb3$mortalite_tarif$origine$empreinte, tb3$serie_tme$origine$empreinte),
+              c("4eb68f9af5835cad25255f14232f5df0", "a5b4c1cf5cf86afc6ac166504fe808d7"))
+cat_g3 <- catalogue_garanties()
+P1 <- "sinistres_declares_non_regles"
+P2 <- "capitaux_non_reclames"
+P3 <- "provision_mathematique_temporaire_deces"
+calcul3 <- list()
+for (arrete in list(A0, A)) {
+  et_a <- format(arrete)
+  bil <- controler_base(b3, arrete, j3$declarations$declarations, j3$declarations$conventions)
+  verifier(paste0("V.1 à ", et_a, " : declarations_requises, refus_tables et visibilités non déterminées vides ; registre vide"),
+           nrow(bil$declarations_requises) == 0L && nrow(bil$refus_tables) == 0L &&
+             nrow(bil$vue$visibilite_non_determinee) == 0L && nrow(j3$verite$defauts) == 0L)
+  plan <- valider_plan(plan_reference_jeu(j3, arrete, tb3))
+  vue <- ns$vue_a_date(b3, arrete, plan$donnees, plan$conventions)
+  r1 <- ns$calculer_engagement(vue, plan, tb3, cat_g3, "deces", P1)
+  r2 <- ns$calculer_engagement(vue, plan, tb3, cat_g3, "deces", P2)
+  r3 <- ns$calculer_risque_en_cours(vue, plan, tb3, cat_g3, "deces", P3)
+  cel <- rbind(r1$cellules, r2$cellules, r3$cellules)
+  verifier(paste0("V.2 à ", et_a, " : P1, P2 et P3 calculés, de montant > 0"),
+           identical(cel$statut_calcul, rep("calcule", 3L)) && all(cel$montant > 0))
+  et <- ns$etats_a_date(vue, "deces", "engagement")
+  e1 <- et[match(r1$dossiers$id_dossier, et$id_dossier), ]
+  gs1 <- b3$dossiers$id_garantie_souscrite[match(e1$id_dossier, b3$dossiers$id_dossier)]
+  ind <- ns$provisions_individuelles(vue, plan, tb3, FALSE)$contrats
+  nat <- b3$garanties_souscrites$periodicite_cotisation[match(ind$id_garantie_souscrite, b3$garanties_souscrites$id_garantie_souscrite)]
+  co <- b3$cotisations[b3$cotisations$nature_mouvement == "emission" & b3$cotisations$date_mouvement <= arrete &
+                         b3$cotisations$fin_periode > arrete &
+                         b3$cotisations$id_garantie_souscrite %in%
+                           b3$garanties_souscrites$id_garantie_souscrite[b3$garanties_souscrites$code_garantie == "deces" &
+                                                                           startsWith(b3$garanties_souscrites$id_contrat, "CT")], ]
+  non_civile <- format(co$debut_periode, "%m-%d") != "01-01" | format(co$fin_periode, "%m-%d") != "12-31"
+  # V.3 sans la clause P1 capital_du (erratum v1.0.11) ; indicateur non bloquant à la place :
+  # dossiers de P1 capital_du payés (prestation capital réglée au plus l'arrêté) et non payés
+  du <- e1$id_dossier[e1$etat_dossier == "capital_du"]
+  paye_du <- du %in% b3$prestations$id_dossier[b3$prestations$type_prestation == "capital" &
+                                                 b3$prestations$date_reglement <= arrete]
+  cat(sprintf("    [INDICATEUR] v1-modeste-03 à %s : dossiers de P1 capital_du payés / non payés : %d / %d\n", et_a,
+              sum(paye_du), sum(!paye_du)))
+  verifier(paste0("V.3 à ", et_a, " : >= 1 dossier de P2 ; >= 1 dossier de P1 ouvert ",
+                  "d'un contrat collectif ; P3 individuel : chaque nature valorisée ; P3 collectif > 0, d'une période non civile"),
+           nrow(r2$dossiers) >= 1L && any(e1$etat_dossier == "ouvert" & startsWith(gs1, "GS")) &&
+             all(c("unique", "annuelle", "trimestrielle") %in% nat) &&
+             sum(ns$provisions_collectives(vue, plan)$montant) > 0 && any(non_civile))
+  # V.4 : affiliation visible à l'arrêté (saisie, et fin si sa saisie l'est) couvrant la survenance
+  ouv <- et[et$etat_dossier == "ouvert", ]
+  ct_o <- b3$garanties_souscrites$id_contrat[match(b3$dossiers$id_garantie_souscrite[match(ouv$id_dossier, b3$dossiers$id_dossier)],
+                                                   b3$garanties_souscrites$id_garantie_souscrite)]
+  col <- startsWith(ct_o, "CT")
+  af <- b3$affiliations[b3$affiliations$date_saisie <= arrete, ]
+  af_fin <- ifelse(!is.na(af$date_saisie_fin) & af$date_saisie_fin <= arrete, as.numeric(af$date_fin), Inf)
+  as_o <- b3$sinistres$id_assure[match(ouv$id_sinistre, b3$sinistres$id_sinistre)]
+  couvre <- mapply(function(a, ct, s) sum(af$id_assure == a & af$id_contrat == ct & af$date_debut <= s & af_fin >= as.numeric(s)),
+                   as_o[col], ct_o[col], ouv$date_entree_etat[col])
+  verifier(paste0("V.4 à ", et_a, " : chaque dossier collectif ouvert a une affiliation qui couvre sa survenance"),
+           any(col) && all(couvre == 1L))
+  # V.5 : capital_du sans paiement à l'arrêté : montant fixé = vérité (règlement futur ou dépôt,
+  # ou règlement de la base entre l'arrêté et l'extraction)
+  cd <- et[et$etat_dossier == "capital_du", ]
+  cap <- b3$prestations[b3$prestations$type_prestation == "capital", ]
+  cd <- cd[!(cd$id_dossier %in% cap$id_dossier[cap$date_reglement <= arrete]), ]
+  vrai <- j3$verite$flux_futurs$montant[match(cd$id_dossier, j3$verite$flux_futurs$id_dossier)]
+  vrai[is.na(vrai)] <- cap$montant[match(cd$id_dossier[is.na(vrai)], cap$id_dossier)]
+  verifier(paste0("V.5 à ", et_a, " : dossiers capital_du sans paiement : montant fixé = montant de vérité"),
+           nrow(cd) >= 1L && identical(cd$montant_en_vigueur, vrai))
+  # V.6 : contrat individuel en cours à l'arrêté hors décès, exclu de P3 par un décès connu ;
+  # contrat individuel de fin connue
+  ci <- b3$contrats[b3$contrats$nature_contrat == "individuel", ]
+  fin_age <- ns$date_atteinte_age(b3$assures$date_naissance[match(ci$id_assure, b3$assures$id_assure)], 70L, "revolu")
+  morts <- b3$sinistres$id_assure[b3$sinistres$date_saisie <= arrete & b3$sinistres$date_survenance <= arrete]
+  exclus <- ci$id_contrat[ci$id_assure %in% morts & pmin(as.numeric(ci$date_terme), as.numeric(fin_age)) > arrete]
+  verifier(paste0("V.6 à ", et_a, " : >= 1 contrat individuel exclu de P3 par un décès ; >= 1 contrat de fin connue"),
+           length(exclus) >= 1L && !any(exclus %in% ind$id_contrat) &&
+             any(!is.na(ci$date_fin) & ci$date_saisie_fin <= arrete & ci$date_fin <= arrete))
+  calcul3[[et_a]] <- list(r2 = r2, et = et)
+}
+# V.7 : P2 au 2025-12-31 recalculé par une voie indépendante : capital fixé (dernier
+# fixation_capital) ou, pour un dossier ouvert, capital reconstitué (forfaitaire ; sinon taux du
+# capital x salaire de l'affiliation + majoration du conjoint si la famille rattachée au sinistre
+# en porte un, sinistre instruit) x F(survenance, A) (prorata simple par année civile, jours
+# exacts, taux_par_annee du plan) x 1,01 (chargement)
+taux3 <- c(`2016` = 0.02, `2017` = 0.02, `2018` = 0.02, `2019` = 0.02, `2020` = 0.02, `2021` = 0.01, `2022` = 0.01,
+           `2023` = 0.0167, `2024` = 0.03, `2025` = 0.03)
+facteur3 <- function(s, a) {
+  f <- 1
+  for (y in as.integer(format(s, "%Y")):as.integer(format(a, "%Y"))) {
+    fin_an <- as.numeric(as.Date(sprintf("%d-12-31", y)))
+    jours_an <- fin_an - as.numeric(as.Date(sprintf("%d-12-31", y - 1L)))
+    part <- min(as.numeric(a), fin_an) - max(as.numeric(s), fin_an - jours_an)
+    if (part > 0) f <- f * (1 + taux3[[as.character(y)]] * part / jours_an)
+  }
+  f
+}
+d2 <- calcul3[[format(A)]]$r2$dossiers
+param3 <- function(gs, nom) { k <- b3$parametres$id_garantie_souscrite == gs & b3$parametres$parametre == nom
+                               if (any(k)) b3$parametres$valeur[k] else 0 }
+capital3 <- vapply(d2$id_dossier, function(d) {
+  fx <- b3$evenements[b3$evenements$id_dossier %in% d & b3$evenements$type_evenement == "fixation_capital", ]
+  if (nrow(fx)) return(fx$montant[order(fx$date_effet, decreasing = TRUE)[1L]])
+  gs <- b3$dossiers$id_garantie_souscrite[b3$dossiers$id_dossier == d]
+  if (param3(gs, "capital_forfaitaire") > 0) return(param3(gs, "capital_forfaitaire"))
+  s <- b3$sinistres[b3$sinistres$id_sinistre == b3$dossiers$id_sinistre[b3$dossiers$id_dossier == d], ]
+  ct <- b3$garanties_souscrites$id_contrat[b3$garanties_souscrites$id_garantie_souscrite == gs]
+  af <- b3$affiliations[b3$affiliations$id_assure == s$id_assure & b3$affiliations$id_contrat == ct, ]
+  conjoint <- if (!is.na(s$date_instruction)) any(b3$famille$id_sinistre %in% s$id_sinistre & b3$famille$lien == "conjoint") else 0.55
+  af$salaire_reference * (param3(gs, "taux_capital") + param3(gs, "majoration_conjoint") * conjoint)
+}, 0)
+attendu3 <- capital3 * mapply(facteur3, d2$date_entree_etat, A) * 1.01
+verifier("V.7 : chaque dossier de P2 au 2025-12-31 = capital x F(survenance, A) x 1,01, recalculé par une voie indépendante (1e-10 relatif)",
+         nrow(d2) >= 1L && isTRUE(all.equal(unname(d2$montant), unname(attendu3), tolerance = 1e-10)) &&
+           max(abs(d2$montant / attendu3 - 1)) < 1e-10)

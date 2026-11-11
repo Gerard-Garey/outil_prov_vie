@@ -105,6 +105,26 @@ verifier_egal("R2 : idem, prorata compose : 103 924,6496265443", eng(b2_base_cap
 verifier_egal("R3 : paiement partiel de 40 000 le 2025-03-01 (305 jours de revalorisation) : 63 133,8082191781",
               eng(b2_base_capital(paiements = data.frame(date = D("2025-03-01"), montant = 40000)), p)$cellules$montant,
               63133.8082191781, tolerance = TOL)
+# R3b (erratum v1.0.11) : capital payé en totalité au nominal le 2025-03-01, clôture regle
+# d'effet 2025-03-01 saisie après l'arrêté (2026-01-05) : solde = revalorisation non payée,
+# revalorisée jusqu'à l'arrêté, 103 936 - 100 000 x (1 + 0,024 x 305 / 365) = 140 928 / 73 ;
+# témoin : clôture saisie le 2025-03-05, dossier clos, P1 nul, aucun dossier
+base_r3b <- function(saisie_cloture) {
+  b <- b2_base_capital(paiements = data.frame(date = D("2025-03-01"), montant = 100000))
+  b$evenements <- rbind(b$evenements, b2_tab("evenements", id_evenement = "EV2", id_sinistre = "SI1", id_dossier = "DO1",
+                                             type_evenement = "cloture_dossier", date_effet = D("2025-03-01"),
+                                             date_saisie = saisie_cloture, motif = "regle"))
+  b
+}
+r3b <- eng(base_r3b(D("2026-01-05")), p)
+etat_r3b <- ns$etats_a_date(b2_vue(base_r3b(D("2026-01-05")), A), "deces", "engagement")
+verifier_egal("R3b : payé au nominal, clôture saisie après l'arrêté : 1 930,5205479452054 (140 928 / 73), DO1, exact, capital_du",
+              list(r3b$cellules$montant, r3b$dossiers$id_dossier, r3b$dossiers$statut_resultat,
+                   etat_r3b$etat_dossier[etat_r3b$id_dossier == "DO1"]),
+              list(1930.5205479452054, "DO1", "exact", "capital_du"), tolerance = TOL)
+r3b_t <- eng(base_r3b(D("2025-03-05")), p)
+verifier_egal("R3b, témoin : clôture saisie le 2025-03-05 : P1 nul, aucun dossier",
+              list(r3b_t$cellules$montant, nrow(r3b_t$dossiers)), list(0, 0L))
 r4 <- eng(non_reclame, p_depot(), P2)
 verifier_egal("R4 : P2 (bénéficiaire non identifié), capital_revalorise_reglement, taux_futur 0,024, H = 2034-09-01 : 127 666,8365965362 ; écart à R1 : 23 730,8365965363 ; jugement_expert ; flux daté de H",
               list(r4$cellules$montant, r4$cellules$montant - r1$cellules$montant, r4$dossiers$statut_resultat,

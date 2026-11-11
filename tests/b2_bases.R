@@ -1,6 +1,7 @@
 # Bases, tables et plan des tests de la branche B2 (familles « engagement » et « risque en
 # cours », #66 ; spécification de B2, docs/specifications/b2-capital-deces-v1.md, § 3.6, § 7.4
-# et § 7.5). Sourcé par tests/unitaires/engagement.R et tests/unitaires/risque_en_cours.R
+# et § 7.5 ; table, série et plan des jeux, § 3.6 et § 7.9.6, #69). Sourcé par
+# tests/unitaires/engagement.R, tests/unitaires/risque_en_cours.R et tests/unitaires/simulation.R
 # (le package est chargé ; `racine` est défini). Aucune donnée réelle : bases construites à
 # la main, table et série fictives déclarées.
 #
@@ -39,6 +40,66 @@ b2_tables <- function() {
   tme <- b2_ns$construire_table(data.frame(mois = mois, taux_pourcent = taux, stringsAsFactors = FALSE),
                                 "serie_tme_mensuelle", "tme_fictive_b2", "fictive", "série fictive, sans source (tests B2)")
   list(mortalite_tarif = mort, serie_tme = tme)
+}
+
+# Table et série fictives des plans des jeux (spécification de B2, § 3.6 et § 7.9.6) :
+#   - mortalite_fictive_v1_03 : table fictive, sans source ; âges 18 à 80, l_x arrondis au
+#     dixième et écrits en littéraux ci-dessous (la table fait foi, non la formule q_x = 0,0005 +
+#     0,00001 (x - 18)^2 dont ils sont tirés) ; empreinte du contenu 4eb68f9af5835cad25255f14232f5df0 ;
+#   - tme_fictive_v1_03 : série fictive, sans source ; 2,00 % de 2014-01 à 2019-12 ; 1,00 % de
+#     2020-01 à 2022-06 ; 3,00 % de 2022-07 à 2025-12 (144 mois) ; empreinte
+#     a5b4c1cf5cf86afc6ac166504fe808d7.
+b2_tables_v1_03 <- function() {
+  lx <- c(100000.0, 99950.0, 99899.0, 99845.1, 99786.2, 99720.3, 99645.5, 99559.8, 99461.3, 99347.9, 99217.7,
+          99068.9, 98899.5, 98707.6, 98491.5, 98249.2, 97979.0, 97679.2, 97348.0, 96984.0, 96585.4, 96150.7,
+          95678.6, 95167.7, 94616.7, 94024.4, 93389.7, 92711.7, 91989.5, 91222.3, 90409.5, 89550.6, 88645.2,
+          87693.2, 86694.4, 85648.8, 84556.8, 83418.7, 82235.0, 81006.4, 79733.8, 78418.2, 77060.7, 75662.9,
+          74226.0, 72751.9, 71242.3, 69699.2, 68124.7, 66521.0, 64890.6, 63235.9, 61559.5, 59864.2, 58152.6,
+          56427.8, 54692.7, 52950.2, 51203.3, 49455.3, 47709.0, 45967.6, 44234.2)
+  mort <- b2_ns$construire_table(data.frame(age = 18:80, lx = lx), "lx_age", "mortalite_fictive_v1_03", "fictive",
+                                 "table fictive, sans source (jeux de la v1, plans de référence)")
+  mois <- sprintf("%04d-%02d", rep(2014:2025, each = 12L), rep(1:12, 12L))
+  taux <- ifelse(mois <= "2019-12", 2, ifelse(mois <= "2022-06", 1, 3))
+  tme <- b2_ns$construire_table(data.frame(mois = mois, taux_pourcent = taux, stringsAsFactors = FALSE),
+                                "serie_tme_mensuelle", "tme_fictive_v1_03", "fictive",
+                                "série fictive, sans source (jeux de la v1, plans de référence)")
+  list(mortalite_tarif = mort, serie_tme = tme)
+}
+
+# Plan `recommandees` des jeux v1-modeste-01 à 03 (spécification de B2, § 7.9.6, couples J1 à
+# J4, V1, V2) : seuls changent l'arrêté et `donnees` / `conventions`, repris de
+# declarations.txt du jeu `jeu` (objet jeu_simule) ; `tables` : b2_tables_v1_03().
+plan_reference_jeu <- function(jeu, arrete, tables) {
+  reconst <- list(taux_sans_suite = 0, probabilite_reconnaissance_iad = 1,
+                  structure_familiale = list(taux_conjoint = 0.55, nombre_enfants = 0),
+                  age_limite_enfant_majoration = 26L, liens_conjoint_majoration = c("concubin", "conjoint", "partenaire_pacs"))
+  list(version_plan = 1L, arrete = arrete,
+    perimetre = list(garanties = "deces", referentiels = "comptes_sociaux", segmentations = list()),
+    tables = list(
+      mortalite_tarif = list(identifiant = "mortalite_fictive_v1_03", empreinte = tables$mortalite_tarif$origine$empreinte,
+                             statut = "fictive", hors_axes = "refus"),
+      serie_tme = list(identifiant = "tme_fictive_v1_03", empreinte = tables$serie_tme$origine$empreinte, statut = "fictive",
+                       hors_axes = "refus", decalage_publication_mois = 1L)),
+    taux = list(deces = list(provision_mathematique_temporaire_deces = list(comptes_sociaux = "taux_tarif"))),
+    frais = list(deces = list(
+      sinistres_declares_non_regles = list(comptes_sociaux = list(taux_chargement_psap = 0.01)),
+      capitaux_non_reclames = list(comptes_sociaux = list(taux_chargement_psap = 0.01)),
+      provision_mathematique_temporaire_deces = list(comptes_sociaux = list(
+        taux_chargement_gestion = 0.001, taux_chargement_acquisition = 0.01, taux_chargement_cotisation = 0.05)))),
+    revalorisation = list(capital_deces = list(taux_par_annee = c(`2016` = 0.02, `2017` = 0.02, `2018` = 0.02,
+      `2019` = 0.02, `2020` = 0.02, `2021` = 0.01, `2022` = 0.01, `2023` = 0.0167, `2024` = 0.03, `2025` = 0.03),
+      prorata = "simple")),
+    conventions = c(list(age = "revolu", instant_date = "fin_journee", repartition_annee = "uniforme",
+                         fractionnement = "echeances_exactes", decompte_jours = "exact_exact"),
+                    jeu$declarations$conventions[setdiff(names(jeu$declarations$conventions), "age")]),
+    postes = list(deces = list(
+      sinistres_declares_non_regles = list(methode = "capital_dossier", parametres = reconst),
+      capitaux_non_reclames = list(methode = "capital_revalorise", parametres = c(list(critere = "beneficiaire_non_identifie"), reconst)),
+      provision_mathematique_temporaire_deces = list(
+        individuel = list(methode = "prospective_prime_pure", parametres = list(pas = "an", paiement_capital = "fin_pas", plancher = "par_contrat")),
+        collectif = list(methode = "prorata_cotisation", parametres = list())))),
+    donnees = jeu$declarations$declarations,
+    restitution = list(echeanciers = "aucun", triangles = "aucun"), liens = list(), graine = 1L)
 }
 
 # Plan minimal de B2 (spécification de B2, § 7.5), empreintes des tables fictives.
