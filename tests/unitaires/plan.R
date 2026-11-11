@@ -76,10 +76,12 @@ verifier("taux technique taux_tarif admis",
                                                   "comptes_sociaux"), "taux_tarif")), "plan_calcul"))
 verifier("prospective_prime_declaree admise", inherits(valider_plan(avec(plan_min(), c(P3, "individuel", "methode"),
                                                                          "prospective_prime_declaree")), "plan_calcul"))
-verifier("segmentation ligne_activite avec correspondance couvrant le périmètre admise",
+verifier("segmentations des quatre règles admises en B2 (contrat, nature_contrat, ligne_activite avec correspondance couvrant le périmètre, annee_survenance) : admises (critère 1.4, erratum v1.0.12)",
          inherits(valider_plan(avec(plan_min(), c("perimetre", "segmentations"),
                                     list(lob = list(regle = "ligne_activite", correspondance = list(deces = "32")),
-                                         par_contrat = list(regle = "contrat")))), "plan_calcul"))
+                                         par_contrat = list(regle = "contrat"), nc = list(regle = "nature_contrat"),
+                                         an = list(regle = "annee_survenance")))), "plan_calcul") &&
+           identical(ns$REGLES_SEGMENTATION_B2, c("contrat", "nature_contrat", "annee_survenance", "ligne_activite")))
 verifier("restitution des échéanciers par identifiants admise",
          inherits(valider_plan(avec(plan_min(), c("restitution", "echeanciers"), c("DO2", "DO1"))), "plan_calcul"))
 # Entrées connues du schéma mais non lues par le périmètre : admises et canonisées (§ 2.3).
@@ -188,6 +190,16 @@ section("plan : plan_invalide (critère 1.4)")
 invalide <- function(nom, p, chemin = NULL) {
   if (is.null(chemin)) verifier_refus(nom, valider_plan(p), "plan_invalide")
   else verifier_chemin(nom, valider_plan(p), "plan_invalide", chemin)
+}
+# Règles de segmentation retirées de B2 (§ 2.2, critère 1.4, erratum v1.0.12) : un témoin par règle ;
+# le message nomme la règle et le chemin.
+for (regle in c("adherent", "secteur_activite", "college", "gestionnaire")) {
+  r <- refus_de(valider_plan(avec(plan_min(), c("perimetre", "segmentations"), list(s1 = list(regle = regle)))))
+  verifier(paste0("segmentation de règle ", regle, " : plan_invalide dès valider_plan(), « règle de segmentation reportée après B2 », règle et chemin nommés"),
+           !is.null(r) && r$motif == "plan_invalide" &&
+             grepl("r\u00e8gle de segmentation report\u00e9e apr\u00e8s B2", conditionMessage(r), fixed = TRUE) &&
+             grepl(paste0("(", regle, " ;"), conditionMessage(r), fixed = TRUE) &&
+             identical(r$attendu, "perimetre$segmentations$s1$regle"))
 }
 r <- refus_de(valider_plan(avec(plan_min(), c("perimetre", "referentiels"), c("comptes_sociaux", "solvabilite_2"))))
 verifier("solvabilite_2 au périmètre : plan_invalide, aucune méthode de meilleure estimation avant B6",

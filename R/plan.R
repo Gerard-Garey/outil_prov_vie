@@ -27,6 +27,8 @@ SECTIONS_PLAN <- c("version_plan", "arrete", "perimetre", "tables", "taux", "fra
 # `tables` (STATUTS_TABLE, HORS_AXES) sont tenues par le module `tables`, qui les lit aussi.
 REGLES_SEGMENTATION <- c("contrat", "adherent", "college", "gestionnaire", "nature_contrat",
                          "secteur_activite", "annee_survenance", "ligne_activite")
+# Les règles admises en B2 (REGLES_SEGMENTATION_B2) sont tenues par `donnees`, qui calcule la
+# clé de segment de chacune ; valider_plan() refuse les autres (spécification de B2, § 2.2).
 INSTANTS_DATE <- "fin_journee"
 REPARTITIONS_ANNEE <- c("uniforme", "force_constante")
 FRACTIONNEMENTS <- "echeances_exactes"
@@ -302,6 +304,11 @@ COLONNES_TABLES_RETENUES <- c("usage", "garantie", "identifiant", "statut", "for
       if (!.liste_nommee(x)) .refus_invalide(chemin, "liste nomm\u00e9e attendue")
       if (is.null(x[["regle"]])) .refus_incomplet(.sous_chemin(chemin, "regle"))
       regle <- .v_chaine(REGLES_SEGMENTATION)(x[["regle"]], .sous_chemin(chemin, "regle"))
+      if (!(regle %in% REGLES_SEGMENTATION_B2)) {
+        .refus_invalide(.sous_chemin(chemin, "regle"), paste0("r\u00e8gle de segmentation report\u00e9e apr\u00e8s B2 (",
+                                                              regle, " ; r\u00e8gles admises : ",
+                                                              paste(REGLES_SEGMENTATION_B2, collapse = ", "), ")"))
+      }
       enfants <- list(regle = .v_chaine(REGLES_SEGMENTATION))
       if (regle == "ligne_activite") {
         enfants$correspondance <- .v_libre(catalogue$garanties$code_garantie, garanties, function(g) .v_chaine())

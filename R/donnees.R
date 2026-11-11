@@ -463,6 +463,15 @@ etats_a_date <- function(vue, garanties, famille) {
   res[.COLONNES_ETATS]
 }
 
+# --- Segments ----------------------------------------------------------------------
+
+# Règles de segmentation admises en B2 (spécification de B2, § 2.2, erratum v1.0.12), parmi
+# celles du schéma de la v1 (REGLES_SEGMENTATION de `plan`) : les autres (adherent,
+# secteur_activite, college, gestionnaire) sont refusées par valider_plan() (plan_invalide),
+# reportées après B2. Tenue ici, où segments_vue() calcule la clé de segment de chacune ; lue
+# par `plan` (graphe de l'ADR 0010, point 1 : `plan` appelle `donnees`).
+REGLES_SEGMENTATION_B2 <- c("contrat", "nature_contrat", "annee_survenance", "ligne_activite")
+
 # --- Refus d'appel -----------------------------------------------------------------
 
 .refus_structure <- function(message, ...) {
