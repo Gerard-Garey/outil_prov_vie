@@ -217,3 +217,96 @@ methodes_poste <- function(x, poste, colonne) {
   }
   data.frame(champ = champ, methode = methode, stringsAsFactors = FALSE)
 }
+
+# --- Arrêt de poste -------------------------------------------------------------------
+
+# Motifs de vue$visibilite_non_determinee qui ne sont pas des motifs de refus (spécification de
+# B2, § 6.2 : ils n'arrêtent rien) ; sous-cas de D10 traités R (dictionnaire, § 9).
+.MOTIFS_ND_SANS_ARRET <- c("D02b", "D03g", "parente_non_determinee")
+.SOUS_CAS_D10_R <- c("D10a", "D10h")
+
+# Postes arrêtés par le bilan (M239 ; ADR 0010, point 11 (b), annoté ; spécification de B2,
+# § 6.2). `catalogue` : catalogue_garanties() (lectures.csv : colonnes lues par poste) ;
+# `bilan` : bilan de controler_base() (refus_tables, vue$visibilite_non_determinee), passé en
+# argument (aucune arête garanties -> donnees) ; `postes` : section `postes` du plan (garantie
+# -> poste -> ...) ; `parties` : parties de ligne, liste de list(table, colonnes)
+# (donnees::parties_ligne(), passée en argument pour la même raison). Une colonne d'une partie
+# de ligne vaut pour toute la partie (erratum v1.0.5). Règles, dans cet ordre :
+#   (i) ligne de refus_tables de portée table (refus induit compris) sur T : postes qui lisent
+#       une colonne de T ;
+#   (ii) ligne de refus_tables de portée colonne sur (T, c) : postes qui lisent (T, c) ; si c
+#       est une colonne d'une partie de ligne de T, postes qui lisent une colonne de la partie ;
+#   (iii) ligne de vue$visibilite_non_determinee de motif de refus (motif R : code de
+#       controles.csv de portée autre que ligne, défaut traité R, sous-cas D10a ou D10h ; ni
+#       D02b, ni D03g, ni parente_non_determinee) sur T : ligne entière (colonne NA), postes
+#       qui lisent T ou une table descendante de T (clés étrangères simples de colonnes.csv) ;
+#       partie de ligne (colonne renseignée), postes qui lisent une colonne de la partie de T
+#       qui contient `colonne` (§ 4.3 : une partie inconnue n'arrête que ses lecteurs ; la
+#       ligne et ses descendantes restent visibles). La ligne de refus_tables qui porte
+#       postes_arretes est celle de même table, de colonne celle de l'origine et de même motif.
+# Rend list(postes : data.frame (garantie, poste, motif_arret), une ligne par poste du plan,
+# motif_arret = motif de la première ligne qui l'arrête dans l'ordre du bilan (refus_tables,
+# puis visibilite_non_determinee), NA si le poste n'est pas arrêté ; refus_tables :
+# refus_tables du bilan, `postes_arretes` rempli : « garantie/poste » joints par « ; », triés,
+# NA si la ligne n'arrête aucun poste du plan).
+postes_a_arreter <- function(catalogue, bilan, postes, parties) {
+  dico <- dictionnaire()
+  g <- rep(names(postes), lengths(postes))
+  p <- unlist(lapply(postes, names), use.names = FALSE)
+  if (is.null(p)) p <- character(0)
+  cles <- paste(g, p, sep = "/")
+  lec <- catalogue$lectures
+  lec_cle <- paste(lec$code_garantie, lec$poste, sep = "/")
+  lit_table <- function(tables) unique(lec_cle[lec$table %in% tables])
+  # colonnes de la partie de ligne de `t` qui contient `c1` ; c1 seule hors de toute partie
+  colonnes_partie <- function(t, c1) {
+    for (q in parties) if (identical(q$table, t) && c1 %in% q$colonnes) return(q$colonnes)
+    c1
+  }
+  lit_colonne <- function(t, c1) unique(lec_cle[lec$table == t & lec$colonne %in% colonnes_partie(t, c1)])
+  # tables descendantes : clés étrangères simples (fille -> parente), jusqu'au point fixe
+  col <- dico$colonnes
+  ref <- col[nzchar(col$reference) & !grepl(";", col$reference, fixed = TRUE), , drop = FALSE]
+  ref_parente <- sub("\\..*$", "", ref$reference)
+  descendance <- function(t) {
+    res <- t
+    repeat {
+      nouvelles <- setdiff(unique(ref$table[ref_parente %in% res]), res)
+      if (length(nouvelles) == 0L) return(res)
+      res <- c(res, nouvelles)
+    }
+  }
+  motif_r <- function(m) {
+    !(m %in% .MOTIFS_ND_SANS_ARRET) &&
+      (m %in% dico$controles$code[dico$controles$portee != "ligne"] || m %in% .SOUS_CAS_D10_R ||
+         (m %in% dico$defauts$code && "R" %in% .eclater_catalogue(dico$defauts$traitements[dico$defauts$code == m])))
+  }
+  rt <- bilan$refus_tables
+  nd <- bilan$vue$visibilite_non_determinee
+  motif <- stats::setNames(rep(NA_character_, length(cles)), cles)
+  porte <- vector("list", nrow(rt))
+  arreter <- function(touches, m, ligne_rt) {
+    touches <- intersect(touches, cles)
+    nouveaux <- touches[is.na(motif[touches])]
+    motif[nouveaux] <<- m
+    if (!is.na(ligne_rt)) porte[[ligne_rt]] <<- c(porte[[ligne_rt]], touches)
+  }
+  for (i in seq_len(nrow(rt))) {
+    touches <- if (rt$portee[i] == "table" || is.na(rt$colonne[i])) lit_table(rt$table[i]) else
+      lit_colonne(rt$table[i], rt$colonne[i])
+    arreter(touches, rt$motif[i], i)
+  }
+  for (i in seq_len(nrow(nd))) {
+    if (!motif_r(nd$motif[i])) next
+    t <- nd$table[i]
+    touches <- if (is.na(nd$colonne[i])) lit_table(descendance(t)) else lit_colonne(t, nd$colonne[i])
+    colonne_origine <- if (is.na(nd$origine[i])) NA_character_ else sub("^[^.]*\\.", "", nd$origine[i])
+    j <- which(rt$table == t & rt$colonne %in% colonne_origine & rt$motif == nd$motif[i])[1L]
+    arreter(touches, nd$motif[i], j)
+  }
+  rt$postes_arretes <- vapply(porte, function(x) {
+    if (length(x) == 0L) NA_character_ else paste(sort(unique(x), method = "radix"), collapse = ";")
+  }, "")
+  list(postes = data.frame(garantie = g, poste = p, motif_arret = unname(motif), stringsAsFactors = FALSE),
+       refus_tables = rt)
+}

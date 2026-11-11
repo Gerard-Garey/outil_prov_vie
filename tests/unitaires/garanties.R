@@ -119,3 +119,75 @@ file.copy(file.path(source_catalogue, setdiff(fichiers_catalogue, "lectures.csv"
 verifier_egal("fichier absent (lectures.csv)", motif_de(lire_catalogue(absent, d)), "catalogue_invalide")
 verifier_egal("dossier introuvable", motif_de(lire_catalogue(file.path(tempdir(), "absent-catalogue"), d)),
               "catalogue_invalide")
+
+section("garanties : postes_a_arreter() (M239 ; spécification de B2, § 6.2, critère 3.8, #66)")
+
+# Bilans construits (seules les colonnes lues par postes_a_arreter() comptent) et bilan de
+# v1-modeste-02 aux deux arrêtés.
+cat_g <- catalogue_garanties()
+postes_b2 <- list(deces = list(capitaux_non_reclames = list(), provision_mathematique_temporaire_deces = list(),
+                               sinistres_declares_non_regles = list()))
+bilan_de <- function(rt, nd = NULL) {
+  n <- length(rt[[1L]])
+  rt <- data.frame(table = rt[[1L]], colonne = rt[[2L]], motif = rt[[3L]], portee = rt[[4L]], origine = rep(NA_character_, n),
+                   nombre = rep(1L, n), nombre_visibles = rep(1L, n), identifiants = rep("X", n), nombre_dossiers = rep(1L, n),
+                   postes_arretes = rep(NA_character_, n), stringsAsFactors = FALSE)
+  if (is.null(nd)) nd <- list(character(0), character(0), character(0), character(0))
+  nd <- data.frame(table = nd[[1L]], colonne = nd[[2L]], motif = nd[[3L]], origine = nd[[4L]],
+                   nombre = rep(1L, length(nd[[1L]])), identifiants = rep("X", length(nd[[1L]])), stringsAsFactors = FALSE)
+  list(refus_tables = rt, vue = list(visibilite_non_determinee = nd))
+}
+arrets <- function(b) ns$postes_a_arreter(cat_g, b, postes_b2, ns$parties_ligne())
+verifier_egal("règle (i) : refus de portée table sur cotisations (refus induit compris) : P3 seul arrêté ; sur prestations : P1 et P2",
+              list(arrets(bilan_de(list("cotisations", NA_character_, "refus_induit", "table")))$postes$motif_arret,
+                   arrets(bilan_de(list("prestations", "id_dossier", "type_incompatible", "table")))$postes$motif_arret),
+              list(c(NA, "refus_induit", NA), c("type_incompatible", NA, "type_incompatible")))
+verifier_egal("règle (ii) : refus de portée colonne sur (sinistres, date_instruction) : P1 et P2 ; sur (sinistres, cause), colonne que nul ne lit : aucun poste, postes_arretes NA ; motif de la première ligne du bilan",
+              list(arrets(bilan_de(list("sinistres", "date_instruction", "type_incompatible", "colonne")))$postes$motif_arret,
+                   arrets(bilan_de(list("sinistres", "cause", "hors_domaine", "colonne")))$refus_tables$postes_arretes,
+                   arrets(bilan_de(list(c("contrats", "garanties_souscrites"), c("date_terme", "taux_technique_tarif"),
+                                        c("manquant_obligatoire", "hors_domaine"), c("colonne", "colonne"))))$postes$motif_arret),
+              list(c("type_incompatible", NA, "type_incompatible"), NA_character_, c(NA, "manquant_obligatoire", NA)))
+nd_iii <- bilan_de(list("sinistres", "date_declaration", "D02c", "colonne"),
+                   list(c("sinistres", "sinistres", "dossiers"), c(NA, "date_instruction", NA),
+                        c("D02c", "D02c", "parente_non_determinee"), c("sinistres.date_declaration", "sinistres.date_instruction", NA)))
+a_iii <- arrets(nd_iii)
+verifier_egal("règle (iii) : ligne entière de sinistres non déterminée (D02c) : postes qui lisent sinistres ou une descendante (P1, P2, P3) ; partie de ligne : lecteurs de la colonne ; parente_non_determinee n'arrête rien ; postes_arretes sur la ligne de même table, colonne de l'origine et motif",
+              list(a_iii$postes$motif_arret, a_iii$refus_tables$postes_arretes,
+                   arrets(bilan_de(list(character(0), character(0), character(0), character(0)),
+                                   list("dossiers", NA_character_, "parente_non_determinee", NA_character_)))$postes$motif_arret,
+                   arrets(bilan_de(list(character(0), character(0), character(0), character(0)),
+                                   list("evenements", NA_character_, "D02b", NA_character_)))$postes$motif_arret),
+              list(rep("D02c", 3L),
+                   "deces/capitaux_non_reclames;deces/provision_mathematique_temporaire_deces;deces/sinistres_declares_non_regles",
+                   rep(NA_character_, 3L), rep(NA_character_, 3L)))
+verifier_egal("règle (iii) : partie de ligne seule (sinistres.date_instruction, refus de valeur) : P1 et P2, non P3",
+              arrets(bilan_de(list("sinistres", "date_instruction", "D02c", "colonne"),
+                              list("sinistres", "date_instruction", "D02c", "sinistres.date_instruction")))$postes$motif_arret,
+              c("D02c", NA, "D02c"))
+j2 <- lire_jeu(file.path(racine, "inst", "extdata", "jeux", "v1-modeste-02"))
+verifier_egal("(3.8) v1-modeste-02 aux deux arrêtés : refus D09 sur prestations.montant (portée colonne) : P1 et P2 arrêtés (D09), P3 non ; postes_arretes de la ligne",
+              lapply(as.Date(c("2024-12-31", "2025-12-31")), function(a) {
+                x <- arrets(controler_base(j2$base, a, j2$declarations$declarations, j2$declarations$conventions))
+                list(x$postes$motif_arret, x$refus_tables$postes_arretes)
+              }),
+              rep(list(list(c("D09", NA, "D09"), "deces/capitaux_non_reclames;deces/sinistres_declares_non_regles")), 2L))
+verifier_egal("postes_a_arreter() : bilan sans refus : aucun poste arrêté ; colonnes du bilan inchangées hors postes_arretes",
+              { b <- bilan_de(list(character(0), character(0), character(0), character(0)))
+                x <- arrets(b); list(x$postes$motif_arret, names(x$refus_tables), nrow(x$refus_tables)) },
+              list(rep(NA_character_, 3L), names(bilan_de(list("a", "b", "c", "colonne"))$refus_tables), 0L))
+verifier_egal("règle (iii), ligne entière non déterminée sur une table que nul ne lit (adherents) : postes qui lisent une descendante (contrats : P1, P2, P3) ; sous-cas D10a et D10h (traités R) sur dossiers : P1 et P2",
+              list(arrets(bilan_de(list(character(0), character(0), character(0), character(0)),
+                                   list("adherents", NA_character_, "manquant_obligatoire", NA_character_)))$postes$motif_arret,
+                   arrets(bilan_de(list(character(0), character(0), character(0), character(0)),
+                                   list("dossiers", NA_character_, "D10a", NA_character_)))$postes$motif_arret,
+                   arrets(bilan_de(list(character(0), character(0), character(0), character(0)),
+                                   list("dossiers", NA_character_, "D10h", NA_character_)))$postes$motif_arret),
+              list(rep("manquant_obligatoire", 3L), c("D10a", NA, "D10a"), c("D10h", NA, "D10h")))
+verifier_egal("partie de ligne (erratum v1.0.5) : une colonne de la partie vaut pour toute la partie ; (ii) refus de portée colonne sur affiliations.date_saisie_fin (que nul ne lit) : lecteurs de date_fin (P1, P2) ; (iii) partie non déterminée (affiliations.motif_fin) : idem ; contrats.date_saisie_fin : P3 ; colonne hors partie (affiliations.salaire_reference) : ses seuls lecteurs",
+              list(arrets(bilan_de(list("affiliations", "date_saisie_fin", "D02c", "colonne")))$postes$motif_arret,
+                   arrets(bilan_de(list(character(0), character(0), character(0), character(0)),
+                                   list("affiliations", "motif_fin", "D02c", "affiliations.motif_fin")))$postes$motif_arret,
+                   arrets(bilan_de(list("contrats", "date_saisie_fin", "D02c", "colonne")))$postes$motif_arret,
+                   arrets(bilan_de(list("affiliations", "salaire_reference", "D09", "colonne")))$postes$motif_arret),
+              list(c("D02c", NA, "D02c"), c("D02c", NA, "D02c"), c(NA, "D02c", NA), c("D09", NA, "D09")))

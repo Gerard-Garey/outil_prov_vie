@@ -232,9 +232,37 @@ CONVENTIONS_LIMITE_AGE <- c("revolu", "millesime")
 # tête), puis par code (exclusions, hypotheses_defaut, declarations_requises : par motif,
 # puis famille ou référentiel dans l'ordre de leur liste) ; `identifiants` porte les dix premières valeurs de la clé primaire,
 # triées (sort radix), jointes par « ; » (colonnes d'une clé composite jointes par « | »).
+# Le bilan est celui de la vue à l'arrêté (vue_a_date()$bilan, spécification de B2, § 4.2).
 controler_base <- function(donnees, arrete, declarations = NULL, conventions = NULL) {
   if (missing(arrete)) {
     refuser("controler_base() : date d'arr\u00eat\u00e9 absente (`arrete`, obligatoire, sans valeur par d\u00e9faut)",
+            "plan_incomplet", module = "donnees")
+  }
+  vue_a_date(donnees, arrete, declarations, conventions)$bilan
+}
+
+# Vue à l'arrêté (spécification de B2, docs/specifications/b2-capital-deces-v1.md, § 4.2 ;
+# ADR 0010, point 14, annoté) : construite une seule fois par `donnees`, lue par les familles
+# de calcul (etats_a_date(), valeurs_vue()), jamais la base brute. Mêmes arguments et mêmes
+# refus d'appel que controler_base(), sans valeur par défaut (`declarations` et `conventions` :
+# NULL pour aucune déclaration, aucune convention). Rend une liste de classe `vue_provie` :
+#   bilan : la liste que rend controler_base() (controler_base() en est la lecture) ;
+#   retenu : par table, lignes retenues dans la vue (logique ; .construire_vue()) ;
+#   parties : par table à partie de ligne, logique de Kleene (.visibilite_a(), mode "vue") :
+#     TRUE connue à l'arrêté, FALSE inconnue de façon déterminée, NA non déterminée ou
+#     illisible par sa forme (#51) ;
+#   exclu : par famille de calcul (FAMILLES_CALCUL) puis par table, lignes exclues par une
+#     exclusion déclarée d'action `exclure` pour cette famille, cascade du dictionnaire
+#     (§ 1.10 : un sinistre exclu exclut ses dossiers, rentes, bénéficiaires, événements,
+#     prestations et évaluations) comprise ;
+#   hypotheses : hypothèses par défaut appliquées (placement des constats H déclarés), une
+#     entrée par (motif, référentiel, poste, valeur, table) avec ses lignes ;
+#   ctx : environnement interne, lu par valeurs_vue() et etats_a_date() seulement.
+# Sans point : appelée hors du module par les familles de calcul et l'orchestration (B2),
+# non exportée.
+vue_a_date <- function(donnees, arrete, declarations, conventions) {
+  if (missing(arrete)) {
+    refuser("vue_a_date() : date d'arr\u00eat\u00e9 absente (`arrete`, obligatoire, sans valeur par d\u00e9faut)",
             "plan_incomplet", module = "donnees")
   }
   dico <- dictionnaire()
@@ -263,7 +291,176 @@ controler_base <- function(donnees, arrete, declarations = NULL, conventions = N
   .regle_p(ctx)
   .construire_vue(ctx)
   .regle_v(ctx)
-  .bilan(ctx)
+  bilan <- .bilan(ctx)
+  structure(list(bilan = bilan, retenu = ctx$retenu, parties = .visibilite_a(ctx, "vue")$parties,
+                 exclu = .exclu_vue(ctx), hypotheses = ctx$placement$hypotheses, ctx = ctx),
+            class = "vue_provie")
+}
+
+# Valeurs d'une colonne dans la vue `vue` (objet vue_a_date()) : .valeurs_vue(). Son NA veut
+# dire « hors de la vue » (ligne non retenue, partie de ligne inconnue, non déterminée ou
+# illisible), jamais « absente » : un lecteur qui doit distinguer lit `vue$parties`
+# (spécification de B2, § 4.3). Sans point : appelée hors du module par les familles de
+# calcul, non exportée.
+valeurs_vue <- function(vue, table, colonne) {
+  if (!inherits(vue, "vue_provie")) stop("valeurs_vue() : `vue` doit \u00eatre un objet vue_provie", call. = FALSE)
+  .valeurs_vue(vue$ctx, table, colonne)
+}
+
+# Tables de la cascade d'une exclusion (dictionnaire, § 1.10) : un sinistre exclu exclut, dans
+# la même famille, ses dossiers, rentes, bénéficiaires, événements, prestations et
+# évaluations ; la cascade suit les clés étrangères simples de ces tables vers les tables de
+# la cascade et vers sinistres.
+.TABLES_CASCADE_EXCLUSION <- c("dossiers", "rentes", "beneficiaires", "evenements", "prestations", "evaluations_gestion")
+
+# Lignes exclues par famille de calcul (vue_a_date()$exclu) : lignes des exclusions placées
+# (.placer(), action `exclure`) de la famille, puis cascade jusqu'au point fixe (une ligne
+# d'une table de la cascade est exclue si la ligne qu'elle vise par une clé étrangère l'est).
+.exclu_vue <- function(ctx) {
+  tables <- setdiff(ctx$tables, "extraction")
+  liens <- .liens_visibilite(ctx$dico)
+  liens <- liens[liens$table %in% intersect(tables, .TABLES_CASCADE_EXCLUSION) &
+                   liens$table_cible %in% intersect(tables, c("sinistres", .TABLES_CASCADE_EXCLUSION)), , drop = FALSE]
+  res <- list()
+  for (f in FAMILLES_CALCUL) {
+    x <- lapply(stats::setNames(tables, tables), function(t) rep(FALSE, NROW(ctx$base[[t]])))
+    for (e in ctx$placement$exclusions) {
+      if (e$famille == f && e$action == "exclure" && e$table %in% tables) x[[e$table]][e$lignes] <- TRUE
+    }
+    repeat {
+      change <- FALSE
+      for (i in seq_len(nrow(liens))) {
+        t <- liens$table[i]
+        u <- liens$table_cible[i]
+        if (!any(x[[u]])) next
+        cles <- as.character(.valeurs(ctx, u, liens$colonne_cible[i]))[x[[u]]]
+        nouveau <- x[[t]] | as.character(.valeurs(ctx, t, liens$colonne[i])) %in% cles[!is.na(cles)]
+        if (!identical(nouveau, x[[t]])) {
+          x[[t]] <- nouveau
+          change <- TRUE
+        }
+      }
+      if (!change) break
+    }
+    res[[f]] <- x
+  }
+  res
+}
+
+# --- États à une date ----------------------------------------------------------------
+
+# Garanties dont etats_a_date() reconstitue les dossiers (B2 : deces seule ; spécification de
+# B2, § 4.2) ; colonnes rendues, dans cet ordre.
+.GARANTIES_ETATS <- "deces"
+.COLONNES_ETATS <- c("id_sinistre", "id_dossier", "etat", "date_entree_etat", "categorie_invalidite",
+                     "montant_en_vigueur", "etat_dossier", "date_etat_dossier", "motif_cloture", "instruit")
+
+# États à l'arrêté des dossiers de la vue `vue` (objet vue_a_date()) dont la garantie souscrite
+# a un code de `garanties` (B2 : "deces" seule ; tout autre code est une erreur de
+# programmation), pour la famille de calcul `famille` (exigée, sans valeur par défaut, un code
+# de FAMILLES_CALCUL ; autre valeur : erreur de programmation) (spécification de B2, § 4.2,
+# erratum v1.0.5 ; ADR 0010, point 14, annoté). Une ligne par dossier retenu, dans l'ordre de
+# la table dossiers, exclus pour la famille compris (l'appelant les filtre par
+# vue$exclu[[famille]]$dossiers) ; colonnes .COLONNES_ETATS :
+#   etat : "deces" (sinistre deces) ou "iad" (sinistre iad), NA sinon ; date_entree_etat :
+#     sinistres.date_survenance ; categorie_invalidite : NA (B5) ;
+#   montant_en_vigueur : montant du dernier fixation_capital du dossier retenu et non exclu
+#     pour la famille (NA sans fixation) ;
+#   etat_dossier ("ouvert", "capital_du", "clos"), date_etat_dossier (date d'effet de
+#     l'événement qui l'a fixé, date_ouverture pour l'ouvert initial), motif_cloture (motif du
+#     cloture_dossier en vigueur si clos, NA sinon) : automate du dossier deces sur les
+#     événements de la vue de niveau dossier non exclus pour la famille
+#     (vue$exclu[[famille]]$evenements), de date d'effet au plus l'arrêté (comme les
+#     composantes de l'enjeu et D07 (c)), dans l'ordre de .dernier_evenement() (date d'effet,
+#     ordre des types du § 4, date de saisie, id_evenement) : départ ouvert ; fixation_capital
+#     ouvert -> capital_du (montant mis à jour ; sur un clos, montant mis à jour, état
+#     inchangé) ; cloture_dossier -> clos ; reouverture_dossier : clos -> capital_du si un montant est en vigueur (fixation retenue
+#     antérieure à la réouverture), ouvert sinon, à la date d'effet de la réouverture ; les
+#     autres types sont sans effet ;
+#   instruit : logique de Kleene, NA si la partie sinistres.date_instruction vaut NA dans
+#     `vue$parties`, sinon partie ET date d'instruction présente (spécification de B2, § 4.3).
+# Sans point : appelée hors du module par la famille « engagement », non exportée.
+etats_a_date <- function(vue, garanties, famille) {
+  if (!inherits(vue, "vue_provie")) stop("etats_a_date() : `vue` doit \u00eatre un objet vue_provie", call. = FALSE)
+  if (missing(famille) || !is.character(famille) || length(famille) != 1L || is.na(famille) ||
+      !(famille %in% FAMILLES_CALCUL)) {
+    stop(paste0("erreur interne de provie : etats_a_date() : `famille` doit \u00eatre un code de FAMILLES_CALCUL (",
+                paste(FAMILLES_CALCUL, collapse = ", "), ")"), call. = FALSE)
+  }
+  if (!is.character(garanties) || length(garanties) < 1L || anyNA(garanties) || !all(garanties %in% .GARANTIES_ETATS)) {
+    stop(paste0("erreur interne de provie : etats_a_date() ne reconstitue que les garanties ",
+                paste(.GARANTIES_ETATS, collapse = ", ")), call. = FALSE)
+  }
+  ctx <- vue$ctx
+  vv <- function(t, c1) .valeurs_vue(ctx, t, c1)
+  jointure <- function(x, t, cle, c1) vv(t, c1)[match(as.character(x), as.character(vv(t, cle)), incomparables = NA)]
+  gs <- vv("dossiers", "id_garantie_souscrite")
+  code <- jointure(gs, "garanties_souscrites", "id_garantie_souscrite", "code_garantie")
+  k <- which(ctx$retenu$dossiers & code %in% garanties)
+  n <- length(k)
+  id_dossier <- vv("dossiers", "id_dossier")[k]
+  id_sinistre <- vv("dossiers", "id_sinistre")[k]
+  i_sin <- match(as.character(id_sinistre), as.character(vv("sinistres", "id_sinistre")), incomparables = NA)
+  nature <- vv("sinistres", "nature_sinistre")[i_sin]
+  etat <- ifelse(nature %in% "deces", "deces", ifelse(nature %in% "iad", "iad", NA_character_))
+  date_entree <- vv("sinistres", "date_survenance")[i_sin]
+  ouverture <- vv("dossiers", "date_ouverture")[k]
+  # automate du dossier, sur les événements retenus de niveau dossier, d'effet au plus l'arrêté
+  a <- as.numeric(ctx$arrete)
+  type <- vv("evenements", "type_evenement")
+  effet <- as.numeric(vv("evenements", "date_effet"))
+  ev <- which(!is.na(type) & !is.na(effet) & effet <= a & !is.na(vv("evenements", "id_dossier")) &
+                !vue$exclu[[famille]]$evenements)
+  p <- .paires(vv("evenements", "id_dossier")[ev], id_dossier)
+  etat_dossier <- rep("ouvert", n)
+  date_etat <- ouverture
+  montant <- rep(NA_real_, n)
+  motif_cloture <- rep(NA_character_, n)
+  if (nrow(p) > 0L) {
+    te <- ctx$dico$types_evenements
+    i <- ev[p$i]
+    o <- order(p$j, effet[i], te$ordre[match(type[i], te$type_evenement)], as.numeric(vv("evenements", "date_saisie"))[i],
+               vv("evenements", "id_evenement")[i], method = "radix")
+    i <- i[o]
+    j <- p$j[o]
+    montant_ev <- vv("evenements", "montant")
+    motif_ev <- vv("evenements", "motif")
+    for (m in seq_along(i)) {
+      e <- i[m]
+      d <- j[m]
+      switch(type[e],
+        fixation_capital = {
+          montant[d] <- montant_ev[e]
+          if (etat_dossier[d] != "clos") {
+            etat_dossier[d] <- "capital_du"
+            date_etat[d] <- effet[e]
+          }
+        },
+        cloture_dossier = {
+          etat_dossier[d] <- "clos"
+          date_etat[d] <- effet[e]
+          motif_cloture[d] <- motif_ev[e]
+        },
+        reouverture_dossier = {
+          if (etat_dossier[d] == "clos") {
+            etat_dossier[d] <- if (is.na(montant[d])) "ouvert" else "capital_du"
+            date_etat[d] <- effet[e]
+            motif_cloture[d] <- NA_character_
+          }
+        },
+        NULL)
+    }
+  }
+  # instruit : la partie de ligne (Kleene) ; une date présente sous une partie connue
+  partie <- vue$parties$sinistres[i_sin]
+  instruction <- .valeurs(ctx, "sinistres", "date_instruction")[i_sin]
+  instruit <- ifelse(is.na(partie), NA, partie & !is.na(instruction))
+  res <- data.frame(id_sinistre = id_sinistre, id_dossier = id_dossier, etat = etat, date_entree_etat = date_entree,
+                    categorie_invalidite = rep(NA_character_, n), montant_en_vigueur = montant,
+                    etat_dossier = etat_dossier, date_etat_dossier = structure(as.numeric(date_etat), class = "Date"),
+                    motif_cloture = motif_cloture, instruit = as.logical(instruit), stringsAsFactors = FALSE)
+  rownames(res) <- NULL
+  res[.COLONNES_ETATS]
 }
 
 # --- Refus d'appel -----------------------------------------------------------------
@@ -1918,6 +2115,12 @@ lire_declarations <- function(declarations, dico) {
   list(table = "affiliations", colonnes = c("date_fin", "motif_fin", "date_saisie_fin"), date = "date_saisie_fin"),
   list(table = "sinistres", colonnes = "date_instruction", date = "date_instruction"))
 
+# Parties de ligne (.PARTIES_LIGNE) : liste de list(table, colonnes), une par partie. Une
+# colonne d'une partie vaut pour toute la partie (spécification de B2, § 6.2, erratum
+# v1.0.5). Sans point : lue par les familles de calcul, qui la passent à
+# garanties::postes_a_arreter() (aucune arête garanties -> donnees) ; non exportée.
+parties_ligne <- function() lapply(.PARTIES_LIGNE, function(p) list(table = p$table, colonnes = p$colonnes))
+
 # Liens de la règle 1 du § 6 (une ligne fille n'est visible que si sa parente l'est) : clés
 # étrangères simples de colonnes.csv, hors adherents et assures (visibles par référence).
 .liens_visibilite <- function(dico) {
@@ -2543,24 +2746,24 @@ lire_declarations <- function(declarations, dico) {
   res
 }
 
-# Valeurs d'une colonne dans la vue : manquantes pour une ligne non retenue et pour une
-# partie de ligne inconnue à l'arrêté (fin d'un contrat ou d'une affiliation saisie après,
-# ou de saisie non déterminée ; instruction postérieure ; partie dont une colonne lue par la
-# vue est refusée pour sa valeur) ; une jointure sur ces valeurs ne
-# voit donc que la vue.
+# Valeurs d'une colonne dans la vue : manquantes pour une ligne non retenue et, à un arrêté
+# antérieur à l'extraction, pour une partie de ligne qui n'est pas connue à l'arrêté de façon
+# déterminée : partie lue sur l'évaluation unique de la visibilité (`parties` de
+# .visibilite_a(), mode "vue" ; M216), jamais recalculée ici, et date de partie jamais
+# convertie (#54, spécification de B2, § 4.3) : fin d'un contrat ou d'une affiliation saisie
+# après, ou de saisie non déterminée ; instruction postérieure ; partie dont une colonne lue
+# par la vue est refusée pour sa valeur ; date de partie illisible par sa forme (#51). Le NA
+# rendu veut dire « hors de la vue », non « absente » ; une jointure sur ces valeurs ne voit
+# donc que la vue. La table extraction (une ligne, contrôlée par les refus d'appel) n'a pas de
+# vue : elle est lue telle quelle.
 .valeurs_vue <- function(ctx, table, colonne) {
   x <- .valeurs(ctx, table, colonne)
+  if (table == "extraction") return(x)
   masque <- !ctx$retenu[[table]]
   if (!.vue_totale(ctx)) {
-    a <- as.numeric(ctx$arrete)
     for (p in .PARTIES_LIGNE) {
       if (p$table == table && colonne %in% p$colonnes) {
-        d <- as.numeric(.valeurs(ctx, table, p$date))
-        # fin connue à la date que retient l'hypothèse déclarée de D03g
-        dh <- ctx$partie_h[[table]]
-        if (!is.null(dh) && p$date == "date_saisie_fin") d <- ifelse(is.na(dh), d, dh)
-        # partie de visibilité non déterminée (règle P, ou refus de valeur, .refus_vue())
-        masque <- masque | is.na(d) | d > a | ctx$partie_nd[[table]]
+        masque <- masque | !(.visibilite_a(ctx, "vue")$parties[[table]] %in% TRUE)
       }
     }
   }
@@ -3808,13 +4011,21 @@ lire_declarations <- function(declarations, dico) {
     statut[[t]] <- ifelse(cle %in% vrai[!is.na(vrai)], TRUE, ifelse(cle %in% indet[!is.na(indet)], NA, FALSE))
     propre[[t]] <- statut[[t]]
   }
-  # parties de ligne
+  # parties de ligne ; une date de partie illisible par sa forme (valeur écrite que l'outil ne
+  # sait pas lire, champ non vide) est inconnue, NA dans les deux modes, sans conversion ; un
+  # champ vide garde sa valeur (#51 ; spécification de B2, § 4.3 : « illisible » vaut
+  # « inconnu », non « absente »)
   parties <- list()
   for (p in .PARTIES_LIGNE) {
     t <- p$table
     if (!(t %in% tables)) next
-    if (totale) { parties[[t]] <- rep(TRUE, n_de(t)); next }
-    # date de la partie illisible par sa forme : non lue (aucune conversion), partie masquée
+    illisible <- if (lisible(t, p$date)) rep(FALSE, n_de(t)) else !is.na(.valeurs(ctx, t, p$date))
+    if (totale) {
+      x <- rep(TRUE, n_de(t))
+      x[illisible] <- NA
+      parties[[t]] <- x
+      next
+    }
     d <- if (lisible(t, p$date)) as.numeric(.valeurs(ctx, t, p$date)) else rep(NA_real_, n_de(t))
     dh <- ctx$partie_h[[t]]
     if (!is.null(dh) && p$date == "date_saisie_fin") d <- ifelse(is.na(dh), d, dh)
@@ -3827,6 +4038,7 @@ lire_declarations <- function(declarations, dico) {
       x[k$lignes] <- y
     }
     for (k in refus) if (k$table == t && identical(k$colonne, p$date)) x[k$lignes] <- NA
+    x[illisible] <- NA
     parties[[t]] <- x & statut[[t]]
   }
   res <- list(statut = statut, propre = propre, valable = valable, candidate = candidate, membre = membre,
@@ -4861,6 +5073,7 @@ lire_declarations <- function(declarations, dico) {
   ordre <- order(traitement, method = "radix")   # départage reproductible de deux traitements d'une même clé
   constats <- constats[ordre]
   placement <- .placer(ctx, constats)
+  ctx$placement <- placement
   enjeu <- .enjeu(ctx, placement$ecarts, dico)
 
   ne <- ctx$non_executes

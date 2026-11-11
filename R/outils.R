@@ -674,18 +674,47 @@ date_atteinte_age <- function(date_naissance, age, convention) {
   list(annee = lt$year + 1900L, mois = lt$mon + 1L, jour = lt$mday)
 }
 
-# Nombre de jours (depuis 1970-01-01) de la date annee-mois-jour, le 29 février d'une
-# année non bissextile étant lu 1er mars.
+# Nombre de jours (depuis 1970-01-01) de la date annee-mois-jour ; un quantième absent du
+# mois (29 février d'une année non bissextile, 31 d'un mois de trente jours) est lu premier
+# jour du mois suivant. Seule arithmétique de quantième du package (ajouter_mois(),
+# anniversaires de date_atteinte_age()).
 .jour_de <- function(annee, mois, jour) {
   n <- max(length(annee), length(mois), length(jour))
-  annee <- rep_len(annee, n)
-  mois <- rep_len(mois, n)
-  jour <- rep_len(jour, n)
-  bissextile <- (annee %% 4L == 0L & annee %% 100L != 0L) | annee %% 400L == 0L
-  mars <- mois == 2L & jour == 29L & !bissextile
-  mois[mars] <- 3L
-  jour[mars] <- 1L
-  as.numeric(as.Date(sprintf("%04d-%02d-%02d", annee, mois, jour), format = "%Y-%m-%d"))
+  annee <- rep_len(as.integer(annee), n)
+  mois <- rep_len(as.integer(mois), n)
+  jour <- rep_len(as.integer(jour), n)
+  premier <- .jour_premier_janvier(annee) + .CUMUL_MOIS[mois] + (mois > 2L & .bissextile(annee))
+  longueur <- .JOURS_MOIS[mois] + (mois == 2L & .bissextile(annee))
+  ifelse(jour > longueur, premier + longueur, premier + jour - 1)
+}
+
+# Calendrier grégorien proleptique, par arithmétique sur les entiers (sans chaîne ni
+# as.Date ; constat D de l'audit de #66) : longueur des mois d'une année commune, jours
+# écoulés avant chaque mois, année bissextile.
+.JOURS_MOIS <- c(31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31)
+.CUMUL_MOIS <- c(0, cumsum(.JOURS_MOIS)[-12L])
+.bissextile <- function(annee) (annee %% 4L == 0L & annee %% 100L != 0L) | annee %% 400L == 0L
+
+# Nombre de jours depuis 1970-01-01 du 1er janvier de `annee` (entiers, vectorisé ; NA pour
+# NA), par décompte des années bissextiles.
+.jour_premier_janvier <- function(annee) {
+  y <- as.integer(annee) - 1L
+  bis <- function(x) x %/% 4L - x %/% 100L + x %/% 400L
+  as.numeric(365 * (y - 1969L) + bis(y) - bis(1969L))
+}
+
+# Date `k` mois après `d` (Date ou nombre de jours depuis 1970-01-01 ; vectorisé, `d` et `k`
+# de même longueur ou l'un de longueur 1 ; `k` entier, négatif pour reculer) : même quantième,
+# un quantième absent du mois visé donnant le premier jour du mois suivant (.jour_de(), comme
+# l'anniversaire d'un 29 février de date_atteinte_age()). Rend des nombres de jours. Sans
+# point : lue par `engagement` (critère sans_evenement ; 1er janvier des années civiles du
+# découpage des durées, ajouter_mois(0, 12 (y - 1970))) et `risque_en_cours` (pas, échéances,
+# anniversaires) ; non exportée.
+ajouter_mois <- function(d, k) {
+  n <- .longueur_commune(length(d), length(k), "ajouter_mois")
+  c0 <- .composantes_date(rep_len(as.numeric(d), n))
+  m <- c0$annee * 12L + c0$mois - 1L + rep_len(as.integer(k), n)
+  .jour_de(m %/% 12L, m %% 12L + 1L, c0$jour)
 }
 
 # Anniversaire d'ordre `age` d'une naissance (composantes) : en nombre de jours.
