@@ -8,8 +8,9 @@ name: CI
 #     CONTEXT.md, « Plateforme de référence »), sans package CRAN ;
 #   - « Documents LaTeX » : pdfLaTeX (trois passes) sur la charte et la documentation de
 #     fond, puis le contrôle du préambule (issue #7).
-# Le workflow de régénération des références de non-régression s'écrira en B2, sur la
-# même image.
+# Le workflow de régénération des références de non-régression est
+# regenerer-references.yml (même image, lancé à la main, hors du ruleset ; ADR 0011) ; le
+# job « Contrôles du dépôt » contrôle les commits de référence (commit_reference.sh).
 
 on:
   pull_request:
@@ -30,9 +31,11 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
+      # Historique complet : commit_reference.sh lit les commits de la PR et leurs parents.
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           persist-credentials: false
+          fetch-depth: 0
       - name: Réglages Claude Code valides
         run: |
           set -euo pipefail
@@ -59,6 +62,25 @@ jobs:
             echo "::error::fichier sensible versionné (voir la liste ci-dessus)"; exit 1
           fi
           echo "Aucun fichier sensible versionné."
+      # ADR 0011, point 21 : tout commit qui touche tests/reference/ ne touche rien d'autre, a
+      # pour unique parent le commit calculé (message et provenance.txt) et cite l'empreinte de
+      # l'arbre ; témoins négatifs d'abord. Plage : commits de la PR, ou de la poussée sur main.
+      - name: Commits de référence
+        env:
+          BASE_REF: ${{ github.base_ref }}
+          AVANT: ${{ github.event.before }}
+          TETE: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          set -euo pipefail
+          bash tests/controles/commit_reference.sh --temoins
+          if [ -n "$BASE_REF" ]; then
+            plage="origin/$BASE_REF..$TETE"
+          elif [ -n "$AVANT" ] && [ "$AVANT" != "0000000000000000000000000000000000000000" ]; then
+            plage="$AVANT..$TETE"
+          else
+            plage="$TETE~1..$TETE"
+          fi
+          bash tests/controles/commit_reference.sh "$plage"
 
   tests:
     name: Tests (R 4.3.3)
