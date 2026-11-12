@@ -4,7 +4,8 @@
 # est défini. Bases, tables fictives et plan minimal : tests/b2_bases.R.
 # Valeurs en dur : cas T1 à T7 du § 7.4 (mesure m7 de la spécification ; T3, T4 et T6 selon
 # l'erratum v1.0.4 : durées exact_exact du § 2.5, 2024 bissextile, la durée de 2024-01-01 à
-# 2025-01-01 valant 365/366 + 1/365), tolérance relative 1e-10 (critère 3.6).
+# 2025-01-01 valant 365/366 + 1/365), tolérance relative 1e-10 (critère 3.6). Valeurs de
+# `lifecontingencies` en dur : critère (3.11), § 7.6 (après T6).
 
 source(file.path(racine, "tests", "b2_bases.R"))
 ns <- asNamespace("provie")
@@ -58,6 +59,40 @@ t6 <- indiv(b2_base_p3("annuelle"), plan_p3(D("2024-01-01"), acquisition = 0.03)
 verifier_egal("T6 : T3 avec acquisition 0,03, arrêté à la date d'effet (prime de l'effet passée) : valeur avant plancher négative, provision 0 (plancher par contrat)",
               list(t6$valeur < 0, t6$montant), list(TRUE, 0))
 verifier_egal("T6 (erratum v1.0.4) : valeur avant plancher -28,6288517481", t6$valeur, -28.6288517481, tolerance = TOL)
+
+# Contre-vérification par `lifecontingencies` (critère 3.11, spécification de B2, § 7.6, #66). Valeurs
+# imprimées par tests/contre_verification/b2_lifecontingencies.R, hors CI, le 12/11/2026 : R version
+# 4.3.3 (2024-02-29), lifecontingencies 1.6.0 (la 1.6.3 exige R >= 4.4.0 : 1.6.0 installée depuis
+# l'archive CRAN, avec Rcpp 1.1.2 et ggplot2 4.0.3), commande
+#   R_LIBS=<bibliothèque> Rscript tests/contre_verification/b2_lifecontingencies.R
+# (%.10f). T1 = Axn(x = 41, n = 2) x 100 000 ; A_effet = Axn(x = 40, n = 3) x 100 000 ; ä_effet =
+# axn(x = 40, n = 3), table fictive du § 3.6, taux 0,02. `Axn` et `axn` comptent des durées entières :
+# elles se comparent aux valeurs à durées entières recalculées ici en R de base ; l'écart du code
+# (durée 2024-01-01 à 2025-01-01 = 365/366 + 1/365, 29 février 2024, § 2.5) est vérifié à part.
+# Régénération sur ordre du mainteneur, avec tableau avant / après.
+lc_t1 <- 4786.6205305652
+lc_a_effet <- 5626.2297306466
+lc_a_effet_vie <- 2.9031141869
+lx_lc <- c(100000, 99000, 97020, 94109.4)
+v_lc <- 1 / 1.02
+dx_lc <- lx_lc[-4L] - lx_lc[-1L]
+ent_t1 <- 100000 * sum(v_lc^(1:2) * dx_lc[2:3]) / lx_lc[2L]
+ent_a_effet <- 100000 * sum(v_lc^(1:3) * dx_lc[1:3]) / lx_lc[1L]
+ent_a_effet_vie <- sum(v_lc^(0:2) * lx_lc[1:3]) / lx_lc[1L]
+# Les trois valeurs sont supérieures à 1 : tolérance relative 1e-10, qui couvre l'arrondi de l'impression
+# (5e-11 en absolu, soit 1,7e-11 en relatif pour ä_effet, la plus petite) ; un appel par valeur.
+verifier_egal("lifecontingencies 1.6.0 (R 4.3.3, 12/11/2026) : T1 = Axn(41, 2) x 100 000 = 4 786,6205305652, égal à la valeur à durées entières recalculée en R de base",
+              lc_t1, ent_t1, tolerance = TOL)
+verifier_egal("lifecontingencies 1.6.0 : A_effet = Axn(40, 3) x 100 000 = 5 626,2297306466, égal à la valeur à durées entières recalculée en R de base",
+              lc_a_effet, ent_a_effet, tolerance = TOL)
+verifier_egal("lifecontingencies 1.6.0 : ä_effet = axn(40, 3), paiement d'avance = 2,9031141869, égal à la valeur à durées entières recalculée en R de base",
+              lc_a_effet_vie, ent_a_effet_vie, tolerance = TOL)
+verifier_egal("T1 du code égal à la valeur de lifecontingencies (4 786,6205305652), aucun effet du 29 février 2024",
+              t1$montant, lc_t1, tolerance = TOL)
+ecart_lc <- c(a_effet = (lc_a_effet - t3$a_effet) / t3$a_effet,
+              a_effet_vie = (lc_a_effet_vie - t3$a_double_effet) / t3$a_double_effet)
+verifier("A_effet et ä_effet du code sous les valeurs de lifecontingencies, d'un écart relatif entre 5e-8 et 3e-7 (mesuré : 1,48e-7 et 9,7e-8), dû au 29 février 2024 (durée 2024 = 365/366 + 1/365, § 2.5 ; § 7.6)",
+         all(ecart_lc > 5e-8 & ecart_lc < 3e-7))
 
 # arrêté entre deux anniversaires (fraction s de l'année d'assurance, répartition uniforme ou
 # force constante ; spécification de B2, § 5.5), calcul indépendant
