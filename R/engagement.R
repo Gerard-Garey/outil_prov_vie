@@ -708,8 +708,9 @@ statut_methode_catalogue <- function(catalogue, garantie, poste, champ, methode)
 # famille engagement, de garantie souscrite hors de garanties_couverture_exclue(vue,
 # "engagement") (erratum v1.0.13) ; P2 = ceux qui remplissent le critère du plan (réunion), P1 =
 # les autres, partition faite avant le filtre des dossiers clos ; un dossier clos n'est pas
-# calculé, sauf si une ligne d'evenements du sinistre ou du dossier porte une hypothèse de la
-# vue (S2 ; visible de type cloture_dossier ou reouverture_dossier, ou invisible) : unité
+# calculé, sauf si une ligne d'evenements du dossier (lecture par id_dossier seule : un événement
+# d'un autre dossier du sinistre ne décide pas, erratum v1.0.19, réserve R7) porte une hypothèse
+# de la vue (S2 ; visible de type cloture_dossier ou reouverture_dossier, ou invisible) : unité
 # restituée à 0, jugement_expert, deux lignes d'échéancier de flux 0 (§ 5.8, errata v1.0.17 et v1.0.18, E18-1) ; un dossier de solde au
 # plus nul n'entre pas dans `dossiers`, sauf sous D03c (S1) ou si une ligne de prestations du
 # dossier porte S2 (unité à montant nul, § 5.8, E16-5 : montant 0). Indicateurs : une
