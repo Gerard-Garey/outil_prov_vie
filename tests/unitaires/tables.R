@@ -429,9 +429,70 @@ s_haute <- ns$construire_table(data.frame(mois = sprintf("2023-%02d", 1:12), tau
                                           stringsAsFactors = FALSE), "serie_tme_mensuelle", "tme_haute", "fictive",
                                "série fictive, sans source")
 p_haute <- ns$plafond_a132_1(s_haute, as.Date(c("2024-01-01", "2024-01-01")), c("periodique", "unique"), c(TRUE, FALSE), 1L)
-verifier("plafond de 3,5 % : TME semestriel 6 % (au-dessus de 5,83 %), primes périodiques et prime unique longue : 0,035",
+# Lecture (a) de #88 (décision du mainteneur du 12 novembre 2026) : échelle d'A132-1-1 sur le
+# taux de référence mensuel (60 % du TME non plafonné), puis plafond de 3,5 % sur les deux
+# bornes ; taux_reference = min(3,5 % ; 60 %) (option (a2)). Valeurs attendues calculées à la
+# main, sans plafond_a132_1() (énumération des points k x 0,0025 de l'ouvert ]réf - 0,0035 ;
+# réf + 0,0010[ à 1e-12, puis min(0,035 ; .)) : TME 6 % -> réf. 0,036, point 0,035 seul
+# (0,0325 = réf. - 0,0035 exclu), bornes 0,035 et 0,035 (lecture (b) : 0,0325 et 0,035).
+verifier("plafond de 3,5 % : TME semestriel 6 %, primes périodiques et prime unique longue : 0,035, bornes 0,035 et 0,035",
          identical(p_haute$taux_reference, c(0.035, 0.035)) && all(abs(p_haute$borne_haute - 0.035) <= 1e-15) &&
-           all(abs(p_haute$borne_basse - 0.0325) <= 1e-15))
+           all(abs(p_haute$borne_basse - 0.035) <= 1e-15) && identical(p_haute$reference_plafonnee_3_5, c(TRUE, TRUE)))
+# Seuil de divergence des lectures (a) et (b) : TME 5,99 % -> réf. 0,03594, points 0,0325 et
+# 0,035, bornes 0,0325 et 0,035 (identiques sous (b)) ; plafond de 3,5 % appliqué au taux de
+# référence restitué (0,03594 > 0,035), sans effet sur les bornes.
+p_seuil <- ns$plafond_a132_1(serie_x(rep(5.99, 6L), "tme_599"), as.Date("2024-01-01"), "periodique", NA, 1L)
+cat("    mesure : TME 5,99 % :", sprintf("%.17g", unlist(p_seuil[1:4])), p_seuil$reference_plafonnee_3_5, "\n")
+verifier("plafond de 3,5 % : TME 5,99 % (juste sous 6 %) : 0,035, bornes 0,0325 et 0,035, reference_plafonnee_3_5",
+         abs(p_seuil$tme_semestriel - 0.0599) <= 1e-15 && identical(p_seuil$taux_reference, 0.035) &&
+           abs(p_seuil$borne_basse - 0.0325) <= 1e-15 && abs(p_seuil$borne_haute - 0.035) <= 1e-15 &&
+           identical(p_seuil$reference_plafonnee_3_5, TRUE))
+# Réserve M1 de l'audit de #88 : la mention exige un dépassement de 3,5 % de plus de 1e-12,
+# pmin() plafonne sans tolérance. Série constante 5,8333333333417 % : 60 % du TME dépasse
+# 3,5 % d'environ 5e-14, taux_reference ramené à 3,5 %, mention FALSE (écart assumé, égalité
+# à 1e-12) ; série constante 5,8333333342 % : dépassement d'environ 5,2e-12, mention TRUE.
+s_m1 <- function(x, id) {
+  ns$construire_table(data.frame(mois = sprintf("2023-%02d", 1:12), taux_pourcent = rep(x, 12L),
+                                 stringsAsFactors = FALSE), "serie_tme_mensuelle", id, "fictive",
+                      "série fictive, sans source")
+}
+p_m1 <- ns$plafond_a132_1(s_m1(5.8333333333417, "tme_m1_sous"), as.Date("2024-01-01"), "periodique", NA, 1L)
+p_m1b <- ns$plafond_a132_1(s_m1(5.8333333342, "tme_m1_sur"), as.Date("2024-01-01"), "periodique", NA, 1L)
+cat("    mesure : M1 : écarts à 3,5 %", sprintf("%.3g", 0.6 * c(p_m1$tme_semestriel, p_m1b$tme_semestriel) - 0.035),
+    "; mentions", p_m1$reference_plafonnee_3_5, p_m1b$reference_plafonnee_3_5, "\n")
+verifier("reference_plafonnee_3_5 : FALSE si 60 % du TME dépasse 3,5 % de moins de 1e-12 (référence 0,035, bornes 0,0325 et 0,035)",
+         0.6 * p_m1$tme_semestriel > 0.035 && 0.6 * p_m1$tme_semestriel - 0.035 <= 1e-12 &&
+           identical(p_m1$taux_reference, 0.035) && identical(p_m1$reference_plafonnee_3_5, FALSE) &&
+           abs(p_m1$borne_basse - 0.0325) <= 1e-15 && abs(p_m1$borne_haute - 0.035) <= 1e-15)
+verifier("reference_plafonnee_3_5 : TRUE si 60 % du TME dépasse 3,5 % de plus de 1e-12",
+         0.6 * p_m1b$tme_semestriel - 0.035 > 1e-12 && identical(p_m1b$taux_reference, 0.035) &&
+           identical(p_m1b$reference_plafonnee_3_5, TRUE))
+# TME 7 % -> réf. 0,042, points 0,04 et 0,0425, bornes plafonnées 0,035 et 0,035 (lecture (b) :
+# 0,0325 et 0,035) ; tarifs 3,40 % ; 3,50 % ; 3,51 % : FALSE (NA sous (b)), FALSE, TRUE. La
+# branche 75 % n'est pas plafonnée : prime unique de huit ans au plus, réf. 0,0525, points
+# 0,05 et 0,0525 (0,055 = réf. + 0,0025, hors de l'ouvert), bornes 0,05 et 0,0525.
+x7p <- a132("2024-01-01", rep("periodique", 3L), rep("2034-01-01", 3L), c(0.034, 0.035, 0.0351),
+            serie = serie_x(rep(7, 6L), "tme_7"))
+x7u <- a132("2024-01-01", "unique", "2027-01-01", 0.05, serie = serie_x(rep(7, 6L), "tme_7"))
+mesurer("X7p (TME 7 %)", x7p)
+mesurer("X7u (TME 7 %, 75 %)", x7u)
+verifier("plafond de 3,5 % : TME 7 %, primes périodiques : 0,035, bornes 0,035 et 0,035 ; FALSE, FALSE, TRUE",
+         all(abs(x7p$valeur_regle - 0.035) <= 1e-15) && all(bornes_de(x7p) == "0.035 0.035") &&
+           identical(x7p$depassement, c(FALSE, FALSE, TRUE)))
+verifier("TME 7 %, prime unique de huit ans au plus (75 %) : 0,0525, bornes 0,05 et 0,0525, non plafonnée",
+         abs(x7u$valeur_regle - 0.0525) <= 1e-15 && identical(bornes_de(x7u), "0.05 0.0525") &&
+           identical(x7u$depassement, FALSE))
+# Mention reference_plafonnee_3_5 dans detail : présente au-dessus de 3,5 % (TME 7 %, primes
+# périodiques), absente sous 3,5 % (TME 5,5 % : réf. 0,033, bornes 0,03 et 0,0325) et dans
+# la branche 75 % (TME 7 %).
+x55 <- a132("2024-01-01", "periodique", "2034-01-01", 0.03, serie = serie_x(rep(5.5, 6L), "tme_55"))
+mesurer("X55 (TME 5,5 %)", x55)
+verifier("detail : reference_plafonnee_3_5 à TME 7 % en primes périodiques, après delai_3_mois_non_pris_en_compte",
+         all(grepl(";delai_3_mois_non_pris_en_compte;reference_plafonnee_3_5$", x7p$detail)))
+verifier("detail : pas de reference_plafonnee_3_5 à TME 5,5 % (réf. 0,033, bornes 0,03 et 0,0325) ni en branche 75 %",
+         abs(x55$valeur_regle - 0.033) <= 1e-15 && identical(bornes_de(x55), "0.03 0.0325") &&
+           !grepl("reference_plafonnee_3_5", x55$detail, fixed = TRUE) &&
+           !grepl("reference_plafonnee_3_5", x7u$detail, fixed = TRUE))
 
 # --- (2.5) Aucune table embarquée -----------------------------------------------------------
 

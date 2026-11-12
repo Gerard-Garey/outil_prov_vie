@@ -32,6 +32,8 @@ COLONNES_INDICATEURS <- c("regle", "poste", "garantie", "valeur_regle", "valeur_
 #   plus huit ans), sinon min(3,5 % ; 60 %) ; échelle d'A132-1-1 (erratum v1.0.2, contrôle
 #   de conformité de regulatory du 11 novembre 2026) : plafond au pas de 0,25 point, sans
 #   descendre en dessous de 0, inchangé tant que T - 0,10 point < référence < T + 0,35 point ;
+#   à la sortie de cet intervalle, le nouveau plafond est le point de l'échelle
+#   immédiatement inférieur au taux de référence mensuel ;
 #   comparaisons de A132_1 et R132_3_1 à 1e-12 près (approximation numérique : très au-dessus
 #   de l'erreur d'arrondi binaire, moins de 1e-15 sur des taux de l'ordre de 0,05, très
 #   au-dessous de la résolution des taux, de l'ordre de 1e-5 ; aucun arrondi n'est prescrit par
@@ -414,19 +416,33 @@ minimum_r132_3_1 <- function(serie, annee, decalage) {
 # primaire et secondaire) ; les deux lectures décrites par regulatory le
 # 11 novembre 2026, (alpha) moyenne sur six mois du maximum mensuel, (beta) moyenne des
 # marchés primaire et secondaire, ne sont pas tranchées.
-# Échelle d'A132-1-1 (établie par regulatory) : sans historique du plafond, le plafond en
-# vigueur T est l'un des multiples k x 0,25 point (k entier >= 0) de l'intervalle ouvert
+# Échelle d'A132-1-1 (établie par regulatory) : le plafond en vigueur T reste inchangé tant
+# que T - 0,10 point < référence < T + 0,35 point ; à la sortie de cet intervalle, le nouveau
+# T est le point de l'échelle immédiatement inférieur au taux de référence mensuel. Tout
+# point de l'ouvert ci-dessous peut donc être en vigueur : sans historique du plafond, T est
+# l'un des multiples k x 0,25 point (k entier >= 0) de l'intervalle ouvert
 # ]référence - 0,35 point ; référence + 0,10 point[, appartenance testée à 1e-12 près, et
 # T = 0 si aucun n'y figure ; borne_basse et borne_haute = plus petit et plus grand de ces
-# points (0 et 0 si aucun). Délai de trois mois d'A132-1-1 : délai de grâce (lecture de
-# regulatory), non pris en compte ; un dépassement signalé peut être un faux positif pour un
+# points (0 et 0 si aucun). Plafond de 3,5 % (#88, lecture (a), décision du mainteneur du
+# 12 novembre 2026) : hors de la branche 75 %, l'échelle s'applique au taux de référence
+# mensuel d'A132-1-1, 60 % du TME semestriel non plafonné, puis le plafond de 3,5 % d'A132-1
+# s'applique aux deux bornes ; taux_reference reste min(3,5 % ; 60 %) (option (a2)), et
+# reference_plafonnee_3_5 vaut TRUE quand 60 % du TME dépasse 3,5 % de plus de 1e-12 (FALSE
+# dans la branche 75 %) : la mention décrit la convention (a2), taux_reference à 3,5 % au
+# lieu de 60 % du TME, et ne dit pas que le plafond réglementaire change. Écart assumé avec
+# pmin(), sans tolérance : si 60 % du TME est dans ]3,5 % ; 3,5 % + 1e-12], taux_reference
+# est ramené à 3,5 % et la mention vaut FALSE ; taux_reference et 60 % du TME diffèrent alors
+# d'au plus 1e-12, égaux à la tolérance des comparaisons de la règle, et les bornes ne
+# changent pas. Délai de trois mois d'A132-1-1 : délai de grâce (lecture de regulatory), non
+# pris en compte ; un dépassement signalé peut être un faux positif pour un
 # contrat souscrit dans les trois mois qui suivent une baisse du plafond.
 # `nature_primes` ("unique", "periodique" ou NA) et `duree_au_plus_8_ans` (logique, NA si le
 # terme manque) : longueur de `date`, ou 1. Rend un data.frame (tme_semestriel,
-# taux_reference, borne_basse, borne_haute), une ligne par date ; taux_reference et bornes
-# NA si un mois manque, si nature_primes manque, ou en prime unique si la durée manque (en
-# primes périodiques, la branche min(3,5 % ; 60 %) ne dépend pas de la durée : erratum v1.0.2,
-# écart E3 de regulatory).
+# taux_reference : 75 % du TME dans la branche 75 %, sinon taux de référence mensuel
+# plafonné à 3,5 % ; borne_basse, borne_haute, reference_plafonnee_3_5), une ligne par date ;
+# taux_reference, bornes et reference_plafonnee_3_5 NA si un mois manque, si nature_primes
+# manque, ou en prime unique si la durée manque (en primes périodiques, la branche
+# min(3,5 % ; 60 %) ne dépend pas de la durée : erratum v1.0.2, écart E3 de regulatory).
 plafond_a132_1 <- function(serie, date, nature_primes, duree_au_plus_8_ans, decalage) {
   .controler_serie(serie, "plafond_a132_1")
   .controler_decalage(decalage, "plafond_a132_1")
@@ -447,11 +463,19 @@ plafond_a132_1 <- function(serie, date, nature_primes, duree_au_plus_8_ans, deca
   connue <- !is.na(nature_primes) & (nature_primes == "periodique" | !is.na(duree_au_plus_8_ans))
   courte <- connue & nature_primes == "unique" & duree_au_plus_8_ans %in% TRUE
   autre <- connue & !courte
-  reference <- rep(NA_real_, n)
-  reference[courte] <- .PART_A132_1_UNIQUE_COURTE * tme[courte]
-  reference[autre] <- pmin(.PLAFOND_A132_1_AUTRE, .PART_A132_1_AUTRE * tme[autre])
-  bornes <- .bornes_echelle_a132_1_1(reference)
-  data.frame(tme_semestriel = tme, taux_reference = reference, borne_basse = bornes$basse, borne_haute = bornes$haute)
+  mensuel <- rep(NA_real_, n)
+  mensuel[courte] <- .PART_A132_1_UNIQUE_COURTE * tme[courte]
+  mensuel[autre] <- .PART_A132_1_AUTRE * tme[autre]
+  bornes <- .bornes_echelle_a132_1_1(mensuel)
+  reference <- mensuel
+  reference[autre] <- pmin(.PLAFOND_A132_1_AUTRE, mensuel[autre])
+  bornes$basse[autre] <- pmin(.PLAFOND_A132_1_AUTRE, bornes$basse[autre])
+  bornes$haute[autre] <- pmin(.PLAFOND_A132_1_AUTRE, bornes$haute[autre])
+  plafonne <- rep(NA, n)
+  plafonne[courte & !is.na(tme)] <- FALSE
+  plafonne[autre] <- mensuel[autre] > .PLAFOND_A132_1_AUTRE + .TOLERANCE_INDICATEURS
+  data.frame(tme_semestriel = tme, taux_reference = reference, borne_basse = bornes$basse, borne_haute = bornes$haute,
+             reference_plafonnee_3_5 = plafonne)
 }
 
 # Points extrêmes de l'échelle d'A132-1-1 dans ]référence - 0,35 point ; référence + 0,10
@@ -531,8 +555,9 @@ indicateur_r132_3_1 <- function(serie, annee, decalage, taux_retenu, poste, gara
 # (délai de grâce) non pris en compte : TRUE peut être un faux positif. detail :
 # « id_contrat=...;date=AAAA-MM-JJ;nature_primes=...;borne_basse=...;borne_haute=...;
 # type_organisme=...;delai_3_mois_non_pris_en_compte », puis « ;approximation_arrete »,
-# « ;terme_absent » (en prime unique, référence NA, sans hypothèse par défaut ; en primes
-# périodiques, ligne calculée), « ;serie_incomplete ».
+# « ;reference_plafonnee_3_5 » (60 % du TME au-dessus de 3,5 %, #88), « ;terme_absent » (en
+# prime unique, référence NA, sans hypothèse par défaut ; en primes périodiques, ligne
+# calculée), « ;serie_incomplete ».
 indicateur_a132_1 <- function(serie, date, nature_primes, date_effet, date_terme, decalage, taux_tarif, id_contrat,
                               poste, garantie, type_organisme, approximation_arrete) {
   .controler_libelles("indicateur_a132_1", poste, garantie, type_organisme)
@@ -567,6 +592,7 @@ indicateur_a132_1 <- function(serie, date, nature_primes, date_effet, date_terme
                    ";borne_basse=", .reel_detail(p$borne_basse), ";borne_haute=", .reel_detail(p$borne_haute),
                    ";type_organisme=", type_organisme, ";delai_3_mois_non_pris_en_compte",
                    if (approximation_arrete) ";approximation_arrete" else "",
+                   ifelse(p$reference_plafonnee_3_5 %in% TRUE, ";reference_plafonnee_3_5", ""),
                    ifelse(is.na(date_terme), ";terme_absent", ""),
                    ifelse(is.na(p$tme_semestriel), ";serie_incomplete", ""))
   .lignes_indicateurs("A132_1", poste, garantie, p$taux_reference, taux_tarif, depassement, detail)
