@@ -315,7 +315,8 @@ valeurs_vue <- function(vue, table, colonne) {
 # colonne d'identifiant id_* de la clé primaire de la table ou clé étrangère (`reference`) du
 # dictionnaire, de type character (aucune date, aucun montant, aucune autre composante de clé
 # comme affiliations.college ; erratum v1.0.18, constats m1 et m3 de l'audit, décisions du
-# mainteneur), est une erreur interne. Seul
+# mainteneur), et tout `lignes` qui n'est pas un vecteur numérique d'indices entiers, finis et
+# positifs (un logique, `TRUE` par exemple, ne vaut pas indice), est une erreur interne. Seul
 # rattachement d'une ligne cachée à son unité, pour un statut ; jamais lu
 # pour un montant. Sans point : appelée par `engagement` (hypotheses_vue_unites()) ; non
 # exportée.
@@ -329,6 +330,10 @@ cles_lignes_hypothese <- function(vue, table, lignes, colonne) {
   if (!(is.character(colonne) && length(colonne) == 1L && colonne %in% cles)) {
     stop(paste0("erreur interne de provie : cles_lignes_hypothese() : ", table, ".", paste(colonne, collapse = ","),
                 " n'est pas une colonne d'identifiant du dictionnaire"), call. = FALSE)
+  }
+  if (!(is.numeric(lignes) && all(is.finite(lignes)) && all(lignes >= 1) && all(lignes == trunc(lignes)))) {
+    stop(paste0("erreur interne de provie : cles_lignes_hypothese() : `lignes` de ", table,
+                " n'est pas un vecteur d'indices entiers positifs"), call. = FALSE)
   }
   placees <- unlist(lapply(Filter(function(h) identical(h$table, table), vue$hypotheses), `[[`, "lignes"))
   if (!all(lignes %in% placees)) {

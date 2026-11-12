@@ -12,9 +12,9 @@
 # `Axn` et `axn` comptent des durées entières : leurs valeurs se comparent aux valeurs à
 # durées entières (A_effet = 5 626,2297306466 ; ä_effet = 2,9031141869 ; T1 = 4 786,6205305652),
 # non aux valeurs du code (A_effet = 5 626,2288966461 ; ä_effet = 2,9031139047), qui en
-# diffèrent d'environ 1,5e-7 en relatif par l'effet du 29 février 2024 sur le découpage
-# exact_exact du § 2.5 (durée de 2024-01-01 à 2025-01-01 : 365/366 + 1/365) ; T1 n'est pas
-# touché. Le script imprime la version de R, celle du package, la date, chaque valeur, son
+# diffèrent en relatif de 1,48e-7 (A_effet) et de 9,7e-8 (ä_effet) par l'effet du 29 février
+# 2024 sur le découpage exact_exact du § 2.5 (durée de 2024-01-01 à 2025-01-01 : 365/366 +
+# 1/365) ; T1 n'est pas touché. Le script imprime la version de R, celle du package, la date, chaque valeur, son
 # écart à la valeur à durées entières et son écart à la valeur du code. Les valeurs imprimées
 # le 12/11/2026 (R 4.3.3, lifecontingencies 1.6.0) sont écrites en dur dans
 # tests/unitaires/risque_en_cours.R, où sont calculés T1 et T3, avec ces versions et cette date

@@ -699,6 +699,17 @@ verifier_egal("(4.9) valeur invalide et dossier arrêté (ME2 d'âge inconnu, D0
                           function(v) motif_de(calculer_provisions(b_49, plan_49(hyp_d("D03c", v)), tid)), "",
                           USE.NAMES = FALSE)),
               list("famille_non_determinee", rep("plan_invalide", 5L)))
+# montant de forme valide mais hors de la plage des doubles (400 « 9 », non fini) : valeur mal
+# formée, refus plan_invalide après les arrêts du poste (comme les formes ci-dessus), jamais
+# l'erreur brute de valeur_actuelle_probable()
+d03c_inf <- paste0("ensemble=", strrep("9", 400L))
+verifier_egal("(4.9) montant hors de la plage des doubles (ensemble= suivi de 400 « 9 ») : refus plan_invalide ; liste cadres=50000;ensemble=<400 « 9 »> : refus plan_invalide ; dossier arrêté (ME2 d'âge inconnu) : arrêt famille_non_determinee, sans refus ; entrée valide ensemble=30000 inchangée : DO1 85 747,20",
+              list(motif_de(calculer_provisions(b_49, plan_49(hyp_d("D03c", d03c_inf)), tid)),
+                   motif_de(calculer_provisions(b_49, plan_49(hyp_d("D03c", paste0("cadres=50000;", d03c_inf))), tid)),
+                   p1_49(calculer_provisions(b_49f, plan_49(hyp_d("D03c", d03c_inf), excl_fam("D03a", character(0), F3)$exclusions),
+                                             tid))[[4L]],
+                   do1_49(calculer_provisions(b_49, plan_49(hyp_d("D03c", "ensemble=30000")), tid))[[2L]]),
+              list("plan_invalide", "plan_invalide", "famille_non_determinee", 85747.2), tolerance = TOL)
 verifier_egal("(4.9) liste à deux collèges cadres=50000;ensemble=40000 : collège ensemble lu, 114 329,60 ; montant décimal ensemble=30000.50",
               c(do1_49(calculer_provisions(b_49, plan_49(hyp_d("D03c", "cadres=50000;ensemble=40000")), tid))[[2L]],
                 do1_49(calculer_provisions(b_49, plan_49(hyp_d("D03c", "ensemble=30000.50")), tid))[[2L]]),
@@ -863,6 +874,16 @@ verifier_egal("(4.7) (l) cles_lignes_hypothese() : EV1 invisible (délai 500) : 
                    grepl("erreur interne", motif_de(ns$cles_lignes_hypothese(v_87, "evenements", 1L, "montant"))),
                    grepl("erreur interne", motif_de(ns$cles_lignes_hypothese(v_87, "dossiers", 1L, "id_dossier")))),
               list(NA_character_, "SI1", "DO1", TRUE, TRUE, TRUE))
+# `lignes` : vecteur numérique d'indices entiers, finis et positifs ; un logique (TRUE rend
+# toutes les lignes), une chaîne, un indice fractionnaire, manquant, infini ou négatif est une
+# erreur interne, même pour une ligne placée (ici EV1, ligne 1)
+verifier_egal("(4.7) (l) cles_lignes_hypothese() : `lignes` d'un autre type ou hors indices entiers positifs (TRUE, \"1\", 1.5, NA, Inf, -1, 0) : erreur interne ; EV1 en double (1) ou en entier (1L) : SI1",
+              list(vapply(list(TRUE, "1", 1.5, NA_integer_, Inf, -1, 0),
+                          function(l) grepl("erreur interne", motif_de(ns$cles_lignes_hypothese(v_87, "evenements", l, "id_sinistre"))),
+                          NA),
+                   ns$cles_lignes_hypothese(v_87, "evenements", 1, "id_sinistre"),
+                   ns$cles_lignes_hypothese(v_87, "evenements", 1L, "id_sinistre")),
+              list(rep(TRUE, 7L), "SI1", "SI1"))
 verifier("(4.7) une seule détection de S2 : hypotheses_vue_unites() définie une fois, dans R/engagement.R, appelée par calculer_engagement(), provisions_individuelles() et provisions_collectives() ; cles_lignes_hypothese() définie une fois, dans R/donnees.R, appelée par hypotheses_vue_unites() seule",
          { src <- unlist(lapply(list.files(file.path(racine, "R"), "\\.R$", full.names = TRUE), readLines, encoding = "UTF-8"))
            sum(grepl("^hypotheses_vue_unites <- function", src)) == 1L &&

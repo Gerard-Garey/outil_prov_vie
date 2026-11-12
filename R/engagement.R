@@ -366,14 +366,16 @@ lecture_unites <- function(table, colonnes, cles, unite = seq_along(cles), garde
 
 # Salaire de référence par défaut sous l'hypothèse D03c (spécification de B2, § 5.9 ; décision
 # E16-1 du mainteneur, option B) : `valeur` déclarée, de forme `<college>=<montant>` joints
-# par « ; » (montant décimal à point, positif ou nul), et `college` de l'affiliation. Rend le
-# montant ; valeur d'une autre forme (dont un collège répété) ou collège absent de la liste :
+# par « ; » (montant décimal à point, positif ou nul, fini), et `college` de l'affiliation. Rend
+# le montant ; valeur d'une autre forme (dont un collège répété ou un montant hors de la plage
+# des doubles, non fini) ou collège absent de la liste :
 # NA si `refus` est faux, sinon refus plan_invalide ou plan_incomplet (aucune conversion
 # silencieuse ; le lecteur ne refuse qu'une fois les arrêts du poste connus).
 .salaire_d03c <- function(valeur, college, poste, refus) {
   morceaux <- strsplit(valeur, ";", fixed = TRUE)[[1L]]
+  montants <- sub("^[^=]*=", "", morceaux)
   forme <- length(morceaux) > 0L && all(grepl("^[^=;[:space:]]+=[0-9]+(\\.[0-9]+)?$", morceaux)) &&
-    !endsWith(valeur, ";")
+    !endsWith(valeur, ";") && all(is.finite(as.numeric(montants)))
   cles <- sub("=.*$", "", morceaux)
   if (!forme || anyDuplicated(cles)) {
     if (!refus) return(NA_real_)
@@ -389,7 +391,7 @@ lecture_unites <- function(table, colonnes, cles, unite = seq_along(cles), garde
                    " \u00bb sans salaire pour le coll\u00e8ge ", college), "plan_incomplet", module = "engagement",
             attendu = paste0(college, "=<montant>"), recu = valeur)
   }
-  as.numeric(sub("^[^=]*=", "", morceaux[i]))
+  as.numeric(montants[i])
 }
 
 # Capital reconstitué des dossiers `ouvert` (spécification de B2, § 5.3) : `etats` (lignes de
