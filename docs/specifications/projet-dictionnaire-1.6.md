@@ -349,7 +349,7 @@ Un `a_naitre` n'est jamais rejeté. Statut du tableau : jugement d'expert, à vi
   - « 31 décembre le plus voisin » n'apparaît qu'à l'art. 143-3 dans le recueil.
   - Verdict sur dict. :109 : **écart, portée trop large**.
 - **Texte remplacé.** dict. :109 : « Leur lecture (âge révolu, millésime) est une **convention du plan**, jamais une règle du dictionnaire. Exemple de convention possible pour les rentiers : la date de naissance reportée au 31 décembre le plus voisin (ANC 143-3, rapport de recherche, statut « vérifié ») ». S'y ajoute le point 5 du § 7 de la spécification du module `donnees` (`module-donnees-v1.md:897`) : renvoyer aux conventions fermées sans les recopier.
-- **Règle proposée, lecture A** (recommandée par `regulatory`) : « Leur lecture est une **convention du plan** (`conventions$age`, liste fermée de la spécification du module `donnees`, § 5.2), jamais une règle du dictionnaire. Exemple de convention possible pour les rentiers : la date de naissance reportée au 31 décembre le plus voisin. L'art. 143-3 du règlement ANC 2015-11 prescrit ce report pour le seul calcul de la provision mathématique des rentes mentionné à l'art. 143-2 (rentes d'incapacité et d'invalidité issues de contrats couvrant des risques du 3° de l'art. L310-1 du code des assurances). Aucun poste de la v1 n'en relève : son emploi en v1 est une convention retenue par analogie (jugement d'expert, M151). Lecture de `regulatory` sur le recueil ANC « Secteur de l'assurance », version en vigueur au 1er janvier 2025 (SHA-256 `0d7fb3c8…9319766`), 12 novembre 2026. »
+- **Règle retenue, lecture A** (recommandée par `regulatory`, retenue par le mainteneur le 12 novembre 2026, M501) : « Leur lecture est une **convention du plan** (`conventions$age`, liste fermée de la spécification du module `donnees`, § 5.2), jamais une règle du dictionnaire. Exemple de convention possible pour les rentiers : la date de naissance reportée au 31 décembre le plus voisin. L'art. 143-3 du règlement ANC 2015-11 prescrit ce report pour le seul calcul de la provision mathématique des rentes mentionné à l'art. 143-2 (rentes d'incapacité et d'invalidité issues de contrats couvrant des risques du 3° de l'art. L310-1 du code des assurances). Aucun poste de la v1 n'en relève : son emploi en v1 est une convention retenue par analogie (jugement d'expert, M151). Lecture de `regulatory` sur le recueil ANC « Secteur de l'assurance », version en vigueur au 1er janvier 2025 (SHA-256 `0d7fb3c8…9319766`), 12 novembre 2026. »
   - Le rapport de recherche n'est plus cité. Sa ligne 28 ne dit rien de la limitation (point 1 de #32, hors de la branche).
 - **Lecture B** (variante de `regulatory`). Le report vaudrait pour toute provision mathématique des rentes des opérations autres que vie (art. 143-1, R343-7), dans le calcul de l'art. 143-2. Les rentes vie (art. 142-3, 142-4) seraient hors champ. Pour les rentes d'invalidité du 2° (art. 143-12), le rattachement au poste resterait à établir. La phrase serait la même, sauf que « pour le seul calcul … mentionné à l'art. 143-2 » deviendrait « pour la provision mathématique des rentes des opérations autres que vie, dans le calcul mentionné à l'art. 143-2 ».
 - **Éclairage d'`actuary`** (pour Q1).
@@ -471,3 +471,24 @@ Les points sans effet sur aucun couple, chacun fondé sur la mesure citée dans 
     - la forme de D05 ;
     - le domaine de `college` sans « ; » ni « = ».
 12. **Q12 (#60).** Rattacher à #60 les points 1 à 4 du § 7 de la spécification du module `donnees` (§ 1.7, § 1.8 et § 1.10 du projet ; recommandé) ?
+
+### 10.4 Réponses du mainteneur (12 novembre 2026)
+
+*Consignées par la session de la branche (`docs/feuille-de-route.md`, § 4.3, M501 à M512).* Le mainteneur a retenu la recommandation sur chacune des questions Q1 à Q12 :
+
+| Question | Réponse | Décision |
+|---|---|---|
+| Q1 (#32) | lecture A de l'art. 143-3 | M501 |
+| Q2 (P6, A1) | option (c) : lecture de la loi n° 89-1009, art. 7 et 7-1, par `regulatory` dans la présente branche ; `maintien_deces` = `FALSE` dans les quatre bases existantes | M502 |
+| Q3 (P7, P8) | colonnes `signalement` et `parent`, sous-cas de D10 dans `defauts.csv` ; colonnes lues laissées au code | M503 |
+| Q4 (P12) | `vue_empechee` | M504 |
+| Q5 (P14) | « ou dossier sans sinistre » retiré de D04a | M505 |
+| Q6 (P18) | D03g étendu et D03i | M506 |
+| Q7 (#72) | option (i) ; issue de suite **#105** créée | M507 |
+| Q8 (#81) | D11a à D11c | M508 |
+| Q9 (#83) | option (a) ; `parente_posterieure` ; D02b étendu à `prestations` | M509 |
+| Q10 (#90) | tableau du § 5.2 tel quel (R3 : les deux dates) | M510 |
+| Q11 (#99) | formes du § 7, bornes de D03h comprises | M511 |
+| Q12 (#60) | points 1 à 4 du § 7 de la spécification du module `donnees` rattachés | M512 |
+
+Reste avant le visa du projet : la lecture de `regulatory` sur P9 (A1, option (c)) et la rédaction définitive du § 1.2.
