@@ -402,11 +402,11 @@ Tenue par `architect`, après chaque série de PR fusionnées. Chaque mise à jo
   La coupe (b) du point d'étape (B2 en deux branches) reste **en réserve** (M244) : elle ne se rouvre que sur décision du mainteneur.
 - **Consultations Fable** : 2/3 (1 : `actuary-approfondi`, I1 à I3, 10 novembre 2026, M246 ; 2 : `architect-approfondi`, ADR 0011, 11 novembre 2026, M253).
 
-### 1.7 Branche des reliquats du capital décès : `claude/deces-reliquats` (Br, décidée, non ouverte)
+### 1.7 Branche des reliquats du capital décès : `claude/deces-reliquats` (Br, **ouverte** le 12 novembre 2026)
 
 *Fiche proposée par `architect-approfondi` le 12 novembre 2026 (vingt-sixième série). **Arrêtée par le mainteneur le 12 novembre 2026** (vingt-septième série) : branche suivante, principale et porteuse des références (M297), **six issues** avec #80 (écart assumé au plafond de trois à cinq issues de `CLAUDE.md`, M297), fusion après Bo (M298). Restent ouvertes : 0a (#88), la question de #75 (0b), l'ordre de lancer 0d, le point de contact de #92 mi3.*
 
-- **Branche** : `claude/deces-reliquats`, à partir de la tête de `main` après la fusion de la PR d'ouverture (M296). PR brouillon au premier push ; session et clone propres (ADR 0012, point 10). Corps de la PR, un `Closes #N` par ligne :
+- **Branche** : `claude/deces-reliquats`, à partir de la tête de `main` après la fusion de la PR d'ouverture (M296) : **ouverte le 12 novembre 2026 sur `aeba496`** (commit de fusion de la PR #93), par la session principale. PR brouillon au premier push ; session et clone propres (ADR 0012, point 10). Corps de la PR, un `Closes #N` par ligne :
 
   ```
   Closes #80
