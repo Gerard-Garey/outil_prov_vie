@@ -4740,6 +4740,32 @@ travers son espace de noms, jamais en chargeant les fichiers de \code{R/}
 par \code{source()}\fsp; seules la batterie de concordance et les scripts
 de contrôle lisent ces fichiers, sans les exécuter.
 
+\textbf{Contre-vérifications hors de l'intégration continue.} Une
+\textbf{contre-vérification} est une valeur de référence externe,
+produite hors de l'intégration continue par un package avancé qui n'est pas
+une dépendance du package, et écrite en dur dans un test avec sa version et
+sa date~; elle se distingue du \textbf{recoupement}, comparaison, dans une
+batterie exécutée par l'intégration continue, d'une grandeur du package à
+un calcul en R de base (ADR~0004, point~5). Le script
+\code{tests/contre\_verification/b2\_lifecontingencies.R}, lancé à la main
+sur ordre du mainteneur et jamais par une batterie, calcule avec le
+package \code{lifecontingencies} trois valeurs des cas de la provision
+mathématique de la temporaire décès (spécification de la branche B2,
+§~7.6, critère~(3.11))~: la provision du cas T1 et les valeurs actuelles
+des capitaux et des primes à la date d'effet du cas T3. Il imprime la
+version de R, celle du package et la date~; les valeurs imprimées le
+12~novembre~2026, sous R~4.3.3 avec \code{lifecontingencies}~1.6.0 (la
+version~1.6.3 exige un R plus récent), sont écrites en dur, avec ces
+versions et cette date, dans \code{tests/unitaires/risque\_en\_cours.R}.
+Le package comptant les durées en années entières, ses valeurs se
+comparent, à la tolérance relative de $10^{-10}$, aux valeurs à durées
+entières recalculées en R de base~; la provision T1 du code leur est égale,
+et les deux valeurs actuelles du code sont légèrement inférieures, par
+l'effet du 29~février~2024 sur le décompte des jours \code{exact\_exact},
+écart relatif que le test borne entre $5 \cdot 10^{-8}$ et
+$3 \cdot 10^{-7}$. Une régénération de ces valeurs se fait sur ordre du
+mainteneur, avec un tableau avant~/ après.
+
 \textbf{Intégration continue.} Les trois batteries tournent, dans l'ordre
 ci-dessus, dans le job «~Tests (R~4.3.3)~» de l'intégration continue du
 dépôt, exécuté dans le conteneur \code{rocker/r-ver:4.3.3} épinglé par
