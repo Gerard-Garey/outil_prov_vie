@@ -1075,7 +1075,9 @@ elle tourne, que deux appels de même graine rendent les mêmes tirages, que
 la graine et les genres de l'appelant sont rétablis à l'identique, y
 compris après une erreur dans \code{expr}, et que la suite des tirages de
 l'appelant est inchangée. Elle compare aussi trois tirages sous une graine
-fixée à des valeurs écrites en dur, à une tolérance relative déclarée~; en
+fixée à des valeurs écrites en dur, à la tolérance mixte déclarée du
+harnais, absolue pour ces valeurs inférieures à~1
+(section~\ref{sec:harnais})~; en
 intégration continue, cette comparaison tourne sur la plateforme de
 référence (section~\ref{sec:batteries}). La fonction ne garantit pas, à
 elle seule, l'identité des tirages d'une plateforme à l'autre.
@@ -4416,13 +4418,14 @@ préambule. Aucun PDF n'est versionné.
 \label{sec:controles}
 % =============================================================================
 
-Sept scripts R de \code{tests/controles/}, exécutés par la batterie
+Huit scripts R de \code{tests/controles/}, exécutés par la batterie
 unitaire, et un script shell, exécuté par le job «~Contrôles du dépôt~» de
 l'intégration continue, vérifient des règles du dépôt qui ne sont pas des
 tests du package. Chaque script R s'exécute seul, depuis la racine du
 dépôt (\code{Rscript tests/controles/<script>.R}), n'emploie que R de base,
-imprime une ligne par constat (\code{[OK]}, \code{[ECHEC]}, et
-\code{[AVERT]} pour le contrôle de Java), avec le fichier et la ligne en
+imprime une ligne par constat (\code{[OK]}, \code{[ECHEC]},
+\code{[AVERT]} pour le contrôle de Java, \code{[INFO]} pour le
+recensement des tolérances), avec le fichier et la ligne en
 cause, et sort avec un statut non nul au moindre échec. Un argument
 facultatif désigne une autre racine, ce qui permet de démontrer qu'un
 script refuse une copie du dépôt délibérément fautive (témoin négatif).
@@ -4444,11 +4447,13 @@ script refuse une copie du dépôt délibérément fautive (témoin négatif).
 \code{image\_reference.R} & L'image du conteneur du job «~Tests (R~4.3.3)~» et celle du workflow de régénération des références sont la même, épinglée par digest, et ce digest est celui que \code{CONTEXT.md} consigne à l'entrée «~Plateforme de référence~» (section~\ref{sec:references}). \\
 \code{commit\_reference.sh} & Script shell, hors de la batterie unitaire (\code{git} peut manquer dans l'image du job de tests)~: tout commit de la plage contrôlée qui touche \code{tests/reference/} ne touche rien d'autre, porte les lignes exigées du message (run, commit calculé, image, plateforme, empreinte, visa), remplies, a pour unique parent le commit calculé, et cite l'empreinte de l'arbre à ce commit. \\
 \code{preambule\_latex.R} & Le préambule de chaque document LaTeX suivi du dépôt (fichier \code{.tex} ou \code{.TEX} qui porte un \code{\textbackslash documentclass}, où qu'il soit), autre que la charte, est identique à celui de la charte graphique, hors des blocs bornés par «~À ADAPTER~», dont le nombre, l'ordre et l'objet doivent être ceux de la charte\fsp; un fichier sans \code{\textbackslash documentclass} est un fragment, ignoré. \\
+\code{recensement\_tolerances.R} & Recensement informatif, qui n'échoue sur aucun de ses signalements (issue~79)~: il liste les appels de \code{verifier\_egal()} à tolérance non nulle et les appels directs de \code{all.equal()} à tolérance déclarée des fichiers R de \code{tests/} (hors \code{tests/reference/}), et signale ceux dont la valeur attendue rassemble au moins deux valeurs numériques finies non nulles dont le rapport du plus grand au plus petit atteint~10 (section~\ref{sec:harnais}). La valeur attendue est évaluée sans effet de bord, dans un environnement qui ne contient que les constantes numériques littérales du fichier et une liste blanche de fonctions pures~; une expression qui demande les données des tests ou une autre fonction est classée «~indéterminée~» et listée, sans être exécutée. Le script imprime des lignes \code{[INFO]}, et \code{[ECHEC]} seulement si un fichier n'est pas analysable ou si les deux décomptes des appels (arbre syntaxique et analyse du source) diffèrent. \\
 \end{longtable}
 }
 
 Ces scripts sont des \textbf{contrôles statiques}~: ils analysent le texte
-des fichiers, sans exécuter le package. Ils ne prouvent pas l'absence de
+des fichiers, sans exécuter le package (le recensement des tolérances
+n'évalue que des expressions littérales, sans effet de bord). Ils ne prouvent pas l'absence de
 toute violation. Les faux négatifs et faux positifs relevés par l'audit de
 leur première version ont été corrigés par l'issue~27 du dépôt, avec des
 témoins négatifs versionnés dans \code{tests/unitaires/controles.R}, que la
@@ -4490,7 +4495,8 @@ unique~: \code{resultat.txt}, la représentation du résultat
 calcul, rejouable par \code{rejouer\_fiche()}. Tout est comparé, sauf une
 liste fermée d'exclusions qui décrivent la machine ou le code et non le
 résultat~: versions de R et du package, plateforme, empreintes du code et du
-résultat. La comparaison se fait feuille par feuille~: une différence de
+résultat. La comparaison se fait feuille par feuille, par la fonction
+\code{comparer\_feuilles()} du harnais (section~\ref{sec:harnais})~: une différence de
 structure (feuille absente ou nouvelle, type, longueur, valeur manquante
 contre valeur) échoue toujours~; deux réels finis $x$ (obtenu) et $r$
 (référence) sont égaux si $|x - r| \le 10^{-10} \max(1, |r|)$, seuil déclaré
@@ -4543,8 +4549,11 @@ de quoi il arrête la batterie. Il fournit~:
 \begin{itemize}[itemsep=2pt]
 \item \code{section()}, qui ouvre une section de la sortie\fsp;
 \item \code{verifier()}, qui vérifie une condition\fsp;
-\item \code{verifier\_egal()}, qui vérifie une égalité, exacte ou à une
-  tolérance relative déclarée\fsp;
+\item \code{verifier\_egal()}, qui vérifie une égalité~: exacte
+  (\code{identical()}) à tolérance nulle, valeur par valeur par le
+  comparateur \code{comparer\_objets()} à une tolérance mixte déclarée
+  strictement positive (ci-dessous)~; une tolérance négative, manquante ou
+  qui n'est pas un réel unique fait échouer la vérification\fsp;
 \item \code{verifier\_refus()}, qui vérifie qu'un refus d'appel est levé
   avec le motif attendu\fsp;
 \item \code{attendu\_echec()}, pour un défaut connu, avec renvoi à son
@@ -4560,6 +4569,40 @@ Chaque vérification imprime une ligne~: \code{[OK]}, \code{[ECHEC]},
 \code{[ATTENDU]} (échec attendu, avec l'issue) ou \code{[SUCCES INATTENDU]}.
 Un échec attendu qui réussit fait échouer la batterie~: la marque est alors
 retirée pour en faire un test ordinaire.
+
+\textbf{Comparateur.} Le harnais porte aussi le comparateur de l'ADR~0011,
+point~7~: \code{comparer\_feuilles()}, qui compare un résultat à sa référence
+de non-régression et qu'emploient les fonctions de \code{tests/references.R}
+(section~\ref{sec:references}), et \code{comparer\_objets()}, qui applique
+les mêmes règles à deux objets R quelconques et sur lequel
+\code{verifier\_egal()} s'adosse (issue~79)~: une seule implémentation de la
+comparaison valeur par valeur sert les références et les tests. Deux réels
+finis $x$ (obtenu) et $r$ (attendu) sont égaux si
+$|x - r| \le \varepsilon \max(1, |r|)$, où $\varepsilon$ est la tolérance
+déclarée~: écart relatif au-dessus de~1 en valeur absolue, écart absolu en
+dessous. Pour \code{comparer\_feuilles()}, $\varepsilon$ vaut par défaut la
+tolérance des références, $10^{-10}$ (section~\ref{sec:references}). Les
+autres valeurs (logiques, entières, chaînes, dates) se comparent
+exactement. Toute différence de structure échoue, quelle que soit la
+tolérance~: type (entier contre réel compris), longueur, valeur manquante
+contre valeur, \code{NA} contre \code{NaN}, infini contre fini, élément
+absent ou nouveau, et, pour \code{comparer\_objets()}, tout attribut (noms,
+classe, dimensions, niveaux) qui diffère. Le message d'échec de
+\code{verifier\_egal()} donne le nombre d'écarts et les cinq premiers, avec
+leur emplacement, la valeur attendue, la valeur obtenue et l'écart.
+
+\textbf{Petites valeurs attendues.} Sous $|r| = 1$, la tolérance mixte est
+absolue~: à $\varepsilon = 10^{-10}$, elle admet, pour une valeur attendue
+telle que $|r| < 10^{-10} / (1{,}5 \cdot 10^{-7}) \approx 6{,}7 \cdot
+10^{-4}$, un écart relatif supérieur à $1{,}5 \cdot 10^{-7}$, le plus petit
+effet de formule déjà rencontré (ADR~0011, point~8), qu'elle ne détecterait
+donc plus. Pour une telle valeur, l'appelant passe la tolérance
+$10^{-10} / |r|$, ou compare le rapport de la valeur obtenue à la valeur
+attendue à~1. Cette règle est un jugement d'expert (avis d'\code{actuary}
+sur l'issue~79), écrite en commentaire du harnais\fsp; aucun script ne la
+contrôle. Le recensement des tolérances (section~\ref{sec:controles})
+signale seulement les valeurs attendues qui mêlent des ordres de grandeur
+différents.
 
 % =============================================================================
 \section{Concordance entre la documentation et le code}
