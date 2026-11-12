@@ -724,13 +724,34 @@ for (nom_s in names(segs_45)) {
   verifier(paste0("(4.6) (i) Q2 (E16-2 (ii)) : debut_periode de COC2 manquante, fin 2025-06-30, mouvement 2025-03-01, D03f H : P3 4 275,986050487058 approximation_numerique (hypothèse non lue)", et),
            egal_mixte(cel_x(r_46i, P3)$montant, 4275.986050487058) &&
              identical(cel_x(r_46i, P3)$statut_resultat, "approximation_numerique"))
+  # (k) Q-a : périodicité unique (règle non applicable), valeur invalide sous D03f H : arrêt, non refus
+  verifier_egal(paste0("(4.6) (k) Q-a : COC1 de périodicité unique, fin_periode manquante, D03f H avec la valeur n_importe : arrêt parametre_non_determine, CTC1 (non refus)", et),
+                arret_46(calculer_provisions(b_un, plan_45(sg, ex = d02a_c, h = hyp_v("D03f", "n_importe")), tid)), arret_attendu)
+  # (l) Q-b : deux déclarations D03f (tous, puis P3), le poste P3 l'emportant sur tous
+  r_46l <- calculer_provisions(b_46e, plan_45(sg, ex = d02a_c, h = c(hyp_v("D03f", "n_importe"),
+                                                                     list(list(motif = "D03f", referentiel = "comptes_sociaux", poste = P3, valeur = "regle")))), tid)
+  verifier(paste0("(4.6) (l) Q-b : D03f tous invalide (n_importe), D03f P3 regle (comptes sociaux) : pas de refus, P3 3 710,670981993908 jugement_expert, total 444 872,630083363678", et),
+           egal_mixte(c(cel_x(r_46l, P3)$montant, cel_x(r_46l, "total")$montant), c(3710.670981993908, 444872.630083363678)) &&
+             identical(cel_x(r_46l, P3)$statut_resultat, "jugement_expert"))
+  verifier_egal(paste0("(4.6) (l) Q-b : D03f tous regle, D03f P3 invalide (n_importe, comptes sociaux) : refus plan_invalide", et),
+                motif_de(calculer_provisions(b_46e, plan_45(sg, ex = d02a_c, h = c(hyp_v("D03f", "regle"),
+                                                                                 list(list(motif = "D03f", referentiel = "comptes_sociaux", poste = P3, valeur = "n_importe")))), tid)),
+                "plan_invalide")
 }
 verifier("(4.6) (j) une seule constante des mois par périodicité dans R/ : MOIS_PERIODE_COTISATION, sans point, module donnees (E16-3 (a)) ; .MOIS_PERIODICITE supprimée",
          local({
+           # toute définition de premier niveau dont la valeur (celle de l'espace de noms) a pour noms
+           # les périodicités de MOIS_PERIODE_COTISATION, quels que soient son nom et l'ordre des noms
+           per <- names(ns$MOIS_PERIODE_COTISATION)
            defs <- unlist(lapply(list.files(file.path(racine, "R"), pattern = "\\.R$", full.names = TRUE), function(f) {
-             l <- readLines(f, warn = FALSE)
-             l <- l[grepl("<- c\\(annuelle = 12L", l)]
-             if (length(l)) paste0(basename(f), ":", sub(" <-.*$", "", l)) else NULL
+             noms <- character()
+             for (e in parse(f, keep.source = FALSE, encoding = "UTF-8")) {
+               if (is.call(e) && (identical(e[[1L]], as.name("<-")) || identical(e[[1L]], as.name("="))) && is.name(e[[2L]])) {
+                 v <- get0(as.character(e[[2L]]), envir = ns, inherits = FALSE)
+                 if ((is.atomic(v) || is.list(v)) && setequal(names(v), per)) noms <- c(noms, as.character(e[[2L]]))
+               }
+             }
+             if (length(noms)) paste0(basename(f), ":", unique(noms)) else NULL
            }))
            identical(defs, "donnees.R:MOIS_PERIODE_COTISATION") &&
              identical(ns$MOIS_PERIODE_COTISATION, c(annuelle = 12L, semestrielle = 6L, trimestrielle = 3L, mensuelle = 1L)) &&
