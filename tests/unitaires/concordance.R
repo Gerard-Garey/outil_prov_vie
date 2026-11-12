@@ -2,7 +2,7 @@
 # --racine=) : le script tourne dans un processus Rscript distinct, on lit statut et sortie.
 # `racine` est défini par la batterie.
 
-lancer_concordance <- function(contenu_doc, r_outils = "f_un <- function() 1\n.aux <- function() 2\nK <- 3\n",
+lancer_concordance <- function(contenu_doc, r_outils = "f_un <- function() 1\n.aux <- function() 2\n.K <- 3\nk_min <- 4\n",
                                namespace = "export(f_un)\n", strict = TRUE) {
   faux <- tempfile("racine-")
   on.exit(unlink(faux, recursive = TRUE), add = TRUE)
@@ -36,7 +36,7 @@ r <- lancer_concordance(NULL, strict = FALSE)
 verifier("document absent, sans --strict : avertissement, statut 0",
          r$statut == 0L && grepl("[AVERT]", r$sortie, fixed = TRUE))
 r <- lancer_concordance(tableau("outils", "f\\_un()"))
-verifier("document concordant : statut 0 (fonction à point et constante non recensées)",
+verifier("document concordant : statut 0 (fonction à point, constante à point et objet en minuscules non recensés)",
          r$statut == 0L && grepl("module outils : 1 fonction(s) concordante(s)", r$sortie, fixed = TRUE))
 r <- lancer_concordance(tableau("outils", "f\\_un()"), r_outils = "f_un <- function() 1\ng <- function() 2\n")
 verifier("fonction du code absente du document : échec --strict, nom cité",
@@ -76,6 +76,14 @@ R_CONSTANTES <- paste(c("f_un <- function() 1", ".aux <- function(x) x + 1L",
                         "K <- 3L", "NOM <- \"a_b\"", "LISTE <- c(\"x\", \"y\", \"z\")",
                         "TAB <- data.frame(a = 1:2)", "DEP <- c(NOM, \"w\")", "SANS <- list(1, 2)",
                         "PAR_FONCTION <- .aux(1L)"), collapse = "\n")
+# Code d'outils réduit aux fonctions et aux constantes nommées (un tableau de constantes
+# doit citer toutes les constantes du code, issue #41).
+code_avec <- function(...) {
+  lignes <- strsplit(R_CONSTANTES, "\n", fixed = TRUE)[[1L]]
+  constantes <- grepl("^[A-Z][A-Z0-9_]* <- ", lignes)
+  garde <- vapply(strsplit(lignes, " <- ", fixed = TRUE), function(x) x[1L] %in% c(...), NA)
+  paste(lignes[!constantes | garde], collapse = "\n")
+}
 doc_constantes <- function(...) c(tableau("outils", "f\\_un"), constantes_doc(...))
 verifie_constantes <- function(nom, lignes, attendu, strict = TRUE, r_outils = R_CONSTANTES) {
   r <- lancer_concordance(doc_constantes(lignes), r_outils = r_outils, strict = strict)
@@ -100,7 +108,7 @@ r <- lancer_concordance(doc_constantes("\\code{K} & \\code{3}~: objet", "\\code{
 verifier("tableau à trois colonnes, liste en tête de la deuxième cellule : lue et concordante (K) ; entier pour une chaîne : écart (NOM)",
          r$statut == 1L && grepl("constante NOM", r$sortie, fixed = TRUE) && !grepl("constante K ", r$sortie, fixed = TRUE))
 r <- lancer_concordance(doc_constantes("\\code{K} & Valeur libre & Objet seul", "\\code{SANS} & Texte libre & \\code{3}~: objet"),
-                        r_outils = R_CONSTANTES)
+                        r_outils = code_avec("K", "SANS"))
 verifier("tableau à trois colonnes, aucune forme lue : statut 0, constantes nommées « sans valeur littérale lue »",
          r$statut == 0L && grepl("sans valeur littérale lue : K, SANS", r$sortie, fixed = TRUE))
 verifie_constantes("chaîne différente : échec, constante, ligne et valeurs citées", "\\code{NOM} & \\code{\"a\"} & objet",
@@ -136,7 +144,7 @@ verifie_constantes("même écart sans --strict : [AVERT], statut 0", "\\code{K} 
 # Rangée sur plusieurs lignes du source : lue en entier jusqu'au « \\\\ » final.
 verifie_constantes("rangée sur deux lignes du source, décompte faux dans la seconde : échec, ligne de début citée",
                    "\\code{TAB} & Tableau de trois\nlignes", "constante TAB (module outils) -- ligne 8 : décompte du document « trois lignes »")
-r <- lancer_concordance(doc_constantes("\\code{TAB} & Tableau de deux\nlignes"), r_outils = R_CONSTANTES)
+r <- lancer_concordance(doc_constantes("\\code{TAB} & Tableau de deux\nlignes"), r_outils = code_avec("TAB"))
 verifier("même rangée sur deux lignes, décompte juste : statut 0, valeur lue", r$statut == 0L &&
            grepl("1 citée(s), 1 valeur(s) littérale(s) concordante(s)", r$sortie, fixed = TRUE))
 r <- lancer_concordance(c(tableau("outils", "f\\_un"), "\\begin{tabular}{ll}",
@@ -153,7 +161,7 @@ verifie_constantes("\\code{\"...\"} dans la troisième cellule : échec", "\\cod
 verifie_constantes("même écart sans --strict : [AVERT], statut 0", "\\code{NOM} & version \\code{\"a\\_b\"}",
                    "[AVERT] constante NOM", strict = FALSE)
 r <- lancer_concordance(doc_constantes("\\code{NOM} & \\code{\"a\\_b\"}", "\\code{SANS} & version \\code{x}"),
-                        r_outils = R_CONSTANTES)
+                        r_outils = code_avec("NOM", "SANS"))
 verifier("chaîne reconnue seule, ou \\code{} sans guillemets dans une cellule sans forme : pas d'écart, cellule non lue nommée",
          r$statut == 0L && grepl("sans valeur littérale lue : SANS", r$sortie, fixed = TRUE))
 
@@ -191,9 +199,54 @@ verifier("rangée de quatre cellules sous un en-tête de trois : écart, la rang
            grepl("ligne 9 : rangée fusionnée ou \\\\ manquant (4 cellules, l'en-tête en a 3)", r$sortie, fixed = TRUE))
 r <- lancer_concordance(doc_brut(c("\\code{K} & Entier \\code{3} \\\\ \\hline", "\\code{NOM} & \\code{\"a\\_b\"} \\\\[2pt]",
                                    "\\code{LISTE} & trois chaînes \\\\[1ex] \\midrule", "\\midrule")),
-                        r_outils = R_CONSTANTES)
+                        r_outils = code_avec("K", "NOM", "LISTE"))
 verifier("\\\\ suivi de \\hline, de [...] ou de \\midrule en fin de ligne : rangées lues", r$statut == 0L &&
            grepl("3 citée(s), 3 valeur(s) littérale(s) concordante(s)", r$sortie, fixed = TRUE))
 r <- lancer_concordance(doc_brut(c("\\code{K} & Entier \\code{4} \\\\ \\hline")), r_outils = R_CONSTANTES)
 verifier("rangée finie par \\\\ \\hline : valeur comparée (entier faux : échec)", r$statut == 1L &&
            grepl("entier du document « 4 »", r$sortie, fixed = TRUE))
+
+# Complétude (issue #41, décision M408) : le tableau cite toutes les constantes en majuscules
+# de premier niveau du module ; les noms à point, les fonctions et les objets en minuscules
+# ne sont pas recensés.
+complet <- c("\\code{K} & Entier \\code{3}", "\\code{NOM} & \\code{\"a\\_b\"}", "\\code{LISTE} & trois chaînes")
+r <- lancer_concordance(doc_constantes(complet), r_outils = code_avec("K", "NOM", "LISTE"))
+verifier("tableau complet : statut 0, aucune constante absente", r$statut == 0L &&
+           !grepl("constantes absentes", r$sortie, fixed = TRUE) &&
+           grepl("constantes du module outils : 3 citée(s)", r$sortie, fixed = TRUE))
+r <- lancer_concordance(doc_constantes(complet), r_outils = paste(code_avec("K", "NOM", "LISTE"), "NOUVELLE <- 1L", sep = "\n"))
+verifier("constante ajoutée au code, absente du tableau : échec --strict, constante nommée", r$statut == 1L &&
+           grepl("module outils -- constantes absentes du document : NOUVELLE", r$sortie, fixed = TRUE))
+r <- lancer_concordance(doc_constantes(complet), r_outils = paste(code_avec("K", "NOM", "LISTE"), "N2 = 1L", "N3 <- 2L", sep = "\n"))
+verifier("deux constantes absentes (affectations = et <-) : toutes nommées", r$statut == 1L &&
+           grepl("constantes absentes du document : N2, N3", r$sortie, fixed = TRUE))
+r <- lancer_concordance(doc_constantes(complet), r_outils = paste(code_avec("K", "NOM", "LISTE"), "3L -> DROITE", sep = "\n"))
+verifier("constante affectée par -> absente du tableau : échec, nommée", r$statut == 1L &&
+           grepl("constantes absentes du document : DROITE", r$sortie, fixed = TRUE))
+r <- lancer_concordance(doc_constantes(complet), r_outils = paste(code_avec("K", "NOM", "LISTE"), "`APOSTROPHE` <- 1L", sep = "\n"))
+verifier("constante au nom entre accents graves absente du tableau : échec, nommée", r$statut == 1L &&
+           grepl("constantes absentes du document : APOSTROPHE", r$sortie, fixed = TRUE))
+r <- lancer_concordance(doc_constantes(complet), r_outils = paste(code_avec("K", "NOM", "LISTE"), "GLOBALE <<- 1L", "AUTRE := 1", sep = "\n"))
+verifier("<<- et := ne sont pas des affectations de constante (comme pour constantes_du_code) : non exigées, statut 0",
+         r$statut == 0L && !grepl("constantes absentes", r$sortie, fixed = TRUE))
+r <- lancer_concordance(doc_constantes(c(complet, "\\code{DROITE} & Entier \\code{3}")),
+                        r_outils = paste(code_avec("K", "NOM", "LISTE"), "3L -> DROITE", sep = "\n"))
+verifier("constante affectée par -> et citée : valeur lue, statut 0", r$statut == 0L &&
+           grepl("4 citée(s), 4 valeur(s) littérale(s) concordante(s)", r$sortie, fixed = TRUE))
+r <- lancer_concordance(doc_constantes(complet), r_outils = paste(code_avec("K", "NOM", "LISTE"), "NOUVELLE <- 1L", sep = "\n"),
+                        strict = FALSE)
+verifier("même écart sans --strict : [AVERT], statut 0", r$statut == 0L &&
+           grepl("[AVERT] module outils -- constantes absentes du document : NOUVELLE", r$sortie, fixed = TRUE))
+r <- lancer_concordance(c(tableau("outils", "f\\_un", "FONC", "LAMB"), constantes_doc(complet)), r_outils = paste(
+  code_avec("K", "NOM", "LISTE"), ".INTERNE <- 1L", "FONC <- function() 1", "LAMB <- \\(x) x", "mini <- 2L",
+  "if (TRUE) { DANS_BLOC <- 1L }", "sapply(1, function(i) { DANS_FONCTION <- i })", sep = "\n"))
+verifier("constante à point, fonction ou lambda en majuscules, objet en minuscules, affectation hors premier niveau : non exigés, statut 0",
+         r$statut == 0L && !grepl("constantes absentes", r$sortie, fixed = TRUE))
+r <- lancer_concordance(tableau("outils", "f\\_un"), r_outils = "f_un <- function() 1\nK <- 3L\nL <- 4L\n")
+verifier("module qui a des constantes mais aucun tableau de constantes : échec, constantes nommées", r$statut == 1L &&
+           grepl("module outils -- constantes dans R/ mais aucun tableau de constantes dans le document : K, L", r$sortie, fixed = TRUE))
+r <- lancer_concordance(tableau("outils", "f\\_un"), r_outils = "f_un <- function() 1\nK <- 3L\n", strict = FALSE)
+verifier("même écart sans --strict : [AVERT], statut 0", r$statut == 0L &&
+           grepl("[AVERT] module outils -- constantes dans R/ mais aucun tableau", r$sortie, fixed = TRUE))
+r <- lancer_concordance(tableau("outils", "f\\_un"), r_outils = "f_un <- function() 1\n.INTERNE <- 3L\n")
+verifier("module sans constante en majuscules et sans tableau : statut 0", r$statut == 0L)
