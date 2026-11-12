@@ -545,6 +545,7 @@ Tenue par `architect`, après chaque série de PR fusionnées. Chaque mise à jo
 - **Décisions M** : bloc **M500 à M599** (§ 4.3). **ADR** : aucun numéro réservé.
 - **Consultations Fable** : 0/3.
 - **Ouverture** (12 novembre 2026) : branche partie de `main` à `7d53a05` (fusion de la PR #101, qui porte la présente fiche) ; session `session_01TA5STRBtHnStUwf9XwJYL2`, ouverte par la session principale de Br sur le message du mainteneur ; écart au plafond de trois à cinq issues accepté (M500).
+- **Visa** (12 novembre 2026) : réponses Q1 à Q14 en M501 à M514 ; issues créées sur accord : #105 (suite de #72), #106 (contrôle de `maintien_deces`) ; commentaire sur #14 (M515) ; **projet visé (M516)**. Hors couloir, noté dans la PR #103 pour `architect` : `CONTEXT.md:37` (définition du maintien de la garantie décès, lecture I3 implicite) ; éléments des sections communes au § 10.2 du projet.
 
 ## 2. Branches suivantes
 
@@ -1100,6 +1101,11 @@ Sous-section créée vide à la vingt-septième série (ADR 0012, point 13 ; M29
 | M510 | 12/11/2026 | **#90** : tableau des relations du § 5.2 tel quel (règle « toutes les dates de la relation violée », règles écrites R11 à R13 ; date rejetée tenue pour inconnue ; visibilité inchangée ; exception de l'enfant posthume ; R3 rejette les deux dates) (décision du mainteneur du 12/11/2026, en session, réponse à la question Q10 du projet) | projet, § 5 |
 | M511 | 12/11/2026 | **Forme des valeurs `H` (#99)** : formes du § 7, dont D03h décimal borné à [−0,05 ; 0,10] (jugement d'expert, sans lien avec A132-1), D03a `regle` (paramètres avec #100), D03b et D05 en listes par clé, domaine de `college` sans « ; » ni « = » (décision du mainteneur du 12/11/2026, en session, réponse à la question Q11 du projet) | projet, § 7 |
 | M512 | 12/11/2026 | **#60** : points 1 à 4 du § 7 de la spécification du module `donnees` rattachés à #60 (décision du mainteneur du 12/11/2026, en session, réponse à la question Q12 du projet) | projet, § 1.7, § 1.8, § 1.10 |
+| M513 | 12/11/2026 | **P6 (#60), contrôle de cohérence de `maintien_deces` : option (b)**, renvoyé au recensement du poste « maintien de la garantie décès » ; issue **#106** créée par la session sur accord du mainteneur (décision du mainteneur du 12/11/2026, en session, réponse à Q13 du projet) | projet, § 1.2, § 10.3 ; issue #106 |
+| M514 | 12/11/2026 | **P6 (#60), loi vraie : option (a)** : `maintien_deces` = `FALSE` en `1.6` (M502 inchangée) ; la spécification du poste « maintien de la garantie décès » exigera une base à `TRUE` avec `taux_technique_tarif` renseigné (décision du mainteneur du 12/11/2026, en session, réponse à Q14 du projet) | projet, § 1.2, § 10.3 ; issue #106 |
+| M515 | 12/11/2026 | **Commentaire de `regulatory` sur #14, point 4, accordé** (lecture de la loi n° 89-1009 du 12/11/2026, points ouverts I1 à I3, constat sur `CONTEXT.md:37`), déposé par la session (décision du mainteneur du 12/11/2026, en session) | issue #14, commentaire 6827145686 |
+| M516 | 12/11/2026 | **Projet de dictionnaire `1.6` visé** dans son ensemble (§ 0 à § 10, réponses Q1 à Q14 : M501 à M514) ; il spécifie, sans les fermer, #60, #72, #81, #83, #90, #32 (point 2) et la forme des valeurs `H` pour #99 ; transcription dans le texte du dictionnaire, le CSV et `VERSION_DICTIONNAIRE_ATTENDUE` par la branche de code Bdr-b2 ; les effets sur les couples restent des prévisions à remesurer, sans visa de résultat ici (décision du mainteneur du 12/11/2026, en session) | `docs/specifications/projet-dictionnaire-1.6.md` ; § 1.10 |
+| — | 12/11/2026 | **Numéros restés sans emploi** dans le bloc de `claude/dictionnaire-1-6` : **M517 à M599** (ADR 0012, point 13) | § 4.3 |
 
 ## 5. Escalades, relances et arrêts hors branche
 

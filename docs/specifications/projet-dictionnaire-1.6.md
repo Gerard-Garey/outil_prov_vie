@@ -1,6 +1,6 @@
 # Projet de dictionnaire de la base brute fictive : version `1.6`
 
-> *Rédigé par l'agent actuary-approfondi (IA) le 12 novembre 2026, sur la branche de documents seuls `claude/dictionnaire-1-6` (PR #103 ; `docs/feuille-de-route.md`, § 1.10 ; ADR 0012, point 4 ; M299, M500). Squelette posé par la session de la branche le même jour. Lecture de l'art. 143-3 du règlement ANC 2015-11 par l'agent regulatory (IA) le 12 novembre 2026, reprise au § 6. Statut : **projet, non visé**. Le visa du mainteneur se consigne au § 4.3 de la feuille de route (M5xx).*
+> *Rédigé par l'agent actuary-approfondi (IA) le 12 novembre 2026, sur la branche de documents seuls `claude/dictionnaire-1-6` (PR #103 ; `docs/feuille-de-route.md`, § 1.10 ; ADR 0012, point 4 ; M299, M500). Squelette posé par la session de la branche le même jour. Lecture de l'art. 143-3 du règlement ANC 2015-11 par l'agent regulatory (IA) le 12 novembre 2026, reprise au § 6 ; lecture de la loi n° 89-1009, art. 2, 7, 7-1 et 10, par le même agent le même jour, reprise au § 1.2 et au § 9. Reprise du § 1.2 par l'agent actuary (IA) le même jour. Statut : **projet visé** par le mainteneur le 12 novembre 2026 (M516, `docs/feuille-de-route.md`, § 4.3), réponses Q1 à Q14 consignées en M501 à M514.*
 
 ## 0. Objet, portée, statut
 
@@ -82,25 +82,45 @@ Les points 1 à 4 du même § 7 (`module-donnees-v1.md:893-897`) sont aussi des 
 - **Traitement.** Refus `R` de portée table. Aucune déclaration ne le lève. Il arrête les postes qui lisent la table et ses filles. Dans la priorité des causes (`module-donnees-v1.md:576`), `vue_empechee` prend le rang de `refus_induit` quand il est la seule cause. C'est un jugement d'expert : la cause n'est pas une donnée de la ligne mais l'impossibilité de construire la vue.
 - **Effet attendu.** Aucun couple, mesuré : `refus_tables` ne porte aucune rangée `refus_induit` dans les dix couples. Sa seule rangée est la rangée D09 de J3 et de J4.
 
-### 1.2 P6 : colonne « porte le maintien » (D03h exécutable sur un contrat collectif) : **conditionnel, voir § 10**
+### 1.2 P6 : colonne `maintien_deces` (D03h exécutable sur un contrat collectif)
 
-- **Règle proposée** (sous condition). Nouvelle colonne de T4 `garanties_souscrites` :
+- **Règle.** Nouvelle colonne de T4 `garanties_souscrites` :
   - `maintien_deces`, `logical`, Obl. `C`, Saisie `E`, Défauts `—` ;
-  - domaine : « la garantie `deces` du contrat collectif porte le maintien de la garantie décès en cas d'arrêt de travail (portée : P9) » ;
-  - requise pour `deces` d'un contrat collectif, manquante ailleurs.
-  
-  D03h devient exécutable sur un contrat collectif. La garantie souscrite visée est celle de `deces`, d'un contrat collectif, à `maintien_deces` = `TRUE` et à `taux_technique_tarif` manquant. La rangée `D03h … non_lisible` disparaît.
+  - domaine : « la garantie `deces` de ce contrat collectif comporte une clause de maintien de la garantie décès en cas d'incapacité de travail ou d'invalidité, imposée par la loi n° 89-1009, art. 7-1 (salariés garantis collectivement dans les conditions de son art. 2, régime couvrant les risques décès, incapacité de travail et invalidité, en un ou plusieurs contrats, chez cet organisme d'assurance ou un autre) ou stipulée par le contrat ; requise pour `deces` d'un contrat collectif, manquante ailleurs ».
+
+  Règle `C` (dict. :121) : un manquant sur la garantie `deces` d'un contrat collectif est un refus `manquant_obligatoire` ; une valeur présente ailleurs (contrat individuel, autre garantie) est un refus `hors_domaine`.
+
+  D03h devient exécutable sur un contrat collectif. Il vise la garantie `deces` d'un contrat collectif à `maintien_deces` = `TRUE` et à `taux_technique_tarif` manquant. La rangée `D03h … non_lisible` disparaît.
+
+  Sur la garantie `deces` d'un contrat collectif à `maintien_deces` = `FALSE`, `taux_technique_tarif` est hors condition. Une valeur présente y est donc `hors_domaine` (dict. :121), comme pour l'arrêt de travail. Le code l'admet aujourd'hui, faute de colonne (`R/donnees.R:1681-1683`) : Bdr-b2 retire cette admission.
+
+  La colonne déclare l'existence de la clause, non sa portée. Le point ouvert P9 du dictionnaire (dict. :815 ; #14, point 4 ; distinct du point P9 de l'errata, § 1.4) reste ouvert, hors de la présente branche. Il porte sur la portée du maintien et de sa provision : « Cet engagement » de l'art. 7-1, al. 2, vise-t-il tout le maintien ou le seul engagement postérieur à la résiliation ? Il ne conditionne pas la colonne : sous l'une ou l'autre lecture, la clause existe ou non au contrat, et D03h se lit de même.
 - **Remplace.**
-  - dict. :337 (`taux_technique_tarif`) : « pour la garantie `deces` d'un contrat collectif qui porte le maintien de la garantie décès (portée du maintien : P9) » devient « … dont `maintien_deces` vaut `TRUE` » ;
-  - ajout d'une ligne à T4 après dict. :344 ;
-  - § 8, ligne « Maintien de la garantie décès » (dict. :709) : ajout de `garanties_souscrites.maintien_deces` ;
+  - dict. :337 (`taux_technique_tarif`) : « pour la garantie `deces` d'un contrat collectif qui porte le maintien de la garantie décès (portée du maintien : P9) » devient « pour la garantie `deces` d'un contrat collectif dont `maintien_deces` vaut `TRUE` » ;
+  - ajout d'une ligne à T4 après dict. :344 (`clause_type_beneficiaire`) ;
+  - § 8, ligne « Maintien de la garantie décès » (dict. :709) : ajout de `garanties_souscrites.maintien_deces`, lue comme condition d'existence de l'engagement de maintien ; la mention « portée : P9 » y demeure ;
+  - § 11, P9 (dict. :815), colonne « État » : ajout de « l'existence de la clause est une donnée de la base (`garanties_souscrites.maintien_deces`, version `1.6`) ; sa portée reste ouverte » ;
+  - dict. :315 : inchangé ;
   - annexe A : sans objet, la colonne est propre à la v1.
-- **Traitement.** D03h inchangé : `H`, taux du tarif retenu égal à la valeur déclarée (§ 7).
-- **Condition.** La colonne suppose qu'un contrat collectif décès puisse ne pas porter le maintien. C'est la question de P9 (« portée du maintien », dict. :815 ; #14, point 4), qui relève d'un texte (loi n° 89-1009, art. 7 et 7-1, cité à dict. :315) qu'aucune lecture établie de `regulatory` ne tranche à ce jour. Point d'arrêt de l'ADR 0012, point 9 : § 10, A1.
+- **Traitement.**
+  - D03h inchangé : `H`, taux du tarif retenu égal à la valeur déclarée (§ 7).
+  - `maintien_deces` manquant sous sa condition : refus `R` `manquant_obligatoire`, de portée ligne pour le calcul (§ 2, M507). Aucune déclaration ne le lève.
+  - Jugement d'expert. Motif : l'existence de la clause est un fait contractuel. Aucune hypothèse par défaut ne vaut dans les deux référentiels : `TRUE` serait prudent en comptes sociaux, et la meilleure estimation n'a pas de valeur centrale fondée sans le contrat. Alternative écartée : un défaut nouveau traité `H`, sans intensité au simulateur ni poste qui le lise en `1.6`. Effet chiffré de l'écart : nul sur les dix couples, aucune base n'ayant de manquant (simulateur sans défaut sur la colonne).
+- **Condition levée.** Lecture de `regulatory` du 12 novembre 2026 : loi n° 89-1009, art. 2, 7, 7-1 et 10. Statut `revue requise`, lecture indirecte de Légifrance (§ 9). Elle conclut :
+  - l'art. 7-1, al. 1, 1re phrase, n'impose la clause qu'aux salariés garantis collectivement dans les conditions de l'art. 2, quand le régime couvre les risques décès, incapacité de travail et invalidité ;
+  - une garantie `deces` collective sans clause est donc conforme, et une clause peut aussi être stipulée sans obligation : la colonne déclarée est fondée ;
+  - une règle déduite de la présence de `incapacite` ou d'`invalidite` au même contrat ne serait pas conforme comme règle unique. Le texte admet « un ou de plusieurs contrats », donc un autre organisme d'assurance, et une clause stipulée est invisible dans la base.
+
+  Point d'arrêt A1 levé (§ 10.1 ; M502).
 - **Effet attendu.**
   - Prévision, fondée sur une mesure : les quatre bases portent toutes leurs garanties `deces` collectives avec `taux_technique_tarif` manquant. Mesuré par `Rscript d03h.R` : `v1-modeste-01` 5 sur 5, `v1-modeste-02` 5 sur 5, `construite-deces-01` 1 sur 1, `v1-modeste-03` 6 sur 6.
-  - Si une base reçoit `maintien_deces` = `TRUE`, D03h y est détecté. Les plans de référence ne déclarent pas D03h, donc le couple tombe en **refus `declaration_manquante`** : changement de statut de tous ses postes, visa du mainteneur.
-  - Avec `FALSE` partout (recommandé pour les bases existantes, choix de loi vraie à faire par Bdr-b2) : aucune provision ne change. Dans les dix couples, la rangée `non_lisible` de `controles_non_executes` disparaît et l'empreinte `empreintes/donnees/garanties_souscrites` de la fiche change.
+  - Avec `maintien_deces` = `FALSE` dans les quatre bases (M502), D03h n'est détecté nulle part : aucune provision ni aucun verdict ne change. Dans les dix couples, la rangée `D03h … non_lisible` de `controles_non_executes` disparaît et l'empreinte `empreintes/donnees/garanties_souscrites` de la fiche change. Visa : `actuary`.
+  - Réserve sur la loi vraie (constat mesuré, sans effet en `1.6`) :
+    - dans les trois jeux, chaque contrat collectif qui porte `deces` porte aussi `incapacite` et `invalidite` (5 sur 5, 5 sur 5, 6 sur 6), et aucun n'est résilié ; la base construite ne porte que `deces` (`GSC1`) ;
+    - le simulateur ouvre un sinistre décès quand l'assuré meurt pendant son arrêt (`R/simulation.R:697-701`) ; la vérité des jeux contient 2, 2 et 1 flux de décès futurs issus d'un arrêt (`verite/flux_futurs.csv`, `id_sinistre_origine` renseigné) ;
+    - sous la lecture « tous les arrêts » du point ouvert P9, ces flux relèvent du maintien et contredisent `FALSE` ; sous la lecture « après résiliation seulement », ils relèvent de la garantie en vigueur ;
+    - aucun poste ne valorise le maintien en `1.6`, d'où l'absence d'effet ; à régler avant ce poste (§ 10.3, Q14).
+  - Contrôle de cohérence (facultatif, suggéré par `regulatory`, hors de la règle) : signaler sans refuser une garantie `deces` collective à `FALSE` quand le même contrat porte `incapacite` et `invalidite`. Il n'est pas intégré à la règle : décision au mainteneur (§ 10.3, Q13).
 
 ### 1.3 P7 et P8 : grammaire des traitements de `defauts.csv` ; sous-cas de D10
 
@@ -399,10 +419,10 @@ Comparaison aux références en vigueur (`main` `7d53a05`). Tout est **prévisio
 
 | Couple | Fiche | Provisions | Bilan | Visa |
 |---|---|---|---|---|
-| J1, J2 | `versions/dictionnaire`, `empreintes/donnees/extraction` ; `garanties_souscrites` si P6 | inchangées (0 `exact`) ; refus `declaration_manquante` si P6 avec `maintien_deces` = `TRUE` | rangée `D03h non_lisible` retirée si P6 (mesurée présente) ; rangées `D11…` selon § 3 | `actuary`, sauf le cas P6 `TRUE` (mainteneur) |
+| J1, J2 | `versions/dictionnaire`, `empreintes/donnees/extraction`, `empreintes/donnees/garanties_souscrites` (P6) | inchangées (0 `exact`) ; P6 avec `maintien_deces` = `FALSE` (M502) : D03h non détecté | rangée `D03h non_lisible` retirée (P6 ; mesurée présente) ; rangées `D11…` selon § 3 | `actuary` |
 | J3, J4 | idem, plus la section `donnees` du plan (valeurs `H` alignées, § 7) | **P1, P2, total : d'arrêté (`D09`) à 0 `exact`** (#72 ; mesure substitutive) ; P3 0 `exact` inchangé | `refus_tables` : `portee` `ligne`, `postes_arretes` vide ; `enjeu` : rangées de cause `D09` en partie calculées (8 D02a, part des 10 `ensemble`) ; `hypotheses_defaut$valeur` (6 et 10 rangées) ; `D03h`, `D11` comme J1 | **mainteneur** (total) |
-| C1 à C4 | idem J1 | inchangées (mesuré : bilans vides, aucun D02a, aucun dossier masqué, collège `ensemble` seul) ; refus si P6 `TRUE` pour `GSC1` | `D03h`, `D11` comme J1 | `actuary`, sauf P6 `TRUE` |
-| V1, V2 | idem J1 | inchangées (mêmes mesures) ; refus si P6 `TRUE` | `D03h`, `D11` comme J1 | `actuary`, sauf P6 `TRUE` |
+| C1 à C4 | idem J1 | inchangées (mesuré : bilans vides, aucun D02a, aucun dossier masqué, collège `ensemble` seul) ; P6 : `GSC1` à `maintien_deces` = `FALSE` | `D03h`, `D11` comme J1 | `actuary` |
+| V1, V2 | idem J1 | inchangées (mêmes mesures) ; P6 avec `FALSE` | `D03h`, `D11` comme J1 | `actuary` |
 
 Les points sans effet sur aucun couple, chacun fondé sur la mesure citée dans sa section : P7 à P18 hors P6 (§ 1), #81 (cellules de provision), #83, #90, #32.
 
@@ -415,7 +435,7 @@ Les points sans effet sur aucun couple, chacun fondé sur la mesure citée dans 
 | Art. L310-1, 2° et 3°, du code des assurances | § 6 | libellé **incertain** (lecture indirecte) : ne pas le citer mot pour mot | `regulatory` |
 | Intitulés des art. 600-2 à 600-4 du règlement ANC 2015-11 | § 6 (contexte) | incertains : non cités | `regulatory` |
 | Numéro et date du JO du règlement 2015-11 ; version Légifrance | § 6 | non trouvés | `regulatory` |
-| Loi n° 89-1009, art. 7 et 7-1 (maintien de la garantie décès) ; P9 (#14, point 4) | § 1.2 (P6) | **non établi** : la portée du maintien est ouverte (dict. :815) | `regulatory` (point d'arrêt, § 10, A1) |
+| Loi n° 89-1009, art. 2, 7, 7-1 et 10 (maintien de la garantie décès) | § 1.2 (P6) | **lu** par `regulatory` le 12/11/2026, statut `revue requise` : lecture indirecte de Légifrance par fragments (lecture directe empêchée), concordante avec `docs/recherche/2026-11-07-lectures-regulatory-cadrage.md:24`, qui signale une différence de rédaction de l'al. 1 de l'art. 7-1 avec le JO papier ; relecture directe recommandée avant toute citation mot pour mot. Établi pour P6 : clause imposée par l'art. 7-1, al. 1, 1re phrase, dans les conditions de l'art. 2, ou stipulée ; art. 10 sans effet sur P6. Interprétations ouvertes : **I1**, « décès, incapacité de travail et invalidité » cumulatif, ou décès et l'un des deux risques ; **I2**, portabilité (CSS L911-8) couverte ou non par le renvoi de l'art. 2, al. 3 ; **I3**, portée de « Cet engagement » (al. 2), soit le point ouvert P9 du dictionnaire (dict. :815 ; #14, point 4), hors de la présente branche | `regulatory` (relecture directe ; I1 à I3 sur #14, point 4) ; mainteneur (I1 à I3) |
 | A132-1 du code des assurances | § 7 (D03h) | **non cité** : les bornes proposées pour D03h sont celles de la colonne (jugement d'expert P12, dict. :818), non un plafond réglementaire ; à lire seulement si le mainteneur veut lier la borne haute au plafond d'A132-1 | `regulatory`, sur demande |
 | CSS L911-8 (portabilité) | § 3 (D11, hors portabilité) | déjà cité au dictionnaire (dict. :388) ; aucun ajout | — |
 
@@ -423,12 +443,7 @@ Les points sans effet sur aucun couple, chacun fondé sur la mesure citée dans 
 
 ### 10.1 Points d'arrêt (ADR 0012, point 9)
 
-- **A1 : P6 (§ 1.2), texte non établi.** La colonne `maintien_deces` suppose une réponse à P9, la portée du maintien, qui relève de la loi n° 89-1009, art. 7 et 7-1, sans lecture établie. Trois options :
-  - (a) attendre une lecture de `regulatory` sur #14, point 4, puis écrire P6 dans le projet ;
-  - (b) déplacer P6 hors de la `1.6`, vers une version suivante ; D03h reste `non_lisible` sur un contrat collectif ;
-  - (c) accorder un point de contact pour une lecture de `regulatory` pendant la présente branche (documents seuls, aucun fichier commun).
-  
-  Recommandation : (c), puis P6 sous la forme du § 1.2, avec `maintien_deces` = `FALSE` dans les bases existantes. Motif : sans cela, les dix couples tombent en refus (§ 8).
+- **A1 : P6 (§ 1.2), levé.** Le mainteneur a retenu l'option (c) (M502, 12/11/2026). `regulatory` a lu la loi n° 89-1009, art. 2, 7, 7-1 et 10, le même jour (§ 9, statut `revue requise`, lecture indirecte). La lecture établit que la clause de maintien n'est pas obligatoire pour tout contrat collectif décès : la colonne `maintien_deces` est fondée. P6 est écrit au § 1.2, avec `maintien_deces` = `FALSE` dans les quatre bases existantes. Le point ouvert P9 du dictionnaire (portée du maintien, I3 ; dict. :815 ; #14, point 4) reste hors de la présente branche et ne conditionne pas la colonne.
 - **A2 : valeurs admises d'hypothèses lues par Br** (D03f, D03c, D03h). Le projet reprend D03f `regle` et D03c `<college>=<montant>` à la lettre de l'erratum v1.0.16 (`d266559`, visé, sur `claude/deces-reliquats`, pas encore sur `main`). Il ajoute deux contraintes nouvelles : les **bornes** de D03h et le **domaine** de `college` (sans « ; » ni « = »). Br lit la forme de `main` (ADR 0012, point 7). Ces contraintes vivent dans `valider_plan()` (`R/plan.R`, Bdr-b2), hors du couloir de Br, et `.hypothese_d03h()` (`R/risque_en_cours.R`, couloir de Br) reste une garde à la lecture. Aucun fichier commun, donc aucun point de contact demandé. Le contrôle de concordance se fait à la fusion de Br : la forme de l'erratum sur `main` doit égaler celle du § 7.
 - **A3 : décisions ouvertes dans Br et Bo.** #88 (0a) n'a aucun lien avec le dictionnaire. La question de #75 et #92 Q1 sont tranchées par E16-1 et par l'erratum v1.0.16 (visés le 12/11/2026), qui ne sont pas sur `main` : le projet s'y range. #62 (Bo) n'a aucun lien. Bdr-b2 modifiera `tests/controles/concordance_dictionnaire.R` (couloir de Bo) pour les colonnes nouvelles des CSV : après la fusion de Bo, ce n'est pas un recouvrement.
 - **A4 : deux lectures de l'art. 143-3** (§ 6). `regulatory` les a décrites, `actuary` éclaire, le mainteneur tranche (Q1).
@@ -436,13 +451,14 @@ Les points sans effet sur aucun couple, chacun fondé sur la mesure citée dans 
 ### 10.2 Éléments pour les sections communes (consignés par Br ou au point d'étape)
 
 - **§ 2, ligne Bdr-b2.**
-  - Dépendances à ajouter : fusion de Br (forme de D03c et D03f sur `main`) ; Bdr-b1 avant le code de #81 (D11 écrit par #34) ; #100 (B4) pour les paramètres de D03a sous `regle`, si Q11 est retenue ; lecture de `regulatory` sur P9 si P6 reste dans la `1.6`.
+  - Dépendances à ajouter : fusion de Br (forme de D03c et D03f sur `main`) ; Bdr-b1 avant le code de #81 (D11 écrit par #34) ; #100 (B4) pour les paramètres de D03a sous `regle`, si Q11 est retenue ; P6 (§ 1.2) : colonne `maintien_deces` au simulateur, à `FALSE` dans les quatre bases (M502), et retrait de l'admission d'un `taux_technique_tarif` présent sur un décès collectif (`R/donnees.R:1681-1683`).
   - Bdr-b2 aligne aussi la spécification du module `donnees` (`vue_empechee`, #72, #83, #90), le simulateur (intensités nouvelles : `manquant_date_effet`, `college_errone`, `affiliations_simultanees`) et les déclarations des jeux (§ 7).
   - Ampleur : elle dépasse l'évaluation initiale. À l'appréciation d'`architect` au plan de Bdr-b2, avec un découpage possible en deux commits par issue.
 - **ADR 0010.** Annotations à rédiger par `architect` :
   - point 23 : colonnes nouvelles de `defauts.csv` (`signalement`, `parent`) et de `controles.csv` (`traitement`), et lignes de sous-cas ;
   - point 9 : codes de bilan nouveaux `vue_empechee` et `parente_posterieure`, modalité de portée `ligne`.
 - **`CONTEXT.md`.** Termes proposés pour `architect` : « valeur réservée » (`signalement`, `regle`), « date rejetée » (D02a sous `H`, tenue pour inconnue), « vue empêchée ».
+- **`CONTEXT.md`, ligne 37** (constat hors couloir, signalé par `regulatory`). La définition du maintien de la garantie décès retient implicitement l'une des deux lectures du point ouvert P9 du dictionnaire (I3), par les mots « après la résiliation ou le non-renouvellement du contrat collectif ». À reformuler par `architect` après la décision sur #14, point 4. La même définition laisse déjà la portée « à établir ».
 - **§ 3.** #32 : le point 2 est spécifié ici ; le point 1 (rapport de recherche, ligne 28) et la ligne 296 du recensement restent hors plan. #72 option (ii) et l'extension de la règle 3 du § 6 de la spécification du module `donnees` : issue proposée si Q7 retient le renvoi (corps ci-dessous).
 - **Issue proposée** (création sur accord du mainteneur), si Q7 retient (i) :
   - titre : `donnees : règles V et arrêts de vue en portée ligne sous un refus de valeur (suite de #72)` ;
@@ -471,6 +487,16 @@ Les points sans effet sur aucun couple, chacun fondé sur la mesure citée dans 
     - la forme de D05 ;
     - le domaine de `college` sans « ; » ni « = ».
 12. **Q12 (#60).** Rattacher à #60 les points 1 à 4 du § 7 de la spécification du module `donnees` (§ 1.7, § 1.8 et § 1.10 du projet ; recommandé) ?
+13. **Q13 (P6, contrôle de cohérence facultatif).** Faut-il signaler une garantie `deces` collective à `maintien_deces` = `FALSE` quand le même contrat porte `incapacite` et `invalidite` ?
+    - (a) en `1.6`, un code de contrôle nouveau (§ 1.10) : traitement `S` seul, détection présomptive, portée ligne, aucune déclaration ; effet prévu : 5 signalements par couple pour J1 à J4, 6 pour V1 et V2, 0 pour C1 à C4, tous de faux positifs par construction (M502) ;
+    - (b) pas en `1.6` : le contrôle est renvoyé au recensement du poste « maintien de la garantie décès », où il prend son objet, par une issue (**recommandé**) ;
+    - (c) aucun contrôle.
+
+    Motif de (b) : la détection repose sur la lecture I1 et sur une condition de l'art. 2 que la base ne permet pas de lire, et elle n'a d'effet utile que lorsqu'un poste valorise le maintien.
+14. **Q14 (P6, loi vraie).** Les trois jeux portent `incapacite` et `invalidite` sur tous leurs contrats collectifs qui portent `deces`. Leur vérité contient 2, 2 et 1 décès futurs issus d'un arrêt (mesuré), que la lecture « tous les arrêts » du point ouvert P9 rattache au maintien. Avec `FALSE` (M502), ce rattachement est incohérent, sans effet en `1.6`.
+    - (a) garder `FALSE` en `1.6` et exiger, à la spécification du poste « maintien de la garantie décès », une base à `maintien_deces` = `TRUE` avec `taux_technique_tarif` renseigné (**recommandé** : M502 inchangée) ;
+    - (b) passer dès Bdr-b2 les contrats collectifs des jeux régénérés à `TRUE`, `taux_technique_tarif` renseigné ; cela rouvre M502 et demande une mesure de l'effet sur P3 et sur l'indicateur A132-1 ;
+    - (c) faire produire au simulateur des décès issus d'un arrêt seulement sous `TRUE` (pertinent sous la seule lecture « tous les arrêts »).
 
 ### 10.4 Réponses du mainteneur (12 novembre 2026)
 
@@ -491,4 +517,6 @@ Les points sans effet sur aucun couple, chacun fondé sur la mesure citée dans 
 | Q11 (#99) | formes du § 7, bornes de D03h comprises | M511 |
 | Q12 (#60) | points 1 à 4 du § 7 de la spécification du module `donnees` rattachés | M512 |
 
-Reste avant le visa du projet : la lecture de `regulatory` sur P9 (A1, option (c)) et la rédaction définitive du § 1.2.
+La lecture de `regulatory` du 12 novembre 2026 (loi n° 89-1009, art. 2, 7, 7-1 et 10) est reprise au § 1.2 et au § 9, et le § 1.2 est rédigé sous la forme retenue par M502. Réponses du mainteneur du même jour : **Q13, option (b)** (contrôle renvoyé au recensement du poste « maintien de la garantie décès », issue **#106** ; M513) ; **Q14, option (a)** (`FALSE` en `1.6`, base à `TRUE` exigée à la spécification de ce poste ; M514). Commentaire de `regulatory` déposé sur #14, point 4 (M515).
+
+**Visa.** Projet visé par le mainteneur le 12 novembre 2026 (M516).
