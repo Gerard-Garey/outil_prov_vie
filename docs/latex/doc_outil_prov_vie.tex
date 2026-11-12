@@ -4563,6 +4563,21 @@ de quoi il arrête la batterie. Il fournit~:
   avec le motif attendu\fsp;
 \item \code{attendu\_echec()}, pour un défaut connu, avec renvoi à son
   issue\fsp;
+\item \code{informer()}, qui imprime une ligne d'information
+  \code{[INFO]}, hors décompte~: une mesure consignée sans devenir un
+  critère, telle la comparaison de l'empreinte du résultat recalculée à
+  celle de la fiche de référence (ADR~0011, point~23)\fsp;
+\item \code{travail\_de()}, qui mesure le travail d'une fonction sans
+  horloge, une durée dépendant de la charge de la machine~: la somme des
+  tailles (longueur, ou lignes fois colonnes d'un \code{data.frame}) des
+  arguments des appels, faits dans la fonction, aux opérations de base et
+  aux fonctions que l'appelant désigne\fsp; seuls sont comptés les appels
+  écrits dans la fonction, dans les fonctions désignées et dans celles
+  qu'elles définissent. Elle sert aux tests de complexité\fsp;
+\item \code{fonctions\_de()}, qui rend les noms des fonctions, hors
+  primitives, définies directement dans un espace de noms donné (par
+  exemple pour désigner à \code{travail\_de()} les fonctions du
+  package)\fsp;
 \item \code{bilan()}, qui imprime le décompte et termine en échec s'il y a
   un échec ou un succès inattendu\fsp;
 \item \code{installer\_provie()}, qui installe et charge le package\fsp; si
