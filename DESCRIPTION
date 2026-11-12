@@ -1,7 +1,7 @@
 Package: provie
 Type: Package
 Title: Recalcul des provisions d'assurance vie et de prévoyance
-Version: 0.6.0
+Version: 0.5.0
 Author: Gerard-Garey
 Description: Moteur de recalcul, à une date d'arrêté déclarée, des provisions
     des garanties d'assurance vie et de prévoyance, sous les référentiels
