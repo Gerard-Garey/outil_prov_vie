@@ -428,6 +428,8 @@ Tenue par `architect`, après chaque série de PR fusionnées. Chaque mise à jo
   - `docs/specifications/b2-capital-deces-v1.md` ; `inst/extdata/garanties/lectures.csv` si #75 l'exige ;
   - parties `engagement`, `risque_en_cours` et `tables` du document LaTeX, par `docwriter`, en fin de branche.
 
+  **Point de contact accordé à Bo** (M404, 12 novembre 2026, consigné par Bo au § 4.2, `504c577`) : `tests/references.R`, comparateur de l'ADR 0011, point 7 (`.type_feuille`, `.ecart_ligne`, `.texte`, `.comparer_valeurs`, `.comparer_table`, `comparer_feuilles`, l. 132 à 250 à `aeba496`), déplacé vers `tests/harnais.R` par #79, sans changement de code ; **Bo écrit en premier, Br ne modifie pas ces lignes avant la fusion de Bo** (ADR 0012, point 5). Le reste de `tests/references.R` (liste `COUPLES_REFERENCE`) reste dans le couloir de Br.
+
   **Point de contact** (à accorder) : `R/donnees.R`, `.MOIS_PERIODE_COTISATION` et `periode_cotisation_regle()` (l. 497 à 520 à `89d39a8`), pour #92 mi3 (constante en double avec `.MOIS_PERIODICITE`, `R/risque_en_cours.R:20`). **Hors couloir** : le reste de `R/donnees.R`, le dictionnaire, `R/plan.R`, `tests/harnais.R`, `tests/controles/`. `b2_base_construite_deces_01()` (`tests/b2_bases.R`) n'est pas modifiée : les cas nouveaux se construisent sur une copie, comme en B2, sans quoi C1 à C4 changent.
 - **Contrats partagés en jeu** (`docs/agents/routage.md`, § 4.2) : forme de l'objet retourné (ADR 0010, points 6 et 9 : `statut_resultat`, `hypotheses_defaut`, `indicateurs`), si #91 y ajoute une trace ou si #87 marque un dossier. **#91 et #87 sont des issues sensibles** : toute forme nouvelle est consignée par une annotation de l'ADR 0010 au moment de sa décision.
 - **Étape 0, avant tout code** :
