@@ -2659,9 +2659,18 @@ retenues de chaque table\fsp; le statut des parties de ligne, en logique de
 Kleene (section~\ref{sec:donnees-bilan})\fsp; par famille de calcul et par
 table, les lignes exclues par une déclaration d'exclusion d'action
 \code{exclure} pour cette famille, cascade du dictionnaire comprise\fsp;
-les hypothèses par défaut appliquées. Une famille lit une colonne par
-\code{valeurs\_vue()}, dont la valeur manquante veut dire «~hors de la
-vue~».
+les hypothèses par défaut appliquées (\code{hypotheses}~: par hypothèse
+placée, motif, référentiel, poste, valeur, table et lignes). Une famille
+lit une colonne par \code{valeurs\_vue()}, dont la valeur manquante veut
+dire «~hors de la vue~». Les hypothèses placées ne sont lues que par deux
+fonctions~: \code{hypothese\_vue()} (module \code{engagement}), seule
+sélection d'une hypothèse par ligne, et \code{cles\_lignes\_hypothese()},
+seule exception au principe selon lequel les familles ne lisent la base
+qu'au travers de la vue~: elle rend la valeur de la base d'une colonne
+d'identifiant pour des lignes placées sous une hypothèse de la vue, même
+cachées à l'arrêté, afin de rattacher ces lignes à leur unité pour le seul
+statut, jamais pour un montant (décision du mainteneur du 12~novembre~2026,
+M317 et M322~; section~\ref{sec:statut-unite}).
 
 \textbf{États des dossiers.} \code{etats\_a\_date(vue, garanties, famille)}
 rend une ligne par dossier retenu à l'arrêté dont la garantie souscrite a
@@ -3110,13 +3119,13 @@ n'est exportée.
 \rowcolor{tableheader}
 \textcolor{financeblue}{\textbf{Fonction}} & \textcolor{financeblue}{\textbf{Arguments}} & \textcolor{financeblue}{\textbf{Rôle}} \\
 \endhead
-\code{calculer\_engagement()} & \code{vue}, \code{plan}, \code{tables}, \code{catalogue}, \code{garantie}, \code{poste} & Point d'appel d'un poste de la famille «~engagement~» (sinistres déclarés non réglés ou capitaux non réclamés)\fsp; rend les cellules, les dossiers, les échéanciers et les indicateurs\fsp; un poste arrêté rend une cellule \code{arrete} sans montant. \\
-\code{capital\_deces\_dossier()} & \code{vue}, \code{plan}, \code{etats}, \code{methode}, \code{parametres}, \code{prestations}, \code{poste} & Calcule, sous l'une des quatre méthodes, le capital, le solde revalorisé à l'arrêté, le montant à l'horizon de la méthode et la date du flux de chaque dossier\fsp; signale le salaire déclaré sous l'hypothèse D03c du poste (colonne \code{d03c}). \\
+\code{calculer\_engagement()} & \code{vue}, \code{plan}, \code{tables}, \code{catalogue}, \code{garantie}, \code{poste} & Point d'appel d'un poste de la famille «~engagement~» (sinistres déclarés non réglés ou capitaux non réclamés)\fsp; rend les cellules, les dossiers (dont les unités restituées à montant nul), les échéanciers et les indicateurs\fsp; un poste arrêté rend une cellule \code{arrete} sans montant. \\
+\code{capital\_deces\_dossier()} & \code{vue}, \code{plan}, \code{etats}, \code{methode}, \code{parametres}, \code{prestations}, \code{poste} & Calcule, sous l'une des quatre méthodes, le capital, le solde revalorisé à l'arrêté, le montant à l'horizon de la méthode et la date du flux de chaque dossier\fsp; signale le salaire déclaré sous l'hypothèse D03c du poste (colonne \code{d03c}) et le capital reconstitué (colonne \code{reconstitue}, qui décide des lignes lues pour la détection S2). \\
 \code{facteur\_revalorisation()} & \code{debut}, \code{fin}, \code{taux\_par\_annee}, \code{prorata}, \code{conventions}, \code{arrete}, \code{taux\_futur} & Facteur de revalorisation légale entre deux dates, produit sur les années civiles, au prorata simple ou composé\fsp; refus \code{plan\_incomplet} pour une année sans taux. Seule implémentation du package. \\
 \code{valeur\_actuelle\_probable()} & \code{echeancier}, \code{actualisation}, \code{conventions} & Seule fonction de valeur actuelle probable du package~: flux $\times$ probabilité $\times$ facteur d'actualisation, sommés par clé\fsp; un type d'actualisation admis sans branche de calcul est une erreur interne, jamais un facteur~1. Lue aussi par \code{risque\_en\_cours}. \\
 \code{duree\_annees()} & \code{debut}, \code{fin}, \code{conventions} & Durée en années entre deux dates selon la convention de décompte des jours (\code{exact\_exact} ou \code{exact\_365}). \\
 \code{parametre\_vue()} & \code{vue}, \code{nom}, \code{gs}, \code{famille = NULL} & Rend un paramètre de chaque garantie souscrite dans la vue\fsp; \code{NA} s'il manque, \code{ambigu} s'il porte plusieurs valeurs\fsp; si une famille de calcul est donnée, \code{exclu} signale une ligne retenue du paramètre exclue pour cette famille. Seule lecture des paramètres d'une garantie souscrite, appelée par les familles «~engagement~» et «~risque en cours~». \\
-\code{hypothese\_vue()} & \code{vue}, \code{motif}, \code{referentiel}, \code{table}, \code{lignes}, \code{poste} & Seule sélection d'une hypothèse placée par la vue pour chaque ligne d'une table, lue par un poste~: hypothèse du poste de préférence à celle de \code{tous}, puis la première placée\fsp; \code{NA} sans hypothèse appliquée\fsp; le contrôle de la valeur reste à chaque lecteur. Appelée aussi par \code{risque\_en\_cours} (D03h, D03f). \\
+\code{hypothese\_vue()} & \code{vue}, \code{motif}, \code{referentiel}, \code{table}, \code{lignes}, \code{poste} & Seule sélection d'une hypothèse placée par la vue pour chaque ligne d'une table, lue par un poste~: hypothèse du poste de préférence à celle de \code{tous}, puis la première placée\fsp; \code{NA} sans hypothèse appliquée\fsp; le contrôle de la valeur reste à chaque lecteur. Avec \code{cles\_lignes\_hypothese()}, seule lectrice des hypothèses placées par la vue. Appelée aussi par \code{risque\_en\_cours} (D03h, D03f). \\
 \code{hypotheses\_vue\_unites()} & \code{vue}, \code{referentiel}, \code{poste}, \code{famille}, \code{n}, \code{lectures} & Seule détection des hypothèses appliquées par la vue (source S2~: D02b, D03g) aux lignes lues pour chaque unité d'un poste, visibles ou non, hors lignes exclues pour la famille\fsp; rend les codes de chaque unité. Appelée aussi par \code{risque\_en\_cours}. \\
 \code{joindre\_codes()} & \code{...} & Seule réunion des codes d'hypothèse d'une unité (sources S1 et S2)~: codes uniques, triés, joints par «~;~». Appelée aussi par \code{risque\_en\_cours}. \\
 \code{lecture\_unites()} & \code{table}, \code{colonnes}, \code{cles}, \code{unite}, \code{garde}, \code{admises} & Décrit la lecture d'une table par les unités d'un poste pour la détection S2 (clés, unités, lignes admises). Appelée aussi par \code{risque\_en\_cours}. \\
@@ -3169,9 +3178,12 @@ remplissent le critère déclaré par le plan, réunion de
 dossier de qualité \code{non\_identifie}) et de \code{sans\_evenement}
 (aucun événement retenu du dossier d'effet postérieur à l'arrêté diminué du
 nombre de mois déclaré, et une date d'ouverture au plus égale à cette
-date)\fsp; les sinistres déclarés non réglés sont les autres. Un dossier
-clos, dont celui clos par un dépôt à la Caisse des dépôts et consignations,
-n'entre dans aucun des deux postes. Les décès que l'organisme ne connaît
+date)\fsp; les sinistres déclarés non réglés sont les autres. Cette
+partition se fait avant le filtre des dossiers clos. Un dossier clos, dont
+celui clos par un dépôt à la Caisse des dépôts et consignations, n'est pas
+calculé~; il n'est restitué, à montant nul, que si une ligne qui décide de
+sa clôture porte une hypothèse de la vue, au poste que lui donne la
+partition (section~\ref{sec:statut-unite}). Les décès que l'organisme ne connaît
 pas sont des sinistres tardifs, qui ne relèvent d'aucun de ces postes
 (section~\ref{sec:totaux}).
 
@@ -3296,8 +3308,9 @@ canonique, qui le porte sous deux formes). Une année antérieure ou égale à c
 taux est refusée (\code{plan\_incomplet}, le message nommant l'année et le
 premier dossier). Un solde nul ou négatif donne une provision nulle, et le
 dossier n'est pas restitué, sauf si le salaire déclaré sous l'hypothèse
-D03c entre dans son capital~: il est alors restitué à montant nul (unité
-de montant nul, spécification, version~1.0.16, §~5.8). Un capital payé au nominal après la
+D03c entre dans son capital ou si une ligne de prestations du dossier
+porte une hypothèse de la vue~: il est alors restitué à montant nul
+(section~\ref{sec:statut-unite}). Un capital payé au nominal après la
 survenance laisse ainsi un solde égal à la revalorisation non payée,
 revalorisée jusqu'à l'arrêté, tant que la clôture du dossier n'est pas
 retenue à l'arrêté. Les frais sont le chargement déclaré appliqué
@@ -3342,13 +3355,15 @@ par défaut dont P1 et P2 lisent la valeur est celle du salaire manquant
 \code{jugement\_expert}, et la colonne \code{hypotheses\_defaut} porte
 \code{D03c}, y compris quand son solde est au plus nul (il est alors
 restitué à montant nul)~; D03a déclarée en hypothèse n'est pas lue, l'âge
-restant inconnu. Les
-hypothèses de visibilité D02b et D03g, appliquées par la vue à un arrêté
-antérieur à l'extraction, décident de la visibilité de lignes que lisent
-ces postes sans marquer le dossier~; elles restent déclarées au bilan
-(\code{hypotheses\_defaut}). C'est un écart à la règle de la spécification
-(§~5.3, statut \code{jugement\_expert} «~si une hypothèse entre dans le
-montant~»), signalé (issue~87).
+restant inconnu. Les hypothèses de visibilité D02b et D03g, appliquées par
+la vue à un arrêté antérieur à l'extraction, marquent aussi le dossier
+dont une ligne lue est placée sous l'une d'elles, qu'elle l'ait rendue
+visible ou cachée~: le dossier est \code{jugement\_expert} et ses codes
+vont dans \code{hypotheses\_defaut} (issue~87 du dépôt~; règle unique de
+statut, section~\ref{sec:statut-unite}). La colonne
+\code{hypotheses\_defaut} d'un dossier réunit donc les codes de D03c et
+des hypothèses de la vue, uniques, triés et joints par «~;~»
+(\code{joindre\_codes()})~; elle est vide sans hypothèse.
 
 \textbf{Indicateurs.} Chaque poste émet une ligne \code{R132\_3\_1} par
 année de taux de revalorisation employée, années postérieures à l'arrêté
@@ -3356,6 +3371,174 @@ comprises (section~\ref{sec:tables-indicateurs}). Un plan qui déclare une
 méthode à l'horizon de l'arrêté sur l'un des deux postes et une méthode
 «~règlement~» sur l'autre est admis, avec une ligne
 \code{methode\_revalorisation\_mixte}.
+
+% =============================================================================
+\section{Statut d'une unité sous hypothèse et unité à montant nul}
+\label{sec:statut-unite}
+% =============================================================================
+
+Les deux familles de calcul de l'état du code suivent une seule règle de
+statut, pour les sinistres déclarés non réglés, les capitaux non réclamés
+(unité~: le dossier) et la provision mathématique de la temporaire décès
+(unité~: le contrat, individuel ou collectif)~: une unité est restituée au
+statut \code{jugement\_expert} dès qu'une valeur que la base ne fournit
+pas, et qu'une déclaration du plan fournit, entre dans le calcul de son
+montant (spécification de la branche B2, version~1.0.16, §~5.8~;
+décisions du mainteneur du 12~novembre~2026, M310 et M311~; issues~87,
+91 et~92 du dépôt). La règle s'ajoute aux autres causes de
+\code{jugement\_expert} propres à chaque poste (méthode «~règlement~»,
+structure familiale du plan, facteur d'issue). Trois sources, et elles
+seules~:
+
+\begin{itemize}[itemsep=2pt]
+\item \textbf{S1, hypothèse appliquée par la famille}~: la valeur ou la
+  règle déclarée par le plan (comptes sociaux, poste du calcul ou tous les
+  postes) est lue pour l'unité~: D03c pour les sinistres déclarés non
+  réglés et les capitaux non réclamés (section~\ref{sec:engagement-capital}),
+  D03h (champ individuel) et D03f (champ collectif) pour la provision
+  mathématique (section~\ref{sec:risque-en-cours-p3})\fsp;
+\item \textbf{S2, hypothèse appliquée par la vue}~: une ligne lue pour
+  l'unité figure parmi les lignes d'une hypothèse D02b ou D03g placée par
+  la vue (comptes sociaux, poste du calcul ou tous les postes), que
+  l'hypothèse l'ait rendue visible ou cachée à l'arrêté\fsp;
+\item \textbf{S3, extrapolation d'une table}~: un point lu pour l'unité
+  est hors des axes de la table, sous la déclaration
+  \code{derniere\_valeur} (dans l'état du code, la table du tarif du champ
+  individuel de la provision mathématique, section~\ref{sec:tables-indicateurs}).
+\end{itemize}
+
+\textbf{Provenance, non effet} (jugement d'expert). La règle se juge sur
+ce que le calcul lit, non sur l'écart que la valeur produit~: un effet
+n'est défini que contre une autre valeur, que la base ne donne pas (c'est
+pourquoi une hypothèse est déclarée), un effet nul par coïncidence ne rend
+pas la valeur observée, et le mesurer demanderait un second calcul par
+unité. L'alternative «~les hypothèses de la vue n'entrent pas dans le
+statut~» a été écartée (décision E16-4, M310)~: la visibilité d'un
+événement décide de l'état du dossier et de son capital, et un statut
+\code{exact} affirmerait un montant que la base seule ne détermine pas.
+Une hypothèse déclarée mais non appliquée n'entre pas dans le statut~:
+D02a en hypothèse par défaut, que la vue n'applique pas encore
+(section~\ref{sec:donnees-bilan}), ou une hypothèse placée sur une
+cotisation sortie du calcul par une fin de période connue au plus
+l'arrêté. À un arrêté égal à la date d'extraction, D02b et D03g sont des
+signalements~: aucune hypothèse de la vue n'est placée, et le statut n'en
+dépend pas.
+
+\textbf{Lignes lues (S2).} Parmi les tables que le poste lit, visibles ou
+non à l'arrêté, et non exclues pour la famille du poste (une ligne exclue
+n'est jamais lue)~:
+
+\begin{itemize}[itemsep=2pt]
+\item dossier des sinistres déclarés non réglés ou des capitaux non
+  réclamés~: sa ligne de \code{dossiers}, la ligne de \code{sinistres} de
+  son sinistre, les lignes d'\code{evenements} de ce sinistre ou du
+  dossier, les lignes de \code{prestations} et de \code{beneficiaires} du
+  dossier, la ligne de \code{contrats} du contrat de sa garantie
+  souscrite\fsp; si le capital est reconstitué, les lignes
+  d'\code{affiliations} de l'assuré au contrat et, si le sinistre est
+  instruit, les lignes de \code{famille} du sinistre\fsp;
+\item contrat individuel de la provision mathématique~: sa ligne de
+  \code{contrats}, la ligne d'\code{assures} de son assuré, les lignes de
+  \code{sinistres} de cet assuré\fsp;
+\item contrat collectif~: sa ligne de \code{contrats} et les lignes de
+  \code{cotisations} du champ (émission, annulation, régularisation, des
+  garanties \code{deces} du contrat), visibles ou non, hors cotisation de
+  fin de période connue au plus l'arrêté.
+\end{itemize}
+
+\noindent Une ligne cachée à l'arrêté n'est pas lisible par
+\code{valeurs\_vue()}~; son rattachement à une unité passe par
+\code{cles\_lignes\_hypothese()} (module \code{donnees}), qui n'en rend
+que les identifiants (section~\ref{sec:donnees-etats}). Connaître
+l'identifiant d'une ligne cachée ne fait entrer dans aucun calcul une
+information inconnue à l'arrêté~: il ne décide que d'un statut. La
+détection est faite par la seule \code{hypotheses\_vue\_unites()}, et les
+codes S1 et S2 d'une unité sont réunis par la seule
+\code{joindre\_codes()} (module \code{engagement}), pour les deux
+familles.
+
+\textbf{Unité à montant nul} (jugement d'expert~; décision E16-5 du
+mainteneur, M311). Une unité de la population du poste dont le montant
+devient nul, ou qui sortirait du calcul, par l'effet d'une valeur S1 à S3
+reste une unité restituée~: montant nul, statut \code{jugement\_expert},
+codes dans \code{hypotheses\_defaut} pour un dossier~; elle compte dans le
+nombre de dossiers du poste et fait exister la cellule de son segment.
+Motif~: la valeur déclarée a décidé du montant, et sans unité la cellule
+prendrait le statut des seules autres unités. La population se lit avant
+les filtres que la valeur décide, et seule une ligne qui \emph{décide} du
+filtre de sortie fait restituer l'unité (décisions E18-1 et E18-2,
+M320 et M321)~:
+
+\begin{itemize}[itemsep=2pt]
+\item \textbf{dossier de solde au plus nul}~: le salaire déclaré sous
+  D03c entre dans son capital, ou une ligne de \code{prestations} du
+  dossier porte une hypothèse de la vue\fsp;
+\item \textbf{dossier clos}~: une ligne d'\code{evenements} \emph{du
+  dossier} porte une hypothèse de la vue et décide de la clôture, soit
+  visible et de type \code{cloture\_dossier} ou
+  \code{reouverture\_dossier}, soit cachée à l'arrêté, quel que soit son
+  type (une réouverture cachée laisse le dossier clos). Seules les lignes
+  rattachées au dossier par son identifiant, entrées de son automate
+  (section~\ref{sec:donnees-etats}), décident~: un événement d'un autre
+  dossier du même sinistre n'en décide pas, même s'il entre dans le statut.
+  Le dossier restitué va au poste que donne la partition des capitaux non
+  réclamés, faite avant le filtre des dossiers clos\fsp;
+\item \textbf{contrat individuel sorti de la population}~: par un
+  sinistre \code{deces} ou \code{iad} visible, non exclu, survenu au plus
+  l'arrêté, dont la ligne porte une hypothèse de la vue, ou par sa date de
+  fin au plus l'arrêté dont la partie de fin porte une hypothèse de la vue
+  (la fin contractuelle étant postérieure à l'arrêté). Une voie de sortie
+  établie par des lignes sans hypothèse (sinistre saisi, date de fin
+  saisie, fin contractuelle au plus l'arrêté) établit la sortie~: aucune
+  ligne sous hypothèse n'en décide alors, et le contrat n'est pas
+  restitué\fsp;
+\item \textbf{contrat collectif}~: sous une valeur S1 ou S2, il est
+  restitué même quand aucune de ses cotisations n'a de fin de période
+  postérieure à l'arrêté.
+\end{itemize}
+
+\noindent Une unité de montant nul sans valeur S1 à S3 reste hors de la
+restitution, comme avant. Alternatives écartées~: pas d'unité, statut de
+la cellule inchangé (contraire à la règle)~; un drapeau au niveau de la
+cellule (forme nouvelle de l'objet, deux règles de statut).
+
+\textbf{Échéancier d'une unité restituée à zéro.} Un dossier clos ou un
+contrat sorti, restitué à montant nul, reçoit deux lignes d'échéancier
+(capital et frais), de flux nul, de probabilité~1, datées du lendemain de
+l'arrêté, sans actualisation. Ces lignes sont une \emph{trace} de l'unité
+dans les échéanciers, non une valorisation~: elles ne projettent aucun
+flux, et le montant nul n'est pas l'estimation d'un engagement par une
+méthode, mais l'effet de la valeur déclarée sur la population. Un dossier
+de solde au plus nul garde ses deux lignes ordinaires, de flux nul.
+
+\textbf{Trace dans l'objet rendu} (aucune colonne ni aucun champ nouveau,
+ADR~0010, point~6, annotation du 12~novembre~2026). Pour un dossier, la
+colonne \code{hypotheses\_defaut} porte les codes S1 et S2. Pour la
+provision mathématique, qui n'a pas de dossier, le statut se lit sur la
+cellule et, contrat par contrat, sur la segmentation \code{contrat}~;
+S1 garde ses traces (\code{hypothese\_D03h} dans le détail de la ligne
+\code{tarif\_vie}), S3 a sa ligne \code{hors\_axes\_derniere\_valeur}.
+Le bilan compte toujours les lignes placées par motif et par référentiel,
+lues ou non par un poste (\code{hypotheses\_defaut} du bilan).
+
+\textbf{Limites.}
+
+\begin{itemize}[itemsep=2pt]
+\item \textbf{Dossier caché} (décision E17-2, M318). Un dossier rendu
+  invisible par une hypothèse de la vue (sinistre caché par D03g, dossiers
+  cachés par la visibilité des lignes filles) n'est pas une ligne
+  d'\code{etats\_a\_date()}~: il est hors de la population et n'est pas
+  une unité. Le rattacher à l'un des deux postes demanderait un calcul
+  contrefactuel de son état et de son solde, que la règle écarte~; sa
+  trace reste celle du bilan.
+\item \textbf{Assuré et sinistre caché.} La ligne d'\code{assures} de
+  l'assuré et un sinistre caché entrent dans le statut d'un contrat
+  individuel, mais ne décident pas de sa sortie~: aucune règle ne restitue
+  un contrat que ces lignes feraient sortir. Une hypothèse de la vue qui
+  viendrait à porter sur la table \code{assures} demanderait une règle
+  comme celle de la date de fin (E18-2) pour dire si le contrat sorti est
+  restitué.
+\end{itemize}
 
 
 \partie{Partie X}{Module triangle}
@@ -3406,9 +3589,9 @@ fonctions n'est exportée.
 \begin{tabular}{@{}p{5.6cm}>{\raggedright\arraybackslash}p{3.0cm}p{6.5cm}@{}}
 \rowcolor{tableheader}
 \textcolor{financeblue}{\textbf{Fonction}} & \textcolor{financeblue}{\textbf{Arguments}} & \textcolor{financeblue}{\textbf{Rôle}} \\
-\code{calculer\_risque\_en\_cours()} & \code{vue}, \code{plan}, \code{tables}, \code{catalogue}, \code{garantie}, \code{poste} & Point d'appel de la provision mathématique de la temporaire décès\fsp; rend une cellule pour le poste (champs individuel et collectif réunis), les échéanciers des contrats individuels, les indicateurs et les contrats valorisés par champ (unités de la restitution par segment)\fsp; un poste arrêté rend une cellule \code{arrete}. \\
-\code{provisions\_individuelles()} & \code{vue}, \code{plan}, \code{tables}, \code{temoin} & Calcule, contrat individuel par contrat, la population, l'échéancier et la provision (plancher nul par contrat)\fsp; marque les contrats dont un âge est lu hors des axes sous \code{derniere\_valeur} et rend leurs lignes \code{hors\_axes\_derniere\_valeur}\fsp; le témoin rétrospectif n'est calculé que si \code{temoin} vaut \code{TRUE} (\code{NA} en prime unique). \\
-\code{provisions\_collectives()} & \code{vue}, \code{plan} & Calcule, par contrat collectif, la provision au prorata des cotisations nettes de chargement sur les jours postérieurs à l'arrêté (\code{prorata\_cotisation}), sous le traitement déclaré de la période couverte manquante (D03f)\fsp; rend aussi le motif d'arrêt et le premier contrat en cause, et les contrats valorisés sous l'hypothèse de D03f. \\
+\code{calculer\_risque\_en\_cours()} & \code{vue}, \code{plan}, \code{tables}, \code{catalogue}, \code{garantie}, \code{poste} & Point d'appel de la provision mathématique de la temporaire décès\fsp; rend une cellule pour le poste (champs individuel et collectif réunis), les échéanciers des contrats individuels (deux lignes de flux nul par contrat sorti restitué), les indicateurs et les contrats valorisés par champ (unités de la restitution par segment)\fsp; un poste arrêté rend une cellule \code{arrete}. \\
+\code{provisions\_individuelles()} & \code{vue}, \code{plan}, \code{tables}, \code{temoin} & Calcule, contrat individuel par contrat, la population, l'échéancier et la provision (plancher nul par contrat)\fsp; marque les contrats dont un âge est lu hors des axes sous \code{derniere\_valeur} et rend leurs lignes \code{hors\_axes\_derniere\_valeur}\fsp; rend les codes des hypothèses de la vue de chaque contrat et les contrats sortis à restituer à montant nul\fsp; le témoin rétrospectif n'est calculé que si \code{temoin} vaut \code{TRUE} (\code{NA} en prime unique). \\
+\code{provisions\_collectives()} & \code{vue}, \code{plan} & Calcule, par contrat collectif, la provision au prorata des cotisations nettes de chargement sur les jours postérieurs à l'arrêté (\code{prorata\_cotisation}), sous le traitement déclaré de la période couverte manquante (D03f)\fsp; rend aussi le motif d'arrêt et le premier contrat en cause, et les contrats sous une hypothèse (D03f, ou hypothèse de la vue), restitués même de montant nul. \\
 \end{tabular}
 \end{center}
 
@@ -3434,7 +3617,11 @@ contrat, de la date à laquelle l'assuré atteint \code{age\_fin\_garantie}
 (selon la convention d'âge) et de la fin du contrat quand elle est connue à
 l'arrêté, est postérieure à l'arrêté. Un contrat dont l'assuré a un
 sinistre \code{deces} ou \code{iad} retenu survenu au plus l'arrêté en sort~:
-il relève des sinistres déclarés non réglés. Le capital est
+il relève des sinistres déclarés non réglés. Un contrat sorti de la
+population par un sinistre ou par sa date de fin, quand la ligne qui
+décide de la sortie porte une hypothèse de la vue, est restitué à montant
+nul
+(section~\ref{sec:statut-unite}). Le capital est
 \code{capital\_forfaitaire}. Un paramètre lu manquant ou à plusieurs
 valeurs (\code{capital\_forfaitaire}, \code{age\_fin\_garantie} et, sous la
 prime déclarée pour un contrat à primes périodiques,
@@ -3547,7 +3734,9 @@ du poste l'emportant sur celle de tous les postes), sans
 quoi l'appel est refusé (\code{declaration\_manquante})~; le contrat est
 alors au statut \code{jugement\_expert}, comme un contrat dont un âge est
 lu hors des axes de la table du tarif sous \code{derniere\_valeur}
-(ci-dessous), et \code{exact} sinon.
+(ci-dessous) ou dont une ligne lue (contrat, assuré, sinistres de l'assuré)
+est placée sous une hypothèse de la vue, et \code{exact} sinon (règle
+unique de statut, section~\ref{sec:statut-unite}).
 
 \textbf{Champ collectif.} Sous \code{prorata\_cotisation}, hors couverture
 exclue pour la famille «~risque en cours~» (même fonction), la provision
@@ -3558,7 +3747,9 @@ net du chargement de cotisation déclaré multiplié par la part des jours de
 la période postérieurs à l'arrêté. C'est une approximation (égalité si le
 risque est uniforme sur la période et la prime pure), restituée au statut
 \code{approximation\_numerique} faute d'un statut plus juste dans la liste
-fermée.
+fermée~; un contrat sous l'hypothèse D03f ou dont une ligne lue (contrat,
+cotisations du champ) est placée sous une hypothèse de la vue est
+\code{jugement\_expert} (section~\ref{sec:statut-unite}).
 
 \textbf{Champ collectif~: ordre d'évaluation d'une cotisation.} Chaque
 cotisation retenue du champ est lue dans cet ordre (issue~92 du dépôt~;
