@@ -47,6 +47,16 @@
 # constante s'obtient sans charger le package, en évaluant les affectations de premier
 # niveau de R/<module>.R qui sont des fonctions ou dont le nom est en majuscules (modules
 # pris dans l'ordre de MODULES).
+#
+# Complétude des constantes (issue #41, décision M408). Toute constante en majuscules de
+# premier niveau de R/<module>.R (nom ^[A-Z][A-Z0-9_]*$, affectation <- ou = dont le membre
+# de droite n'est pas une fonction ; même prédicat que celui de constantes_du_code()) doit
+# figurer dans le tableau de
+# constantes de son module : une constante absente est un écart nommé, et un module qui a
+# des constantes mais aucun tableau de constantes en est un aussi (même traitement que
+# « fonctions dans R/ mais aucun tableau »). Les constantes dont le nom commence par un
+# point (.NOM, internes) ne sont pas recensées, comme les fonctions à point : elles ne sont
+# pas exigées au tableau ; citées dans un tableau, elles sont un écart.
 
 options(warn = 2)
 args <- commandArgs(TRUE)
@@ -138,6 +148,18 @@ MOTIF_DECOMPTE <- paste0("(?<![[:alpha:]-])([[:alpha:]]+(?:-[[:alpha:]]+)*|[0-9]
                          "(motifs|cha[^ ]{1,2}nes|lignes|CSV)(?![[:alpha:]])")
 MOTIF_SUITE_CODE <- "^\\\\code\\{[^{}\"]*\\}(?:, \\\\code\\{[^{}\"]*\\})*"
 
+# Prédicat partagé par constantes_du_code() et constantes_majuscules_du_fichier() : une
+# expression de premier niveau est une affectation « NOM <- valeur » ou « NOM = valeur » à un
+# nom (« 3L -> NOM » est déjà normalisé en « NOM <- 3L » par le parseur ; « NOM <<- v » et
+# « NOM := v » n'en sont pas). Rend list(nom, droite), ou NULL.
+affectation_de_premier_niveau <- function(expr) {
+  if (is.call(expr) && as.character(expr[[1L]])[1L] %in% c("<-", "=") && is.name(expr[[2L]])) {
+    list(nom = as.character(expr[[2L]]), droite = expr[[3L]])
+  }
+}
+est_fonction <- function(x) is.call(x) && identical(x[[1L]], as.name("function"))
+NOM_CONSTANTE <- "^[A-Z][A-Z0-9_]*$"
+
 # Affectations de premier niveau évaluables : fonctions (toutes) et constantes (nom en
 # majuscules), évaluées sans le package, modules dans l'ordre de MODULES. Rend, par nom de
 # constante, list(module, valeur, erreur).
@@ -148,12 +170,13 @@ constantes_du_code <- function(racine) {
     chemin <- file.path(racine, "R", paste0(module, ".R"))
     if (!file.exists(chemin)) next
     for (expr in parse(chemin, keep.source = FALSE)) {
-      if (!(is.call(expr) && as.character(expr[[1L]])[1L] %in% c("<-", "=") && is.name(expr[[2L]]))) next
-      nom <- as.character(expr[[2L]])
-      if (is.call(expr[[3L]]) && identical(expr[[3L]][[1L]], as.name("function"))) {
-        assign(nom, eval(expr[[3L]], env), envir = env)
-      } else if (grepl("^[A-Z][A-Z0-9_]*$", nom)) {
-        r <- tryCatch(list(valeur = eval(expr[[3L]], env), erreur = NA_character_),
+      aff <- affectation_de_premier_niveau(expr)
+      if (is.null(aff)) next
+      nom <- aff$nom
+      if (est_fonction(aff$droite)) {
+        assign(nom, eval(aff$droite, env), envir = env)
+      } else if (grepl(NOM_CONSTANTE, nom)) {
+        r <- tryCatch(list(valeur = eval(aff$droite, env), erreur = NA_character_),
                       error = function(e) list(valeur = NULL, erreur = conditionMessage(e)))
         if (is.na(r$erreur)) assign(nom, r$valeur, envir = env)
         constantes[[nom]] <- list(module = module, valeur = r$valeur, erreur = r$erreur)
@@ -161,6 +184,18 @@ constantes_du_code <- function(racine) {
     }
   }
   constantes
+}
+
+# Constantes en majuscules de premier niveau d'un fichier R (issue #41) : les affectations
+# que constantes_du_code() évalue comme constantes, par le même prédicat (ensemble identique
+# par construction). Les noms à point (.NOM) en sont exclus.
+constantes_majuscules_du_fichier <- function(chemin) {
+  noms <- character(0)
+  for (expr in parse(chemin, keep.source = FALSE)) {
+    aff <- affectation_de_premier_niveau(expr)
+    if (!is.null(aff) && !est_fonction(aff$droite) && grepl(NOM_CONSTANTE, aff$nom)) noms <- c(noms, aff$nom)
+  }
+  unique(noms)
 }
 
 # Fin de rangée : « \\ », suivi au plus d'un « [...] » puis de filets (\hline, \midrule...).
@@ -367,6 +402,12 @@ if (!file.exists(document)) {
     }
     noms <- vapply(rangees, function(r) r$nom, "")
     for (nom in unique(noms[duplicated(noms)])) signaler(nom, "citée deux fois dans le tableau")
+    chemin_module <- file.path(racine, "R", paste0(module, ".R"))
+    absentes <- if (file.exists(chemin_module)) setdiff(constantes_majuscules_du_fichier(chemin_module), noms) else character(0)
+    if (length(absentes) > 0L) {
+      echecs <- echecs + 1L
+      ecart(paste("module", module), paste("constantes absentes du document :", paste(absentes, collapse = ", ")))
+    }
     comparees <- 0L
     sans_litteral <- character(0)
     for (r in rangees) {
@@ -395,6 +436,16 @@ if (!file.exists(document)) {
       accord(sprintf("constantes du module %s : %d citée(s), %d valeur(s) littérale(s) concordante(s)%s",
                      module, length(rangees), comparees,
                      if (length(sans_litteral)) paste0(" ; sans valeur littérale lue : ", paste(sans_litteral, collapse = ", ")) else ""))
+    }
+  }
+  # Module qui a des constantes mais aucun tableau de constantes (issue #41).
+  for (module in setdiff(MODULES, modules_cl)) {
+    chemin_module <- file.path(racine, "R", paste0(module, ".R"))
+    if (!file.exists(chemin_module)) next
+    sans_tableau <- constantes_majuscules_du_fichier(chemin_module)
+    if (length(sans_tableau) > 0L) {
+      ecart(paste("module", module), paste("constantes dans R/ mais aucun tableau de constantes dans le document :",
+                                           paste(sans_tableau, collapse = ", ")))
     }
   }
 }

@@ -915,25 +915,29 @@ d'aléa du package passe par \code{avec\_graine()}~: aucun autre fichier de
 de contrôle (section~\ref{sec:controles}). Aucune fonction du module n'est
 exportée.
 
-\begin{center}
-\small
+{\small
 \rowcolors{2}{tablerow}{white}
 % concordance-fonctions : outils
-\begin{tabular}{@{}p{3.9cm}>{\raggedright\arraybackslash}p{3.0cm}p{8.2cm}@{}}
+\begin{longtable}{@{}p{3.9cm}>{\raggedright\arraybackslash}p{3.0cm}p{8.2cm}@{}}
 \rowcolor{tableheader}
 \textcolor{financeblue}{\textbf{Fonction}} & \textcolor{financeblue}{\textbf{Arguments}} & \textcolor{financeblue}{\textbf{Rôle}} \\
+\endfirsthead
+\rowcolor{tableheader}
+\textcolor{financeblue}{\textbf{Fonction}} & \textcolor{financeblue}{\textbf{Arguments}} & \textcolor{financeblue}{\textbf{Rôle}} \\
+\endhead
 \code{refuser()} & \code{message}, \code{motif}, champs facultatifs & Lève un refus d'appel~: condition de classe \code{refus\_provie} (qui hérite de \code{error}), qui interrompt l'appel sans rendre d'objet\fsp; le motif est pris dans la liste fermée \code{MOTIFS\_REFUS}\fsp; les champs facultatifs (\code{module}, \code{table}, \code{colonne}, \code{usage}, \code{nombre}, \code{identifiants}, \code{attendu}, \code{recu}) situent le refus, les identifiants étant tronqués à dix. \\
 \code{avec\_graine()} & \code{graine}, \code{expr} & Évalue \code{expr} sous le générateur Mersenne-Twister (échantillonneurs Inversion et Rejection) et la graine donnée, puis rétablit les genres du générateur et la graine de l'appelant, même en cas d'erreur (section~\ref{sec:graine}). \\
 \code{empreinte()} & \code{octets} & Rend le MD5 d'un vecteur d'octets (\code{raw}), en 32 caractères hexadécimaux minuscules, calculé par \code{tools::md5sum()} sur un fichier temporaire supprimé à la sortie (R~4.3.3 ne calcule le MD5 que d'un fichier). \\
 \code{ecrire\_valeurs()} & \code{x}, \code{forme = "texte"} & Écrit un vecteur atomique simple (logique, entier, réel, caractère, date) sous sa forme canonique~: en texte, une chaîne par valeur (réels à 17 chiffres significatifs, dates ISO~8601)\fsp; en octets, sans étiquette de type, nombres en petit-boutiste (section~\ref{sec:ecriture}). \\
+\code{vers\_utf8()} & \code{x}, \code{quoi} & Rend les chaînes de \code{x} en UTF-8, sans jamais les corriger~: une chaîne ASCII reste telle quelle, une chaîne marquée UTF-8 est validée, une chaîne marquée latin1 est traduite\fsp; refuse par \code{liste\_invalide} une chaîne marquée \code{bytes}, une chaîne non ASCII sans encodage déclaré sous une locale non UTF-8, et un UTF-8 invalide, le refus nommant \code{quoi}. Non exportée, appelée par \code{ecrire\_valeurs()}, \code{ecrire\_liste()} et le module \code{lecture}. \\
 \code{ecrire\_liste()} & \code{x} & Sérialise une liste nommée en texte aplati UTF-8, une ligne par feuille (chemin, type, valeurs), rendu en octets\fsp; n'écrit aucun fichier (section~\ref{sec:format-liste}). \\
 \code{lire\_liste()} & \code{octets} & Relit, sans évaluer de code, les octets écrits par \code{ecrire\_liste()}\fsp; refuse tout texte qui n'est pas canonique, de sorte que l'aller-retour rend une liste identique. \\
 \code{decrire\_plateforme()} & Aucun & Décrit la plateforme d'exécution pour la fiche de calcul (version de R, système, machine, boutisme, bibliothèques d'algèbre linéaire, d'expressions régulières et Unicode), en liste sérialisable par \code{ecrire\_liste()}, sans date ni nom d'utilisateur\fsp; chaque champ est une chaîne de longueur~1, et un champ indisponible (\code{Sys.info()} qui rend \code{NULL}, composant absent de \code{Sys.info()} ou d'\code{extSoftVersion()}) vaut \code{NA}. \\
 \code{calculer\_age()} & \code{date\_naissance}, \code{date}, \code{convention} & Rend l'âge entier, en années, à une date, selon une convention de la liste fermée \code{CONVENTIONS\_AGE} (\code{revolu}, \code{millesime}, \code{plus\_proche}, \code{naissance\_31\_decembre})\fsp; né un 29~février, l'anniversaire d'une année non bissextile est le 1er~mars\fsp; \code{NA} si la date précède la naissance\fsp; refuse par \code{plan\_invalide} une convention hors de la liste. Seule fonction d'âge du package. \\
 \code{date\_atteinte\_age()} & \code{date\_naissance}, \code{age}, \code{convention} & Fonction inverse de \code{calculer\_age()}~: première date, au plus tôt la naissance, à laquelle l'âge selon la convention vaut \code{age}. \\
 \code{ajouter\_mois()} & \code{d}, \code{k} & Rend la date \code{k} mois après \code{d}, en nombre de jours, au même quantième\fsp; un quantième absent du mois visé donne le premier jour du mois suivant. Non exportée, lue par \code{engagement} et \code{risque\_en\_cours}. \\
-\end{tabular}
-\end{center}
+\end{longtable}
+}
 
 Le module porte aussi sept constantes (section~\ref{sec:outils-constantes}).
 Les deux fonctions d'âge sont décrites à la section~\ref{sec:age}.
@@ -1074,7 +1078,9 @@ elle tourne, que deux appels de même graine rendent les mêmes tirages, que
 la graine et les genres de l'appelant sont rétablis à l'identique, y
 compris après une erreur dans \code{expr}, et que la suite des tirages de
 l'appelant est inchangée. Elle compare aussi trois tirages sous une graine
-fixée à des valeurs écrites en dur, à une tolérance relative déclarée~; en
+fixée à des valeurs écrites en dur, à la tolérance mixte déclarée du
+harnais, absolue pour ces valeurs inférieures à~1
+(section~\ref{sec:harnais})~; en
 intégration continue, cette comparaison tourne sur la plateforme de
 référence (section~\ref{sec:batteries}). La fonction ne garantit pas, à
 elle seule, l'identité des tirages d'une plateforme à l'autre.
@@ -1286,10 +1292,11 @@ machine, transcription du dictionnaire de la base, et donne accès, par table
 et par colonne, aux types, domaines, obligations, modes de saisie et défauts
 de données. Il porte aussi l'automate des événements, la liste des
 paramètres, la liste des défauts et celle des codes de contrôle de
-structure. Il ne peut appeler que \code{outils}. Deux de ses cinq
+structure. Il ne peut appeler que \code{outils}. Deux de ses six
 fonctions sont exportées, \code{dictionnaire()} et
-\code{controler\_types()}\fsp; les trois autres servent les modules
-\code{lecture} et \code{donnees}.
+\code{controler\_types()}\fsp; les quatre autres, non exportées, servent
+le module lui-même et, hors de lui, les modules \code{lecture} et
+\code{donnees}.
 
 \begin{center}
 \small
@@ -1301,6 +1308,7 @@ fonctions sont exportées, \code{dictionnaire()} et
 \code{dictionnaire()} & Aucun & Lit et valide, à chaque appel, le dictionnaire lisible par machine embarqué sous \code{inst/extdata/dictionnaire/} (sept CSV et \code{dictionnaire.txt}), et le rend en liste nommée~: version, date de visa, puis un \code{data.frame} par CSV, dont \code{controles}\fsp; refuse par \code{dictionnaire\_invalide} un dictionnaire incohérent (section~\ref{sec:dictionnaire-csv}). \\
 \code{controler\_types()} & \code{donnees} & Contrôle, sans rien convertir, en trois temps~: la structure de la liste, la table \code{extraction} (version, une ligne), puis les écarts de forme de toutes les tables, tous relevés et comptés avant le refus\fsp; rend la base inchangée ou la refuse (section~\ref{sec:dictionnaire-csv}). \\
 \code{constater\_forme()} & \code{donnee}, \code{table}, \code{dico} & Relève, sans s'interrompre ni rien convertir, les écarts de forme d'une table (colonne inconnue, colonne obligatoire ou conditionnelle absente, type R) et les rend en \code{data.frame}, une ligne par écart, avec son code de \code{controles.csv} et les lignes concernées\fsp; non exportée, appelée par \code{controler\_types()} et \code{controler\_base()}. \\
+\code{type\_conforme()} & \code{x}, \code{type} & Teste, sans rien convertir, que \code{x} a exactement le type R d'un type du dictionnaire~: la classe est celle du type (\code{character}, \code{integer}, \code{numeric}, \code{logical}, \code{Date}), sans dimension, une \code{Date} étant de plus stockée en double\fsp; rend \code{FALSE} pour un type inconnu\fsp; non exportée, appelée par \code{constater\_forme()}, \code{controler\_version\_extraction()}, \code{lire\_jeu()} et \code{ecrire\_jeu()}. \\
 \code{lire\_texte\_type()} & \code{x}, \code{type} & Lit une colonne de texte dans un type du dictionnaire par la grammaire stricte, sans convertir ce qui n'est pas exactement l'écriture du type\fsp; rend la colonne typée si toutes ses valeurs se lisent, et les numéros des valeurs illisibles\fsp; non exportée, appelée par \code{lire\_base()} et \code{constater\_forme()}. \\
 \code{controler\_version\_extraction()} & \code{donnee} & Refuse (\code{extraction\_invalide}) une table \code{extraction} d'une autre version du dictionnaire que celle qu'attend le moteur\fsp; non exportée, appelée par \code{controler\_types()}, \code{lire\_base()} et \code{controler\_base()}. \\
 \end{tabular}
@@ -2622,6 +2630,8 @@ Les constantes du module sont citées d'après le code (\code{R/donnees.R})~:
 \code{REFERENTIELS} & \code{comptes\_sociaux}, \code{solvabilite\_2}~: référentiels d'une hypothèse par défaut. \\
 \code{ACTIONS\_EXCLUSION} & \code{exclure}, \code{conserver}~: actions d'une exclusion déclarée. \\
 \code{RUBRIQUES\_DECLARATIONS} & \code{exclusions}, \code{hypotheses}, \code{seuils}, \code{evaluations\_gestion}~: rubriques admises de \code{declarations}. \\
+\code{SEUIL\_DELAI\_D03G} & \code{"d03g\_delai\_jours"}~: entrée de \code{seuils} qui porte le délai du défaut D03g, en jours, par table, commun aux deux référentiels\fsp; lue aussi par le module \code{plan} (entrées admises de \code{seuils}). \\
+\code{SEUILS\_AGE\_D02C} & \code{d02c\_age\_min}, \code{d02c\_age\_max}~: entrées de \code{seuils} qui portent les bornes basse et haute de l'âge du défaut D02c, en années entières, par emploi\fsp; lues aussi par le module \code{plan} (entrées admises de \code{seuils}). \\
 \code{ENTREES\_CONVENTIONS} & \code{age}, \code{instant\_date}, \code{repartition\_annee}, \code{fractionnement}, \code{decompte\_jours}, \code{limite\_age}~: entrées admises de \code{conventions}\fsp; seules \code{age} et \code{limite\_age} sont contrôlées et lues par \code{controler\_base()}, \code{valider\_plan()} contrôlant les valeurs de toutes (section~\ref{sec:plan-schema}). \\
 \code{REGLES\_LIMITE\_AGE} & \code{atteinte}, \code{depassement}~: règle de limite d'âge du défaut D07~(c). \\
 \code{CONVENTIONS\_LIMITE\_AGE} & \code{revolu}, \code{millesime}~: conventions d'âge admises pour le défaut D07~(c). \\
@@ -3061,6 +3071,24 @@ n'est exportée.
 \code{parametre\_vue()} & \code{vue}, \code{nom}, \code{gs}, \code{famille = NULL} & Rend un paramètre de chaque garantie souscrite dans la vue\fsp; \code{NA} s'il manque, \code{ambigu} s'il porte plusieurs valeurs\fsp; si une famille de calcul est donnée, \code{exclu} signale une ligne retenue du paramètre exclue pour cette famille. Seule lecture des paramètres d'une garantie souscrite, appelée par les familles «~engagement~» et «~risque en cours~». \\
 \code{statut\_le\_plus\_faible()} & \code{statuts} & Rend le plus faible d'un ensemble de statuts de résultat (\code{exact} sans élément). \\
 \code{statut\_methode\_catalogue()} & \code{catalogue}, \code{garantie}, \code{poste}, \code{champ}, \code{methode} & Rend le statut d'une méthode au catalogue~: la première méthode du champ est recommandée, les suivantes alternatives. \\
+\end{tabular}
+\end{center}
+
+Les constantes du module sont citées d'après le code
+(\code{R/engagement.R})~:
+
+\begin{center}
+\small
+\rowcolors{2}{tablerow}{white}
+\begin{tabular}{@{}p{5.6cm}p{9.5cm}@{}}
+\rowcolor{tableheader}
+\textcolor{financeblue}{\textbf{Constante}} & \textcolor{financeblue}{\textbf{Valeur et objet}} \\
+\code{COLONNES\_CELLULES} & \code{garantie}, \code{referentiel}, \code{poste}, \code{famille}, \code{provision}, \code{segmentation}, \code{segment}, \code{niveau}, \code{montant}, \code{nombre\_dossiers}, \code{methode}, \code{statut\_methode}, \code{statut\_resultat}, \code{statut\_calcul}, \code{motif\_arret}~: colonnes, dans cet ordre, des cellules rendues par une famille de calcul (ADR~0010, point~6)\fsp; lues aussi par \code{risque\_en\_cours} et \code{calculer\_provisions}. \\
+\code{COLONNES\_DOSSIERS} & \code{id\_dossier}, \code{id\_sinistre}, \code{garantie}, \code{referentiel}, \code{poste}, \code{etat}, \code{date\_entree\_etat}, \code{montant}, \code{methode}, \code{statut\_resultat}, \code{hypotheses\_defaut}~: colonnes, dans cet ordre, des provisions par dossier rendues par la famille\fsp; lues aussi par \code{calculer\_provisions}. \\
+\code{COLONNES\_ECHEANCIERS} & \code{cle}, \code{referentiel}, \code{poste}, \code{date}, \code{etat}, \code{type\_flux}, \code{flux}, \code{probabilite}, \code{actualisation}, \code{valeur\_actuelle}~: colonnes, dans cet ordre, des échéanciers rendus par une famille de calcul\fsp; lues aussi par \code{risque\_en\_cours} et \code{calculer\_provisions}. \\
+\code{STATUTS\_RESULTAT\_B2} & \code{exact}, \code{approximation\_numerique}, \code{jugement\_expert}~: statuts de résultat, du plus fort au plus faible, dont \code{statut\_le\_plus\_faible()} rend le plus faible d'un ensemble. \\
+\code{TYPES\_ACTUALISATION} & \code{aucune}, \code{taux}~: types d'actualisation admis par \code{valeur\_actuelle\_probable()}. \\
+\code{TYPES\_FLUX\_ECHEANCIER} & \code{capital\_unique}, \code{prime\_periodique}, \code{frais}~: types de flux admis dans la colonne \code{type\_flux} de l'échéancier lu par \code{valeur\_actuelle\_probable()}. \\
 \end{tabular}
 \end{center}
 
@@ -4394,13 +4422,14 @@ préambule. Aucun PDF n'est versionné.
 \label{sec:controles}
 % =============================================================================
 
-Sept scripts R de \code{tests/controles/}, exécutés par la batterie
+Huit scripts R de \code{tests/controles/}, exécutés par la batterie
 unitaire, et un script shell, exécuté par le job «~Contrôles du dépôt~» de
 l'intégration continue, vérifient des règles du dépôt qui ne sont pas des
 tests du package. Chaque script R s'exécute seul, depuis la racine du
 dépôt (\code{Rscript tests/controles/<script>.R}), n'emploie que R de base,
-imprime une ligne par constat (\code{[OK]}, \code{[ECHEC]}, et
-\code{[AVERT]} pour le contrôle de Java), avec le fichier et la ligne en
+imprime une ligne par constat (\code{[OK]}, \code{[ECHEC]},
+\code{[AVERT]} pour le contrôle de Java, \code{[INFO]} pour le
+recensement des tolérances), avec le fichier et la ligne en
 cause, et sort avec un statut non nul au moindre échec. Un argument
 facultatif désigne une autre racine, ce qui permet de démontrer qu'un
 script refuse une copie du dépôt délibérément fautive (témoin négatif).
@@ -4416,23 +4445,29 @@ script refuse une copie du dépôt délibérément fautive (témoin négatif).
 \endhead
 \code{liste\_blanche\_description.R} & Les champs \code{Depends}, \code{Imports}, \code{LinkingTo}, \code{Suggests} et \code{Enhances} de \code{DESCRIPTION}, et les directives d'import de \code{NAMESPACE}, ne citent que des packages de priorité \code{base} (et R lui-même dans \code{Depends})\fsp; les champs \code{Remotes} et \code{Additional\_repositories} sont refusés. \code{NAMESPACE} est lu par \code{parse()}, sans évaluation, les deux branches de chaque \code{if} étant visitées. \\
 \code{absence\_java.R} & Aucun package connu pour dépendre de Java n'est déclaré dans \code{DESCRIPTION}, ni présent dans la fermeture de ses dépendances parmi les packages installés\fsp; aucun fichier de code suivi du dépôt (fichiers R analysés par \code{getParseData()}, autres fichiers ligne à ligne, dont les fichiers YAML, shell, JSON et de verrouillage) ne charge ni n'installe un tel package, ni n'installe ou n'active un environnement Java. La liste des packages à Java est un jugement de mise en œuvre, écrit dans le script. \\
-\code{graphe\_modules.R} & Les fichiers de \code{R/} sont parmi les quinze modules\fsp; chaque module n'appelle que les modules de sa colonne «~Peut appeler~» (section~\ref{sec:modules}), un appel écrit entre accents graves ou entre guillemets valant l'appel nu\fsp; aucun appel dynamique (fonction désignée par son nom, accès à un espace de noms ou à un environnement par son nom, \code{environment()} sous ses trois formes), ni \code{assign()} au premier niveau d'un fichier\fsp; un nom de premier niveau n'est défini que dans un seul fichier. Seule la cible d'une affectation n'est pas une référence~: un nom local homonyme d'une définition d'un autre module produit une fausse arête (limite du côté sûr, écrite dans le script). \\
-\code{frontiere\_calcul\_affichage.R} & Aucun élément de Shiny dans \code{R/}\fsp; aucun réglage du générateur pseudo-aléatoire (\code{set.seed()}, \code{RNGkind()}, \code{RNGversion()}, \code{.Random.seed}) hors de \code{R/outils.R}\fsp; aucun appel de \code{warning()}, \code{message()}, \code{cat()}, \code{print()}, \code{writeLines()}, \code{writeChar()}, \code{packageStartupMessage()}, \code{Sys.time()}, \code{Sys.Date()} ni \code{date()}, hors du corps des fonctions de premier niveau nommées \code{print.*} et \code{format.*}\fsp; un nom écrit entre accents graves ou entre guillemets en position d'appel vaut le nom nu\fsp; jetons de code ASCII, les commentaires accentués étant admis (décision du mainteneur du 10~novembre~2026, M236)\fsp; si \code{app/} existe, aucun appel aux fonctions internes du package ni à une liste de fonctions de calcul. Limite écrite dans le script~: une référence masquée par une variable locale homonyme n'est pas vue. \\
+\code{graphe\_modules.R} & Les fichiers de \code{R/} sont parmi les quinze modules\fsp; chaque module n'appelle que les modules de sa colonne «~Peut appeler~» (section~\ref{sec:modules}), un appel écrit entre accents graves ou entre guillemets valant l'appel nu\fsp; aucun appel dynamique (fonction désignée par son nom, accès à un espace de noms ou à un environnement par son nom, \code{environment()} sous ses trois formes), ni \code{assign()} au premier niveau d'un fichier\fsp; aucune introspection de pile ou d'environnement (\code{parent.frame()}, \code{sys.function()}, \code{parent.env()}, \code{topenv()}, \code{sys.call()}, \code{sys.frame()}, \code{sys.frames()}, \code{sys.calls()}, \code{sys.parent()}, \code{sys.on.exit()}, \code{match.call()}, \code{globalenv()}\fsp; décisions du mainteneur du 12~novembre~2026, M403, M411 et M412), sauf deux exceptions déclarées en dur, chacune limitée à une fonction d'un module~: \code{topenv()} dans \code{empreinte\_code()} du module \code{rapport} (empreinte du code, ADR~0007, point~9\fsp; M409) et \code{globalenv()} dans \code{avec\_graine()} du module \code{outils} (graine locale et rétablissement de \code{.Random.seed}, ADR~0010, point~21\fsp; M412)~; une exception qui ne se produit plus, le fichier du module étant présent, est un échec\fsp; un nom de premier niveau n'est défini que dans un seul fichier\fsp; un identifiant à point (auxiliaire) défini au premier niveau d'un fichier n'est employé, appelé, cité ou écrit en chaîne égale à son nom (\code{vapply(x, ".aux", 1)}), que dans ce fichier, car une fonction appelée hors de son module ne porte pas de point (ADR~0010, annotation de la quatrième série, point~(c)\fsp; décision du mainteneur du 12~novembre~2026, M405, issue~74)~; des emplois laissés hors de l'issue~74 sont admis comme exceptions, déclarées en dur dans le script et renvoyées à l'issue~102, ouverte pour les supprimer, et une exception déclarée qui ne se produit plus est elle-même un échec. Seule la cible d'une affectation n'est pas une référence~: un nom local homonyme d'une définition d'un autre module produit une fausse arête (limite du côté sûr, écrite dans le script). Deux autres limites sont écrites dans le script~: une chaîne égale au nom d'une fonction sans point d'un autre module ne compte pas comme une arête (des noms de colonnes égalent des noms de fonctions), et seul l'appel d'une fonction interdite est vu, non une référence sans appel (\code{g <- parent.frame}, \code{lapply(1, sys.call)}) ni un \code{do.call()} qui la reçoit par son nom nu (\code{do.call(parent.frame, list())}), admis comme tout nom nu de fonction de base (issue~109). \\
+\code{frontiere\_calcul\_affichage.R} & Aucun élément de Shiny dans \code{R/} (\code{input\$}, \code{session\$} et \code{output\$} hors nom local, fonctions réactives, de rendu et de mise à jour, \code{shiny::})\fsp; aucun réglage du générateur pseudo-aléatoire (\code{set.seed()}, \code{RNGkind()}, \code{RNGversion()}, appelés ou seulement référencés, \code{.Random.seed}) hors de \code{R/outils.R}\fsp; aucun appel ni aucune référence à \code{warning()}, \code{message()}, \code{cat()}, \code{print()}, \code{print.default()}, \code{str()}, \code{show()}, \code{sink()}, \code{writeLines()}, \code{writeChar()} ni \code{packageStartupMessage()}, aucun appel direct d'une méthode \code{print.*}, et aucune écriture vers la console par \code{write()}, \code{write.table()}, \code{write.csv()}, \code{write.csv2()} ou \code{write.dcf()}, hors du corps des fonctions de premier niveau nommées \code{print.*} et \code{format.*} (décisions du mainteneur du 12~novembre~2026, M401 et M411), un champ homonyme (\code{x\$print}) n'étant ni un appel ni une référence~; la destination d'une écriture se lit sur l'argument \code{file}~: chaîne vide, \code{stdout()} ou \code{stderr()}, ou argument absent ou laissé vide (\code{write.table(x, , ...)}) pour les quatre dernières fonctions, dont la console est la destination par défaut\fsp; une destination désignée par une variable, ou un appel qui transmet \code{...}, ne se décide pas sur le source et est admis\fsp; aucune lecture de l'horloge (\code{Sys.time()}, \code{Sys.Date()}, \code{date()}) nulle part, méthodes \code{print.*} et \code{format.*} comprises, car un rendu qui lit l'horloge n'est pas reproductible (M402 et M410)\fsp; un nom écrit entre accents graves ou entre guillemets en position d'appel vaut le nom nu\fsp; jetons de code ASCII, les commentaires accentués étant admis (décision du mainteneur du 10~novembre~2026, M236)\fsp; si \code{app/} existe, aucun appel aux fonctions internes du package ni à une liste de fonctions de calcul. Un symbole homonyme d'une fonction interdite n'en est pas une référence s'il est la cible d'une affectation, un argument formel d'une fonction qui le contient, ou s'il est lu après une affectation du même nom, faite plus haut dans le source, dans une fonction qui le contient, hors des définitions de premier niveau, toujours comptées~: une affectation (ou une variable de \code{for}) hors de toute fonction, au premier niveau du fichier ou dans un \code{if} ou une boucle de ce niveau, ne masque rien et sa cible est comptée\fsp; une lecture qui précède l'affectation est comptée, et l'argument de \code{local()} est une portée à part (M400). Limites écrites dans le script~: une affectation conditionnelle masque les lectures qui la suivent, \code{<<-} est traité comme \code{<-}, \code{assign()} et \code{->} ne masquent rien, et \code{with()}, \code{within()}, \code{eval()} et \code{evalq()} ne sont pas des portées. \\
 \code{concordance\_dictionnaire.R} & Le dictionnaire lisible par machine (section~\ref{sec:dictionnaire-csv}) concorde avec le texte visé \code{docs/specifications/dictionnaire-base-v1.md}, qui fait foi~: le dossier contient exactement les sept CSV et \code{dictionnaire.txt}\fsp; la version de \code{dictionnaire.txt} est celle du texte et \code{VERSION\_DICTIONNAIRE\_ATTENDUE}, sa date de visa celle de l'historique du texte, ses empreintes celles des CSV\fsp; chaque CSV est égal, ligne à ligne, champ à champ et dans le même ordre, au tableau correspondant du texte\fsp; les codes de contrôle sont disjoints des codes de défaut, et ceux qui sont des motifs de refus d'appel sont exactement \code{colonne\_absente}, \code{colonne\_inconnue} et \code{type\_incompatible}. Les limites de détection sont écrites en tête du script. \\
 \code{image\_reference.R} & L'image du conteneur du job «~Tests (R~4.3.3)~» et celle du workflow de régénération des références sont la même, épinglée par digest, et ce digest est celui que \code{CONTEXT.md} consigne à l'entrée «~Plateforme de référence~» (section~\ref{sec:references}). \\
 \code{commit\_reference.sh} & Script shell, hors de la batterie unitaire (\code{git} peut manquer dans l'image du job de tests)~: tout commit de la plage contrôlée qui touche \code{tests/reference/} ne touche rien d'autre, porte les lignes exigées du message (run, commit calculé, image, plateforme, empreinte, visa), remplies, a pour unique parent le commit calculé, et cite l'empreinte de l'arbre à ce commit. \\
 \code{preambule\_latex.R} & Le préambule de chaque document LaTeX suivi du dépôt (fichier \code{.tex} ou \code{.TEX} qui porte un \code{\textbackslash documentclass}, où qu'il soit), autre que la charte, est identique à celui de la charte graphique, hors des blocs bornés par «~À ADAPTER~», dont le nombre, l'ordre et l'objet doivent être ceux de la charte\fsp; un fichier sans \code{\textbackslash documentclass} est un fragment, ignoré. \\
+\code{recensement\_tolerances.R} & Recensement informatif, qui n'échoue sur aucun de ses signalements (issue~79)~: il liste les appels de \code{verifier\_egal()} à tolérance non nulle et les appels directs de \code{all.equal()} à tolérance déclarée des fichiers R de \code{tests/} (hors \code{tests/reference/}), et signale ceux dont la valeur attendue rassemble au moins deux valeurs numériques finies non nulles dont le rapport du plus grand au plus petit atteint~10. Il porte en outre la mention «~PETITES VALEURS~» sur chaque appel de \code{verifier\_egal()} dont la valeur attendue, même réduite à une seule valeur, compte une valeur numérique finie non nulle de valeur absolue inférieure à $\min\bigl(1, \varepsilon / (1{,}5 \cdot 10^{-7})\bigr)$, $\varepsilon$ étant la tolérance lue de l'appel (environ $6{,}7 \cdot 10^{-4}$ pour $\varepsilon = 10^{-10}$\fsp; borné à~1, au-delà duquel la tolérance mixte est relative\fsp; paragraphe «~Petites valeurs attendues~» de la section~\ref{sec:harnais}). Un appel est reconnu sous sa forme nue, entre accents graves ou préfixée par \code{::} ou \code{:::}\fsp; un champ (\code{x\$verifier\_egal()}) n'est pas un appel. La valeur attendue est évaluée sans effet de bord, dans un environnement qui ne contient que les constantes numériques littérales du fichier et une liste blanche de fonctions pures~; une expression qui demande les données des tests ou une autre fonction est classée «~indéterminée~» et listée, sans être exécutée, comme un appel dont les arguments ne s'apparient pas sans exécution (\code{...} transmis, argument en trop). Le script imprime des lignes \code{[INFO]}, et \code{[ECHEC]} seulement si un fichier n'est pas analysable ou si les deux décomptes des appels (arbre syntaxique et analyse du source) diffèrent («~recensement incohérent~»), ce que produit un nom écrit en chaîne en position d'appel, compté par l'arbre seul. \\
 \end{longtable}
 }
 
 Ces scripts sont des \textbf{contrôles statiques}~: ils analysent le texte
-des fichiers, sans exécuter le package. Ils ne prouvent pas l'absence de
+des fichiers, sans exécuter le package (le recensement des tolérances
+n'évalue que des expressions littérales, sans effet de bord). Ils ne prouvent pas l'absence de
 toute violation. Les faux négatifs et faux positifs relevés par l'audit de
 leur première version ont été corrigés par l'issue~27 du dépôt, avec des
 témoins négatifs versionnés dans \code{tests/unitaires/controles.R}, que la
 batterie unitaire exécute sur des copies minimales et fautives du dépôt\fsp; les limites
-qui demeurent sont écrites en tête de chaque script, et les cas laissés hors
-de l'issue~27 faute de décision du mainteneur sont suivis par l'issue~62.
+qui demeurent sont écrites en tête de chaque script. Les cas laissés hors
+de l'issue~27 faute de décision du mainteneur ont été traités par
+l'issue~62, sur ses décisions du 12~novembre~2026 (M400 à M403, M409 à
+M412), avec leurs témoins négatifs\fsp; les références sans appel aux
+fonctions interdites par le contrôle du graphe, et leur passage à \code{do.call()} par
+leur nom nu, restent suivis par l'issue~109.
 
 % =============================================================================
 \section{Références de non-régression}
@@ -4468,7 +4503,8 @@ unique~: \code{resultat.txt}, la représentation du résultat
 calcul, rejouable par \code{rejouer\_fiche()}. Tout est comparé, sauf une
 liste fermée d'exclusions qui décrivent la machine ou le code et non le
 résultat~: versions de R et du package, plateforme, empreintes du code et du
-résultat. La comparaison se fait feuille par feuille~: une différence de
+résultat. La comparaison se fait feuille par feuille, par la fonction
+\code{comparer\_feuilles()} du harnais (section~\ref{sec:harnais})~: une différence de
 structure (feuille absente ou nouvelle, type, longueur, valeur manquante
 contre valeur) échoue toujours~; deux réels finis $x$ (obtenu) et $r$
 (référence) sont égaux si $|x - r| \le 10^{-10} \max(1, |r|)$, seuil déclaré
@@ -4521,12 +4557,31 @@ de quoi il arrête la batterie. Il fournit~:
 \begin{itemize}[itemsep=2pt]
 \item \code{section()}, qui ouvre une section de la sortie\fsp;
 \item \code{verifier()}, qui vérifie une condition\fsp;
-\item \code{verifier\_egal()}, qui vérifie une égalité, exacte ou à une
-  tolérance relative déclarée\fsp;
+\item \code{verifier\_egal()}, qui vérifie une égalité~: exacte
+  (\code{identical()}) à tolérance nulle, valeur par valeur par le
+  comparateur \code{comparer\_objets()} à une tolérance mixte déclarée
+  strictement positive (ci-dessous)~; une tolérance négative, non finie,
+  manquante ou qui n'est pas un nombre unique fait échouer la
+  vérification\fsp;
 \item \code{verifier\_refus()}, qui vérifie qu'un refus d'appel est levé
   avec le motif attendu\fsp;
 \item \code{attendu\_echec()}, pour un défaut connu, avec renvoi à son
   issue\fsp;
+\item \code{informer()}, qui imprime une ligne d'information
+  \code{[INFO]}, hors décompte~: une mesure consignée sans devenir un
+  critère, telle la comparaison de l'empreinte du résultat recalculée à
+  celle de la fiche de référence (ADR~0011, point~23)\fsp;
+\item \code{travail\_de()}, qui mesure le travail d'une fonction sans
+  horloge, une durée dépendant de la charge de la machine~: la somme des
+  tailles (longueur, ou lignes fois colonnes d'un \code{data.frame}) des
+  arguments des appels, faits dans la fonction, aux opérations de base et
+  aux fonctions que l'appelant désigne\fsp; seuls sont comptés les appels
+  écrits dans la fonction, dans les fonctions désignées et dans celles
+  qu'elles définissent. Elle sert aux tests de complexité\fsp;
+\item \code{fonctions\_de()}, qui rend les noms des fonctions, hors
+  primitives, définies directement dans un espace de noms donné (par
+  exemple pour désigner à \code{travail\_de()} les fonctions du
+  package)\fsp;
 \item \code{bilan()}, qui imprime le décompte et termine en échec s'il y a
   un échec ou un succès inattendu\fsp;
 \item \code{installer\_provie()}, qui installe et charge le package\fsp; si
@@ -4538,6 +4593,54 @@ Chaque vérification imprime une ligne~: \code{[OK]}, \code{[ECHEC]},
 \code{[ATTENDU]} (échec attendu, avec l'issue) ou \code{[SUCCES INATTENDU]}.
 Un échec attendu qui réussit fait échouer la batterie~: la marque est alors
 retirée pour en faire un test ordinaire.
+
+\textbf{Comparateur.} Le harnais porte aussi le comparateur de l'ADR~0011,
+point~7~: \code{comparer\_feuilles()}, qui compare un résultat à sa référence
+de non-régression et qu'emploient les fonctions de \code{tests/\allowbreak references.R}
+(section~\ref{sec:references}), et \code{comparer\_objets()}, qui applique
+les mêmes règles à deux objets R quelconques et sur lequel
+\code{verifier\_egal()} s'adosse (issue~79)~: une seule implémentation de la
+comparaison valeur par valeur sert les références et les tests. Deux réels
+finis $x$ (obtenu) et $r$ (attendu) sont égaux si
+$|x - r| \le \varepsilon \max(1, |r|)$, où $\varepsilon$ est la tolérance
+déclarée~: écart relatif au-dessus de~1 en valeur absolue, écart absolu en
+dessous. Pour \code{comparer\_feuilles()}, $\varepsilon$ vaut par défaut la
+tolérance des références, $10^{-10}$ (section~\ref{sec:references}). Les
+autres valeurs (logiques, entières, chaînes, dates) se comparent
+exactement\fsp; \code{comparer\_objets()} compare aussi exactement toute
+classe temporelle (\code{Date}, \code{POSIXct}, \code{POSIXlt},
+\code{difftime}), même stockée en réel. Toute différence de structure échoue, quelle que soit la
+tolérance~: type (entier contre réel compris), longueur, valeur manquante
+contre valeur, \code{NA} contre \code{NaN}, infini contre fini, élément
+absent ou nouveau, et, pour \code{comparer\_objets()}, tout attribut (noms,
+classe, dimensions, niveaux) qui diffère ainsi que le type de stockage
+(\code{typeof}) d'une valeur atomique (une date stockée en entier contre
+une date stockée en réel). Le message d'échec de \code{verifier\_egal()}
+donne le nombre d'écarts et les cinq premiers, avec leur emplacement, la
+valeur attendue, la valeur obtenue et l'écart\fsp; un attribut y est décrit
+par ses dix premiers éléments, suivis de leur nombre s'il en a davantage.
+
+\textbf{Petites valeurs attendues.} Pour $|r| \le 1$, la tolérance mixte
+est absolue~: à $\varepsilon = 10^{-10}$, elle admet, pour une valeur
+attendue telle que $|r| < 10^{-10} / (1{,}5 \cdot 10^{-7}) \approx 6{,}7
+\cdot 10^{-4}$, un écart relatif supérieur à $1{,}5 \cdot 10^{-7}$, le
+plus petit effet de formule déjà rencontré (ADR~0011, point~8), qu'elle ne
+détecterait donc plus. Consignes à l'appelant, que le harnais n'applique
+pas~: pour une valeur attendue scalaire, ou homogène, sous ce seuil,
+l'appelant passe la tolérance $10^{-10} \times |r|$ (le plus petit $|r|$
+non nul si elle compte plusieurs valeurs)\fsp; une valeur attendue qui mêle
+des ordres de grandeur se scinde en autant d'appels que d'ordres de
+grandeur, ou se compare par le rapport de la valeur obtenue à la valeur
+attendue, rapproché de~1, car la tolérance $10^{-10} \times \min |r|$
+rendrait quasi exacte la comparaison des grandes valeurs (pour
+$r = (10^{-8}, 1000)$, un écart d'une unité du dernier chiffre sur~1000
+échoue)\fsp; une valeur attendue nulle se compare à part, à tolérance
+nulle, car à tolérance positive le harnais admet pour elle l'écart absolu
+$\varepsilon$. Cette règle est un jugement d'expert (avis d'\code{actuary} sur l'issue~79), écrite en
+commentaire du harnais\fsp; aucun script ne la contrôle. Le recensement des
+tolérances (section~\ref{sec:controles}) signale, à titre d'information,
+les valeurs attendues qui mêlent des ordres de grandeur différents et
+celles qui comptent de petites valeurs.
 
 % =============================================================================
 \section{Concordance entre la documentation et le code}
@@ -4589,9 +4692,20 @@ l'en-tête, et toute chaîne entre guillemets qu'aucune forme n'a lue
 (décision du mainteneur du 9~novembre~2026, M207)~: une version citée au
 fil d'une phrase, une chaîne en troisième cellule, une liste écrite avec
 guillemets. Une chaîne entre guillemets écrite dans une cellule de valeur
-est donc toujours comparée au code ou signalée. Les constantes internes,
-dont le nom commence par un point, ne sont pas lues\fsp; elles se citent
-dans le texte, d'après le code.
+est donc toujours comparée au code ou signalée.
+
+\textbf{Complétude des tableaux de constantes.} Toute constante en
+majuscules de premier niveau de \code{R/<module>.R} (affectation par
+\code{<-}, \code{=} ou \code{->} à un nom, dont la valeur n'est pas une
+fonction) figure dans le tableau de constantes de son module~: une
+constante absente du tableau est un écart, et un module qui a de telles
+constantes sans tableau de constantes en est un aussi, comme un module qui
+a des fonctions sans tableau de fonctions (issue~41, décision du
+mainteneur du 12~novembre~2026, M408). Les constantes internes, dont le
+nom commence par un point, ne sont pas recensées, comme les fonctions à
+point~: elles ne sont pas exigées, et une telle constante citée dans un
+tableau de constantes est un écart (constante absente du module)\fsp;
+elles se citent dans le texte, d'après le code.
 
 Avec l'option \code{-{}-strict}, tout écart, comme l'absence du document,
 fait échouer la batterie\fsp; sans elle, les écarts sont des avertissements.

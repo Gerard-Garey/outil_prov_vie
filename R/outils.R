@@ -194,7 +194,7 @@ ecrire_valeurs <- function(x, forme = "texte") {
       as.raw(c(0xa2, 0x07, 0x00, 0x00, 0x00, 0x00, 0xf0, 0x7f))
     return(as.vector(octets))
   }
-  x <- .vers_utf8(x, "valeur")
+  x <- vers_utf8(x, "valeur")
   morceaux <- lapply(seq_along(x), function(i) {
     if (is.na(x[i])) return(writeBin(-1L, raw(), size = 4L, endian = "little"))
     brut <- charToRaw(x[i])
@@ -231,7 +231,7 @@ ecrire_valeurs <- function(x, forme = "texte") {
 #   - non marquee et non ASCII : refusee si la locale native n'est pas UTF-8 (R ne sait
 #     pas dire quel est son encodage ; enc2utf8() ecrirait alors <c3><a9> a la place des
 #     octets, mesure du 7 novembre 2026, R 4.3.3) ; sinon validee comme UTF-8.
-.vers_utf8 <- function(x, quoi) {
+vers_utf8 <- function(x, quoi) {
   refus <- function(raison) {
     refuser(paste0("cha\u00eene de ", quoi, " : ", raison), "liste_invalide", module = "outils")
   }
@@ -256,7 +256,7 @@ ecrire_valeurs <- function(x, forme = "texte") {
 # retour chariot (\r), autres caractères de contrôle et DEL (\xNN), plus les codes de
 # `codes_extra` ; NA devient \N. Le reste est écrit en UTF-8 tel quel.
 .echapper <- function(x, codes_extra = integer(0)) {
-  x <- .vers_utf8(x, "texte")
+  x <- vers_utf8(x, "texte")
   res <- vapply(seq_along(x), function(i) {
     s <- x[i]
     if (is.na(s)) return("\\N")
