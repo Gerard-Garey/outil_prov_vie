@@ -2741,13 +2741,16 @@ fait pas partie~: il est dans le module \code{outils}, qui sert aussi
 \code{donnees} et le simulateur (section~\ref{sec:age}). Le module \code{tables} ne
 peut appeler que \code{outils}. Sa fonction \code{formats\_tables()} est exportée.
 
-\begin{center}
-\small
+{\small
 \rowcolors{2}{tablerow}{white}
 % concordance-fonctions : tables
-\begin{tabular}{@{}p{3.9cm}>{\raggedright\arraybackslash}p{3.0cm}p{8.2cm}@{}}
+\begin{longtable}{@{}p{5.6cm}>{\raggedright\arraybackslash}p{3.0cm}p{6.5cm}@{}}
 \rowcolor{tableheader}
 \textcolor{financeblue}{\textbf{Fonction}} & \textcolor{financeblue}{\textbf{Arguments}} & \textcolor{financeblue}{\textbf{Rôle}} \\
+\endfirsthead
+\rowcolor{tableheader}
+\textcolor{financeblue}{\textbf{Fonction}} & \textcolor{financeblue}{\textbf{Arguments}} & \textcolor{financeblue}{\textbf{Rôle}} \\
+\endhead
 \code{formats\_tables()} & Aucun & Rend les formats de tables admis, en \code{data.frame} (format, nature, colonnes et types, description, conversion)\fsp; en B2~: \code{lx\_age} (mortalité) et \code{serie\_tme\_mensuelle} (taux). \\
 \code{construire\_table()} & \code{donnees}, \code{format}, \code{identifiant}, \code{statut}, \code{provenance} & Construit une \code{table\_provie} depuis le contenu d'une table au format natif, sans conversion de type, avec l'empreinte MD5 de l'écriture canonique de ce contenu\fsp; refus \code{liste\_invalide}, \code{format\_table\_inconnu} ou \code{type\_incompatible}. \\
 \code{convertir\_lx\_qx()} & \code{age}, \code{lx} & Convertit le format \code{lx\_age}~: $q_x = 1 - l_{x+1}/l_x$ pour chaque âge sauf le dernier\fsp; un $l_x$ nul met hors des axes cet âge et les suivants. \\
@@ -2761,8 +2764,8 @@ peut appeler que \code{outils}. Sa fonction \code{formats\_tables()} est export�
 \code{indicateur\_hors\_axes()} & \code{table}, \code{points}, \code{valeurs}, \code{usage}, \code{id\_contrat}, \code{poste}, \code{garantie} & Seule construction de la ligne d'indicateur \code{hors\_axes\_derniere\_valeur} d'une unité dont un point est lu hors des axes sous \code{derniere\_valeur}~: nombre de points hors des axes, \code{depassement} vrai (signal), usage, table, axe et valeurs hors des axes dans \code{detail}\fsp; aucune ligne sans point hors des axes. \\
 \code{format.table\_provie()} & \code{x}, \code{...} & Décrit une table en lignes de texte~: identifiant, nature, statut, pas, nombre de points par axe, format natif, conversion, empreinte. \\
 \code{print.table\_provie()} & \code{x}, \code{...} & Imprime \code{format(x)} et rend la table, invisible. \\
-\end{tabular}
-\end{center}
+\end{longtable}
+}
 
 % =============================================================================
 \section{Formats, représentation et indicateurs}
