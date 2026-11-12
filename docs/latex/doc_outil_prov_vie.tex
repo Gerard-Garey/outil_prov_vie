@@ -2624,6 +2624,8 @@ Les constantes du module sont citées d'après le code (\code{R/donnees.R})~:
 \code{REFERENTIELS} & \code{comptes\_sociaux}, \code{solvabilite\_2}~: référentiels d'une hypothèse par défaut. \\
 \code{ACTIONS\_EXCLUSION} & \code{exclure}, \code{conserver}~: actions d'une exclusion déclarée. \\
 \code{RUBRIQUES\_DECLARATIONS} & \code{exclusions}, \code{hypotheses}, \code{seuils}, \code{evaluations\_gestion}~: rubriques admises de \code{declarations}. \\
+\code{SEUIL\_DELAI\_D03G} & \code{"d03g\_delai\_jours"}~: entrée de \code{seuils} qui porte le délai du défaut D03g, en jours, par table, commun aux deux référentiels\fsp; lue aussi par le module \code{plan} (entrées admises de \code{seuils}). \\
+\code{SEUILS\_AGE\_D02C} & \code{d02c\_age\_min}, \code{d02c\_age\_max}~: entrées de \code{seuils} qui portent les bornes basse et haute de l'âge du défaut D02c, en années entières, par emploi\fsp; lues aussi par le module \code{plan} (entrées admises de \code{seuils}). \\
 \code{ENTREES\_CONVENTIONS} & \code{age}, \code{instant\_date}, \code{repartition\_annee}, \code{fractionnement}, \code{decompte\_jours}, \code{limite\_age}~: entrées admises de \code{conventions}\fsp; seules \code{age} et \code{limite\_age} sont contrôlées et lues par \code{controler\_base()}, \code{valider\_plan()} contrôlant les valeurs de toutes (section~\ref{sec:plan-schema}). \\
 \code{REGLES\_LIMITE\_AGE} & \code{atteinte}, \code{depassement}~: règle de limite d'âge du défaut D07~(c). \\
 \code{CONVENTIONS\_LIMITE\_AGE} & \code{revolu}, \code{millesime}~: conventions d'âge admises pour le défaut D07~(c). \\
@@ -3063,6 +3065,24 @@ n'est exportée.
 \code{parametre\_vue()} & \code{vue}, \code{nom}, \code{gs}, \code{famille = NULL} & Rend un paramètre de chaque garantie souscrite dans la vue\fsp; \code{NA} s'il manque, \code{ambigu} s'il porte plusieurs valeurs\fsp; si une famille de calcul est donnée, \code{exclu} signale une ligne retenue du paramètre exclue pour cette famille. Seule lecture des paramètres d'une garantie souscrite, appelée par les familles «~engagement~» et «~risque en cours~». \\
 \code{statut\_le\_plus\_faible()} & \code{statuts} & Rend le plus faible d'un ensemble de statuts de résultat (\code{exact} sans élément). \\
 \code{statut\_methode\_catalogue()} & \code{catalogue}, \code{garantie}, \code{poste}, \code{champ}, \code{methode} & Rend le statut d'une méthode au catalogue~: la première méthode du champ est recommandée, les suivantes alternatives. \\
+\end{tabular}
+\end{center}
+
+Les constantes du module sont citées d'après le code
+(\code{R/engagement.R})~:
+
+\begin{center}
+\small
+\rowcolors{2}{tablerow}{white}
+\begin{tabular}{@{}p{5.6cm}p{9.5cm}@{}}
+\rowcolor{tableheader}
+\textcolor{financeblue}{\textbf{Constante}} & \textcolor{financeblue}{\textbf{Valeur et objet}} \\
+\code{COLONNES\_CELLULES} & \code{garantie}, \code{referentiel}, \code{poste}, \code{famille}, \code{provision}, \code{segmentation}, \code{segment}, \code{niveau}, \code{montant}, \code{nombre\_dossiers}, \code{methode}, \code{statut\_methode}, \code{statut\_resultat}, \code{statut\_calcul}, \code{motif\_arret}~: colonnes, dans cet ordre, des cellules rendues par une famille de calcul (ADR~0010, point~6)\fsp; lues aussi par \code{risque\_en\_cours} et \code{calculer\_provisions}. \\
+\code{COLONNES\_DOSSIERS} & \code{id\_dossier}, \code{id\_sinistre}, \code{garantie}, \code{referentiel}, \code{poste}, \code{etat}, \code{date\_entree\_etat}, \code{montant}, \code{methode}, \code{statut\_resultat}, \code{hypotheses\_defaut}~: colonnes, dans cet ordre, des provisions par dossier rendues par la famille\fsp; lues aussi par \code{calculer\_provisions}. \\
+\code{COLONNES\_ECHEANCIERS} & \code{cle}, \code{referentiel}, \code{poste}, \code{date}, \code{etat}, \code{type\_flux}, \code{flux}, \code{probabilite}, \code{actualisation}, \code{valeur\_actuelle}~: colonnes, dans cet ordre, des échéanciers rendus par une famille de calcul\fsp; lues aussi par \code{risque\_en\_cours} et \code{calculer\_provisions}. \\
+\code{STATUTS\_RESULTAT\_B2} & \code{exact}, \code{approximation\_numerique}, \code{jugement\_expert}~: statuts de résultat, du plus fort au plus faible, dont \code{statut\_le\_plus\_faible()} rend le plus faible d'un ensemble. \\
+\code{TYPES\_ACTUALISATION} & \code{aucune}, \code{taux}~: types d'actualisation admis par \code{valeur\_actuelle\_probable()}. \\
+\code{TYPES\_FLUX\_ECHEANCIER} & \code{capital\_unique}, \code{prime\_periodique}, \code{frais}~: types de flux admis dans la colonne \code{type\_flux} de l'échéancier lu par \code{valeur\_actuelle\_probable()}. \\
 \end{tabular}
 \end{center}
 
