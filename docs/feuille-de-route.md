@@ -482,6 +482,8 @@ Tenue par `architect`, après chaque série de PR fusionnées. Chaque mise à jo
   **Hors couloir** : `R/donnees.R`, `R/engagement.R`, `R/risque_en_cours.R`, `R/tables.R`, `R/plan.R`, `R/calculer_provisions.R`, leurs tests unitaires, `tests/reference/`, `tests/references.R`, `docs/specifications/`.
 
   **Point de contact accordé** (M404, 12 novembre 2026) : `tests/references.R`, comparateur de l'ADR 0011, point 7 (l. 132 à 250 à `aeba496`), déplacé vers `tests/harnais.R` par #79 ; Bo écrit en premier, Br n'y touche pas avant la fusion de Bo.
+
+  **Point de contact accordé à Br** (12 novembre 2026, E16-3 (a), erratum v1.0.16 de B2 ; décision transmise par la session de Br, consignée au § 1.7 et dans le bloc M de Br) : `R/donnees.R`, l. 497 à 520 à `aeba496` (`.MOIS_PERIODE_COTISATION`, `periode_cotisation_regle()`), renommés en constante sans point, seule table des mois par périodicité (#92 mi3). Hors du couloir de Bo ; Bo n'y écrit pas.
 - **Périmètre** (quatre issues), dans l'ordre des commits ; toutes en circuit 3 (`coder`, `audit` ; workflow `circuit-technique` sur commande du mainteneur) :
   - [ ] **#79 — `verifier_egal()` à tolérance adossé au comparateur de l'ADR 0011, point 7** (`bug`). En tête. Critères de l'issue : recensement par script des appels à tolérance, une seule implémentation, témoin négatif. **Si un test d'un fichier hors couloir échoue après la correction, la session s'arrête sur #79** (ADR 0012, point 9) : l'écart est un constat, et sa correction revient à la branche qui tient le fichier, ou demande un point de contact.
   - [ ] **#74 — auxiliaires à point appelés hors de leur module** (`.type_conforme`, `.vers_utf8`). Critère : le recensement des identifiants à point définis dans un autre fichier de `R/` est vide.
