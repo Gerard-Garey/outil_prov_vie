@@ -30,8 +30,8 @@
 #      calculer_provisions doivent etre refuses par la table ; et la table en dur est coherente (quinze modules, sans cycle) ;
 #   6. un identifiant a point (auxiliaire du module, ADR 0010, annotation de la quatrieme
 #      serie, (c)) defini au premier niveau d'un fichier n'est employe (appel ou symbole,
-#      memes regles de portee qu'en 2) que dans ce fichier : « une fonction appelee hors de
-#      son module ne porte pas de point » (issue #74, M405) ; un nom ecrit en chaine, qui
+#      memes regles de portee qu'en 2) que dans ce fichier : "une fonction appelee hors de
+#      son module ne porte pas de point" (issue #74, M405) ; un nom ecrit en chaine, qui
 #      egale exactement un tel identifiant d'un autre fichier (vapply(x, ".aux", 1) :
 #      match.fun), vaut son emploi (m1 ; pas pour les noms sans point, voir plus bas).
 #      Exceptions declarees en dur (EXCEPTIONS_POINT, chacune renvoyee a l'issue #102) : un

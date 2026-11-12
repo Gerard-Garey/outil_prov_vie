@@ -39,10 +39,12 @@
 #      package, `app/` formate et trace des quantites du resultat).
 # Variable locale (M400, qui etend M236-2 a ce script) : un symbole n'est pas une reference
 # a la fonction interdite du meme nom s'il est (a) la cible d'une affectation (`print <- 1`,
-# variable de for), (b) un argument formel d'une fonction qui le contient, ou (c) lu apres
-# une affectation du meme nom, dans l'ordre du source, faite dans une fonction qui le contient
-# (ou au premier niveau hors definition) ; l'affectation prend effet a la fin de son
-# expression (`print <- print` : la lecture a droite est une reference). Une lecture qui
+# variable de for) hors des definitions de premier niveau, toujours comptees, (b) un argument
+# formel d'une fonction qui le contient, ou (c) lu apres une affectation du meme nom, dans
+# l'ordre du source, faite dans une fonction qui le contient ; une affectation (ou une variable
+# de for) hors de toute fonction, au premier niveau du fichier ou imbriquee dans un `if` ou
+# une boucle de ce niveau, ne masque rien et est comptee ; l'affectation prend effet a la fin
+# de son expression (`print <- print` : la lecture a droite est une reference). Une lecture qui
 # precede l'affectation (`lapply(x, print); print <- 1`) est comptee, dans une boucle comme
 # ailleurs. L'argument de local() est une portee a part : `local({ print <- 1 })` ne masque
 # pas une lecture qui le suit. Limites documentees : une affectation conditionnelle masque
@@ -178,17 +180,21 @@ jetons_du_fichier <- function(chemin) {
     reg_fonction <<- c(reg_fonction, fonction)
     reg_pos <<- c(reg_pos, pos)
   }
+  # Hors de toute fonction (portee 0 : premier niveau du fichier, ou imbrique dans un `if` ou une
+  # boucle de ce niveau), une cible ne masque rien et reste comptee, comme au premier niveau.
   for (i in which(hc$token %in% c("expr", "expr_or_assign_or_help", "equal_assign") & hc$parent != 0L)) {
     cible <- cible_de(i)
     if (!is.na(cible)) {
-      lier(nom_de(cible), if (hc$id[i] %in% id_fonctions) hc$id[i] else fonction_de[i], fin_expr[i])
+      portee <- if (hc$id[i] %in% id_fonctions) hc$id[i] else fonction_de[i]
+      if (portee == 0L) next
+      lier(nom_de(cible), portee, fin_expr[i])
       cibles <- c(cibles, cible)
     }
   }
   for (i in which(hc$token == "SYMBOL_FORMALS")) lier(nom_de(i), hc$parent[i], -Inf)
   for (k in enfants) {
     for (m in seq_len(length(k) - 1L)) {
-      if (hc$token[k[m]] == "SYMBOL" && hc$token[k[m + 1L]] == "IN") {
+      if (hc$token[k[m]] == "SYMBOL" && hc$token[k[m + 1L]] == "IN" && fonction_de[k[m]] != 0L) {
         lier(nom_de(k[m]), fonction_de[k[m]], fin_expr[parent_de[k[m]]])
         cibles <- c(cibles, k[m])
       }
@@ -249,20 +255,35 @@ jetons_du_fichier <- function(chemin) {
     appel <- parent_de[parent_de[ligne_hc]]
     k <- if (is.na(appel)) integer(0) else enfants[[as.character(hc$id[appel])]]
     if (length(k) < 3L || hc$token[k[2L]] != "'('") return("autre")
+    # Arguments dans l'ordre, un par position : `noms` (NA sans nom) et `lignes` (lignes de hc de
+    # l'expression, NA pour un argument vide : `write.table(x, , "a")` laisse `file` absent).
     noms <- character(0)
     lignes <- integer(0)
-    en_attente <- NA_character_
+    nom_c <- NA_character_
+    ligne_c <- NA_integer_
+    contenu <- FALSE
+    pousser <- function() {
+      noms <<- c(noms, nom_c)
+      lignes <<- c(lignes, ligne_c)
+      nom_c <<- NA_character_
+      ligne_c <<- NA_integer_
+      contenu <<- FALSE
+    }
     for (q in k[-(1:2)]) {
       if (hc$token[q] %in% c("SYMBOL_SUB", "STR_CONST")) {
-        en_attente <- nom_de(q)
+        nom_c <- nom_de(q)
+        contenu <- TRUE
       } else if (hc$token[q] == "expr") {
-        noms <- c(noms, en_attente)
-        lignes <- c(lignes, q)
-        en_attente <- NA_character_
+        ligne_c <- q
+        contenu <- TRUE
       } else if (hc$token[q] == "','") {
-        en_attente <- NA_character_
+        pousser()
+      } else if (hc$token[q] == "')'" && (contenu || length(noms) > 0L)) {
+        pousser()
       }
     }
+    defaut <- if (defaut_console) "console" else "absent"
+    destination_de <- function(l) if (is.na(l)) defaut else kind(l)
     restant <- names(formals(get(if (fonction %in% c("write.csv", "write.csv2")) "write.table" else fonction)))
     affecte <- rep(NA_character_, length(noms))
     for (a in which(!is.na(noms) & noms %in% restant)) {
@@ -279,11 +300,11 @@ jetons_du_fichier <- function(chemin) {
       }
     }
     nomme_file <- which(affecte %in% "file")
-    if (length(nomme_file) > 0L) return(kind(lignes[nomme_file[1L]]))
-    if (any(vapply(lignes, kind, "") == "inconnu")) return("autre")
+    if (length(nomme_file) > 0L) return(destination_de(lignes[nomme_file[1L]]))
+    if (any(vapply(lignes[!is.na(lignes)], kind, "") == "inconnu")) return("autre")
     sans_nom <- lignes[is.na(noms)]
     rang <- match("file", restant)
-    if (length(sans_nom) >= rang) kind(sans_nom[rang]) else if (defaut_console) "console" else "absent"
+    if (length(sans_nom) >= rang) destination_de(sans_nom[rang]) else defaut
   }
   dest_ecriture <- rep(NA_character_, length(terminaux))
   for (r in which(token_eff == "SYMBOL_FUNCTION_CALL" & texte_eff %in% ECRITURES)) {
@@ -346,7 +367,7 @@ for (chemin in fichiers) {
     }
     # Sorties console et horloge (point 12). Les methodes print.* et format.* sont exemptees
     # des sorties ; l'horloge n'est admise nulle part (M402, M410).
-    ecriture <- !is.na(j$ecriture[r]) && j$ecriture[r] == "console"
+    ecriture <- !champ && !is.na(j$ecriture[r]) && j$ecriture[r] == "console"
     bavard <- ((appel || nu) && texte %in% APPELS_BAVARDS) ||
       (appel && grepl("^print\\.", texte)) || ecriture || (nu && texte %in% ECRITURES)
     if (bavard) {

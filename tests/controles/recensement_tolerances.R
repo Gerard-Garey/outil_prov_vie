@@ -10,7 +10,20 @@
 # deux et que max |x| / min |x| >= 10 ; il est INDETERMINE (et liste) s'il n'est pas evaluable
 # sans les donnees des tests ou sans appeler une fonction hors liste blanche : rien n'est execute.
 # La tolerance d'un appel est lue : litterale, ou symbole affecte a un litteral en tete de
-# fichier (TOL) ; sinon l'appel est range en « tolerance non resolue » (comptee a tolerance > 0).
+# fichier (TOL) ; sinon l'appel est range en "tolerance non resolue" (comptee a tolerance > 0).
+# Un appel dont les arguments ne s'apparient pas sans execution (`...` transmis, argument en trop)
+# est "indetermine" et liste, sa tolerance lue sur l'argument nomme `tolerance` s'il y en a un.
+# Un appel est reconnu sous ses formes nue, entre accents graves ou prefixee (`base::all.equal`,
+# `pkg::verifier_egal`), par l'arbre et par l'analyse du source ; un champ (`x$verifier_egal(...)`)
+# n'est pas un appel. Un nom ecrit en chaine en position d'appel (`"all.equal"(...)`) que l'arbre
+# compte et que l'analyse du source ne voit pas rend le recensement incoherent (echec) : il ne
+# passe pas inapercu.
+# Les petites valeurs (verifier_egal seulement) : sous |r| = 1 la tolerance est absolue
+# (tests/harnais.R) ; elle ne garantit l'ecart relatif EFFET_RELATIF = 1.5e-7 (plus petit effet de
+# formule rencontre, ADR 0011, point 8, jugement d'expert) que pour |r| >= tolerance / EFFET_RELATIF
+# (6.7e-4 a 1e-10). Un appel dont une feuille numerique finie non nulle est sous ce seuil (tolerance
+# lue) est liste sous PETITES VALEURS, en plus de son classement (la regle vaut aussi pour un
+# scalaire) ; la parade est tolerance = 1e-10 * |r| ou la comparaison de obtenu / r a 1.
 # Les appels directs de all.equal(tolerance = ...) dans verifier() ne passent pas par
 # verifier_egal() : ils sont listes a part, memes criteres.
 # Sortie informative : lignes [INFO] ; [ECHEC] seulement si un fichier n'est pas analysable ou si
@@ -31,6 +44,7 @@ echec <- function(message, chemin = NA_character_) {
 }
 
 RAPPORT_ORDRES <- 10
+EFFET_RELATIF <- 1.5e-7
 
 # Fichiers R de tests/ (tests/reference/ exclu : jeux de donnees, pas du code de test).
 fichiers <- sort(list.files(file.path(racine, "tests"), pattern = "\\.R$", recursive = TRUE, full.names = TRUE),
@@ -38,12 +52,21 @@ fichiers <- sort(list.files(file.path(racine, "tests"), pattern = "\\.R$", recur
 fichiers <- fichiers[!startsWith(fichiers, paste0(file.path(racine, "tests", "reference"), "/"))]
 rel <- function(chemin) substring(chemin, nchar(racine) + 2L)
 
+# L'appel `e` est-il un appel a `nom` : `nom(...)`, `` `nom`(...) `` (meme symbole) ou `pkg::nom(...)`,
+# `pkg:::nom(...)` ? (`x$nom(...)` : un champ, non.)
+est_appel_de <- function(e, nom) {
+  f <- e[[1L]]
+  if (is.symbol(f)) return(identical(as.character(f), nom))
+  is.call(f) && length(f) == 3L && is.symbol(f[[1L]]) && as.character(f[[1L]]) %in% c("::", ":::") &&
+    is.symbol(f[[3L]]) && identical(as.character(f[[3L]]), nom)
+}
+
 # Appels (langage) a `nom` dans l'ordre du source.
 appels_de <- function(x, nom) {
   trouves <- list()
   visite <- function(e) {
     if (is.call(e)) {
-      if (is.symbol(e[[1L]]) && identical(as.character(e[[1L]]), nom)) trouves[[length(trouves) + 1L]] <<- e
+      if (est_appel_de(e, nom)) trouves[[length(trouves) + 1L]] <<- e
       for (i in seq_along(e)) if (!identical(e[[i]], quote(expr = ))) visite(e[[i]])
     } else if (is.expression(e) || is.list(e)) {
       for (i in seq_along(e)) if (!identical(e[[i]], quote(expr = ))) visite(e[[i]])
@@ -64,7 +87,7 @@ feuilles <- function(x) {
 # Evaluation sans effet de bord : l'environnement a pour parent emptyenv() et ne contient que les
 # constantes du fichier et une liste blanche de fonctions pures ; tout autre appel (file.create,
 # quit, une fonction de test...) ou toute variable est introuvable, l'evaluation echoue et
-# l'argument est « indetermine » : rien d'autre n'est execute.
+# l'argument est "indetermine" : rien d'autre n'est execute.
 FONCTIONS_PURES <- c("c", "list", "data.frame", "(", "+", "-", "*", "/", "^", ":", "rep", "seq", "exp", "log",
                      "sqrt", "abs", "as.numeric", "as.integer", "as.Date")
 evaluer <- function(expr, constantes) {
@@ -75,15 +98,20 @@ evaluer <- function(expr, constantes) {
 }
 
 # Classe l'argument attendu : "scalaire", "homogene", "signale" (ordres differents),
-# "indetermine" (expression non evaluable sans les donnees ni appel hors liste blanche).
-classer <- function(expr, constantes) {
+# "indetermine" (expression non evaluable sans les donnees ni appel hors liste blanche) ;
+# `petites` : une feuille numerique finie non nulle est sous tolerance / EFFET_RELATIF (`tol`
+# lue, NA pour un appel sans tolerance resolue ou all.equal : sans objet) ; `min_abs` : la plus
+# petite |feuille| non nulle evaluee (NA si aucune).
+classer <- function(expr, constantes, tol = NA_real_) {
   r <- evaluer(expr, constantes)
-  if (!r$ok) return(list(classe = "indetermine", detail = ""))
+  if (!r$ok) return(list(classe = "indetermine", detail = "", petites = FALSE, min_abs = NA_real_))
   f <- feuilles(r$valeur)
-  if (length(f) < 2L) return(list(classe = "scalaire", detail = ""))
+  petit <- if (length(f) > 0L) min(f) else NA_real_
+  petites <- length(f) > 0L && !is.na(tol) && tol > 0 && petit < tol / EFFET_RELATIF
+  if (length(f) < 2L) return(list(classe = "scalaire", detail = "", petites = petites, min_abs = petit))
   rapport <- max(f) / min(f)
   list(classe = if (rapport >= RAPPORT_ORDRES) "signale" else "homogene",
-       detail = sprintf("%d feuilles, max/min = %.3g", length(f), rapport))
+       detail = sprintf("%d feuilles, max/min = %.3g", length(f), rapport), petites = petites, min_abs = petit)
 }
 
 resoudre_tolerance <- function(expr, constantes) {
@@ -94,8 +122,14 @@ resoudre_tolerance <- function(expr, constantes) {
 
 lignes_de <- function(chemin, jeton) {
   d <- getParseData(parse(chemin, keep.source = TRUE))
-  d <- d[d$token == "SYMBOL_FUNCTION_CALL" & d$text == jeton, ]
-  d$line1[order(d$line1, d$col1)]
+  if (is.null(d)) return(integer(0))
+  # jetons terminaux dans l'ordre du source ; un champ (`x$nom(...)`) n'est pas un appel
+  t <- d[d$terminal & d$token != "COMMENT", ]
+  t <- t[order(t$line1, t$col1), ]
+  precedent <- c(NA_character_, t$token[-nrow(t)])
+  garde <- t$token == "SYMBOL_FUNCTION_CALL" & gsub("`", "", t$text, fixed = TRUE) == jeton &
+    !(precedent %in% c("'$'", "'@'"))
+  t$line1[garde]
 }
 
 recensement <- list()
@@ -124,23 +158,27 @@ for (chemin in fichiers) {
     if (jeton == "verifier_egal") total_egal <- total_egal + length(appels)
     for (i in seq_along(appels)) {
       a <- appels[[i]]
-      if (jeton == "verifier_egal") {
-        m <- match.call(function(nom, obtenu, attendu, tolerance = 0) NULL, a)
-        if (is.null(m$tolerance)) next
-        tol <- resoudre_tolerance(m$tolerance, constantes)
-        attendu <- m$attendu
+      signature <- if (jeton == "verifier_egal") function(nom, obtenu, attendu, tolerance = 0) NULL
+                   else function(target, current, ..., tolerance = 1.5e-8) NULL
+      # Les arguments ne s'apparient pas toujours sans execution (`...` transmis, argument en
+      # trop : match.call() echoue) : l'appel est alors indetermine, la tolerance etant lue sur
+      # l'argument nomme `tolerance` s'il y en a un.
+      m <- tryCatch(match.call(signature, a, envir = emptyenv()), error = function(e) NULL)
+      if (is.null(m)) {
+        tol <- if (is.null(a[["tolerance"]])) NA_real_ else resoudre_tolerance(a[["tolerance"]], constantes)
+        if (!is.na(tol) && tol == 0) next
+        cl <- list(classe = "indetermine", detail = "arguments non appariables", petites = FALSE, min_abs = NA_real_)
       } else {
-        m <- match.call(function(target, current, ..., tolerance = 1.5e-8) NULL, a)
         if (is.null(m$tolerance)) next
         tol <- resoudre_tolerance(m$tolerance, constantes)
-        attendu <- m$current
+        if (!is.na(tol) && tol == 0) next
+        cl <- classer(if (jeton == "verifier_egal") m$attendu else m$current, constantes,
+                      if (jeton == "verifier_egal") tol else NA_real_)
       }
-      if (!is.na(tol) && tol == 0) next
-      cl <- classer(attendu, constantes)
       recensement[[length(recensement) + 1L]] <- data.frame(
         fichier = rel(chemin), ligne = lignes[i], appel = jeton,
         tolerance = if (is.na(tol)) "non resolue" else format(tol), classe = cl$classe, detail = cl$detail,
-        stringsAsFactors = FALSE)
+        petites = cl$petites, min_abs = cl$min_abs, stringsAsFactors = FALSE)
     }
   }
 }
@@ -158,6 +196,16 @@ if (is.null(res)) {
   for (f in names(par_fichier)) info(sprintf("  %s : %d", f, par_fichier[[f]]))
   info("classement de l'argument attendu : ", paste(sprintf("%s = %d", names(table(egal$classe)), table(egal$classe)),
                                                     collapse = ", "))
+  petites <- egal[egal$petites, ]
+  info(sprintf("PETITES VALEURS (feuille numerique finie non nulle de |r| < tolerance / %g : sous |r| = 1 la tolerance est absolue, l'ecart relatif garanti depasse %g) : %d appels",
+               EFFET_RELATIF, EFFET_RELATIF, nrow(petites)))
+  for (i in seq_len(nrow(petites))) {
+    info(sprintf("  %s:%d tolerance %s, plus petit |r| non nul = %.3g (seuil %.3g)", petites$fichier[i], petites$ligne[i],
+                 petites$tolerance[i], petites$min_abs[i], as.numeric(petites$tolerance[i]) / EFFET_RELATIF))
+  }
+  if (any(!is.na(egal$min_abs))) {
+    info(sprintf("plus petit |r| non nul parmi les valeurs attendues evaluees : %.3g", min(egal$min_abs, na.rm = TRUE)))
+  }
   for (cl in c("signale", "indetermine")) {
     k <- egal[egal$classe == cl, ]
     info(sprintf("%s (%s) : %d appels", toupper(cl),

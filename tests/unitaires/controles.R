@@ -425,7 +425,7 @@ verifier("M400 : témoin de l'issue #62, `h <- set.seed` puis `set.seed <- 2` re
 r <- cas_frontiere(c("f_e <- function(x) {", "  lapply(x, print)", "  print <- 1", "  h <- set.seed", "  set.seed <- 2", "  x", "}"))
 verifier("M400 : lecture avant l'affectation, engagement.R:2 (print) et :4 (set.seed)",
          .echoue_en(r, "R/engagement.R", 2L, "print") && .echoue_en(r, "R/engagement.R", 4L, "set.seed"))
-verifier("M400 : la cible d'une affectation n'est pas une référence (aucun [ECHEC] aux lignes 3 et 5)",
+verifier("M400 : la cible d'une affectation dans une fonction n'est pas une référence (aucun [ECHEC] aux lignes 3 et 5)",
          !any(startsWith(r$sortie, "[ECHEC] R/engagement.R:3 ")) && !any(startsWith(r$sortie, "[ECHEC] R/engagement.R:5 ")))
 r <- cas_frontiere(c("f_e <- function(x) {", "  print <- print", "  x", "}"))
 verifier("M400 : `print <- print`, la lecture à droite précède l'affectation, engagement.R:2",
@@ -519,6 +519,39 @@ verifier("M411 : référence sans appel à write.dcf, engagement.R:8", .echoue_e
 r <- cas_frontiere(c("f_e <- function(x, f) {", "  write.csv2(x, f)", "  write.csv2(x, file = \"a.csv\")", "  write.dcf(x, \"a.dcf\")",
                      "  write.dcf(x, file = f)", "  x", "}"))
 verifier("M411, cas licite : write.csv2 et write.dcf vers un fichier ou une variable", .passe(r))
+
+# Revue de #62 : arguments vides dans le calcul de `file`, champ homonyme d'une écriture, affectation
+# hors de toute fonction mais pas au premier niveau.
+r <- cas_frontiere(c("f_e <- function(x) {", "  write.table(x, , \"a\")", "  write.table(x, , )", "  write.csv(x, file = )",
+                     "  write.csv2(x, , FALSE)", "  write.dcf(x, , \"a\")", "  x", "}"))
+verifier("revue #62 : write.table(x, , \"a\") (file vide, \"a\" est append : la console), engagement.R:2",
+         .echoue_en(r, "R/engagement.R", 2L, "write.table() vers la console"))
+verifier("revue #62 : write.table(x, , ) (deux arguments vides), engagement.R:3", .echoue_en(r, "R/engagement.R", 3L, "write.table() vers la console"))
+verifier("revue #62 : write.csv(x, file = ) (file nommé et vide), engagement.R:4", .echoue_en(r, "R/engagement.R", 4L, "write.csv() vers la console"))
+verifier("revue #62 : write.csv2(x, , FALSE), engagement.R:5", .echoue_en(r, "R/engagement.R", 5L, "write.csv2() vers la console"))
+verifier("revue #62 : write.dcf(x, , \"a\"), engagement.R:6", .echoue_en(r, "R/engagement.R", 6L, "write.dcf() vers la console"))
+r <- cas_frontiere(c("f_e <- function(x, f) {", "  write(x, , \"a\")", "  write(x, file = , 1)", "  write.table(x, \"a.csv\", )",
+                     "  write.table(x, f, , )", "  write.csv(x, , , f)", "  x", "}"))
+verifier("revue #62, cas licites : write(x, , \"a\") (défaut file = \"data\"), file en position malgré un argument vide final ou intermédiaire",
+         !any(startsWith(r$sortie, "[ECHEC] R/engagement.R:2 ")) && !any(startsWith(r$sortie, "[ECHEC] R/engagement.R:3 ")) &&
+           !any(startsWith(r$sortie, "[ECHEC] R/engagement.R:4 ")) && !any(startsWith(r$sortie, "[ECHEC] R/engagement.R:5 ")))
+verifier("revue #62 : write.csv(x, , , f) : file vide, console (f est le troisième argument, append), engagement.R:6",
+         .echoue_en(r, "R/engagement.R", 6L, "write.csv() vers la console"))
+r <- cas_frontiere(c("f_e <- function(x) {", "  x$write.table(x)", "  x$write(x)", "  x@write.csv(x)", "  x$write.dcf(x, \"\")",
+                     "  x$print.foo(x)", "  x", "}"))
+verifier("revue #62 : x$write.table(x) et les autres champs homonymes d'une écriture : licites, appel de champ comme pour les autres noms",
+         .passe(r))
+r <- cas_frontiere(c("if (FALSE) { print <- NULL }", "g_e <- function(x) lapply(x, print)", "print <- 1",
+                     "h_e <- function(x) lapply(x, print)"))
+verifier("revue #62 : `if (FALSE) { print <- NULL }` au niveau du fichier ne masque rien : la cible (engagement.R:1) et les lectures (:2, :4) sont comptées",
+         .echoue_en(r, "R/engagement.R", 1L, "print") && .echoue_en(r, "R/engagement.R", 2L, "print") &&
+           .echoue_en(r, "R/engagement.R", 4L, "print"))
+verifier("revue #62 : `print <- 1` au premier niveau est compté comme avant (engagement.R:3)", .echoue_en(r, "R/engagement.R", 3L, "print"))
+r <- cas_frontiere(c("for (cat in 1:2) 1", "g_e <- function(x) lapply(x, cat)"))
+verifier("revue #62 : variable de for au niveau du fichier : comptée, ne masque pas la lecture qui suit (engagement.R:1 et :2)",
+         .echoue_en(r, "R/engagement.R", 1L, "cat") && .echoue_en(r, "R/engagement.R", 2L, "cat"))
+r <- cas_frontiere(c("g_e <- function(x) {", "  if (x) { print <- 1 }", "  for (cat in 1:2) cat", "  lapply(x, print)", "  lapply(x, cat)", "}"))
+verifier("revue #62, cas licite : une affectation ou une variable de for dans une fonction masque toujours (portée de la fonction)", .passe(r))
 
 # N4e, M402 et M410 : l'horloge est interdite dans une méthode format.* comme dans print.*.
 r <- cas_frontiere(c("print.fiche <- function(x, ...) {", "  cat(\"x\")", "  a <- Sys.time()", "  b <- Sys.Date()", "  c <- date()",
@@ -639,3 +672,55 @@ verifier("recensement : un appel de fonction hors liste blanche est indétermin�
            any(grepl("tests/unitaires/temoin.R:1 tolerance 1e-08", r$sortie, fixed = TRUE)))
 r <- cas_recensement(c("f <- function( {"))
 verifier("recensement : un fichier non analysable est un échec, temoin.R", .echoue_en(r, "tests/unitaires/temoin.R"))
+
+# Revue de #79 : appels préfixés ou entre accents graves, arguments non appariables, petites valeurs.
+r <- cas_recensement(c("base::all.equal(x, c(1, 100), tolerance = 1e-9)",
+                       "`verifier_egal`(\"a\", x, c(1e8, 100), tolerance = 1e-8)",
+                       "base:::all.equal(x, c(1, 100), tolerance = 1e-7)",
+                       "x$verifier_egal(\"b\", 1, 1, tolerance = 1e-8)"))
+verifier("recensement : `base::all.equal(...)` et `verifier_egal`(...) sont reconnus des deux côtés : statut 0, pas de « recensement incoherent »",
+         .passe(r) && !any(grepl("incoherent", r$sortie, fixed = TRUE)))
+verifier("recensement : l'appel entre accents graves est recensé (temoin.R:2, ordres différents) ; le champ x$verifier_egal(...) n'est pas un appel (un seul appel de verifier_egal)",
+         any(grepl("a tolerance > 0 : 1 appels", r$sortie, fixed = TRUE)) &&
+           any(grepl("tests/unitaires/temoin.R:2 tolerance 1e-08 2 feuilles, max/min = 1e+06", r$sortie, fixed = TRUE)) &&
+           any(grepl("appels de verifier_egal() : 1", r$sortie, fixed = TRUE)))
+verifier("recensement : base::all.equal et base:::all.equal sont listés avec leur ligne (temoin.R:1 et :3)",
+         any(grepl("direct (hors verifier_egal) : 2 appels", r$sortie, fixed = TRUE)) &&
+           any(grepl("tests/unitaires/temoin.R:1 tolerance 1e-09", r$sortie, fixed = TRUE)) &&
+           any(grepl("tests/unitaires/temoin.R:3 tolerance 1e-07", r$sortie, fixed = TRUE)))
+r <- cas_recensement("\"all.equal\"(x, 1, tolerance = 1e-9)")
+verifier("TEMOIN : un appel que l'arbre compte et que l'analyse du source ne voit pas (nom écrit en chaîne) : « recensement incoherent », échec, statut 1",
+         .echoue_en(r, "tests/unitaires/temoin.R", NA_integer_, "recensement incoherent pour all.equal : 1 appels dans l'arbre, 0 dans l'analyse du source"))
+r <- cas_recensement(c("f <- function(...) verifier_egal(\"a\", ..., tolerance = 1e-8)",
+                       "verifier_egal(\"b\", x, c(1e8, 100), tolerance = 1e-8)",
+                       "verifier_egal(1, 2, 3, 4, 5, tolerance = 1e-8)",
+                       "g <- function(...) all.equal(x, ..., tolerance = 1e-9)",
+                       "h <- function(...) verifier_egal(\"c\", ..., tolerance = 0)"))
+verifier("recensement : `...` transmis ou argument en trop : le script ne plante pas, le recensement va à son terme (statut 0, aucun [ECHEC])",
+         .passe(r) && any(grepl("appels de verifier_egal() : 4", r$sortie, fixed = TRUE)) &&
+           any(grepl("all.equal(tolerance = ...) direct (hors verifier_egal) : 1 appels", r$sortie, fixed = TRUE)))
+verifier("recensement : ces appels sont indéterminés et listés avec leur tolérance lue (temoin.R:1 et :3), le troisième appel est signalé (temoin.R:2) ; tolerance = 0 non recensé",
+         any(grepl("INDETERMINE (non evaluable sans les donnees des tests, a controler) : 2 appels", r$sortie, fixed = TRUE)) &&
+           any(grepl("tests/unitaires/temoin.R:1 tolerance 1e-08 arguments non appariables", r$sortie, fixed = TRUE)) &&
+           any(grepl("tests/unitaires/temoin.R:3 tolerance 1e-08 arguments non appariables", r$sortie, fixed = TRUE)) &&
+           any(grepl("tests/unitaires/temoin.R:2 tolerance 1e-08 2 feuilles", r$sortie, fixed = TRUE)) &&
+           !any(grepl("temoin.R:5 ", r$sortie, fixed = TRUE)))
+r <- cas_recensement(c("verifier_egal(\"p\", x, c(1e-5, 2e-5), tolerance = 1e-10)",
+                       "verifier_egal(\"q\", x, 1e-5, tolerance = 1e-10)",
+                       "verifier_egal(\"r\", x, 6e-4, tolerance = 1e-10)",
+                       "verifier_egal(\"s\", x, 7e-4, tolerance = 1e-10)",
+                       "verifier_egal(\"t\", x, c(0, 1), tolerance = 1e-10)",
+                       "verifier_egal(\"u\", x, 0.05, tolerance = 1e-8)",
+                       "verifier_egal(\"v\", x, c(1, 0.5), tolerance = 1e-10)",
+                       "verifier(\"w\", isTRUE(all.equal(x, c(1e-5, 2e-5), tolerance = 1e-9)))"))
+verifier("recensement : une valeur attendue de petites valeurs (|r| non nul < tolérance / 1.5e-7) est listée sous PETITES VALEURS, sans [ECHEC] (informatif) : quatre appels",
+         .passe(r) && any(grepl("^\\[INFO\\] PETITES VALEURS .* : 4 appels$", r$sortie)))
+verifier("recensement : PETITES VALEURS : temoin.R:1 (vecteur, 1e-05), :2 (scalaire), :3 (6e-04 sous le seuil 6.67e-04 de 1e-10), :6 (0.05 sous le seuil 0.0667 de 1e-8)",
+         any(grepl("temoin.R:1 tolerance 1e-10, plus petit |r| non nul = 1e-05", r$sortie, fixed = TRUE)) &&
+           any(grepl("temoin.R:2 tolerance 1e-10, plus petit |r| non nul = 1e-05", r$sortie, fixed = TRUE)) &&
+           any(grepl("temoin.R:3 tolerance 1e-10, plus petit |r| non nul = 0.0006", r$sortie, fixed = TRUE)) &&
+           any(grepl("temoin.R:6 tolerance 1e-08, plus petit |r| non nul = 0.05", r$sortie, fixed = TRUE)))
+verifier("recensement : hors PETITES VALEURS : 7e-4 (au-dessus du seuil), une valeur nulle, des valeurs de l'ordre de 1, et all.equal (tolérance relative)",
+         !any(grepl("temoin.R:[4578] tolerance [^ ]*, plus petit", r$sortie)))
+verifier("recensement : la classe d'ordres n'est pas modifiée (le vecteur 1e-5, 2e-5 reste homogène : p et v sont homogènes, les cinq autres scalaires)",
+         any(grepl("classement de l'argument attendu : .*homogene = 2, .*scalaire = 5", r$sortie)))

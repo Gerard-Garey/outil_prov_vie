@@ -121,6 +121,59 @@ verifier("TEMOIN : tolérance négative : échec", r$statut == 1L)
 r <- executer_harnais("verifier_egal('a', c(1, 2), c(1, 2), tolerance = 1e-10)")
 verifier("vecteurs identiques à tolérance : succès", r$statut == 0L)
 
+section("harnais : tolérance non finie, petites valeurs, types et classes temporelles, message tronqué (revue de #79)")
+r <- executer_harnais("verifier_egal('a', 1, 1e300, tolerance = Inf)")
+verifier("TEMOIN : tolérance Inf : échec (refus de la tolérance, pas de succès silencieux)",
+         r$statut == 1L && grepl("[ECHEC] a -- tolerance", r$sortie, fixed = TRUE))
+r <- executer_harnais("verifier_egal('a', 1, 1, tolerance = NaN)")
+verifier("TEMOIN : tolérance NaN : échec", r$statut == 1L && grepl("[ECHEC] a -- tolerance", r$sortie, fixed = TRUE))
+r <- executer_harnais("verifier_egal('a', 1, 1, tolerance = 1L)")
+verifier("une tolérance entière finie reste admise", r$statut == 0L)
+# Sous |r| <= 1 la tolérance est absolue : la parade est tolerance = 1e-10 * |r| (écart relatif 1e-10).
+r <- executer_harnais("verifier_egal('a', 1e-5 * (1 + 1e-3), 1e-5, tolerance = 1e-10 * 1e-5)")
+verifier("TEMOIN : r = 1e-5, écart relatif 1e-3, tolerance = 1e-10 * |r| : échec", r$statut == 1L)
+r <- executer_harnais("verifier_egal('a', 1e-5 * (1 + 1e-3), 1e-5, tolerance = 1e-10 / 1e-5)")
+verifier("TEMOIN : la parade inversée (tolerance = 1e-10 / |r| = 1e-5, absolue) laisse passer le même écart relatif de 1e-3",
+         r$statut == 0L)
+r <- executer_harnais("verifier_egal('a', 1e-5 * (1 + 1e-12), 1e-5, tolerance = 1e-10 * 1e-5)")
+verifier("r = 1e-5, écart relatif 1e-12, tolerance = 1e-10 * |r| : succès", r$statut == 0L)
+r <- executer_harnais("verifier_egal('a', structure(20089L, class = 'Date'), as.Date('2025-01-01'), tolerance = 1e-10)")
+verifier("TEMOIN : Date stockée en entier contre Date stockée en réel à tolérance : échec, typeof cité",
+         r$statut == 1L && grepl("double, obtenu integer", r$sortie, fixed = TRUE))
+r <- executer_harnais("verifier_egal('a', structure(20089L, class = 'Date'), as.Date('2025-01-01'))")
+verifier("même cas à tolérance nulle : échec (identical), cohérent avec la tolérance > 0", r$statut == 1L)
+r <- executer_harnais("verifier_egal('a', as.Date('2025-01-01'), as.Date('2025-01-01'), tolerance = 1e-10)")
+verifier("deux Date en réel identiques : succès", r$statut == 0L)
+r <- executer_harnais("t0 <- as.POSIXct('2025-01-01 00:00:00', tz = 'UTC')
+  verifier_egal('a', t0 + 1000, t0, tolerance = 1e-6)")
+verifier("TEMOIN : POSIXct à 1000 s d'écart, tolérance 1e-6 (tolérance relative sur 1.7e9 : 1.7e3) : échec", r$statut == 1L)
+r <- executer_harnais("t0 <- as.POSIXct('2025-01-01 00:00:00', tz = 'UTC')
+  verifier_egal('a', t0 + 1e-5, t0, tolerance = 1e-6)")
+verifier("TEMOIN : POSIXct à 1e-5 s d'écart, sous la tolérance relative : échec (comparaison exacte)", r$statut == 1L)
+r <- executer_harnais("t0 <- as.POSIXct('2025-01-01 00:00:00', tz = 'UTC')
+  verifier_egal('a', list(t0, 1 + 1e-12), list(t0, 1), tolerance = 1e-10)")
+verifier("POSIXct identiques dans une liste, réel voisin dans la tolérance : succès (la tolérance reste pour les réels)",
+         r$statut == 0L)
+r <- executer_harnais("verifier_egal('a', as.difftime(1000 + 1e-5, units = 'secs'), as.difftime(1000, units = 'secs'), tolerance = 1e-6)")
+verifier("TEMOIN : difftime à 1e-5 de l'écart, sous la tolérance relative : échec (comparaison exacte)", r$statut == 1L)
+r <- executer_harnais("verifier_egal('a', as.difftime(1000, units = 'secs'), as.difftime(1000, units = 'secs'), tolerance = 1e-6)")
+verifier("difftime identiques : succès", r$statut == 0L)
+r <- executer_harnais("verifier_egal('a', as.POSIXlt('2025-01-01 00:00:00.5', tz = 'UTC'), as.POSIXlt('2025-01-01 00:00:00.5000001', tz = 'UTC'), tolerance = 1e-3)")
+verifier("TEMOIN : POSIXlt à 1e-7 s d'écart : échec, composante citée (comparaison exacte, pas de récursion sans fin)",
+         r$statut == 1L && grepl("sec", r$sortie, fixed = TRUE))
+r <- executer_harnais("verifier_egal('a', as.POSIXlt('2025-01-01', tz = 'UTC'), as.POSIXlt('2025-01-01', tz = 'UTC'), tolerance = 1e-3)")
+verifier("POSIXlt identiques : succès", r$statut == 0L)
+r <- executer_harnais("verifier_egal('a', setNames(1:100000, paste0('a', 1:100000)), setNames(1:100000, paste0('b', 1:100000)), tolerance = 1e-8)")
+verifier("TEMOIN : écart d'attribut sur un vecteur de 1e5 éléments : message tronqué aux dix premiers, nombre de valeurs cité",
+         r$statut == 1L && grepl("@names", r$sortie, fixed = TRUE) && grepl("(100000 valeurs)", r$sortie, fixed = TRUE) &&
+           grepl("b10,", r$sortie, fixed = TRUE) && !grepl("b11,", r$sortie, fixed = TRUE) && nchar(r$sortie) < 1000)
+r <- executer_harnais("verifier_egal('a', data.frame(x = 1:20), data.frame(x = 1:20, row.names = paste0('r', 1:20)), tolerance = 1e-8)")
+verifier("TEMOIN : row.names différents d'un data.frame de 20 lignes : échec tronqué (20 valeurs)",
+         r$statut == 1L && grepl("@row.names", r$sortie, fixed = TRUE) && grepl("(20 valeurs)", r$sortie, fixed = TRUE))
+r <- executer_harnais("verifier_egal('a', c(x = 1, y = 2), c(x = 1, z = 2), tolerance = 1e-8)")
+verifier("attribut de dix éléments ou moins : cité en entier, sans « valeurs »",
+         r$statut == 1L && grepl("x,z, obtenu x,y", r$sortie, fixed = TRUE) && !grepl("valeurs)", r$sortie, fixed = TRUE))
+
 section("harnais : comparateur déplacé de tests/references.R (#79)")
 e <- comparer_feuilles(list(a = 1 + 5e-11, b = c(1, 2)), list(a = 1, b = c(1, 2)), tolerance = 1e-10)
 verifier("comparer_feuilles : tolérance explicite, 5e-11 sous 1e-10 : aucun écart", nrow(e) == 0L)

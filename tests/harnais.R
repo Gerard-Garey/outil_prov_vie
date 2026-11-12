@@ -64,13 +64,16 @@ verifier <- function(nom, condition) {
 # l'ADR 0011, point 7 (comparer_objets, #79) : réels finis à la tolérance mixte
 # |x - r| <= tolerance x max(1, |r|), toute différence de structure (type, longueur, NA contre
 # NaN, infini contre fini, noms et autres attributs) en échec. Le message liste les premiers écarts.
-# Sous |r| = 1, la tolérance est absolue : pour une référence |r| < 6,7e-4 (tolerance / |r| au-delà
-# de 1,5e-7, plus petit effet de formule rencontré, ADR 0011, point 8), l'appelant passe
-# tolerance = 1e-10 / |r| ou compare obtenu / r à 1 (avis d'actuary sur #79, jugement d'expert).
+# Pour |r| <= 1, la tolérance est absolue (|x - r| <= tolerance) : elle ne garantit un écart relatif
+# de 1,5e-7 (plus petit effet de formule rencontré, ADR 0011, point 8) que pour |r| >= tolerance /
+# 1,5e-7 (6,7e-4 à 1e-10). Pour garder un écart relatif de 1e-10 sur une référence |r| <= 1, l'appelant
+# passe tolerance = 1e-10 * |r| (pour plusieurs valeurs, le plus petit |r| non nul ; une valeur
+# attendue nulle se compare exactement) ou compare obtenu / r à 1 (avis d'actuary sur #79, jugement
+# d'expert). La tolérance est un réel fini positif ou nul (NA, NaN, Inf et négatif sont refusés).
 verifier_egal <- function(nom, obtenu, attendu, tolerance = 0) {
   r <- .harnais_evaluer({
-    if (!is.numeric(tolerance) || length(tolerance) != 1L || is.na(tolerance) || tolerance < 0) {
-      stop("tolerance : un réel positif ou nul est requis")
+    if (!is.numeric(tolerance) || length(tolerance) != 1L || !is.finite(tolerance) || tolerance < 0) {
+      stop("tolerance : un réel fini positif ou nul est requis")
     }
     if (tolerance == 0) {
       if (identical(obtenu, attendu)) TRUE else paste(all.equal(obtenu, attendu), collapse = " ; ")
@@ -311,12 +314,24 @@ comparer_feuilles <- function(obtenu, reference, chemin = "", exclusions = chara
 # listes (dont les data.frame, par colonnes) se parcourent par position, nommées ou non ; les
 # attributs (noms, classe, niveaux, dimensions...) se comparent exactement ; une différence de
 # type (integer contre double, Date contre double), de longueur, de nature (NA, NaN, infini,
-# fini) ou d'attribut est toujours un écart de structure. Seuls les réels finis se comparent à
-# la tolérance ; les autres feuilles (logical, integer, character, Date) à l'égalité exacte.
+# fini) ou d'attribut est toujours un écart de structure ; il en va de même du `typeof` d'une
+# feuille atomique (une Date stockée en entier contre une Date stockée en réel). Seuls les réels
+# finis se comparent à la tolérance ; les autres feuilles (logical, integer, character) et toute
+# classe temporelle (Date, POSIXct, POSIXlt, difftime) à l'égalité exacte.
 comparer_objets <- function(obtenu, attendu, tolerance) {
   ecarts <- list()
   ajouter <- function(e) if (!is.null(e) && nrow(e) > 0L) ecarts[[length(ecarts) + 1L]] <<- e
-  descr <- function(x) if (is.atomic(x) && !is.null(x)) paste(.texte(x), collapse = ",") else paste(class(x), collapse = "/")
+  # Description d'une valeur dans le message d'échec : les `n` premiers éléments d'un vecteur, puis
+  # leur nombre (un attribut de 1e5 éléments, row.names ou names, n'est pas sérialisé en entier).
+  descr <- function(x, n = 10L) {
+    if (is.atomic(x) && !is.null(x)) {
+      debut <- paste(.texte(x[seq_len(min(n, length(x)))]), collapse = ",")
+      if (length(x) > n) sprintf("%s,… (%d valeurs)", debut, length(x)) else debut
+    } else {
+      paste(class(x), collapse = "/")
+    }
+  }
+  temporel <- function(x) inherits(x, c("Date", "POSIXct", "POSIXlt", "difftime"))
   attributs <- function(o, r, ch) {
     ao <- attributes(o)
     ar <- attributes(r)
@@ -326,12 +341,18 @@ comparer_objets <- function(obtenu, attendu, tolerance) {
       }
     }
   }
-  parcourir <- function(o, r, ch) {
+  parcourir <- function(o, r, ch, tol = tolerance) {
     to <- .type_feuille(o)
     tr <- .type_feuille(r)
     if (to != tr) return(ajouter(.ecart_ligne(ch, NA_character_, tr, to, NA_character_, "structure")))
     if (tr == "null") return(invisible(NULL))
+    if (temporel(o) || temporel(r)) tol <- 0
+    if (is.atomic(r) && typeof(o) != typeof(r)) {
+      return(ajouter(.ecart_ligne(ch, NA_character_, typeof(r), typeof(o), NA_character_, "structure")))
+    }
     attributs(o, r, ch)
+    # POSIXlt : [[ rend un POSIXlt (récursion sans fin) ; on parcourt ses composantes brutes
+    if (inherits(r, "POSIXlt")) { o <- unclass(o); r <- unclass(r) }
     if (is.list(r)) {
       if (length(o) != length(r)) {
         return(ajouter(.ecart_ligne(ch, NA_character_, paste("longueur", length(r)), paste("longueur", length(o)),
@@ -340,7 +361,7 @@ comparer_objets <- function(obtenu, attendu, tolerance) {
       noms <- names(r)
       for (i in seq_along(r)) {
         nom_i <- if (is.null(noms) || is.na(noms[i]) || noms[i] == "") as.character(i) else noms[i]
-        parcourir(o[[i]], r[[i]], if (ch == "") nom_i else paste0(ch, "/", nom_i))
+        parcourir(o[[i]], r[[i]], if (ch == "") nom_i else paste0(ch, "/", nom_i), tol)
       }
       return(invisible(NULL))
     }
@@ -354,7 +375,7 @@ comparer_objets <- function(obtenu, attendu, tolerance) {
     }
     if (!inherits(r, "Date")) { o <- unclass(o); r <- unclass(r) }
     for (a in c("names", "dim", "dimnames")) { attr(o, a) <- NULL; attr(r, a) <- NULL }
-    ajouter(.comparer_valeurs(ch, o, r, as.character(seq_along(r)), tolerance))
+    ajouter(.comparer_valeurs(ch, o, r, as.character(seq_along(r)), tol))
   }
   parcourir(obtenu, attendu, "")
   if (length(ecarts) == 0L) {
