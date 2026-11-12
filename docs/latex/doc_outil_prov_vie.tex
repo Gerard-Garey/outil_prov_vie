@@ -4655,9 +4655,20 @@ l'en-tête, et toute chaîne entre guillemets qu'aucune forme n'a lue
 (décision du mainteneur du 9~novembre~2026, M207)~: une version citée au
 fil d'une phrase, une chaîne en troisième cellule, une liste écrite avec
 guillemets. Une chaîne entre guillemets écrite dans une cellule de valeur
-est donc toujours comparée au code ou signalée. Les constantes internes,
-dont le nom commence par un point, ne sont pas lues\fsp; elles se citent
-dans le texte, d'après le code.
+est donc toujours comparée au code ou signalée.
+
+\textbf{Complétude des tableaux de constantes.} Toute constante en
+majuscules de premier niveau de \code{R/<module>.R} (affectation par
+\code{<-}, \code{=} ou \code{->} à un nom, dont la valeur n'est pas une
+fonction) figure dans le tableau de constantes de son module~: une
+constante absente du tableau est un écart, et un module qui a de telles
+constantes sans tableau de constantes en est un aussi, comme un module qui
+a des fonctions sans tableau de fonctions (issue~41, décision du
+mainteneur du 12~novembre~2026, M408). Les constantes internes, dont le
+nom commence par un point, ne sont pas recensées, comme les fonctions à
+point~: elles ne sont pas exigées, et une telle constante citée dans un
+tableau de constantes est un écart (constante absente du module)\fsp;
+elles se citent dans le texte, d'après le code.
 
 Avec l'option \code{-{}-strict}, tout écart, comme l'absence du document,
 fait échouer la batterie\fsp; sans elle, les écarts sont des avertissements.
