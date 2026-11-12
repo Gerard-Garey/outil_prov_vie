@@ -720,13 +720,235 @@ verifier_egal("(4.9) unité à montant nul : D03c ensemble=0 : DO1 0, jugement_e
                 list(do1_49(r0), p1_n(r0), do1_49(rp), p1_n(rp), nrow(rt$dossiers), p1_n(rt)) },
               list(list("DO1", 0, "jugement_expert", "D03c"), list(0, 1L, "jugement_expert"),
                    list("DO1", 0, "jugement_expert", "D03c"), list(0, 1L, "jugement_expert"), 0L, list(0, 0L, "exact")))
-verifier("hypothese_vue() : seule sélection d'une hypothèse par ligne, définie une fois, dans R/engagement.R, appelée par .reconstituer_capital() (D03c), .hypothese_d03h() (D03h) et provisions_collectives() (D03f) ; vue$hypotheses lue dans le code de R/ par hypothese_vue() seule",
+# vue$hypotheses : deux lecteurs exactement (erratum v1.0.17, décision E17-1) : hypothese_vue(),
+# seule sélection d'une hypothèse par ligne, et cles_lignes_hypothese() (`donnees`), qui borne
+# ses lectures aux lignes placées
+verifier("hypothese_vue() : seule sélection d'une hypothèse par ligne, définie une fois, dans R/engagement.R, appelée par .reconstituer_capital() (D03c), .hypothese_d03h() (D03h), provisions_collectives() (D03f) et hypotheses_vue_unites() (S2) ; vue$hypotheses lue dans le code de R/ par hypothese_vue() et cles_lignes_hypothese() seules",
          { src <- unlist(lapply(list.files(file.path(racine, "R"), "\\.R$", full.names = TRUE), readLines, encoding = "UTF-8"))
            sum(grepl("^hypothese_vue <- function", src)) == 1L &&
              any(grepl("^hypothese_vue <- function", readLines(file.path(racine, "R", "engagement.R"), encoding = "UTF-8"))) &&
              "hypothese_vue" %in% all.names(body(ns$.reconstituer_capital)) &&
              "hypothese_vue" %in% all.names(body(ns$.hypothese_d03h)) &&
              "hypothese_vue" %in% all.names(body(ns$provisions_collectives)) &&
+             "hypothese_vue" %in% all.names(body(ns$hypotheses_vue_unites)) &&
              !any(grepl("x\\$motif == \"D03[fh]\"", src)) &&
-             sum(grepl("vue\\$hypotheses", sub("#.*$", "", src))) == 1L &&
-             any(grepl("vue\\$hypotheses", sub("#.*$", "", deparse(ns$hypothese_vue)))) })
+             sum(grepl("vue\\$hypotheses", sub("#.*$", "", src))) == 2L &&
+             any(grepl("vue\\$hypotheses", sub("#.*$", "", deparse(ns$hypothese_vue)))) &&
+             any(grepl("vue\\$hypotheses", sub("#.*$", "", deparse(ns$cles_lignes_hypothese)))) })
+
+section("engagement : statut sous une hypothèse de la vue, D02b et D03g (critère (4.7), § 5.8, source S2), #87")
+
+# Plan de (4.7) : b2_plan() dont `donnees` est celui du plan `recommandees` de la base construite
+# (seuils de D02c, p49), plus D03g en H (deux référentiels, poste tous, date_effet_plus_delai) et
+# les délais de seuils$d03g_delai_jours. Valeurs en dur : § 7.7, critère (4.7) ; (e) à (l)
+# recalculées par un chemin indépendant du code (b87/temoins.R, visa d'actuary). R1 : facteur
+# 1,015 x 1,024 = 1,03936 ; R3 : paiement de 40 000 le 2025-03-01 ; R3b : 140 928 / 73.
+plan_87 <- function(delais = list(), hypotheses = hyp_d("D03g", "date_effet_plus_delai"), exclusions = NULL) {
+  q <- p49
+  if (length(delais)) q$donnees$seuils$d03g_delai_jours <- delais
+  q$donnees$hypotheses <- hypotheses
+  if (!is.null(exclusions)) q$donnees$exclusions <- exclusions
+  q
+}
+dos_87 <- function(r, poste = P1) {
+  d <- r$dossiers[r$dossiers$poste == poste, , drop = FALSE]
+  list(d$id_dossier, d$etat, d$montant, d$statut_resultat, d$hypotheses_defaut)
+}
+cel_87 <- function(r, poste = P1) {
+  q <- r$provisions[r$provisions$poste == poste & r$provisions$segmentation == "ensemble", , drop = FALSE]
+  list(q$montant, q$nombre_dossiers, q$statut_resultat)
+}
+etat_87 <- function(base, plan) {
+  cp <- ns$canoniser_plan(plan)
+  e <- ns$etats_a_date(ns$vue_a_date(base, cp$arrete, cp$donnees, cp$conventions), "deces", "engagement")
+  e$etat_dossier[e$id_dossier == "DO1"]
+}
+b_87 <- b2_base_capital()
+b_87$evenements$date_saisie <- as.Date(NA)
+verifier_egal("(4.7) (a) R1, date_saisie de EV1 manquante, D03g H, délai 0 : DO1 capital_du, 103 936, jugement_expert, D03g (avant : exact, vide)",
+              { q <- plan_87(list(evenements = 0)); c(dos_87(calculer_provisions(b_87, q, tid)), etat_87(b_87, q)) },
+              list("DO1", "deces", 103936, "jugement_expert", "D03g", "capital_du"), tolerance = TOL)
+verifier_egal("(4.7) (b) délai 500 (visibilité 2026-01-28 > A) : DO1 ouvert, capital reconstitué 82 500, 85 747,20, jugement_expert, D03g (ligne invisible rattachée par cles_lignes_hypothese() ; avant : exact)",
+              { q <- plan_87(list(evenements = 500)); c(dos_87(calculer_provisions(b_87, q, tid)), etat_87(b_87, q)) },
+              list("DO1", "deces", 82500 * 1.03936, "jugement_expert", "D03g", "ouvert"), tolerance = TOL)
+verifier_egal("(4.7) (c) témoin : date_saisie de EV1 renseignée (2024-09-16), même plan : 103 936 exact, vide",
+              dos_87(calculer_provisions(b2_base_capital(), plan_87(list(evenements = 0)), tid)),
+              list("DO1", "deces", 103936, "exact", ""), tolerance = TOL)
+b_87d <- b2_base_capital(paiements = data.frame(date = D("2025-03-01"), montant = 40000))
+b_87d$prestations$date_saisie <- as.Date(NA)
+verifier_egal("(4.7) (d) provenance sans effet : R3, date_saisie de la prestation manquante, délai 0 puis 400 : 63 133,8082191781 dans les deux cas, jugement_expert, D03g (avant : exact, vide)",
+              list(dos_87(calculer_provisions(b_87d, plan_87(list(prestations = 0)), tid)),
+                   dos_87(calculer_provisions(b_87d, plan_87(list(prestations = 400)), tid))),
+              rep(list(list("DO1", "deces", 63133.8082191781, "jugement_expert", "D03g")), 2L), tolerance = TOL)
+# (e) R3b (capital payé au nominal le 2025-03-01) dont la clôture regle EV2 (effet 2025-03-01)
+# a sa date_saisie manquante (D03g) : délai 0, clôture visible à A, dossier clos restitué à 0 ;
+# délai 400 (visibilité 2026-04-05 > A), dossier non clos : 140 928 / 73
+b_87e <- function(qualite = "conjoint_survivant") {
+  b <- b2_base_capital(paiements = data.frame(date = D("2025-03-01"), montant = 100000), qualite = qualite)
+  b$evenements <- rbind(b$evenements, b2_tab("evenements", id_evenement = "EV2", id_sinistre = "SI1", id_dossier = "DO1",
+                                             type_evenement = "cloture_dossier", date_effet = D("2025-03-01"),
+                                             date_saisie = as.Date(NA), motif = "regle"))
+  b
+}
+verifier_egal("(4.7) (e) dossier clos par une clôture rendue visible par D03g (délai 0) : DO1 restitué à 0, jugement_expert, D03g, compté dans nombre_dossiers de P1 (partition du § 5.4) ; P2 sans dossier ; contre-témoin, délai 400 : DO1 capital_du, 1 930,5205479452054 (140 928 / 73), jugement_expert, D03g",
+              { r0 <- calculer_provisions(b_87e(), plan_87(list(evenements = 0)), tid)
+                r4 <- calculer_provisions(b_87e(), plan_87(list(evenements = 400)), tid)
+                list(dos_87(r0), cel_87(r0), cel_87(r0, P2), etat_87(b_87e(), plan_87(list(evenements = 0))),
+                     dos_87(r4), cel_87(r4), etat_87(b_87e(), plan_87(list(evenements = 400)))) },
+              list(list("DO1", "deces", 0, "jugement_expert", "D03g"), list(0, 1L, "jugement_expert"), list(0, 0L, "exact"), "clos",
+                   list("DO1", "deces", 140928 / 73, "jugement_expert", "D03g"), list(140928 / 73, 1L, "jugement_expert"),
+                   "capital_du"), tolerance = TOL)
+verifier_egal("(4.7) (e) partition : même dossier clos, bénéficiaire non identifié (critère de P2) : restitué à 0 dans P2, jugement_expert, D03g, compté dans nombre_dossiers de P2 ; P1 sans dossier",
+              { r <- calculer_provisions(b_87e("non_identifie"), plan_87(list(evenements = 0)), tid)
+                list(dos_87(r, P2), cel_87(r, P2), cel_87(r)) },
+              list(list("DO1", "deces", 0, "jugement_expert", "D03g"), list(0, 1L, "jugement_expert"), list(0, 0L, "exact")))
+# (h) EV2, doublon de contenu de EV1 (D01b), date_saisie manquante (D03g H) ; D01b exclu pour
+# engagement : EV2 non lue (§ 5.3), DO1 exact, vide ; D01b conserver : jugement_expert, D03g ;
+# témoin sans D03g (date_saisie de EV2 renseignée), D01b exclu : exact, vide
+b_87h <- function(saisie) {
+  b <- b2_base_capital()
+  b$evenements <- rbind(b$evenements, b2_tab("evenements", id_evenement = "EV2", id_sinistre = "SI1", id_dossier = "DO1",
+                                             type_evenement = "fixation_capital", date_effet = D("2024-09-15"),
+                                             date_saisie = saisie, montant = 100000))
+  b
+}
+verifier_egal("(4.7) (h) ligne d'evenements sous D03g H exclue pour engagement par D01b : non lue, DO1 103 936 exact, vide, comme le témoin sans D03g ; D01b conserver : jugement_expert, D03g",
+              list(dos_87(calculer_provisions(b_87h(as.Date(NA)), plan_87(list(evenements = 0),
+                                                                        exclusions = excl_fam("D01b", "engagement")$exclusions), tid)),
+                   dos_87(calculer_provisions(b_87h(D("2025-01-12")), plan_87(hypotheses = list(),
+                                                                            exclusions = excl_fam("D01b", "engagement")$exclusions), tid)),
+                   dos_87(calculer_provisions(b_87h(as.Date(NA)), plan_87(list(evenements = 0),
+                                                                        exclusions = excl_fam("D01b", character(0))$exclusions), tid))),
+              list(list("DO1", "deces", 103936, "exact", ""), list("DO1", "deces", 103936, "exact", ""),
+                   list("DO1", "deces", 103936, "jugement_expert", "D03g")), tolerance = TOL)
+# (i) sinistre SI1 à date_saisie manquante (D03g), délai 500 (visibilité 2026-01-14 > A) : SI1 et
+# ses dossiers invisibles (règle 1), aucune unité (E17-2) ; bilan : une ligne D03g placée par
+# référentiel ; témoin, délai 0 : DO1 103 936, jugement_expert, D03g
+b_87i <- b2_base_capital()
+b_87i$sinistres$date_saisie <- as.Date(NA)
+verifier_egal("(4.7) (i) sinistre rendu invisible par D03g (délai 500) : aucune ligne de dossiers, P1 0 sur 0 dossier exact, hypotheses_defaut du bilan : D03g, 1 ligne par référentiel ; témoin délai 0 : DO1 103 936 jugement_expert D03g",
+              { r <- calculer_provisions(b_87i, plan_87(list(sinistres = 500)), tid)
+                h <- r$donnees$hypotheses_defaut
+                list(nrow(r$dossiers), cel_87(r), h$motif, h$referentiel, h$nombre,
+                     dos_87(calculer_provisions(b_87i, plan_87(list(sinistres = 0)), tid))) },
+              list(0L, list(0, 0L, "exact"), c("D03g", "D03g"), c("comptes_sociaux", "solvabilite_2"), c(1L, 1L),
+                   list("DO1", "deces", 103936, "jugement_expert", "D03g")), tolerance = TOL)
+# (j) arrêté égal à l'extraction (2026-03-31), taux 2026 de 0,02 (couverture de l'année) :
+# D03g est un signalement, aucune hypothèse placée ; 103 936 x (1 + 0,02 x 90 / 365)
+verifier_egal("(4.7) (j) arrêté égal à l'extraction, même base et même plan que (a) : aucune hypothèse dans vue$hypotheses, DO1 exact, vide, 104 448,5610958904 (= 103 936 x (1 + 0,02 x 90 / 365))",
+              { q <- plan_87(list(evenements = 0))
+                q$arrete <- D("2026-03-31")
+                q$revalorisation$capital_deces$taux_par_annee <- c(`2024` = 0.03, `2025` = 0.024, `2026` = 0.02)
+                cp <- ns$canoniser_plan(q)
+                list(length(ns$vue_a_date(b_87, cp$arrete, cp$donnees, cp$conventions)$hypotheses),
+                     dos_87(calculer_provisions(b_87, q, tid))) },
+              list(0L, list("DO1", "deces", 103936 * (1 + 0.02 * 90 / 365), "exact", "")), tolerance = TOL)
+# (k) R5 (a) au salaire manquant (D03c H, ensemble=30000) et un événement EV1 du dossier
+# (demande_mise_a_jour, effet 2025-01-10) à date_saisie manquante (D03g H, délai 0)
+b_87k <- b_49
+b_87k$evenements <- b2_tab("evenements", id_evenement = "EV1", id_sinistre = "SI1", id_dossier = "DO1",
+                           type_evenement = "demande_mise_a_jour", date_effet = D("2025-01-10"), date_saisie = as.Date(NA))
+verifier_egal("(4.7) (k) D03c (S1) et D03g (S2) sur le même dossier : DO1 85 747,20, jugement_expert, hypotheses_defaut D03c;D03g",
+              dos_87(calculer_provisions(b_87k, plan_87(list(evenements = 0),
+                                                        c(hyp_d("D03g", "date_effet_plus_delai"), hyp_d("D03c", "ensemble=30000"))), tid)),
+              list("DO1", "deces", 85747.2, "jugement_expert", "D03c;D03g"), tolerance = TOL)
+# (l) accesseur de donnees : clé de la base d'une ligne placée, même invisible ; refus (erreur
+# interne) d'une ligne non placée et d'une colonne qui n'est pas une clé du dictionnaire
+v_87 <- local({ cp <- ns$canoniser_plan(plan_87(list(evenements = 500))); ns$vue_a_date(b_87, cp$arrete, cp$donnees, cp$conventions) })
+verifier_egal("(4.7) (l) cles_lignes_hypothese() : EV1 invisible (délai 500) : valeurs_vue() NA, accesseur SI1 et DO1 ; ligne de evenements non placée (2) : erreur interne ; colonne montant (non clé) : erreur interne ; ligne de dossiers non placée : erreur interne",
+              list(ns$valeurs_vue(v_87, "evenements", "id_sinistre"),
+                   ns$cles_lignes_hypothese(v_87, "evenements", 1L, "id_sinistre"),
+                   ns$cles_lignes_hypothese(v_87, "evenements", 1L, "id_dossier"),
+                   grepl("erreur interne", motif_de(ns$cles_lignes_hypothese(v_87, "evenements", 2L, "id_sinistre"))),
+                   grepl("erreur interne", motif_de(ns$cles_lignes_hypothese(v_87, "evenements", 1L, "montant"))),
+                   grepl("erreur interne", motif_de(ns$cles_lignes_hypothese(v_87, "dossiers", 1L, "id_dossier")))),
+              list(NA_character_, "SI1", "DO1", TRUE, TRUE, TRUE))
+verifier("(4.7) une seule détection de S2 : hypotheses_vue_unites() définie une fois, dans R/engagement.R, appelée par calculer_engagement(), provisions_individuelles() et provisions_collectives() ; cles_lignes_hypothese() définie une fois, dans R/donnees.R, appelée par hypotheses_vue_unites() seule",
+         { src <- unlist(lapply(list.files(file.path(racine, "R"), "\\.R$", full.names = TRUE), readLines, encoding = "UTF-8"))
+           sum(grepl("^hypotheses_vue_unites <- function", src)) == 1L &&
+             any(grepl("^hypotheses_vue_unites <- function", readLines(file.path(racine, "R", "engagement.R"), encoding = "UTF-8"))) &&
+             sum(grepl("^cles_lignes_hypothese <- function", src)) == 1L &&
+             any(grepl("^cles_lignes_hypothese <- function", readLines(file.path(racine, "R", "donnees.R"), encoding = "UTF-8"))) &&
+             "hypotheses_vue_unites" %in% all.names(body(ns$calculer_engagement)) &&
+             "hypotheses_vue_unites" %in% all.names(body(ns$provisions_individuelles)) &&
+             "hypotheses_vue_unites" %in% all.names(body(ns$provisions_collectives)) &&
+             identical(Filter(function(n) is.function(ns[[n]]) && "cles_lignes_hypothese" %in% all.names(body(ns[[n]])),
+                              sort(ls(ns, all.names = TRUE), method = "radix")), "hypotheses_vue_unites") })
+# Erratum v1.0.18 (constat M1 de l'audit, réserves R1 et R2 d'actuary, décision E18-1) : une
+# unité sortie du calcul n'est restituée que si une ligne qui décide du filtre de sortie porte
+# S2 ; l'unité restituée garde les deux lignes d'échéancier de capital_dossier, de flux 0
+# (restitution des échéanciers `tous`).
+tous_87 <- function(q) { q$restitution$echeanciers <- "tous"; q }
+ech_87 <- function(r, cle = "DO1") {
+  e <- r$echeanciers[r$echeanciers$cle == cle, , drop = FALSE]
+  list(e$type_flux, e$flux, e$valeur_actuelle, e$date, e$probabilite, e$etat)
+}
+verifier_egal("(4.7) (e) R2 : dossier clos restitué (délai 0) : deux lignes d'échéancier capital_unique et frais, flux 0, valeur actuelle 0, datées de A + 1 (2026-01-01), probabilité 1, état deces",
+              ech_87(calculer_provisions(b_87e(), tous_87(plan_87(list(evenements = 0))), tid)),
+              list(c("capital_unique", "frais"), c(0, 0), c(0, 0), D(rep("2026-01-01", 2L)), c(1, 1), c("deces", "deces")))
+# (m) R3b, clôture EV2 saisie le 2025-03-05 (au plus A), seule la prestation (paiement nominal
+# du 2025-03-01) à date_saisie manquante sous D03g : la clôture ne doit rien à l'hypothèse
+b_87m <- b2_base_capital(paiements = data.frame(date = D("2025-03-01"), montant = 100000))
+b_87m$evenements <- rbind(b_87m$evenements, b2_tab("evenements", id_evenement = "EV2", id_sinistre = "SI1", id_dossier = "DO1",
+                                                   type_evenement = "cloture_dossier", date_effet = D("2025-03-01"),
+                                                   date_saisie = D("2025-03-05"), motif = "regle"))
+b_87m$prestations$date_saisie <- as.Date(NA)
+verifier_egal("(4.7) (m) contre-témoin : dossier clos par une clôture saisie, seule une prestation sous D03g (délai 0 puis 400) : pas d'unité, P1 0 sur 0 dossier exact (avant : DO1 restitué à 0, jugement_expert)",
+              lapply(c(0, 400), function(d) { r <- calculer_provisions(b_87m, plan_87(list(prestations = d)), tid)
+                                              list(nrow(r$dossiers), cel_87(r)) }),
+              rep(list(list(0L, list(0, 0L, "exact"))), 2L))
+# (o) même base, prestation saisie ; réouverture EV3 (effet 2025-06-01) à date_saisie manquante
+# sous D03g : délai 400 (visibilité 2026-07-06 > A), réouverture invisible, dossier resté clos,
+# restitué à 0 (E18-1) ; délai 0, réouverture visible : capital_du, 140 928 / 73
+b_87o <- b2_base_capital(paiements = data.frame(date = D("2025-03-01"), montant = 100000))
+b_87o$evenements <- rbind(b_87o$evenements, b2_tab("evenements", id_evenement = c("EV2", "EV3"), id_sinistre = "SI1",
+                                                   id_dossier = "DO1", type_evenement = c("cloture_dossier", "reouverture_dossier"),
+                                                   date_effet = D(c("2025-03-01", "2025-06-01")),
+                                                   date_saisie = c(D("2025-03-05"), NA), motif = c("regle", NA)))
+verifier_egal("(4.7) (o) réouverture placée sous D03g et rendue invisible (délai 400) : dossier clos restitué à 0, jugement_expert, D03g, deux lignes d'échéancier de flux 0 ; délai 0 (réouverture visible) : capital_du, 1 930,5205479452054 (140 928 / 73), jugement_expert, D03g",
+              { q4 <- tous_87(plan_87(list(evenements = 400)))
+                r4 <- calculer_provisions(b_87o, q4, tid)
+                q0 <- plan_87(list(evenements = 0))
+                r0 <- calculer_provisions(b_87o, q0, tid)
+                list(etat_87(b_87o, q4), dos_87(r4), cel_87(r4), ech_87(r4), etat_87(b_87o, q0), dos_87(r0)) },
+              list("clos", list("DO1", "deces", 0, "jugement_expert", "D03g"), list(0, 1L, "jugement_expert"),
+                   list(c("capital_unique", "frais"), c(0, 0), c(0, 0), D(rep("2026-01-01", 2L)), c(1, 1), c("deces", "deces")),
+                   "capital_du", list("DO1", "deces", 140928 / 73, "jugement_expert", "D03g")), tolerance = TOL)
+# m1 de l'audit (décision du mainteneur : restreindre) : l'accesseur n'admet que des colonnes
+# d'identifiant ; famille (clé primaire id_membre;date_saisie), ligne ME1 placée sous D03g
+b_87f <- b2_base_capital()
+b_87f$famille$date_saisie[1L] <- as.Date(NA)
+v_87f <- local({ cp <- ns$canoniser_plan(plan_87(list(famille = 0))); ns$vue_a_date(b_87f, cp$arrete, cp$donnees, cp$conventions) })
+verifier_egal("(4.7) (l) accesseur restreint aux colonnes d'identifiant : famille ligne 1 placée, id_membre ME1, id_sinistre SI1 ; date_saisie (de la clé primaire) : erreur interne ; date_naissance : erreur interne",
+              list(ns$cles_lignes_hypothese(v_87f, "famille", 1L, "id_membre"),
+                   ns$cles_lignes_hypothese(v_87f, "famille", 1L, "id_sinistre"),
+                   grepl("erreur interne.*colonne d'identifiant", motif_de(ns$cles_lignes_hypothese(v_87f, "famille", 1L, "date_saisie"))),
+                   grepl("erreur interne.*colonne d'identifiant", motif_de(ns$cles_lignes_hypothese(v_87f, "famille", 1L, "date_naissance")))),
+              list("ME1", "SI1", TRUE, TRUE))
+# (p) contre-témoin (erratum v1.0.18, réserve R3) : clôture EV2 saisie ; seul un événement
+# demande_mise_a_jour EV3 (effet 2025-06-01) à date_saisie manquante sous D03g, rendu visible
+# (délai 0) : un type visible autre que cloture_dossier ou reouverture_dossier ne décide pas
+b_87p <- b_87o
+b_87p$evenements$type_evenement[b_87p$evenements$id_evenement == "EV3"] <- "demande_mise_a_jour"
+verifier_egal("(4.7) (p) contre-témoin : dossier clos par une clôture saisie, seul un demande_mise_a_jour visible sous D03g : pas d'unité, P1 0 sur 0 dossier exact (avant : DO1 restitué à 0, jugement_expert)",
+              { r <- calculer_provisions(b_87p, plan_87(list(evenements = 0)), tid); list(nrow(r$dossiers), cel_87(r)) },
+              list(0L, list(0, 0L, "exact")))
+verifier_egal("(4.7) (l) m3 : affiliations.college (composante de clé étrangère, hors id_*) : erreur interne ; id_assure admis par la borne de colonne (ligne non placée : erreur de ligne)",
+              list(grepl("erreur interne.*colonne d'identifiant", motif_de(ns$cles_lignes_hypothese(v_87, "affiliations", 1L, "college"))),
+                   grepl("non plac", motif_de(ns$cles_lignes_hypothese(v_87, "affiliations", 1L, "id_assure")))),
+              list(TRUE, TRUE))
+# (u) erratum v1.0.19 (réserve R7) : sinistre SI1 à deux dossiers ; DO1 clos par une clôture
+# saisie, DO2 clos par une clôture sous D03g rendue visible (délai 0) ; la clôture de DO2 ne
+# décide pas de celle de DO1 (lecture par id_dossier) ; D01b (doublon de contenu) en conserver
+b_87u <- b2_base_capital()
+b_87u$dossiers <- rbind(b_87u$dossiers, transform(b_87u$dossiers, id_dossier = "DO2"))
+b_87u$beneficiaires <- rbind(b_87u$beneficiaires, transform(b_87u$beneficiaires, id_beneficiaire = "BE1b", id_dossier = "DO2"))
+b_87u$evenements <- rbind(b_87u$evenements, transform(b_87u$evenements, id_evenement = "EV1b", id_dossier = "DO2"),
+                          b2_tab("evenements", id_evenement = c("EV2", "EV3"), id_sinistre = "SI1", id_dossier = c("DO1", "DO2"),
+                                 type_evenement = "cloture_dossier", date_effet = D("2025-03-01"),
+                                 date_saisie = c(D("2025-03-05"), NA), motif = "sans_suite"))
+verifier_egal("(4.7) (u) sinistre à deux dossiers, DO1 clos par une clôture saisie, DO2 par une clôture sous D03g visible : DO1 sans unité, DO2 restitué à 0, jugement_expert, D03g ; P1 0 sur 1 dossier jugement_expert (avant : DO1 et DO2 restitués)",
+              { r <- calculer_provisions(b_87u, plan_87(list(evenements = 0), exclusions = excl_fam("D01b", character(0))$exclusions), tid)
+                d <- r$dossiers
+                list(d$id_dossier, d$montant, d$statut_resultat, d$hypotheses_defaut, cel_87(r)) },
+              list("DO2", 0, "jugement_expert", "D03g", list(0, 1L, "jugement_expert")))

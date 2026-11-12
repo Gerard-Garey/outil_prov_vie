@@ -106,18 +106,23 @@
 
 # Contrats individuels de P3 (spécification de B2, § 5.5, champ (a)) : population, échéanciers
 # et provisions par contrat. Rend list(contrats : data.frame (id_contrat, id_garantie_souscrite,
-# capital, taux_tarif, taux_retenu, hypothese_d03h, extrapole (un point de mortalite_tarif lu
-# hors des axes sous derniere_valeur, source S3 du § 5.8, #91), a_effet, a_double_effet (ä à l'effet),
-# prime, valeur (avant plancher), montant (plancher nul par contrat), retro_avant_prime,
+# capital, taux_tarif, taux_retenu, hypothese_d03h, hypotheses_vue (codes des hypothèses de la
+# vue appliquées aux lignes lues pour le contrat, source S2 du § 5.8, #87 ; "" sans hypothèse),
+# extrapole (un point de mortalite_tarif lu hors des axes sous derniere_valeur, source S3 du
+# § 5.8, #91), a_effet, a_double_effet (ä à l'effet), prime, valeur (avant plancher), montant
+# (plancher nul par contrat), retro_avant_prime,
 # retro_apres_prime (témoin rétrospectif, calculé seulement si `temoin` vaut TRUE ; NA sinon,
 # ou si l'arrêté n'est pas une date de pas ou si la prime est unique),
 # nature_primes, date_effet, date_terme, date_souscription), echeancier (flux à l'arrêté,
 # taux retenu), arret (motif né de la famille : hors_axes, parametre_non_determine ; NA),
 # identifiant (premier contrat en cause), hors_axes (lignes d'indicateur
 # hors_axes_derniere_valeur de indicateur_hors_axes(), une par contrat extrapolé, dans l'ordre
-# des contrats ; NULL sans extrapolation)). Sans point : lue par les tests du module (cas T1 à
-# T6) et par calculer_risque_en_cours() (`temoin` = FALSE : le témoin n'est jamais restitué) ;
-# non exportée. `temoin` : TRUE ou FALSE, exigé.
+# des contrats ; NULL sans extrapolation), sortis (contrats sortis de la population par un
+# sinistre ou par leur date_fin au plus A, dont une ligne qui décide de la sortie porte une
+# hypothèse de la vue, source S2 du § 5.8 : unités restituées à 0, errata v1.0.17 et v1.0.18 ;
+# triés)). Sans point :
+# lue par les tests du module (cas T1 à T6) et par calculer_risque_en_cours() (`temoin` =
+# FALSE : le témoin n'est jamais restitué) ; non exportée. `temoin` : TRUE ou FALSE, exigé.
 provisions_individuelles <- function(vue, plan, tables, temoin) {
   if (!(is.logical(temoin) && length(temoin) == 1L && !is.na(temoin))) {
     stop("erreur interne de provie : provisions_individuelles() : `temoin` doit valoir TRUE ou FALSE", call. = FALSE)
@@ -131,7 +136,8 @@ provisions_individuelles <- function(vue, plan, tables, temoin) {
   fr <- plan$frais$deces[[.POSTE_P3]][[.REFERENTIEL_P3]]
   taux_plan <- plan$taux$deces[[.POSTE_P3]][[.REFERENTIEL_P3]]
   exclu <- vue$exclu$risque_en_cours
-  vide <- list(contrats = NULL, echeancier = NULL, arret = NA_character_, identifiant = NA_character_)
+  vide <- list(contrats = NULL, echeancier = NULL, arret = NA_character_, identifiant = NA_character_,
+               sortis = character(0))
   # garanties souscrites deces retenues, version en vigueur à l'arrêté, de contrats individuels
   # couverture exclue (erratum v1.0.13) : garantie souscrite, ou contrat, exclu pour risque_en_cours
   # hors de la population (garanties_couverture_exclue(), seule implémentation), avant toute lecture
@@ -189,6 +195,39 @@ provisions_individuelles <- function(vue, plan, tables, temoin) {
                as.numeric(vv("sinistres", "date_survenance")) <= a)
   sinistre <- assure %in% s_id[s]
   sinistre_inconnu <- !is.na(assure) & assure %in% s_id[vue$retenu$sinistres & exclu$sinistres]
+  # hypothèses de la vue appliquées aux lignes lues pour le contrat (source S2, § 5.8, #87), sur
+  # la population avant la sortie par un sinistre : la ligne de contrats du contrat, celle de
+  # assures de son assuré, celles de sinistres de cet assuré, visibles ou non à A (statut).
+  # Contrat restitué à 0 (`sortis`, errata v1.0.17 et v1.0.18) seulement si une ligne qui
+  # décide de sa sortie porte S2 (constat M1, réserves R1, R4, R5 ; décision E18-2) : sorti par
+  # un sinistre, une ligne de sinistres de l'assuré retenue, non exclue, deces ou iad, survenue
+  # au plus A (un sinistre caché ne décide pas) ; sorti par sa fin de couverture date_fin au
+  # plus A (fin contractuelle postérieure à A), la ligne de contrats (partie de fin)
+  par_fin <- fin_contractuelle > a & !is.na(fin_ct) & fin_ct <= a
+  cand <- which(fin > a | par_fin)
+  s_decide <- vue$retenu$sinistres & (vv("sinistres", "nature_sinistre") %in% c("deces", "iad") &
+                                        as.numeric(vv("sinistres", "date_survenance")) <= a) %in% TRUE
+  s2_cand <- function(lect) {
+    res <- rep("", length(gs))
+    res[cand] <- hypotheses_vue_unites(vue, .REFERENTIEL_P3, .POSTE_P3, "risque_en_cours", length(cand), lect)
+    res
+  }
+  s2 <- s2_cand(list(lecture_unites("contrats", "id_contrat", id_ct[cand]),
+                     lecture_unites("assures", "id_assure", assure[cand]),
+                     lecture_unites("sinistres", "id_assure", assure[cand])))
+  decide_sin <- nzchar(s2_cand(list(lecture_unites("sinistres", "id_assure", assure[cand], admises = s_decide))))
+  decide_fin <- nzchar(s2_cand(list(lecture_unites("contrats", "id_contrat", id_ct[cand]))))
+  # voie de sortie observée (erratum v1.0.19, réserve R6) : un sinistre de l'assuré retenu, non
+  # exclu, deces ou iad, survenu au plus A, dont la ligne ne porte aucune hypothèse de la vue,
+  # ou une date_fin au plus A dont la partie de fin n'en porte pas, établit la sortie sans
+  # hypothèse : pas de restitution
+  s_id_tous <- as.character(vv("sinistres", "id_sinistre"))
+  s_place <- nzchar(hypotheses_vue_unites(vue, .REFERENTIEL_P3, .POSTE_P3, "risque_en_cours", length(s_id_tous),
+                                          list(lecture_unites("sinistres", "id_sinistre", s_id_tous))))
+  sinistre_obs <- !is.na(assure) & assure %in% s_id[s_decide & !exclu$sinistres & !s_place]
+  fin_obs <- par_fin & !decide_fin
+  vide$sortis <- sort(unique(id_ct[((fin > a & sinistre & decide_sin) | (par_fin & decide_fin)) & !sinistre_obs & !fin_obs]),
+                      method = "radix")
   en_cours <- fin > a & !sinistre
   if (!any(en_cours)) return(vide)
   k <- which(en_cours)
@@ -269,7 +308,8 @@ provisions_individuelles <- function(vue, plan, tables, temoin) {
     }
     lignes[[length(lignes) + 1L]] <- data.frame(
       id_contrat = cle, id_garantie_souscrite = id_gs[i], capital = capital$valeur[i], taux_tarif = tarif[i],
-      taux_retenu = taux_r, hypothese_d03h = d03h[i], extrapole = extrapole[i], a_effet = a_effet,
+      taux_retenu = taux_r, hypothese_d03h = d03h[i], hypotheses_vue = s2[i], extrapole = extrapole[i],
+      a_effet = a_effet,
       a_double_effet = a_dbl, prime = prime,
       valeur = v$total, montant = max(0, v$total), retro_avant_prime = retro[1L], retro_apres_prime = retro[2L],
       nature_primes = if (unique_p) "unique" else "periodique", date_effet = structure(effet[i], class = "Date"),
@@ -279,7 +319,7 @@ provisions_individuelles <- function(vue, plan, tables, temoin) {
     echeancier[[length(echeancier) + 1L]] <- v$echeancier
   }
   list(contrats = do.call(rbind, lignes), echeancier = do.call(rbind, echeancier), arret = NA_character_,
-       identifiant = NA_character_, hors_axes = do.call(rbind, hors_axes))
+       identifiant = NA_character_, hors_axes = do.call(rbind, hors_axes), sortis = vide$sortis)
 }
 
 # Valeur de l'hypothèse D03h appliquée à la ligne `ligne` de garanties_souscrites
@@ -355,8 +395,10 @@ provisions_individuelles <- function(vue, plan, tables, temoin) {
 # parametre_non_determine. Identifiant en cause : premier contrat (ordre des lignes de
 # cotisations de la vue). Aucun NA n'entre dans une somme : une part NA résiduelle est une
 # erreur interne. Rend un data.frame (id_contrat, montant), contrats triés, d'attributs
-# `arret` (motif ou NA), `identifiant` (contrat en cause ou NA) et `hypothese_d03f` (contrats
-# dont une cotisation est lue sous l'hypothèse D03f). Sans point : lue par les tests du
+# `arret` (motif ou NA), `identifiant` (contrat en cause ou NA) et `hypothese` (contrats du
+# champ sous une valeur S1 ou S2 du § 5.8 : une cotisation lue sous l'hypothèse D03f, ou une
+# hypothèse de la vue, D02b ou D03g, appliquée à la ligne de contrats du contrat ou à une de
+# ses cotisations lues, #87). Sans point : lue par les tests du
 # module (cas T7) et par calculer_risque_en_cours() ; non exportée.
 provisions_collectives <- function(vue, plan) {
   vv <- function(t, c1) valeurs_vue(vue, t, c1)
@@ -366,7 +408,7 @@ provisions_collectives <- function(vue, plan) {
   resultat <- function(id_contrat, montant, arret = NA_character_, identifiant = NA_character_,
                        hypothese = character(0)) {
     structure(data.frame(id_contrat = id_contrat, montant = montant, stringsAsFactors = FALSE),
-              arret = arret, identifiant = identifiant, hypothese_d03f = hypothese)
+              arret = arret, identifiant = identifiant, hypothese = hypothese)
   }
   # couverture exclue (erratum v1.0.13) : garantie souscrite, ou contrat, exclu pour risque_en_cours
   # hors du champ (garanties_couverture_exclue(), seule implémentation), avant toute lecture du contrat
@@ -407,7 +449,22 @@ provisions_collectives <- function(vue, plan) {
     return(resultat(character(0), numeric(0), "parametre_non_determine", contrat[which(non_determine)[1L]]))
   }
   if (any(sous_h)) .valeur_d03f(h_d03f[sous_h])
-  hypothese <- sort(unique(contrat[sous_h]), method = "radix")
+  # contrats sous une valeur S1 (D03f) ou S2 (hypothèse de la vue appliquée à la ligne de
+  # contrats du contrat ou à une cotisation lue) du § 5.8 : un seul ensemble, pour le statut et
+  # pour l'unité de montant nul (#87, #92 mi1)
+  # cotisations du champ visibles ou non (E17-3) : garantie souscrite deces d'un contrat du
+  # champ ; une cotisation visible de nature hors du prorata ou de fin_periode connue au plus A
+  # n'est pas lue (clés seules lisibles pour une cotisation cachée)
+  id_champ <- sort(unique(as.character(vv("contrats", "id_contrat"))[ct]), method = "radix")
+  id_gs <- as.character(vv("garanties_souscrites", "id_garantie_souscrite"))[gs]
+  c_nature <- vv("cotisations", "nature_mouvement")
+  c_fin <- as.numeric(vv("cotisations", "fin_periode"))
+  s2 <- hypotheses_vue_unites(vue, .REFERENTIEL_P3, .POSTE_P3, "risque_en_cours", length(id_champ), list(
+    lecture_unites("contrats", "id_contrat", id_champ),
+    lecture_unites("cotisations", "id_garantie_souscrite", id_gs,
+                   unite = match(as.character(vv("garanties_souscrites", "id_contrat"))[gs], id_champ),
+                   admises = !(!is.na(c_nature) & !(c_nature %in% .NATURES_PRORATA)) & !(!is.na(c_fin) & c_fin <= a))))
+  hypothese <- id_champ[nzchar(joindre_codes(c("", "D03f")[1L + id_champ %in% contrat[sous_h]], s2))]
   # (4) prorata des cotisations de fin postérieure à A (bornes connues, ou par la règle H)
   garde <- fin > a
   part <- vv("cotisations", "montant")[co[garde]] * (1 - taux_c) *
@@ -416,7 +473,8 @@ provisions_collectives <- function(vue, plan) {
   if (anyNA(part) || anyNA(contrat_g)) {
     stop("erreur interne de provie : part NA dans provisions_collectives() (prorata_cotisation)", call. = FALSE)
   }
-  # contrat sous l'hypothèse sans cotisation de fin postérieure à A : unité de montant nul (§ 5.8)
+  # contrat sous hypothèse (S1 ou S2) sans cotisation de fin postérieure à A : unité de montant
+  # nul (§ 5.8)
   ids <- sort(unique(c(contrat_g, hypothese)), method = "radix")
   if (length(ids) == 0L) return(resultat(character(0), numeric(0)))
   montant <- rep(0, length(ids))
@@ -449,7 +507,8 @@ provisions_collectives <- function(vue, plan) {
 # arguments que engagement::calculer_engagement() (`tables` : mortalite_tarif si une méthode
 # prospective est déclarée, serie_tme pour A132_1). Rend list(cellules, dossiers (vide : P3
 # n'a pas de dossier), echeanciers (contrats individuels, cle = id_contrat, flux à l'arrêté au
-# taux retenu, avant plancher), indicateurs (par contrat individuel valorisé : tarif_vie, taux
+# taux retenu, avant plancher ; contrat sorti restitué : deux lignes de flux 0, erratum
+# v1.0.18), indicateurs (par contrat individuel valorisé : tarif_vie, taux
 # retenu > taux du tarif, et deux lignes A132_1, à la date d'effet de la version de garantie
 # et à l'arrêté ; puis une ligne hors_axes_derniere_valeur par contrat extrapolé, § 5.8),
 # contrats (id_contrat, champ `individuel` ou `collectif`, montant après plancher,
@@ -457,9 +516,10 @@ provisions_collectives <- function(vue, plan) {
 # restitution par segment, #67)). Une seule cellule pour le poste (champs individuel et collectif réunis) :
 # méthode « individuel:<méthode>;collectif:<méthode> », statut_methode `alternative` si l'une
 # l'est, statut_resultat le plus faible des contrats (jugement_expert si D03h entre dans le
-# montant, ou un point de mortalite_tarif lu hors des axes sous derniere_valeur, S3, #91 ;
-# approximation_numerique pour un contrat collectif, jugement_expert sous
-# l'hypothèse D03f), nombre_dossiers 0. Poste arrêté (bilan, ou hors_axes,
+# montant, une hypothèse de la vue appliquée à une ligne lue, S2, #87, ou un point de
+# mortalite_tarif lu hors des axes sous derniere_valeur, S3, #91 ; approximation_numerique pour
+# un contrat collectif, jugement_expert sous l'hypothèse D03f ou une hypothèse de la vue),
+# nombre_dossiers 0. Poste arrêté (bilan, ou hors_axes,
 # parametre_non_determine, dont la période couverte non déterminée d'une cotisation du champ
 # (b)) : cellule `arrete`, premier contrat en cause dans l'attribut `identifiant_arret`. Un
 # montant NA dans le total est une erreur interne.
@@ -512,13 +572,21 @@ calculer_risque_en_cours <- function(vue, plan, tables, catalogue, garantie, pos
   col <- provisions_collectives(vue, plan)
   if (!is.na(attr(col, "arret"))) return(arreter(attr(col, "arret"), attr(col, "identifiant")))
   ct <- ind$contrats
-  # statut d'un contrat collectif : jugement_expert sous l'hypothèse D03f (erratum v1.0.15)
-  statut_col <- ifelse(col$id_contrat %in% attr(col, "hypothese_d03f"), "jugement_expert", "approximation_numerique")
+  # statut d'un contrat collectif : jugement_expert sous une valeur S1 (D03f, erratum v1.0.15) ou
+  # S2 (hypothèse de la vue, #87) du § 5.8 (codes réunis par joindre_codes() dans
+  # provisions_collectives())
+  statut_col <- ifelse(col$id_contrat %in% attr(col, "hypothese"), "jugement_expert", "approximation_numerique")
   # statut d'un contrat individuel (règle unique du § 5.8, erratum v1.0.16) : jugement_expert si
-  # une valeur fournie par le plan entre dans son montant, hypothèse D03h (S1) ou point de
-  # mortalite_tarif lu hors des axes sous derniere_valeur (S3, #91)
-  statut_ind <- if (!is.null(ct)) ifelse(ct$hypothese_d03h | ct$extrapole, "jugement_expert", "exact")
-  statuts <- c(statut_ind, statut_col)
+  # une valeur fournie par le plan entre dans son montant, hypothèse D03h (S1), hypothèse de la
+  # vue (S2, #87 ; codes réunis par joindre_codes()) ou point de mortalite_tarif lu hors des axes
+  # sous derniere_valeur (S3, #91)
+  statut_ind <- if (!is.null(ct)) {
+    ifelse(nzchar(joindre_codes(c("", "D03h")[1L + ct$hypothese_d03h], ct$hypotheses_vue)) | ct$extrapole,
+           "jugement_expert", "exact")
+  }
+  # contrats individuels sortis par un sinistre sous une hypothèse de la vue (S2) : unités à 0
+  sortis <- ind$sortis
+  statuts <- c(statut_ind, rep("jugement_expert", length(sortis)), statut_col)
   montants <- c(if (!is.null(ct)) ct$montant, col$montant)
   if (anyNA(montants)) stop("erreur interne de provie : montant NA dans le total de P3", call. = FALSE)
   total <- sum(sort(montants))
@@ -546,12 +614,34 @@ calculer_risque_en_cours <- function(vue, plan, tables, catalogue, garantie, pos
                               probabilite = e$probabilite, actualisation = e$actualisation,
                               valeur_actuelle = e$valeur_actuelle, stringsAsFactors = FALSE)[COLONNES_ECHEANCIERS]
   }
+  # contrat sorti restitué : deux lignes (capital_unique, frais) de flux 0, probabilité 1, au
+  # lendemain de l'arrêté, valeur nominale (§ 5.3 ; erratum v1.0.18, réserve R2), après les
+  # lignes des contrats valorisés
+  if (length(sortis)) {
+    n_s <- length(sortis)
+    e0 <- valeur_actuelle_probable(data.frame(cle = rep(sortis, each = 2L),
+                                              date = structure(rep(as.numeric(vue$bilan$vue$date_arrete) + 1, 2L * n_s),
+                                                               class = "Date"),
+                                              etat = "actif", type_flux = rep(c("capital_unique", "frais"), n_s),
+                                              flux = 0, probabilite = 1, stringsAsFactors = FALSE),
+                                   list(type = "aucune"), plan$conventions)$echeancier
+    e0 <- data.frame(cle = e0$cle, referentiel = rep(.REFERENTIEL_P3, nrow(e0)), poste = rep(poste, nrow(e0)),
+                     date = e0$date, etat = e0$etat, type_flux = e0$type_flux, flux = e0$flux,
+                     probabilite = e0$probabilite, actualisation = e0$actualisation,
+                     valeur_actuelle = e0$valeur_actuelle, stringsAsFactors = FALSE)
+    echeanciers <- rbind(echeanciers, e0[COLONNES_ECHEANCIERS])
+    rownames(echeanciers) <- NULL
+  }
   # contrats valorisés, par champ (restitution par segment, #67) : montant après plancher
   contrats <- rbind(contrats_vides,
                     if (!is.null(ct)) data.frame(id_contrat = ct$id_contrat, champ = rep("individuel", nrow(ct)),
                                                  montant = ct$montant,
                                                  statut_resultat = statut_ind,
                                                  stringsAsFactors = FALSE),
+                    if (length(sortis)) data.frame(id_contrat = sortis, champ = rep("individuel", length(sortis)),
+                                                   montant = rep(0, length(sortis)),
+                                                   statut_resultat = rep("jugement_expert", length(sortis)),
+                                                   stringsAsFactors = FALSE),
                     if (nrow(col)) data.frame(id_contrat = col$id_contrat, champ = rep("collectif", nrow(col)),
                                               montant = col$montant, statut_resultat = statut_col,
                                               stringsAsFactors = FALSE))

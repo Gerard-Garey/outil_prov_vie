@@ -307,6 +307,37 @@ valeurs_vue <- function(vue, table, colonne) {
   .valeurs_vue(vue$ctx, table, colonne)
 }
 
+# Clés des lignes placées sous une hypothèse de la vue (spécification de B2, § 5.8, source S2 ;
+# erratum v1.0.17, décision E17-1 du mainteneur, option (i) bornée) : valeur de la base de la
+# colonne `colonne` de la table `table` pour les lignes `lignes` (indices), visibles ou non à
+# l'arrêté, que valeurs_vue() masque pour une ligne non retenue. Borné : toute ligne absente des
+# `lignes` des hypothèses de `vue$hypotheses` de cette table, et toute colonne qui n'est pas une
+# colonne d'identifiant id_* de la clé primaire de la table ou clé étrangère (`reference`) du
+# dictionnaire, de type character (aucune date, aucun montant, aucune autre composante de clé
+# comme affiliations.college ; erratum v1.0.18, constats m1 et m3 de l'audit, décisions du
+# mainteneur), est une erreur interne. Seul
+# rattachement d'une ligne cachée à son unité, pour un statut ; jamais lu
+# pour un montant. Sans point : appelée par `engagement` (hypotheses_vue_unites()) ; non
+# exportée.
+cles_lignes_hypothese <- function(vue, table, lignes, colonne) {
+  if (!inherits(vue, "vue_provie")) stop("cles_lignes_hypothese() : `vue` doit \u00eatre un objet vue_provie", call. = FALSE)
+  dico <- vue$ctx$dico
+  cd <- dico$colonnes[dico$colonnes$table == table, , drop = FALSE]
+  pk <- eclater_champ(dico$tables$cle_primaire[dico$tables$table == table][1L])
+  cles <- c(pk, cd$colonne[!is.na(cd$reference) & nzchar(cd$reference)])
+  cles <- intersect(cles[startsWith(cles, "id_")], cd$colonne[cd$type == "character"])
+  if (!(is.character(colonne) && length(colonne) == 1L && colonne %in% cles)) {
+    stop(paste0("erreur interne de provie : cles_lignes_hypothese() : ", table, ".", paste(colonne, collapse = ","),
+                " n'est pas une colonne d'identifiant du dictionnaire"), call. = FALSE)
+  }
+  placees <- unlist(lapply(Filter(function(h) identical(h$table, table), vue$hypotheses), `[[`, "lignes"))
+  if (!all(lignes %in% placees)) {
+    stop(paste0("erreur interne de provie : cles_lignes_hypothese() : ligne de ", table,
+                " non plac\u00e9e sous une hypoth\u00e8se de la vue"), call. = FALSE)
+  }
+  .valeurs(vue$ctx, table, colonne)[lignes]
+}
+
 # Tables de la cascade d'une exclusion (dictionnaire, § 1.10) : un sinistre exclu exclut, dans
 # la même famille, ses dossiers, rentes, bénéficiaires, événements, prestations et
 # évaluations ; la cascade suit les clés étrangères simples de ces tables vers les tables de
