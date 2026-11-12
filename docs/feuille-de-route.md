@@ -512,7 +512,7 @@ Tenue par `architect`, après chaque série de PR fusionnées. Chaque mise à jo
 - **Écritures partagées** : Br, branche principale, tient l'en-tête, les § 2, § 3 et § 5 et poursuit la suite M295 à M399 (§ 4.1) ; Bo n'écrit que le § 1.8 et son bloc M400 à M499 (§ 4.2) ; `claude/dictionnaire-1-6` n'écrit que sa fiche (à créer sous le § 1 à son ouverture, par un commit qui passe par `main`, ADR 0012, point 10) et son bloc M500 à M599 (§ 4.3). Numéros d'ADR : 0013 réservé à Br si elle en a besoin ; aucun pour Bo ni pour `claude/dictionnaire-1-6`.
 - **PR d'ouverture** (ADR 0012, point 10 ; **décidée, M296**) : l'ADR 0012 accepté, l'amendement de `CLAUDE.md`, les présentes fiches et les blocs M400 à M499 et M500 à M599 sont sur `main` avant que Br et Bo partent. Forme : une PR courte vers `main`, sur instruction du mainteneur (elle sort de la condition « un seul domaine » du correctif rapide), en deux commits : `docs:` (`docs/feuille-de-route.md`, `docs/adr/0012-branches-paralleles.md`, `CONTEXT.md`, `README.md` l. 7 et l. 45) puis `claude:` (`CLAUDE.md`). Fusion par le mainteneur, CI verte. Le correctif rapide de #26 (M302) est une PR distincte.
 
-### 1.10 Branche de documents seuls : `claude/dictionnaire-1-6` (étape 0 de Bdr-b2, décidée, non ouverte)
+### 1.10 Branche de documents seuls : `claude/dictionnaire-1-6` (étape 0 de Bdr-b2, ouverte le 12/11/2026 sur `7d53a05`)
 
 *Fiche rédigée par `architect` le 12 novembre 2026 (fiche de base, routine), en application de M299 et de l'ADR 0012, point 10 : elle passe par `main` avant l'ouverture de la branche. Condition d'ouverture de M299 remplie : **erratum v1.0.16 de la spécification de B2 visé par le mainteneur le 12 novembre 2026** (commit `d266559` sur `claude/deces-reliquats`, pas encore sur `main`) ; conclusion transmise sur #90 (commentaire 6824784958). Avis de parallélisme : § 1.9, ligne « Bdr-b2, étape 0 seule ».*
 
@@ -544,6 +544,7 @@ Tenue par `architect`, après chaque série de PR fusionnées. Chaque mise à jo
 - **Critères de fin** : projet complet sur les six issues et la forme des valeurs `H` ; lectures de `regulatory` citées ; visa du mainteneur consigné au § 4.3 ; un commentaire par issue spécifiée qui renvoie à la section du projet ; `comm -12` du point 23 sans fichier hors recouvrement maîtrisé ; CI verte ; à la fusion, une ligne du § 4.3 dit les numéros du bloc restés sans emploi.
 - **Décisions M** : bloc **M500 à M599** (§ 4.3). **ADR** : aucun numéro réservé.
 - **Consultations Fable** : 0/3.
+- **Ouverture** (12 novembre 2026) : branche partie de `main` à `7d53a05` (fusion de la PR #101, qui porte la présente fiche) ; session `session_01TA5STRBtHnStUwf9XwJYL2`, ouverte par la session principale de Br sur le message du mainteneur ; écart au plafond de trois à cinq issues accepté (M500).
 
 ## 2. Branches suivantes
 
@@ -1086,6 +1087,7 @@ Sous-section créée vide à la vingt-septième série (ADR 0012, point 13 ; M29
 
 | N° | Date | Décision | Où elle est consignée |
 |---|---|---|---|
+| M500 | 12/11/2026 | **Écart au plafond de trois à cinq issues accepté** pour `claude/dictionnaire-1-6` : le projet de dictionnaire `1.6` spécifie **six issues** (#60, #72, #81, #83, #90, #32 point 2), plus la forme des valeurs `H` pour #99, et **n'en ferme aucune** (elles se ferment avec le code de Bdr-b2) ; confirmation demandée à l'ouverture par le § 1.10, comme M297 pour Br (décision du mainteneur du 12/11/2026, transmise dans le message d'ouverture de la branche par la session principale de Br) | § 1.10 ; `docs/specifications/projet-dictionnaire-1.6.md` |
 
 ## 5. Escalades, relances et arrêts hors branche
 
