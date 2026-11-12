@@ -56,7 +56,7 @@
 # des constantes mais aucun tableau de constantes en est un aussi (même traitement que
 # « fonctions dans R/ mais aucun tableau »). Les constantes dont le nom commence par un
 # point (.NOM, internes) ne sont pas recensées, comme les fonctions à point : elles ne sont
-# ni exigées au tableau, ni lues si elles y figurent.
+# pas exigées au tableau ; citées dans un tableau, elles sont un écart.
 
 options(warn = 2)
 args <- commandArgs(TRUE)
