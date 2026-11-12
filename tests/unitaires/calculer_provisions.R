@@ -659,6 +659,84 @@ attendu_echec("(4.5) (h) D02a sous H : la date rejetée est tenue pour manquante
               "#90",
               !isTRUE(all.equal(cel_x(calculer_provisions(b_h90, p_h90, tid), P2)$montant, 126906.734629181941, tolerance = 1e-12)))
 
+section("période inversée ou nulle, cas limites et valeur de D03f d'une cotisation de P3 (critère (4.6), § 5.5, erratum v1.0.16, #92)")
+# Base construite (copies : b2_base_construite_deces_01() n'est pas modifiée), plan recommandees
+# à A = 2025-12-31 ; D02a déclaré conserver pour les quatre familles, plus D03f quand le cas le
+# dit ; sans segmentation, puis avec nature_contrat et contrat. Valeurs en dur : § 7.7, critère
+# (4.6) ; « avant » mesuré à 88b47f3 (m25).
+cot_x <- function(id, ...) {   # copie de la base, colonnes de la cotisation `id` modifiées
+  b <- base
+  m <- list(...)
+  for (n in names(m)) b$cotisations[[n]][b$cotisations$id_cotisation == id] <- m[[n]]
+  b
+}
+d02a_c <- excl_x("D02a", "aucune")
+b_46a <- cot_x("COC1", debut_periode = D("2026-03-31"), fin_periode = D("2026-03-30"))
+b_46b <- cot_x("COC1", debut_periode = D("2026-03-31"), fin_periode = D("2026-01-05"))
+b_46d <- cot_x("COC1", debut_periode = D("2026-03-31"), fin_periode = D("2025-06-30"))
+b_46e <- cot_x("COC1", fin_periode = as.Date(NA), date_mouvement = D("2024-11-15"))
+b_46f <- cot_x("COC1", debut_periode = as.Date(NA))
+b_46g <- cot_x("COC1", fin_periode = A1)
+b_46i <- cot_x("COC2", debut_periode = as.Date(NA), date_mouvement = D("2025-03-01"))
+hyp_v <- function(m, v) lapply(ns$REFERENTIELS, function(r) list(motif = m, referentiel = r, poste = "tous", valeur = v))
+arret_46 <- function(r) {
+  q <- r$provisions
+  list(unique(q$motif_arret[q$poste == P3]), unique(q$statut_calcul[q$poste == P3]),
+       unique(q$motif_arret[q$poste == "total"]), id_arret(r))
+}
+arret_attendu <- list("parametre_non_determine", "arrete", "poste_arrete:provision_mathematique_temporaire_deces", "CTC1")
+for (nom_s in names(segs_45)) {
+  sg <- segs_45[[nom_s]]
+  et <- paste0(" (", nom_s, " segmentation)")
+  r_46a <- calculer_provisions(b_46a, plan_45(sg, ex = d02a_c), tid)
+  verifier_egal(paste0("(4.6) (a) COC1 du 2026-03-31 au 2026-03-30 (longueur nulle), D02a conserver : P3 arrêté (parametre_non_determine, CTC1), total arrêté ; P1 337 225,959101369779 et P2 103 936 inchangés", et),
+                c(arret_46(r_46a), egal_mixte(c(cel_x(r_46a, P1)$montant, cel_x(r_46a, P2)$montant), c(337225.959101369779, 103936))),
+                c(arret_attendu, TRUE))
+  r_46b <- calculer_provisions(b_46b, plan_45(sg, ex = d02a_c), tid)
+  verifier_egal(paste0("(4.6) (b) COC1 du 2026-03-31 au 2026-01-05 (inversée), D02a conserver : même arrêt (avant : 4 850,670981993908)", et),
+                arret_46(r_46b), arret_attendu)
+  r_46c <- calculer_provisions(b_46b, plan_45(sg, h = hyp_x("D02a")), tid)
+  verifier_egal(paste0("(4.6) (c) cas (b) sous D02a H (deux référentiels, poste tous) : même arrêt", et),
+                arret_46(r_46c), arret_attendu)
+  r_46d <- calculer_provisions(b_46d, plan_45(sg, ex = d02a_c), tid)
+  verifier(paste0("(4.6) (d) COC1 du 2026-03-31 au 2025-06-30 (inversée, fin au plus A) : P3 3 710,670981993908 exact, aucune unité CTC1", et),
+           egal_mixte(cel_x(r_46d, P3)$montant, 3710.670981993908) && identical(cel_x(r_46d, P3)$statut_resultat, "exact") &&
+             nrow(cel_x(r_46d, P3, "CTC1")) == 0L)
+  r_46e <- calculer_provisions(b_46e, plan_45(sg, ex = d02a_c, h = hyp_x("D03f")), tid)
+  verifier(paste0("(4.6) (e) mi1 : fin_periode de COC1 manquante, mouvement 2024-11-15, D03f H (période échue) : P3 3 710,670981993908 jugement_expert, total 444 872,630083363678", et),
+           egal_mixte(c(cel_x(r_46e, P3)$montant, cel_x(r_46e, "total")$montant), c(3710.670981993908, 444872.630083363678)) &&
+             identical(cel_x(r_46e, P3)$statut_resultat, "jugement_expert"))
+  if (nom_s == "avec") {
+    verifier_egal("(4.6) (e) mi1 : CTC1 unité de montant nul : cellule de P3 du segment CTC1, montant 0, jugement_expert",
+                  as.list(cel_x(r_46e, P3, "CTC1")[c("montant", "statut_resultat")]),
+                  list(montant = 0, statut_resultat = "jugement_expert"))
+  }
+  r_46f <- calculer_provisions(b_46f, plan_45(sg, ex = rbind(d02a_c, excl_x("D03f", "aucune"))), tid)
+  verifier_egal(paste0("(4.6) (f) mi2 : debut_periode de COC1 manquante, fin 2026-06-30 > A, D03f conserver : arrêt parametre_non_determine, CTC1", et),
+                arret_46(r_46f), arret_attendu)
+  r_46g <- calculer_provisions(b_46g, plan_45(sg, ex = d02a_c), tid)
+  verifier(paste0("(4.6) (g) mi2 : fin_periode de COC1 = A (2025-12-31), sans défaut : P3 3 710,670981993908 exact (cotisation échue)", et),
+           egal_mixte(cel_x(r_46g, P3)$montant, 3710.670981993908) && identical(cel_x(r_46g, P3)$statut_resultat, "exact"))
+  verifier_egal(paste0("(4.6) (h) Q1 : cas (e) avec la valeur n_importe : refus plan_invalide", et),
+                motif_de(calculer_provisions(b_46e, plan_45(sg, ex = d02a_c, h = hyp_v("D03f", "n_importe")), tid)),
+                "plan_invalide")
+  r_46i <- calculer_provisions(b_46i, plan_45(sg, ex = d02a_c, h = hyp_x("D03f")), tid)
+  verifier(paste0("(4.6) (i) Q2 (E16-2 (ii)) : debut_periode de COC2 manquante, fin 2025-06-30, mouvement 2025-03-01, D03f H : P3 4 275,986050487058 approximation_numerique (hypothèse non lue)", et),
+           egal_mixte(cel_x(r_46i, P3)$montant, 4275.986050487058) &&
+             identical(cel_x(r_46i, P3)$statut_resultat, "approximation_numerique"))
+}
+verifier("(4.6) (j) une seule constante des mois par périodicité dans R/ : MOIS_PERIODE_COTISATION, sans point, module donnees (E16-3 (a)) ; .MOIS_PERIODICITE supprimée",
+         local({
+           defs <- unlist(lapply(list.files(file.path(racine, "R"), pattern = "\\.R$", full.names = TRUE), function(f) {
+             l <- readLines(f, warn = FALSE)
+             l <- l[grepl("<- c\\(annuelle = 12L", l)]
+             if (length(l)) paste0(basename(f), ":", sub(" <-.*$", "", l)) else NULL
+           }))
+           identical(defs, "donnees.R:MOIS_PERIODE_COTISATION") &&
+             identical(ns$MOIS_PERIODE_COTISATION, c(annuelle = 12L, semestrielle = 6L, trimestrielle = 3L, mensuelle = 1L)) &&
+             !exists(".MOIS_PERIODICITE", envir = ns, inherits = FALSE) && !exists(".MOIS_PERIODE_COTISATION", envir = ns, inherits = FALSE)
+         }))
+
 section("échec attendu #83 (critère (4.4), § 5.3, « Limite connue »)")
 b_ge <- base   # GSC1 : effet postérieur à l'arrêté, invisible à A, ses dossiers aussi (règle 1)
 b_ge$garanties_souscrites$date_effet[1L] <- D("2026-03-01")

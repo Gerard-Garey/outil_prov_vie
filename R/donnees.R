@@ -494,7 +494,9 @@ garanties_couverture_exclue <- function(vue, famille) {
 
 # Mois de la période d'une cotisation par périodicité (dictionnaire, § 9, D03f ; spécification de
 # B2, § 5.5, erratum v1.0.15) : `unique` et toute autre valeur n'ont pas de période.
-.MOIS_PERIODE_COTISATION <- c(annuelle = 12L, semestrielle = 6L, trimestrielle = 3L, mensuelle = 1L)
+# Seule constante des mois par périodicité (#92 mi3, erratum v1.0.16, décision E16-3 (a)), sans
+# point : lue aussi par `risque_en_cours` (échéances de prime de P3, champ (a)).
+MOIS_PERIODE_COTISATION <- c(annuelle = 12L, semestrielle = 6L, trimestrielle = 3L, mensuelle = 1L)
 
 # Période couverte d'une cotisation sous l'hypothèse D03f (règle du dictionnaire, § 9 : période
 # de la périodicité de la garantie souscrite qui commence au premier jour du mois du
@@ -508,7 +510,7 @@ garanties_couverture_exclue <- function(vue, famille) {
 periode_cotisation_regle <- function(date_mouvement, periodicite) {
   n <- .longueur_commune(length(date_mouvement), length(periodicite), "periode_cotisation_regle")
   d <- rep_len(as.numeric(date_mouvement), n)
-  mois <- unname(.MOIS_PERIODE_COTISATION[rep_len(as.character(periodicite), n)])
+  mois <- unname(MOIS_PERIODE_COTISATION[rep_len(as.character(periodicite), n)])
   ok <- !is.na(d) & !is.na(mois)
   debut <- rep(NA_real_, n)
   fin <- rep(NA_real_, n)

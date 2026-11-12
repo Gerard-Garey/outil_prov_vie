@@ -15,9 +15,6 @@
 
 .POSTE_P3 <- "provision_mathematique_temporaire_deces"
 .REFERENTIEL_P3 <- "comptes_sociaux"
-# Mois d'une période de cotisation (garanties_souscrites.periodicite_cotisation ; `unique` :
-# prime unique, aucun flux de prime).
-.MOIS_PERIODICITE <- c(annuelle = 12L, semestrielle = 6L, trimestrielle = 3L, mensuelle = 1L)
 .MOIS_PAS <- c(an = 12L, mois = 1L)
 # Natures de cotisation retenues par prorata_cotisation (signées ; spécification de B2, § 5.5).
 .NATURES_PRORATA <- c("emission", "annulation", "regularisation")
@@ -171,7 +168,9 @@ provisions_individuelles <- function(vue, plan, tables, temoin) {
   age_fin$valeur[age_fin$exclu] <- NA_real_
   prime_p <- param("prime_periodique")
   periodicite <- vv("garanties_souscrites", "periodicite_cotisation")[gs]
-  periode <- unname(.MOIS_PERIODICITE[periodicite])
+  # mois d'une période de cotisation : constante unique du module `donnees` (#92 mi3) ; `unique` :
+  # prime unique, aucun flux de prime
+  periode <- unname(MOIS_PERIODE_COTISATION[periodicite])
   date_age <- rep(Inf, length(gs))
   ok_age <- !is.na(age_fin$valeur) & !is.na(naissance)
   date_age[ok_age] <- as.numeric(date_atteinte_age(naissance[ok_age], as.integer(age_fin$valeur[ok_age]), conventions$age))
@@ -326,19 +325,28 @@ provisions_individuelles <- function(vue, plan, tables, temoin) {
 # regularisation des garanties souscrites deces retenues de contrats collectifs, de fin de
 # période postérieure à l'arrêté, de montant x (1 - taux_chargement_cotisation) x nombre de
 # jours de la période postérieurs à l'arrêté / (fin - début + 1) ; jours postérieurs = fin -
-# A, au plus fin - début + 1 (période entièrement postérieure à l'arrêté ; convention
-# instant_date, § 2.6). Statut : approximation (restituée approximation_numerique, § 5.5).
+# A, au plus fin - début + 1 (prorata plafonné à 1 : période entièrement postérieure à
+# l'arrêté ; convention instant_date, § 2.6). Statut : approximation (restituée
+# approximation_numerique, § 5.5).
+# Ordre d'évaluation d'une cotisation (erratum v1.0.16, #92) : (1) fin_periode connue et au
+# plus A : hors du calcul, quels que soient debut_periode et les traitements déclarés de D03f
+# et de D02a (l'hypothèse D03f n'est pas lue pour la ligne, décision E16-2) ; (2) borne
+# manquante : traitement déclaré de D03f ; (3) bornes connues, fin postérieure à A, période
+# inversée ou de longueur nulle (fin - début + 1 <= 0, D02a, sous conserver comme sous H) :
+# prorata non déterminé, arrêt parametre_non_determine (lecture de Kleene, MA1) ; (4) prorata.
 # Période couverte manquante (D03f, erratum v1.0.15) : `exclure` pour risque_en_cours : ligne
 # hors du calcul (vue$exclu) ; hypothèse H (comptes_sociaux, poste P3 ou `tous`) appliquée à la
 # ligne : les deux bornes sont celles de periode_cotisation_regle() (`donnees`), contrat sous
-# hypothèse ; règle non applicable (périodicité `unique` ou non lisible, mouvement manquant) :
-# arrêt parametre_non_determine ; sans hypothèse (conserver) : lecture de Kleene stricte, la
-# cotisation sort du calcul si fin_periode est connue et au plus A, sinon arrêt
+# hypothèse, restitué même quand la règle rend la cotisation échue (unité de montant nul, § 5.8,
+# #92 mi1) ; valeur déclarée `regle` seule admise, toute autre valeur est un refus plan_invalide,
+# levé après les arrêts du poste quand une cotisation lit l'hypothèse (#92 Q1, comme pour
+# D03h) ; règle non applicable (périodicité `unique` ou non lisible, mouvement manquant) :
+# arrêt parametre_non_determine ; sans hypothèse (conserver) : lecture de Kleene stricte, arrêt
 # parametre_non_determine. Identifiant en cause : premier contrat (ordre des lignes de
 # cotisations de la vue). Aucun NA n'entre dans une somme : une part NA résiduelle est une
 # erreur interne. Rend un data.frame (id_contrat, montant), contrats triés, d'attributs
 # `arret` (motif ou NA), `identifiant` (contrat en cause ou NA) et `hypothese_d03f` (contrats
-# dont une cotisation est valorisée sous l'hypothèse D03f). Sans point : lue par les tests du
+# dont une cotisation est lue sous l'hypothèse D03f). Sans point : lue par les tests du
 # module (cas T7) et par calculer_risque_en_cours() ; non exportée.
 provisions_collectives <- function(vue, plan) {
   vv <- function(t, c1) valeurs_vue(vue, t, c1)
@@ -367,38 +375,64 @@ provisions_collectives <- function(vue, plan) {
   contrat <- as.character(vv("garanties_souscrites", "id_contrat"))[i_gs]
   debut <- as.numeric(vv("cotisations", "debut_periode"))[co]
   fin <- as.numeric(vv("cotisations", "fin_periode"))[co]
-  # période couverte manquante (D03f) : hypothèse H appliquée aux deux bornes, sinon Kleene
-  manque <- is.na(debut) | is.na(fin)
-  lignes_h <- unlist(lapply(Filter(function(x) x$motif == "D03f" && x$referentiel == .REFERENTIEL_P3 &&
-                                     x$table == "cotisations" && x$poste %in% c(.POSTE_P3, "tous"), vue$hypotheses),
-                            function(x) x$lignes))
-  sous_h <- manque & co %in% lignes_h
+  # (1) fin_periode connue et au plus A : hors du calcul, avant toute hypothèse
+  echue_connue <- !is.na(fin) & fin <= a
+  # (2) période couverte manquante (D03f) : hypothèse H appliquée aux deux bornes, sinon Kleene
+  manque <- (is.na(debut) | is.na(fin)) & !echue_connue
+  h_d03f <- Filter(function(x) x$motif == "D03f" && x$referentiel == .REFERENTIEL_P3 &&
+                     x$table == "cotisations" && x$poste %in% c(.POSTE_P3, "tous"), vue$hypotheses)
+  sous_h <- manque & co %in% unlist(lapply(h_d03f, function(x) x$lignes))
   if (any(sous_h)) {
     regle <- periode_cotisation_regle(vv("cotisations", "date_mouvement")[co[sous_h]],
                                       vv("garanties_souscrites", "periodicite_cotisation")[i_gs[sous_h]])
     debut[sous_h] <- as.numeric(regle$debut)
     fin[sous_h] <- as.numeric(regle$fin)
   }
-  echue <- !is.na(fin) & fin <= a
-  inconnue <- (is.na(debut) | is.na(fin)) & !echue
-  if (any(inconnue)) {
-    return(resultat(character(0), numeric(0), "parametre_non_determine", contrat[which(inconnue)[1L]]))
+  inconnue <- (is.na(debut) | is.na(fin)) & !echue_connue
+  # (3) bornes connues, fin postérieure à A, période inversée ou de longueur nulle (D02a)
+  inversee <- !inconnue & !echue_connue & fin - debut + 1 <= 0
+  non_determine <- inconnue | inversee
+  if (any(non_determine)) {
+    return(resultat(character(0), numeric(0), "parametre_non_determine", contrat[which(non_determine)[1L]]))
   }
-  garde <- !echue
-  co <- co[garde]
-  if (length(co) == 0L) return(resultat(character(0), numeric(0)))
-  contrat <- contrat[garde]
-  debut <- debut[garde]
-  fin <- fin[garde]
-  hypothese <- sort(unique(contrat[sous_h[garde]]), method = "radix")
-  longueur <- fin - debut + 1
-  part <- vv("cotisations", "montant")[co] * (1 - taux_c) * pmin(fin - a, longueur) / longueur
-  if (anyNA(part) || anyNA(contrat)) {
+  if (any(sous_h)) .valeur_d03f(h_d03f, co[sous_h])
+  hypothese <- sort(unique(contrat[sous_h]), method = "radix")
+  # (4) prorata des cotisations de fin postérieure à A (bornes connues, ou par la règle H)
+  garde <- fin > a
+  part <- vv("cotisations", "montant")[co[garde]] * (1 - taux_c) *
+    pmin(fin[garde] - a, fin[garde] - debut[garde] + 1) / (fin[garde] - debut[garde] + 1)
+  contrat_g <- contrat[garde]
+  if (anyNA(part) || anyNA(contrat_g)) {
     stop("erreur interne de provie : part NA dans provisions_collectives() (prorata_cotisation)", call. = FALSE)
   }
-  o <- order(contrat, part, method = "radix")
-  s <- rowsum(part[o], contrat[o], reorder = TRUE)
-  resultat(rownames(s), unname(s[, 1L]), hypothese = hypothese)
+  # contrat sous l'hypothèse sans cotisation de fin postérieure à A : unité de montant nul (§ 5.8)
+  ids <- sort(unique(c(contrat_g, hypothese)), method = "radix")
+  if (length(ids) == 0L) return(resultat(character(0), numeric(0)))
+  montant <- rep(0, length(ids))
+  if (length(part)) {
+    o <- order(contrat_g, part, method = "radix")
+    s <- rowsum(part[o], contrat_g[o], reorder = TRUE)
+    montant[match(rownames(s), ids)] <- unname(s[, 1L])
+  }
+  resultat(ids, montant, hypothese = hypothese)
+}
+
+# Valeur de l'hypothèse D03f appliquée aux lignes `lignes` de cotisations (`h` : hypothèses
+# D03f de vue$hypotheses retenues pour P3 ; poste P3 de préférence à `tous`, comme pour D03h) :
+# `regle` seule admise (#92 Q1, erratum v1.0.16) ; toute autre valeur est un refus
+# plan_invalide (aucune valeur ignorée en silence). Ne rend rien.
+.valeur_d03f <- function(h, lignes) {
+  for (l in lignes) {
+    hl <- Filter(function(x) l %in% x$lignes, h)
+    postes <- vapply(hl, `[[`, "", "poste")
+    valeur <- hl[[if (.POSTE_P3 %in% postes) match(.POSTE_P3, postes) else 1L]]$valeur
+    if (!identical(valeur, "regle")) {
+      refuser(paste0("plan : hypoth\u00e8se D03f (comptes_sociaux) : valeur \u00ab ", valeur,
+                     " \u00bb, seule la valeur \u00ab regle \u00bb est admise (r\u00e8gle du dictionnaire)"),
+              "plan_invalide", module = "risque_en_cours", recu = valeur)
+    }
+  }
+  invisible(NULL)
 }
 
 # --- Point d'appel de la famille -----------------------------------------------------
