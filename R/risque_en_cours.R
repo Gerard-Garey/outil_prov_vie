@@ -450,8 +450,8 @@ provisions_collectives <- function(vue, plan) {
   }
   if (any(sous_h)) .valeur_d03f(h_d03f[sous_h])
   # contrats sous une valeur S1 (D03f) ou S2 (hypothèse de la vue appliquée à la ligne de
-  # contrats du contrat ou à une cotisation lue) du § 5.8 : un seul ensemble, pour le statut et
-  # pour l'unité de montant nul (#87, #92 mi1)
+  # contrats du contrat ou à une cotisation lue) du § 5.8 : ensemble du statut (#87, #92 mi1) ;
+  # l'unité de montant nul n'en retient que les contrats à cotisation lue sous D03f (plus bas)
   # cotisations du champ visibles ou non (E17-3) : garantie souscrite deces d'un contrat du
   # champ ; une cotisation visible de nature hors du prorata ou de fin_periode connue au plus A
   # n'est pas lue (clés seules lisibles pour une cotisation cachée)
@@ -473,9 +473,14 @@ provisions_collectives <- function(vue, plan) {
   if (anyNA(part) || anyNA(contrat_g)) {
     stop("erreur interne de provie : part NA dans provisions_collectives() (prorata_cotisation)", call. = FALSE)
   }
-  # contrat sous hypothèse (S1 ou S2) sans cotisation de fin postérieure à A : unité de montant
-  # nul (§ 5.8)
-  ids <- sort(unique(c(contrat_g, hypothese)), method = "radix")
+  # contrat dont une cotisation est lue sous D03f H (S1) sans cotisation de fin postérieure à A :
+  # unité de montant nul (§ 5.8). Un contrat dont seule la ligne de `contrats` porte S2 (D03g sur
+  # sa partie de fin) ne décide pas de sa sortie dans ce champ, qui ne lit pas cette partie : sans
+  # cotisation de fin postérieure à A, il n'est pas restitué ; vivant, il garde le statut de
+  # `hypothese`. Aucune hypothèse de la vue ne s'applique à une ligne de `cotisations` en B2
+  # (D02b et D03g n'admettent pas cette table, defauts.csv, lignes 5 et 13) : la restitution
+  # d'un contrat par S2 d'une cotisation n'est pas codée.
+  ids <- sort(unique(c(contrat_g, intersect(hypothese, contrat[sous_h]))), method = "radix")
   if (length(ids) == 0L) return(resultat(character(0), numeric(0)))
   montant <- rep(0, length(ids))
   if (length(part)) {

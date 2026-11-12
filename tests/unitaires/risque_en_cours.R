@@ -453,3 +453,71 @@ verifier_egal("(4.7) (t) contre-témoins : date_fin au plus A sous D03g visible 
               list(p3_87(calculer_provisions(b_87t1, plan_87ct(0), tid)),
                    p3_87(calculer_provisions(b_87t2, plan_87p3(0), tid))),
               rep(list(list("ensemble", "ensemble", 0, "exact")), 2L))
+# (v) détection S2 du champ collectif (provisions_collectives()), ligne de contrats sous D03g H
+# sur date_saisie_fin (partie de fin du contrat, non lue par le champ : la ligne ne décide pas de
+# la sortie du contrat). Arrêté 2025-12-31 ; cotisation 1 200 du 2025-07-01 au 2026-06-30.
+# (i) contre-témoin : CT3 vivant (date_fin 2026-06-30 > A, date_saisie_fin manquante), chargement
+# 0,10 : montant de T7 (535,5616438356), statut jugement_expert (attribut `hypothese`), cellule
+# ensemble de P3 (T1 de CT2 + collectif) en jugement_expert ; (iii) témoin date_saisie_fin
+# renseignée (2025-06-01) : aucune hypothèse, approximation_numerique du collectif. (ii) CT5
+# collectif résilié le 2021-12-31, seule cotisation en 2021, date_saisie_fin manquante, délai 0
+# puis 2000, avec puis sans cotisation de CT5 (chargement 0) : CT5 non restitué (ni unité à 0,
+# ni segment), cellule ensemble de P3 en approximation_numerique (avant : segment CT5 à 0,
+# cellule en jugement_expert, montants inchangés).
+plan_87co <- function() {
+  q <- plan_p3(A7, cotisation = 0.10)
+  q$donnees <- plan_87ct(0)$donnees
+  q
+}
+b_87u <- b2_base_p3(cotisation = data.frame(debut = D("2025-07-01"), fin = D("2026-06-30"), montant = 1200))
+b_87u$contrats$date_fin[b_87u$contrats$id_contrat == "CT3"] <- D("2026-06-30")
+b_87u$contrats$motif_fin[b_87u$contrats$id_contrat == "CT3"] <- "resiliation_adherent"
+b_87u$contrats$date_saisie_fin[b_87u$contrats$id_contrat == "CT3"] <- as.Date(NA)
+b_87ut <- b_87u
+b_87ut$contrats$date_saisie_fin[b_87ut$contrats$id_contrat == "CT3"] <- D("2025-06-01")
+pc_87u <- function(b) {
+  q <- plan_87co()
+  cp <- ns$canoniser_plan(q)
+  r <- ns$provisions_collectives(ns$vue_a_date(b, cp$arrete, cp$donnees, cp$conventions), q)
+  list(r$id_contrat, r$montant, attr(r, "hypothese"))
+}
+verifier_egal("(4.7) (v) provisions_collectives(), CT3 vivant sous D03g sur contrats.date_saisie_fin : CT3 535,5616438356, sous hypothèse (CT3) ; témoin date_saisie_fin renseignée : CT3 535,5616438356, aucune hypothèse",
+              lapply(list(b_87u, b_87ut), pc_87u),
+              list(list("CT3", 535.5616438356, "CT3"), list("CT3", 535.5616438356, character(0))),
+              tolerance = TOL)
+p3_87u <- function(b, q = plan_87co()) {
+  q <- calculer_provisions(b, q, tid)$provisions
+  q <- q[q$poste == P3, , drop = FALSE]
+  q <- q[order(q$segmentation, q$segment, method = "radix"), , drop = FALSE]
+  list(q$segmentation, q$segment, q$montant, q$statut_resultat)
+}
+verifier_egal("(4.7) (v) bout en bout, cellule ensemble de P3 (T1 de CT2 2 946,4431354470 + collectif) : CT3 vivant sous D03g : 3 482,0047792826, jugement_expert ; témoin : 3 482,0047792826, approximation_numerique",
+              lapply(list(b_87u, b_87ut), function(b) { r <- p3_87u(b); lapply(r, function(x) x[length(x)]) }),
+              list(list("ensemble", "ensemble", 3482.0047792826, "jugement_expert"),
+                   list("ensemble", "ensemble", 3482.0047792826, "approximation_numerique")),
+              tolerance = TOL)
+b_87v <- b2_base_p3(cotisation = data.frame(debut = D("2025-07-01"), fin = D("2026-06-30"), montant = 1200))
+b_87v$contrats <- rbind(b_87v$contrats, transform(b_87v$contrats[2L, ], id_contrat = "CT5", date_effet = D("2018-01-01"),
+                                                  date_debut_gestion = D("2018-01-01"), date_fin = D("2021-12-31"),
+                                                  motif_fin = "resiliation_adherent", date_saisie_fin = as.Date(NA)))
+b_87v$garanties_souscrites <- rbind(b_87v$garanties_souscrites, transform(b_87v$garanties_souscrites[2L, ],
+                                                                          id_garantie_souscrite = "GS5", id_contrat = "CT5",
+                                                                          date_effet = D("2018-01-01")))
+b_87v1 <- b_87v
+b_87v1$cotisations <- rbind(b_87v$cotisations, transform(b_87v$cotisations[1L, ], id_cotisation = "CO9",
+                                                         id_garantie_souscrite = "GS5", debut_periode = D("2021-01-01"),
+                                                         fin_periode = D("2021-12-31"), date_mouvement = D("2021-01-01"),
+                                                         montant = 900))
+plan_87v <- function(delai) {
+  q <- plan_p3(A7)
+  q$donnees <- plan_87ct(delai)$donnees
+  q$perimetre$segmentations <- list(ct = list(regle = "contrat"))
+  q
+}
+verifier_egal("(4.7) (v) CT5 résilié (2021-12-31) sous D03g sur date_saisie_fin, délai 0 puis 2000, avec puis sans cotisation 2021 : CT5 non restitué (segments CT2, CT3 et ensemble), CT3 595,0684931507, cellule ensemble 3 541,5116285977 en approximation_numerique (avant : segment CT5 à 0, jugement_expert)",
+              list(p3_87u(b_87v1, plan_87v(0)), p3_87u(b_87v1, plan_87v(2000)),
+                   p3_87u(b_87v, plan_87v(0)), p3_87u(b_87v, plan_87v(2000))),
+              rep(list(list(c("ct", "ct", "ensemble"), c("CT2", "CT3", "ensemble"),
+                            c(2946.4431354470, 595.0684931507, 3541.5116285977),
+                            c("exact", "approximation_numerique", "approximation_numerique"))), 4L),
+              tolerance = TOL)
