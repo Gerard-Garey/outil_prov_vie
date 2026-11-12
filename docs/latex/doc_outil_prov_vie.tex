@@ -2871,13 +2871,15 @@ d'approximation, faute d'un calendrier de publication établi.
   pour une durée d'au plus huit ans, sinon le moins élevé de 3,5~\% et de
   60~\% de ce taux (\code{plafond\_a132\_1()}). L'historique du plafond
   étant inconnu, la ligne l'encadre par les points extrêmes de l'échelle
-  d'A132-1-1 au pas de 0,25~point compatibles avec la référence, sans
-  descendre sous zéro. L'article A132-1-1 nomme «~taux de référence
-  mensuel~» le produit par 60~\% ou 75~\% de la moyenne semestrielle~:
-  hors de la branche à 75~\%, l'échelle s'applique donc à 60~\% du taux
-  moyen, non plafonné, puis le plafond de 3,5~\% de l'article A132-1
-  s'applique aux deux bornes de l'encadrement (lecture retenue par le
-  mainteneur le 12~novembre~2026, issue~88 du dépôt). Les bornes ne
+  d'A132-1-1 au pas de 0,25~point compatibles avec le taux de référence
+  mensuel, non plafonné, sans descendre sous zéro. L'article A132-1-1
+  nomme «~taux de référence mensuel~» le produit par 60~\% ou 75~\% de la
+  moyenne semestrielle, sans régler son articulation avec le plafond de
+  3,5~\% de l'article A132-1~: hors de la branche à 75~\%, selon la
+  lecture retenue (M304, décision du mainteneur du 12~novembre~2026,
+  issue~88 du dépôt), l'échelle s'applique à 60~\% du taux moyen, non
+  plafonné, puis le plafond de 3,5~\% s'applique aux deux bornes de
+  l'encadrement. Les bornes ne
   diffèrent de celles qu'on obtiendrait en plafonnant la référence avant
   l'échelle qu'à partir d'un taux moyen de 6~\%~: la borne basse y vaut
   3,5~\% au lieu de 3,25~\%. La valeur de la règle reste, elle, le moins
@@ -3506,8 +3508,8 @@ cellule (forme nouvelle de l'objet, deux règles de statut).
 contrat sorti, restitué à montant nul, reçoit deux lignes d'échéancier
 (capital et frais), de flux nul, de probabilité~1, datées du lendemain de
 l'arrêté, sans actualisation. Ces lignes sont une \emph{trace} de l'unité
-dans les échéanciers, non une valorisation~: elles ne projettent aucun
-flux, et le montant nul n'est pas l'estimation d'un engagement par une
+dans les échéanciers, non une valorisation~: elles portent un flux nul et
+n'estiment aucun engagement~; le montant nul n'est pas le résultat d'une
 méthode, mais l'effet de la valeur déclarée sur la population. Un dossier
 de solde au plus nul garde ses deux lignes ordinaires, de flux nul.
 
@@ -3531,13 +3533,17 @@ lues ou non par un poste (\code{hypotheses\_defaut} du bilan).
   une unité. Le rattacher à l'un des deux postes demanderait un calcul
   contrefactuel de son état et de son solde, que la règle écarte~; sa
   trace reste celle du bilan.
-\item \textbf{Assuré et sinistre caché.} La ligne d'\code{assures} de
-  l'assuré et un sinistre caché entrent dans le statut d'un contrat
-  individuel, mais ne décident pas de sa sortie~: aucune règle ne restitue
-  un contrat que ces lignes feraient sortir. Une hypothèse de la vue qui
-  viendrait à porter sur la table \code{assures} demanderait une règle
-  comme celle de la date de fin (E18-2) pour dire si le contrat sorti est
-  restitué.
+\item \textbf{Ligne d'\code{assures}} (limite dormante). Un sinistre
+  caché entre dans le statut d'un contrat individuel mais ne peut, par
+  construction, décider de sa sortie, qui suppose un sinistre visible~:
+  c'est une impossibilité logique, non une limite. La ligne
+  d'\code{assures} de l'assuré est lue pour la détection S2, mais aucune
+  hypothèse de la vue n'y est placée~: ni D02b ni D03g n'admettent la
+  table \code{assures} (dictionnaire des défauts,
+  \code{inst/extdata/dictionnaire/defauts.csv}), et elle n'est donc pas
+  une source S2 dans l'état du code. Si une hypothèse de la vue venait à
+  porter sur cette table, il faudrait une règle comme celle de la date de
+  fin (E18-2) pour dire si le contrat qu'elle ferait sortir est restitué.
 \end{itemize}
 
 
@@ -3720,9 +3726,12 @@ réduction ni rachat~», art.~L132-23). Sous
 témoin \code{retrospective}, valeur accumulée à l'arrêté des primes passées
 moins le coût du risque passé, les frais passés et le chargement
 d'acquisition, aux mêmes bases et sachant la survie à l'arrêté, est égal à
-la prospective sous les mêmes bases~; ce recoupement exact est testé en
-primes périodiques, et le témoin n'est jamais restitué. Il n'est défini
-que si l'arrêté est une date de pas (un pas à cheval sur l'arrêté n'a pas
+la prospective sous les mêmes bases et sous
+\code{prospective\_prime\_pure} (prime d'équivalence) seulement~; sous
+\code{prospective\_prime\_declaree}, la prime déclarée n'équilibre pas,
+en général, les engagements à l'effet, et les deux valeurs diffèrent. Ce
+recoupement exact est testé en primes périodiques, et le témoin n'est
+jamais restitué. Il n'est défini que si l'arrêté est une date de pas (un pas à cheval sur l'arrêté n'a pas
 de part passée sans répartition du flux de capital) et, en primes
 périodiques, il est rendu avant et après la prime de l'échéance tombant à
 l'arrêté. En prime unique, le témoin est sans objet et vaut \code{NA}, à
