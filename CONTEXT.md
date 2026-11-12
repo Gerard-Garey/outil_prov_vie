@@ -181,7 +181,14 @@ Chaque référentiel garde son mot : « provision » seul désigne les comptes s
 
 ## Organisation du travail
 
-- **Branche de travail** : l'unique branche `claude/…` en cours, au périmètre fermé d'issues, portée par une PR brouillon vers `main`.
+- **Branche de travail** : la branche `claude/…` d'une session, au périmètre fermé d'issues, portée par une PR brouillon vers `main` ; unique par défaut, sauf branche parallèle décidée par le mainteneur (ADR 0012).
+- **Branche parallèle** : branche de travail ouverte pendant qu'une autre l'est, à l'initiative exclusive du mainteneur, sous trois conditions vérifiées par `architect` et écrites dans sa fiche : couloirs disjoints, aucune dépendance logique, une seule porteuse des références ; au plus deux branches de code à la fois, chacune avec sa PR brouillon, sa session et son clone (ADR 0012).
+- **Branche principale** : parmi les branches ouvertes, celle qui tient l'en-tête et les § 2, § 3 et § 5 de la feuille de route et poursuit la suite des décisions M ; les autres n'écrivent que leur fiche et leur bloc de décisions (ADR 0012, point 12).
+- **Branche de documents seuls** : branche qui ne touche que des documents (spécification d'`actuary`, lecture de `regulatory`), sans `R/`, `tests/`, `inst/` ni `app/` ; elle ne compte pas dans le plafond de deux branches de code, mais suit les règles de couloir et d'écritures partagées (ADR 0012, point 4).
+- **Couloir** : liste fermée des fichiers et des modules qu'une branche parallèle peut modifier, écrite dans sa fiche ; deux couloirs ne partagent aucun fichier hors les recouvrements maîtrisés et les points de contact. En sortir est un point de décision : arrêt et question au mainteneur (ADR 0012, points 5 et 9).
+- **Recouvrement maîtrisé** : fichier que deux branches parallèles peuvent toucher, selon une règle fixée d'avance (feuille de route, décisions M, ADR, `CONTEXT.md`, version de `DESCRIPTION`, document LaTeX, `NAMESPACE`, `README.md`) ; liste fermée (ADR 0012, point 6).
+- **Point de contact** : recouvrement de plus que les recouvrements maîtrisés (fichier, fonction ou lignes), accordé par le mainteneur, avec la branche qui écrit en premier, mentionné dans les deux fiches (ADR 0012, point 5).
+- **Porteuse des références** : la seule branche ouverte autorisée à commiter sous `tests/reference/` et à modifier `tests/references.R` ; toute autre branche a pour critère « références inchangées ». Le rôle passe à une autre branche à la fusion de la porteuse, sur décision du mainteneur (ADR 0012, points 8 et 21).
 - **Correctif rapide** : modification hors périmètre qui laisse les résultats strictement identiques, touche un seul domaine de commit et pas la documentation de fond ; branche temporaire partie de `main`, PR directe.
 - **Tableau avant / après** : pour un commit qui change un résultat, une ligne par grandeur modifiée (avant, après, écart, explication).
 - **Visa** : approbation d'un tableau avant / après — par le mainteneur pour un résultat final ou un verdict, par `actuary` sinon. Sans visa, rien n'est commité.
