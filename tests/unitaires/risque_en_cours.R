@@ -161,6 +161,16 @@ verifier_egal("témoin rétrospectif calculé seulement à la demande (temoin = 
                               error = function(e) grepl("erreur interne", conditionMessage(e)))) },
               list(NA_real_, NA_real_, 2924.6224668679, TRUE), tolerance = TOL)
 
+verifier_egal("témoin rétrospectif : NA pour une prime unique (CTI1 de la base construite à l'arrêté 2025-01-01, avant : -1 010,1010101010), à l'effet comme après ; contrat à primes périodiques (CTI3) : recoupement de Norberg inchangé ; provisions inchangées (#80)",
+              { bc <- b2_base_construite_deces_01()
+                r <- ns$provisions_individuelles(b2_vue(bc, A1), plan_p3(), tb, TRUE)$contrats
+                u <- r[r$id_contrat == "CTI1", ]; pe <- r[r$id_contrat == "CTI3", ]
+                bu <- b2_base_p3(); effet_u <- ns$provisions_individuelles(b2_vue(bu, D("2024-01-01")), plan_p3(D("2024-01-01")), tb, TRUE)$contrats
+                list(u$nature_primes, u$retro_avant_prime, u$retro_apres_prime, effet_u$retro_avant_prime, effet_u$retro_apres_prime,
+                     pe$nature_primes, pe$retro_avant_prime, pe$retro_apres_prime, u$montant, pe$montant) },
+              list("unique", NA_real_, NA_real_, NA_real_, NA_real_,
+                   "periodique", 986.6244822033, 2924.6224668679, 4786.6205305652, 2924.6224668679), tolerance = TOL)
+
 section("risque_en_cours : paramètre de P3 exclu pour risque_en_cours (erratum v1.0.9, critère (3.16), § 5.5), #78")
 
 # Exclusion posée sur la vue (vue$exclu[[famille]]$parametres, D09 présomptif n'étant pas

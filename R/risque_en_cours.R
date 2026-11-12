@@ -112,7 +112,7 @@
 # capital, taux_tarif, taux_retenu, hypothese_d03h, a_effet, a_double_effet (ä à l'effet),
 # prime, valeur (avant plancher), montant (plancher nul par contrat), retro_avant_prime,
 # retro_apres_prime (témoin rétrospectif, calculé seulement si `temoin` vaut TRUE ; NA sinon,
-# ou si l'arrêté n'est pas une date de pas),
+# ou si l'arrêté n'est pas une date de pas ou si la prime est unique),
 # nature_primes, date_effet, date_terme, date_souscription), echeancier (flux à l'arrêté,
 # taux retenu), arret (motif né de la famille : hors_axes, parametre_non_determine ; NA),
 # identifiant (premier contrat en cause)). Sans point : lue par les tests du module (cas T1 à
@@ -295,16 +295,16 @@ provisions_individuelles <- function(vue, plan, tables, temoin) {
 # passés et le chargement d'acquisition à l'effet (`acquisition`), sachant la survie à
 # l'arrêté. Défini quand l'arrêté est une date de pas (sinon NA : un pas à cheval sur l'arrêté
 # n'a pas de part passée sans répartition du flux de capital). Rend c(avant_prime,
-# apres_prime) ; jamais restitué dans les provisions.
+# apres_prime) ; jamais restitué dans les provisions. Prime unique (`periode` NA) : NA, sans
+# objet (la prime unique n'est pas une donnée lue : le témoin vaudrait le coût du risque passé
+# changé de signe, sans rapport avec la prospective ; #80).
 .retrospective <- function(cle, e, a, fin, q, capital, prime, periode, frais, acquisition, taux, parametres, conventions) {
+  if (is.na(periode)) return(c(NA_real_, NA_real_))
   pas <- .MOIS_PAS[[parametres$pas]]
   n_pas <- ceiling(as.numeric(a - e) / 28 / pas) + 2L
   dates_pas <- c(e, ajouter_mois(rep(e, n_pas), pas * seq_len(n_pas)))
   if (!(a %in% dates_pas)) return(c(NA_real_, NA_real_))
-  if (a == e) {
-    p0 <- if (is.na(periode)) 0 else prime
-    return(c(-acquisition, p0 - acquisition))
-  }
+  if (a == e) return(c(-acquisition, prime - acquisition))
   ech <- .echeancier_contrat(cle, e, e, a, q, capital, prime, periode, frais, parametres, conventions)
   sa <- .survie_effet(e, a, q, conventions)
   # facteur d'actualisation de l'effet à l'arrêté, par la seule fonction d'actualisation
@@ -313,9 +313,8 @@ provisions_individuelles <- function(vue, plan, tables, temoin) {
   va <- .vap(unite, taux, e, conventions)$total
   passe <- ech
   passe$flux <- -passe$flux   # primes reçues positives, capitaux et frais payés négatifs
-  p0 <- if (is.na(periode)) 0 else prime
-  valeur0 <- .vap(passe, taux, e, conventions)$total + p0 - acquisition
-  prime_a <- if (is.na(periode) || !(a %in% ajouter_mois(rep(e, n_pas), periode * seq_len(n_pas)))) 0 else prime
+  valeur0 <- .vap(passe, taux, e, conventions)$total + prime - acquisition
+  prime_a <- if (!(a %in% ajouter_mois(rep(e, n_pas), periode * seq_len(n_pas)))) 0 else prime
   avant <- valeur0 / (va * sa)
   c(avant, avant + prime_a)
 }
