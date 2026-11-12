@@ -18,12 +18,14 @@
 # n'est pas un appel. Un nom ecrit en chaine en position d'appel (`"all.equal"(...)`) que l'arbre
 # compte et que l'analyse du source ne voit pas rend le recensement incoherent (echec) : il ne
 # passe pas inapercu.
-# Les petites valeurs (verifier_egal seulement) : sous |r| = 1 la tolerance est absolue
+# Les petites valeurs (verifier_egal seulement) : pour |r| <= 1 la tolerance est absolue
 # (tests/harnais.R) ; elle ne garantit l'ecart relatif EFFET_RELATIF = 1.5e-7 (plus petit effet de
 # formule rencontre, ADR 0011, point 8, jugement d'expert) que pour |r| >= tolerance / EFFET_RELATIF
-# (6.7e-4 a 1e-10). Un appel dont une feuille numerique finie non nulle est sous ce seuil (tolerance
-# lue) est liste sous PETITES VALEURS, en plus de son classement (la regle vaut aussi pour un
-# scalaire) ; la parade est tolerance = 1e-10 * |r| ou la comparaison de obtenu / r a 1.
+# (6.7e-4 a 1e-10). Au-dessus de |r| = 1 la tolerance est relative : la regle ne s'applique pas, le
+# seuil est borne a 1, min(1, tolerance / EFFET_RELATIF). Un appel dont une feuille numerique finie
+# non nulle est sous ce seuil (tolerance lue) est liste sous PETITES VALEURS, en plus de son
+# classement (la regle vaut aussi pour un scalaire) ; la parade est tolerance = 1e-10 * |r| ou la
+# comparaison de obtenu / r a 1 (valeur attendue melant des ordres de grandeur : voir tests/harnais.R).
 # Les appels directs de all.equal(tolerance = ...) dans verifier() ne passent pas par
 # verifier_egal() : ils sont listes a part, memes criteres.
 # Sortie informative : lignes [INFO] ; [ECHEC] seulement si un fichier n'est pas analysable ou si
@@ -97,9 +99,13 @@ evaluer <- function(expr, constantes) {
   tryCatch(list(valeur = eval(expr, env), ok = TRUE), error = function(e) list(valeur = NULL, ok = FALSE))
 }
 
+# Seuil des petites valeurs : au-dessus de |r| = 1 la tolerance du harnais est relative, la regle
+# ne s'applique pas.
+seuil_petites <- function(tol) min(1, tol / EFFET_RELATIF)
+
 # Classe l'argument attendu : "scalaire", "homogene", "signale" (ordres differents),
 # "indetermine" (expression non evaluable sans les donnees ni appel hors liste blanche) ;
-# `petites` : une feuille numerique finie non nulle est sous tolerance / EFFET_RELATIF (`tol`
+# `petites` : une feuille numerique finie non nulle est sous min(1, tolerance / EFFET_RELATIF) (`tol`
 # lue, NA pour un appel sans tolerance resolue ou all.equal : sans objet) ; `min_abs` : la plus
 # petite |feuille| non nulle evaluee (NA si aucune).
 classer <- function(expr, constantes, tol = NA_real_) {
@@ -107,7 +113,7 @@ classer <- function(expr, constantes, tol = NA_real_) {
   if (!r$ok) return(list(classe = "indetermine", detail = "", petites = FALSE, min_abs = NA_real_))
   f <- feuilles(r$valeur)
   petit <- if (length(f) > 0L) min(f) else NA_real_
-  petites <- length(f) > 0L && !is.na(tol) && tol > 0 && petit < tol / EFFET_RELATIF
+  petites <- length(f) > 0L && !is.na(tol) && tol > 0 && petit < seuil_petites(tol)
   if (length(f) < 2L) return(list(classe = "scalaire", detail = "", petites = petites, min_abs = petit))
   rapport <- max(f) / min(f)
   list(classe = if (rapport >= RAPPORT_ORDRES) "signale" else "homogene",
@@ -197,11 +203,11 @@ if (is.null(res)) {
   info("classement de l'argument attendu : ", paste(sprintf("%s = %d", names(table(egal$classe)), table(egal$classe)),
                                                     collapse = ", "))
   petites <- egal[egal$petites, ]
-  info(sprintf("PETITES VALEURS (feuille numerique finie non nulle de |r| < tolerance / %g : sous |r| = 1 la tolerance est absolue, l'ecart relatif garanti depasse %g) : %d appels",
+  info(sprintf("PETITES VALEURS (feuille numerique finie non nulle de |r| < min(1, tolerance / %g) : pour |r| <= 1 la tolerance est absolue, l'ecart relatif garanti depasse %g) : %d appels",
                EFFET_RELATIF, EFFET_RELATIF, nrow(petites)))
   for (i in seq_len(nrow(petites))) {
     info(sprintf("  %s:%d tolerance %s, plus petit |r| non nul = %.3g (seuil %.3g)", petites$fichier[i], petites$ligne[i],
-                 petites$tolerance[i], petites$min_abs[i], as.numeric(petites$tolerance[i]) / EFFET_RELATIF))
+                 petites$tolerance[i], petites$min_abs[i], seuil_petites(as.numeric(petites$tolerance[i]))))
   }
   if (any(!is.na(egal$min_abs))) {
     info(sprintf("plus petit |r| non nul parmi les valeurs attendues evaluees : %.3g", min(egal$min_abs, na.rm = TRUE)))

@@ -724,3 +724,11 @@ verifier("recensement : hors PETITES VALEURS : 7e-4 (au-dessus du seuil), une va
          !any(grepl("temoin.R:[4578] tolerance [^ ]*, plus petit", r$sortie)))
 verifier("recensement : la classe d'ordres n'est pas modifiée (le vecteur 1e-5, 2e-5 reste homogène : p et v sont homogènes, les cinq autres scalaires)",
          any(grepl("classement de l'argument attendu : .*homogene = 2, .*scalaire = 5", r$sortie)))
+r <- cas_recensement(c("verifier_egal(\"a\", x, 2, tolerance = 1e-6)",
+                       "verifier_egal(\"b\", x, 10, tolerance = 1e-6)",
+                       "verifier_egal(\"c\", x, 0.5, tolerance = 1e-6)",
+                       "verifier_egal(\"d\", x, 0.5, tolerance = 1e-10)"))
+verifier("recensement : le seuil des petites valeurs est borné à 1, min(1, tolérance / 1.5e-7) : à tolérance 1e-6, 2 et 10 ne sont pas signalés (tolérance relative), 0.5 l'est (seuil 1) ; à 1e-10, 0.5 n'est pas signalé (inchangé)",
+         .passe(r) && any(grepl("^\\[INFO\\] PETITES VALEURS .* : 1 appels$", r$sortie)) &&
+           any(grepl("temoin.R:3 tolerance 1e-06, plus petit |r| non nul = 0.5 (seuil 1)", r$sortie, fixed = TRUE)) &&
+           !any(grepl("temoin.R:[124] tolerance [^ ]*, plus petit", r$sortie)))

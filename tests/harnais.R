@@ -66,9 +66,14 @@ verifier <- function(nom, condition) {
 # NaN, infini contre fini, noms et autres attributs) en échec. Le message liste les premiers écarts.
 # Pour |r| <= 1, la tolérance est absolue (|x - r| <= tolerance) : elle ne garantit un écart relatif
 # de 1,5e-7 (plus petit effet de formule rencontré, ADR 0011, point 8) que pour |r| >= tolerance /
-# 1,5e-7 (6,7e-4 à 1e-10). Pour garder un écart relatif de 1e-10 sur une référence |r| <= 1, l'appelant
-# passe tolerance = 1e-10 * |r| (pour plusieurs valeurs, le plus petit |r| non nul ; une valeur
-# attendue nulle se compare exactement) ou compare obtenu / r à 1 (avis d'actuary sur #79, jugement
+# 1,5e-7 (6,7e-4 à 1e-10). Consignes à l'appelant, le harnais ne les applique pas : pour garder un écart
+# relatif de 1e-10 sur une valeur attendue scalaire ou homogène sous le seuil, passer
+# tolerance = 1e-10 * |r| (le plus petit |r| non nul si elle a plusieurs valeurs) ; une valeur attendue
+# nulle se compare à part, à tolérance nulle (avec tolerance > 0, un zéro attendu admet l'écart absolu
+# tolerance x max(1, 0), il n'est pas comparé exactement) ; pour une valeur attendue qui mêle des ordres
+# de grandeur (petites et grandes valeurs), tolerance = 1e-10 * min|r| rendrait la comparaison des
+# grandes quasi exacte (r = c(1e-8, 1000) : un ulp sur 1000 échoue) : scinder l'appel par ordre de
+# grandeur, ou comparer obtenu / r à 1 (avis d'actuary sur #79, jugement
 # d'expert). La tolérance est un réel fini positif ou nul (NA, NaN, Inf et négatif sont refusés).
 verifier_egal <- function(nom, obtenu, attendu, tolerance = 0) {
   r <- .harnais_evaluer({
