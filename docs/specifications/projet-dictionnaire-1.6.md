@@ -225,7 +225,7 @@ Les points 1 à 4 du même § 7 (`module-donnees-v1.md:893-897`) sont aussi des 
 - **Alternative écartée.** Un seul défaut pour les sept colonnes : il mêlerait une règle `H` admissible et une règle `H` sans fondement.
 - **Effet attendu.** Aucun couple, mesuré : aucun `manquant_obligatoire` dans les bilans. La loi vraie des jeux doit déclarer l'intensité nouvelle (sans valeur par défaut), donc `loi_vraie.txt` des jeux change, mais les jeux sont de toute façon retirés en `1.6` (§ 8).
 
-### 1.10 Points 2 et 4 du § 7 de la spécification du module `donnees` (rattachés à #60, à confirmer : Q12)
+### 1.10 Points 2 et 4 du § 7 de la spécification du module `donnees` (rattachés à #60 : Q12, M512)
 
 - **D10 (a), portée** (point 2). Ajout au § 1.10, portée d'un refus `R` (après dict. :163) : « D10 (a) et D10 (h) : portée **table** de la table fille qui porte l'incompatibilité (`dossiers`, `rentes`, `prestations`, `victimes`) ». Effet : aucun. Aucun couple ne porte D10.
 - **Question 4.9** (point 4). Ajout au § 1.10, ligne `X` (dict. :155) : « Aucune exclusion `X` d'une valeur illisible ou hors domaine n'est admise en v1 : ces valeurs relèvent de `R`. D03i et D03g portent sur des **manquants**. » Effet : aucun.
