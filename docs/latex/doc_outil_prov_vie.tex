@@ -3055,7 +3055,7 @@ cause (dossier ou contrat) dans les paramètres retenus du poste~:
 \code{hors\_axes} & Table lue hors de ses axes sous la déclaration \code{refus} (provision mathématique de la temporaire décès). \\
 \code{affiliation\_non\_determinee} & Sinistres déclarés non réglés et capitaux non réclamés~: affiliation qui porte l'assiette d'un capital à reconstituer non déterminée (section~\ref{sec:engagement-capital}). \\
 \code{assiette\_non\_determinee} & Mêmes postes~: salaire de référence de l'affiliation retenue manquant. \\
-\code{parametre\_non\_determine} & Mêmes postes~: paramètre du capital absent, à plusieurs valeurs ou exclu pour la famille «~engagement~»\fsp; provision mathématique de la temporaire décès~: paramètre manquant, à plusieurs valeurs ou exclu pour la famille «~risque en cours~», date de naissance manquante ou d'un assuré exclu, sinistre de l'assuré exclu, fin de couverture indéterminée, sauf contrat hors de la population par une condition connue\fsp; champ collectif~: période couverte d'une cotisation non déterminée (défaut D03f) (section~\ref{sec:risque-en-cours-p3}). \\
+\code{parametre\_non\_determine} & Mêmes postes~: paramètre du capital absent, à plusieurs valeurs ou exclu pour la famille «~engagement~»\fsp; provision mathématique de la temporaire décès~: paramètre manquant, à plusieurs valeurs ou exclu pour la famille «~risque en cours~», date de naissance manquante ou d'un assuré exclu, sinistre de l'assuré exclu, fin de couverture indéterminée, sauf contrat hors de la population par une condition connue\fsp; champ collectif~: période couverte d'une cotisation non déterminée (défaut D03f, sans hypothèse ou règle du dictionnaire inapplicable) ou, bornes connues et fin postérieure à l'arrêté, période inversée ou de longueur nulle (section~\ref{sec:risque-en-cours-p3}). \\
 \code{famille\_non\_determinee} & Sinistres déclarés non réglés et capitaux non réclamés~: majoration familiale inconnue d'un dossier instruit. \\
 \end{tabular}
 \end{center}
@@ -3491,10 +3491,29 @@ risque est uniforme sur la période et la prime pure), restituée au statut
 \code{approximation\_numerique} faute d'un statut plus juste dans la liste
 fermée.
 
+\textbf{Champ collectif~: ordre d'évaluation d'une cotisation.} Chaque
+cotisation retenue du champ est lue dans cet ordre (issue~92 du dépôt~;
+spécification, version~1.0.16)~: (1)~si sa fin de période est connue et au
+plus l'arrêté, elle sort du calcul, avant toute hypothèse et quels que
+soient sa date de début et les traitements déclarés des défauts D03f et
+D02a~; (2)~sinon, si une borne manque, le traitement déclaré du défaut
+D03f s'applique (ci-dessous)~; (3)~sinon, les deux bornes étant connues et
+la fin postérieure à l'arrêté, une période inversée ou de longueur nulle
+(fin moins début plus un jour au plus nul) arrête le poste
+(\code{parametre\_non\_determine}, premier contrat en cause)~; (4)~sinon,
+le prorata s'applique. La règle~(3) est une lecture de Kleene, jugement
+d'expert~: une borne au moins est fausse, sans qu'on sache laquelle, et le
+prorata n'est pas déterminé~; échanger les bornes serait une correction
+silencieuse, un prorata nul omettrait un montant, et la prime entière
+supposerait la période entièrement à venir. Elle vaut que le défaut D02a
+(dates incohérentes) soit déclaré en conservation ou en hypothèse par
+défaut, la règle de cette hypothèse n'étant encore appliquée par aucun
+module (section~\ref{sec:donnees-bilan}).
+
 \textbf{Champ collectif~: période couverte manquante.} Une cotisation
 retenue du champ dont la date de début ou de fin de période manque
 (défaut D03f) suit le traitement déclaré par le plan pour ce défaut
-(spécification, version~1.0.15)~:
+(spécification, versions~1.0.15 et~1.0.16)~:
 
 \begin{itemize}[itemsep=2pt]
 \item \textbf{exclusion} pour la famille «~risque en cours~»~: la ligne sort
@@ -3506,16 +3525,27 @@ retenue du champ dont la date de début ou de fin de période manque
   (\code{parametre\_non\_determine}, premier contrat en cause), sans
   jamais compter la cotisation pour zéro ni l'omettre\fsp;
 \item \textbf{hypothèse par défaut}, déclarée en comptes sociaux pour le
-  poste ou pour tous les postes~: la règle du dictionnaire de la base
-  (§~9, D03f) remplace les \emph{deux} bornes, même si l'une est
-  renseignée~; la période commence au premier jour du mois de la date du
-  mouvement et dure la périodicité de cotisation de la garantie souscrite
+  poste ou pour tous les postes, celle du poste l'emportant quand les deux
+  sont déclarées (sélection par \code{hypothese\_vue()}, module
+  \code{engagement})~: la règle du dictionnaire de la base (§~9, D03f)
+  remplace les \emph{deux} bornes, même si l'une est renseignée~; la
+  période commence au premier jour du mois de la date du mouvement et dure
+  la périodicité de cotisation de la garantie souscrite
   (\code{periode\_cotisation\_regle()}, module \code{donnees}, seule
-  implémentation de la règle)~; un contrat dont une cotisation entre dans
-  le calcul sous la règle est restitué au statut \code{jugement\_expert},
-  et l'hypothèse est comptée dans \code{hypotheses\_defaut}. Une périodicité \code{unique} ou illisible, ou
-  une date de mouvement manquante, rend la règle inapplicable~: le poste
-  est arrêté (\code{parametre\_non\_determine}, premier contrat en cause).
+  implémentation de la règle). Elle n'est lue que pour une cotisation dont
+  la fin de période n'est pas connue au plus l'arrêté (règle~(1)). La seule
+  valeur admise de l'hypothèse est \code{regle}~; toute autre valeur est un
+  refus d'appel (\code{plan\_invalide}), levé seulement si une cotisation
+  lit l'hypothèse et après les règles d'arrêt du poste~: un poste arrêté,
+  par exemple par une règle inapplicable, n'est pas refusé. Un contrat dont
+  une cotisation est lue sous la règle est restitué au statut
+  \code{jugement\_expert}, même quand la règle rend la cotisation échue~:
+  il reste alors une unité restituée, de montant nul, qui fait exister la
+  cellule de son segment~; l'hypothèse est comptée
+  dans \code{hypotheses\_defaut}. Une périodicité \code{unique} ou
+  illisible, ou une date de mouvement manquante, rend la règle
+  inapplicable~: le poste est arrêté (\code{parametre\_non\_determine},
+  premier contrat en cause).
 \end{itemize}
 
 \noindent La substitution des deux bornes est un jugement d'expert~: le
