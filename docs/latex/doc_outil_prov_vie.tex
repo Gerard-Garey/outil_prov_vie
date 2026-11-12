@@ -3326,7 +3326,7 @@ fonctions n'est exportée.
 \rowcolor{tableheader}
 \textcolor{financeblue}{\textbf{Fonction}} & \textcolor{financeblue}{\textbf{Arguments}} & \textcolor{financeblue}{\textbf{Rôle}} \\
 \code{calculer\_risque\_en\_cours()} & \code{vue}, \code{plan}, \code{tables}, \code{catalogue}, \code{garantie}, \code{poste} & Point d'appel de la provision mathématique de la temporaire décès\fsp; rend une cellule pour le poste (champs individuel et collectif réunis), les échéanciers des contrats individuels, les indicateurs et les contrats valorisés par champ (unités de la restitution par segment)\fsp; un poste arrêté rend une cellule \code{arrete}. \\
-\code{provisions\_individuelles()} & \code{vue}, \code{plan}, \code{tables}, \code{temoin} & Calcule, contrat individuel par contrat, la population, l'échéancier et la provision (plancher nul par contrat)\fsp; le témoin rétrospectif n'est calculé que si \code{temoin} vaut \code{TRUE}. \\
+\code{provisions\_individuelles()} & \code{vue}, \code{plan}, \code{tables}, \code{temoin} & Calcule, contrat individuel par contrat, la population, l'échéancier et la provision (plancher nul par contrat)\fsp; le témoin rétrospectif n'est calculé que si \code{temoin} vaut \code{TRUE} (\code{NA} en prime unique). \\
 \code{provisions\_collectives()} & \code{vue}, \code{plan} & Calcule, par contrat collectif, la provision au prorata des cotisations nettes de chargement sur les jours postérieurs à l'arrêté (\code{prorata\_cotisation}), sous le traitement déclaré de la période couverte manquante (D03f)\fsp; rend aussi le motif d'arrêt et le premier contrat en cause, et les contrats valorisés sous l'hypothèse de D03f. \\
 \end{tabular}
 \end{center}
@@ -3449,9 +3449,18 @@ article, sont sans objet pour une temporaire décès, qui ne comporte «~ni
 réduction ni rachat~», art.~L132-23). Sous
 \code{prospective\_prime\_declaree} (alternative), la prime est
 \code{prime\_periodique} nette du chargement de cotisation déclaré. Le
-témoin \code{retrospective}, valeur accumulée des primes passées moins le
-coût du risque aux mêmes bases, est égal à la prospective sous les mêmes
-bases~; ce recoupement exact est testé, et le témoin n'est jamais restitué.
+témoin \code{retrospective}, valeur accumulée à l'arrêté des primes passées
+moins le coût du risque passé, les frais passés et le chargement
+d'acquisition, aux mêmes bases et sachant la survie à l'arrêté, est égal à
+la prospective sous les mêmes bases~; ce recoupement exact est testé en
+primes périodiques, et le témoin n'est jamais restitué. Il n'est défini
+que si l'arrêté est une date de pas (un pas à cheval sur l'arrêté n'a pas
+de part passée sans répartition du flux de capital) et, en primes
+périodiques, il est rendu avant et après la prime de l'échéance tombant à
+l'arrêté. En prime unique, le témoin est sans objet et vaut \code{NA}, à
+la date d'effet comme à toute date (issue~80 du dépôt)~: la prime unique
+n'est pas une donnée lue de la base, et le témoin vaudrait le coût du
+risque passé changé de signe, sans rapport avec la prospective.
 Un taux du tarif manquant suit l'hypothèse D03h déclarée par le plan, sans
 quoi l'appel est refusé (\code{declaration\_manquante})~; le contrat est
 alors au statut \code{jugement\_expert}, et \code{exact} sinon.
