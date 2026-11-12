@@ -407,7 +407,7 @@ ecrire_base <- function(donnees, dossier) {
   if (inherits(x, "Date")) {
     champs <- relever(ecrire_valeurs(x, "texte"))
   } else if (is.character(x)) {
-    x <- relever(.vers_utf8(x, "valeur"))
+    x <- relever(vers_utf8(x, "valeur"))
     vides <- !manquants & x == ""
     if (any(vides)) {
       refus(paste0("cha\u00eene vide \"\" : hors domaine (code chaine_vide, dictionnaire, \u00a7 1.6 :",
@@ -565,7 +565,7 @@ lire_jeu <- function(dossier) {
                            stringsAsFactors = FALSE)
     df <- .lire_table_csv(file.path(dossier, "verite", paste0(nom, ".csv")), nom, colonnes)
     ok <- identical(names(df), colonnes$colonne) &&
-      all(vapply(seq_along(df), function(j) .type_conforme(df[[j]], colonnes$type[j]), NA))
+      all(vapply(seq_along(df), function(j) type_conforme(df[[j]], colonnes$type[j]), NA))
     if (!ok) {
       .refus_lecture(paste0("lire_jeu() : verite/", nom, ".csv : colonnes ou types diff\u00e9rents de manifeste$colonnes_verite"))
     }
@@ -611,7 +611,7 @@ lire_jeu <- function(dossier) {
     all(vapply(names(v), function(nom) {
       t <- types[[nom]]
       is.list(t) && identical(names(t), names(v[[nom]])) &&
-        all(vapply(seq_along(t), function(j) .chaine_type(t[[j]]) && .type_conforme(v[[nom]][[j]], t[[j]]), NA))
+        all(vapply(seq_along(t), function(j) .chaine_type(t[[j]]) && type_conforme(v[[nom]][[j]], t[[j]]), NA))
     }, NA))
   if (!decrit) refus("manifeste$colonnes_verite doit d\u00e9crire exactement les colonnes et les types de verite")
   invisible(NULL)

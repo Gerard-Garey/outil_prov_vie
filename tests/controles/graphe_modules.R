@@ -18,7 +18,15 @@
 #   4. un nom de premier niveau n'est defini que dans un seul fichier (par <-, =, ->, ->>) ;
 #   5. temoins negatifs integres : simulation appele par un module du moteur, triangle
 #      vers engagement, lecture appele par un module du moteur, rapport vers
-#      calculer_provisions doivent etre refuses par la table ; et la table en dur est coherente (quinze modules, sans cycle).
+#      calculer_provisions doivent etre refuses par la table ; et la table en dur est coherente (quinze modules, sans cycle) ;
+#   6. un identifiant a point (auxiliaire du module, ADR 0010, annotation de la quatrieme
+#      serie, (c)) defini au premier niveau d'un fichier n'est employe (appel ou symbole,
+#      memes regles de portee qu'en 2) que dans ce fichier : « une fonction appelee hors de
+#      son module ne porte pas de point » (issue #74, M405). Exceptions declarees en dur
+#      (EXCEPTIONS_POINT, chacune renvoyee a l'issue #102) : un emploi non declare est un
+#      [ECHEC] fichier:ligne ; une exception declaree dont le fichier appelant et le fichier
+#      de definition sont presents et qui ne se produit plus est aussi un [ECHEC] (a retirer
+#      de la liste), comme un succes inattendu.
 # Les noms utilises comme champ (`x$nom`) ne sont pas des appels ; un appel ecrit entre
 # accents graves ou entre guillemets (`f`(x), "f"(x)) vaut l'appel de f. Portee (M236,
 # decision du mainteneur du 10 novembre 2026) : ne compte pas comme reference la seule cible
@@ -74,6 +82,14 @@ AUTORISE <- list(
 MODULES <- names(AUTORISE)
 
 arete_permise <- function(de, vers) de == vers || vers %in% AUTORISE[[de]]
+
+# Emplois d'un identifiant a point hors de son fichier : exceptions declarees (point 6 ;
+# issue #102 : a renommer sans point dans leur module, puis a retirer d'ici).
+EXCEPTIONS_POINT <- data.frame(
+  appelant = c("donnees", "donnees", "donnees", "calculer_provisions"),
+  identifiant = c(".longueur_commune", ".composantes_date", ".jour_de", ".controler_rejeu"),
+  defini_dans = c("outils", "outils", "outils", "plan"),
+  renvoi = "#102", stringsAsFactors = FALSE)
 
 # Dependances dynamiques interdites (appel de fonction par son nom, evaluation de texte).
 APPELS_DYNAMIQUES <- c("match.fun", "get", "get0", "mget", "eval", "evalq", "eval.parent",
@@ -248,6 +264,8 @@ if (.n_echec == avant) ok(sprintf("%d nom(s) de premier niveau, chacun defini da
 # --- 2 et 3. Aretes et appels dynamiques ----------------------------------------------------
 avant <- .n_echec
 n_aretes <- 0L
+emplois_point <- data.frame(appelant = character(0), identifiant = character(0),
+                            defini_dans = character(0), ligne = integer(0), stringsAsFactors = FALSE)
 for (m in names(analyses)) {
   chemin <- file.path(dossier_r, paste0(m, ".R"))
   j <- analyses[[m]]$jetons
@@ -274,6 +292,9 @@ for (m in names(analyses)) {
         texte %in% names(module_de) && module_de[[texte]] != m) {
       vers <- module_de[[texte]]
       n_aretes <- n_aretes + 1L
+      if (startsWith(texte, ".")) {
+        emplois_point[nrow(emplois_point) + 1L, ] <- list(m, texte, vers, j$ligne[r])
+      }
       cle <- paste(j$ligne[r], texte)
       if (!arete_permise(m, vers) && !(cle %in% vus)) {
         vus <- c(vus, cle)
@@ -315,5 +336,32 @@ if (!arete_permise("simulation", "dictionnaire") || !arete_permise("calculer_pro
   echec("table AUTORISE : arete attendue absente (simulation -> dictionnaire, calculer_provisions -> rapport)")
 }
 if (.n_echec == avant) ok("table en dur coherente (quinze modules, sans cycle) ; temoins negatifs refuses : moteur -> simulation, moteur -> lecture, triangle -> engagement, rapport -> calculer_provisions")
+
+# --- 6. Identifiants a point employes hors de leur fichier (#74, M405) -----------------------
+avant <- .n_echec
+declare <- paste(EXCEPTIONS_POINT$appelant, EXCEPTIONS_POINT$identifiant, EXCEPTIONS_POINT$defini_dans)
+cle_emploi <- paste(emplois_point$appelant, emplois_point$identifiant, emplois_point$defini_dans)
+vus_point <- character(0)
+for (r in seq_len(nrow(emplois_point))) {
+  cle_ligne <- paste(cle_emploi[r], emplois_point$ligne[r])
+  if (!(cle_emploi[r] %in% declare) && !(cle_ligne %in% vus_point)) {
+    vus_point <- c(vus_point, cle_ligne)
+    echec(sprintf("`%s` : auxiliaire a point de `%s` employe hors de son module (ADR 0010, annotation de la quatrieme serie, (c)) ; le renommer sans point dans son module, ou, a defaut, le declarer dans EXCEPTIONS_POINT avec son renvoi a une issue",
+                  emplois_point$identifiant[r], emplois_point$defini_dans[r]),
+          file.path(dossier_r, paste0(emplois_point$appelant[r], ".R")), emplois_point$ligne[r])
+  }
+}
+for (k in seq_len(nrow(EXCEPTIONS_POINT))) {
+  e <- EXCEPTIONS_POINT[k, ]
+  if (all(c(e$appelant, e$defini_dans) %in% names(analyses)) && !(declare[k] %in% cle_emploi)) {
+    echec(sprintf("exception declaree (%s) qui ne se produit plus : `%s` n'est plus employe par `%s` depuis `%s` ; la retirer de EXCEPTIONS_POINT",
+                  e$renvoi, e$identifiant, e$appelant, e$defini_dans),
+          file.path(dossier_r, paste0(e$appelant, ".R")))
+  }
+}
+if (.n_echec == avant) {
+  ok(sprintf("identifiants a point : aucun emploi hors de son fichier hors des %d exception(s) declaree(s) (#102)",
+             sum(declare %in% cle_emploi)))
+}
 
 fin()

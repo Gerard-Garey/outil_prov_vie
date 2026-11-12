@@ -510,7 +510,7 @@ constater_forme <- function(donnee, table, dico) {
       next
     }
     x <- donnee[[colonne]]
-    if (.type_conforme(x, type)) next
+    if (type_conforme(x, type)) next
     recu <- paste(class(x), collapse = ",")
     if (inherits(x, "Date")) recu <- paste0(recu, " (", typeof(x), ")")
     lignes <- seq_len(n)
@@ -542,7 +542,7 @@ constater_forme <- function(donnee, table, dico) {
 
 # Type R exact : la classe est celle du type, sans dimension ; une Date est stockée en
 # double (forme d'ecrire_valeurs() et de la lecture CSV).
-.type_conforme <- function(x, type) {
+type_conforme <- function(x, type) {
   if (!is.null(dim(x))) return(FALSE)
   switch(type,
          character = identical(class(x), "character"),
@@ -626,7 +626,7 @@ lire_texte_type <- function(x, type) {
 controler_version_extraction <- function(donnee) {
   if (!("version_dictionnaire" %in% names(donnee))) return(invisible(NULL))
   versions <- donnee[["version_dictionnaire"]]
-  if (!.type_conforme(versions, "character")) return(invisible(NULL))
+  if (!type_conforme(versions, "character")) return(invisible(NULL))
   ecarts <- which(is.na(versions) | versions != VERSION_DICTIONNAIRE_ATTENDUE)
   if (length(ecarts) > 0L) {
     version <- versions[ecarts[1L]]

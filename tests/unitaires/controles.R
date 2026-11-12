@@ -249,6 +249,50 @@ r <- cas_graphe(c("calcul_e <- function(x) {", "  a <- function() simuler_base",
 verifier("N6c : portée sœur (a lit, b affecte), la lecture de a est comptée, engagement.R:2",
          .echoue_en(r, "R/engagement.R", 2L, ARETE))
 
+# Identifiants à point employés hors de leur fichier (#74, M405 ; exceptions renvoyées à #102).
+# lecture -> dictionnaire est une arête permise : seule la règle du point est en cause.
+section("contrôles : graphe_modules.R, identifiants à point (#74, M405)")
+r <- .essai("graphe_modules", list("R/dictionnaire.R" = ".aux_d <- function(x) x",
+                                   "R/lecture.R" = "lire_e <- function(x) .aux_d(x)"))
+verifier("#74 : appel d'un auxiliaire à point d'un autre module, non déclaré, lecture.R:1",
+         .echoue_en(r, "R/lecture.R", 1L, ".aux_d"))
+r <- .essai("graphe_modules", list("R/dictionnaire.R" = ".CONST_D <- 1",
+                                   "R/lecture.R" = c("lire_e <- function(x) {", "  x + .CONST_D", "}")))
+verifier("#74 : symbole (constante) à point d'un autre module, non déclaré, lecture.R:2",
+         .echoue_en(r, "R/lecture.R", 2L, ".CONST_D"))
+r <- .essai("graphe_modules", list("R/dictionnaire.R" = c(".aux_d <- function(x) x", "dico_f <- function(x) .aux_d(x)"),
+                                   "R/lecture.R" = "lire_e <- function(x) dico_f(x)"))
+verifier("#74, cas licite : identifiant à point employé dans son propre fichier, appelé hors module sans point", .passe(r))
+# Exceptions déclarées (EXCEPTIONS_POINT, renvoi #102) : tenues, elles passent ; absentes, elles échouent.
+r <- .essai("graphe_modules", list(
+  "R/outils.R" = c(".longueur_commune <- function(n) n", ".composantes_date <- function(j) j", ".jour_de <- function(j) j"),
+  "R/donnees.R" = c("donnees_f <- function(x) {", "  .longueur_commune(x)", "  .composantes_date(x)", "  .jour_de(x)", "}")))
+verifier("#74, cas licite : emplois déclarés en exception (#102), le contrôle passe", .passe(r))
+r <- .essai("graphe_modules", list(
+  "R/outils.R" = c(".longueur_commune <- function(n) n", ".composantes_date <- function(j) j", ".jour_de <- function(j) j"),
+  "R/donnees.R" = c("donnees_f <- function(x) {", "  .longueur_commune(x)", "  .jour_de(x)", "}")))
+verifier("#74 : exception déclarée qui ne se produit plus (.composantes_date), donnees.R sans ligne", {
+  .echoue_en(r, "R/donnees.R", NA_integer_, ".composantes_date") &&
+    !any(grepl("[ECHEC] R/donnees.R:", r$sortie, fixed = TRUE))
+})
+r <- .essai("graphe_modules", list(
+  "R/outils.R" = c(".longueur_commune <- function(n) n", ".composantes_date <- function(j) j", ".jour_de <- function(j) j"),
+  "R/donnees.R" = c("donnees_f <- function(x) {", "  .longueur_commune(x)", "  .composantes_date(x)", "  .jour_de(x)", "  .autre(x)", "}"),
+  "R/dictionnaire.R" = ".autre <- function(x) x"))
+verifier("#74 : un emploi non déclaré à côté d'exceptions tenues, donnees.R:5", .echoue_en(r, "R/donnees.R", 5L, ".autre"))
+r <- .essai("graphe_modules", list("R/outils.R" = ".longueur_commune <- function(n) n",
+                                   "R/donnees.R" = "donnees_f <- function(x) x"))
+verifier("#74 : exception déclarée dont l'identifiant n'est plus employé (donnees.R n'appelle rien), donnees.R sans ligne",
+         .echoue_en(r, "R/donnees.R", NA_integer_, ".longueur_commune"))
+verifier("#74 : le dépôt réel passe (aucun emploi hors de son fichier hors des exceptions déclarées)", {
+  sortie <- suppressWarnings(system2(file.path(R.home("bin"), "Rscript"),
+                                     c(shQuote(.script_controle("graphe_modules")), shQuote(racine)),
+                                     stdout = TRUE, stderr = TRUE))
+  statut <- attr(sortie, "status")
+  (is.null(statut) || statut == 0L) && any(startsWith(sortie, "[OK] identifiants a point")) &&
+    !any(startsWith(sortie, "[ECHEC]"))
+})
+
 # --- frontiere_calcul_affichage.R (N4, M236) ----------------------------------------------------
 cas_frontiere <- function(lignes) .essai("frontiere_calcul_affichage", list("R/engagement.R" = lignes))
 
