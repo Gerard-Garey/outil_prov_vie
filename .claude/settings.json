@@ -18,7 +18,12 @@
           {
             "type": "command",
             "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/installer_r.sh\"",
-            "timeout": 600
+            "timeout": 1300
+          },
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/installer_latex.sh\"",
+            "timeout": 1600
           }
         ]
       }
