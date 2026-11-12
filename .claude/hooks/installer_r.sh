@@ -45,8 +45,20 @@ fi
 echo "Installation de R $VERSION_R (r-base-core)..." >&2
 # Un depot tiers injoignable ne fait qu'un avertissement d'apt-get update ;
 # la disponibilite de r-base-core est controlee par l'installation elle-meme.
-$sudo_si_besoin apt-get update -qq >/dev/null 2>&1
-if ! DEBIAN_FRONTEND=noninteractive $sudo_si_besoin apt-get install -y -qq \
+# Les hooks d'un meme evenement SessionStart s'executent en parallele (R et
+# TeX Live) : « apt-get update » prend /var/lib/apt/lists/lock, que
+# DPkg::Lock::Timeout ne couvre pas (mesure) ; on le reessaie donc quelques fois.
+for _ in 1 2 3 4 5 6; do
+  $sudo_si_besoin apt-get update -qq >/dev/null 2>&1 && break
+  sleep 10
+done
+# apt-get n'attend pas le verrou dpkg par defaut (« E: Could not get lock »,
+# code 100) : DPkg::Lock::Timeout=600 fait attendre l'installation jusqu'a
+# 600 s la fin de l'installation de l'autre hook. Delai du hook (settings.json) :
+# 600 s d'attente + 60 s de reessais d'update + 600 s de travail propre.
+# env transmet DEBIAN_FRONTEND a travers sudo.
+if ! $sudo_si_besoin env DEBIAN_FRONTEND=noninteractive apt-get \
+       -o DPkg::Lock::Timeout=600 install -y -qq \
        --no-install-recommends r-base-core >/dev/null 2>&1; then
   echo "ATTENTION : installation de r-base-core echouee ; R est absent de cette session." >&2
   exit 0
