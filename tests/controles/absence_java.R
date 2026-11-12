@@ -1,18 +1,35 @@
 # Controle : aucune dependance a Java, directe ou indirecte (ADR 0004, point 6 ; ADR 0010,
-# point 26 ; issue #12). Trois verifications :
+# point 26 ; issue #12 ; #27). Trois verifications :
 #   1. DESCRIPTION : aucun package connu pour dependre de Java dans Depends, Imports,
 #      LinkingTo, Suggests, ni dans leur fermeture recursive parmi les packages installes
 #      (nom de la liste ci-dessous, ou SystemRequirements qui cite Java, JDK ou JRE) ;
 #      un package declare mais non installe est signale [AVERT] (fermeture non verifiable).
-#   2. NAMESPACE, R/, app/, tests/ et .github/ (commentaires `#` ignores) : aucun
-#      chargement d'un package de la liste (library(p), require(p), requireNamespace("p"),
-#      loadNamespace("p"), "p" en argument d'une installation, `p::`, import(p), p dans
-#      packages / extra-packages / needs), aucune installation ni activation d'un
-#      environnement Java (setup-java, openjdk, default-jdk, default-jre, JAVA_HOME, .jinit,
-#      .jcall). Un package a nom courant (xlsx) n'est refuse que dans ces contextes :
-#      "library(openxlsx)  # lecture des feuilles xlsx" passe.
-#   3. Le present script (tests/controles/absence_java.R de la racine examinee) est exclu du
-#      balayage, il porte la liste.
+#   2. Tous les fichiers suivis du depot (git ls-files si la racine examinee est la racine d'un
+#      depot git, sinon toute l'arborescence hors .git/ et .claude/worktrees/) dont l'extension
+#      est R, r, Rmd, yml, yaml, sh, json, toml, lock ou js, ou dont le nom est NAMESPACE,
+#      Dockerfile*, Makefile, .Rprofile, Rprofile.site, .Renviron, Renviron.site, Brewfile ou
+#      Aptfile : aucun chargement d'un package de la liste (library(p), require(p),
+#      requireNamespace("p"), loadNamespace("p"), `p::`, import(p), p dans packages /
+#      extra-packages / needs, y compris en liste YAML sur plusieurs lignes, `any::p`,
+#      `cran::p`, `github::.../p`, "p" en argument d'une installation), aucune installation ni
+#      activation d'un environnement Java (setup-java, openjdk, default-jdk, default-jre,
+#      JAVA_HOME, .jinit, .jcall). Un package a nom courant (xlsx) n'est refuse que dans ces
+#      contextes : "library(openxlsx)  # lecture des feuilles xlsx" passe.
+#      Fichiers R (.R, .r, NAMESPACE, .Rprofile) : analyses par getParseData() (commentaires
+#      exclus par leurs jetons, un `#` dans une chaine ne masque rien ; premier argument,
+#      positionnel ou nomme `package`, de library, require, requireNamespace, loadNamespace,
+#      attachNamespace, tous les arguments de import ; tous les arguments des installations
+#      install.packages, install_*, p_load, pkg_install, needs, pak, install, y compris sur
+#      plusieurs lignes). Les autres fichiers : par ligne ; un `#` n'y ouvre un commentaire
+#      (YAML, shell, Dockerfile, Makefile) que s'il commence un mot hors guillemets ; JSON,
+#      lock et js : aucun commentaire retire (cote sur).
+#      Exclusions, la seule justification etant celle-ci : le present script
+#      (tests/controles/absence_java.R de la racine examinee), qui porte la liste ; .git/ et
+#      .claude/worktrees/ (copies de travail, hors du depot suivi). Les temoins versionnes de
+#      tests/unitaires/controles.R ne sont PAS exclus : ils fabriquent les noms interdits
+#      (paste0("r", "Java")) et n'ecrivent jamais un nom interdit en clair ; ne pas elargir
+#      les exclusions pour eux. La documentation (docs/) n'est balayee que par ses fichiers
+#      de code (aucune extension de prose n'est dans la liste).
 # La liste est un jugement de mise en oeuvre (packages CRAN a Java notoirement requis) ; un
 # ajout se fait ici, avec sa raison.
 # Usage, depuis la racine du depot : Rscript tests/controles/absence_java.R
@@ -111,46 +128,225 @@ if (.n_echec == avant) {
 # DESCRIPTION est traitee plus haut (declarations) ; le present script est exclu par son chemin
 # relatif a la racine examinee (et non par celui du script qui tourne : sur une copie du
 # depot, la copie du script serait sinon balayee).
-fichiers <- file.path(racine, "NAMESPACE")
-for (dossier in c("R", "app", "tests", ".github")) {
-  chemin <- file.path(racine, dossier)
-  if (dir.exists(chemin)) {
-    fichiers <- c(fichiers, list.files(chemin, pattern = "\\.(R|r|Rmd|yml|yaml|sh|json|toml)$",
-                                       recursive = TRUE, full.names = TRUE, all.files = TRUE))
+EXCLUS <- "tests/controles/absence_java.R"
+DOSSIERS_EXCLUS <- c(".git/", ".claude/worktrees/")
+EXTENSIONS <- "\\.(R|Rmd|yml|yaml|sh|json|toml|lock|js|dockerfile)$"
+NOMS <- "^(NAMESPACE|Dockerfile(\\..*)?|Makefile|\\.Rprofile|Rprofile\\.site|\\.Renviron|Renviron\\.site|Brewfile|Aptfile)$"
+NOMS_R <- "^(NAMESPACE|\\.Rprofile|Rprofile\\.site)$"
+SANS_COMMENTAIRE <- "\\.(json|lock|js)$"  # aucun commentaire retire
+# Fichiers suivis : git ls-files si `racine` est la racine d'un depot git, sinon l'arborescence.
+fichiers_suivis <- function() {
+  if (nzchar(Sys.which("git"))) {
+    haut <- suppressWarnings(system2("git", c("-C", shQuote(racine), "rev-parse", "--show-toplevel"),
+                                     stdout = TRUE, stderr = FALSE))
+    if (is.null(attr(haut, "status")) && length(haut) == 1L && normalizePath(haut) == racine) {
+      liste <- suppressWarnings(system2("git", c("-C", shQuote(racine), "-c", "core.quotepath=off", "ls-files"),
+                                        stdout = TRUE, stderr = FALSE))
+      if (is.null(attr(liste, "status"))) return(file.path(racine, liste))
+    }
   }
+  tout <- list.files(racine, recursive = TRUE, all.files = TRUE, include.dirs = FALSE)
+  file.path(racine, tout[!startsWith(tout, ".git/") & !startsWith(tout, ".claude/worktrees/")])
 }
+fichiers <- fichiers_suivis()
 fichiers <- fichiers[file.exists(fichiers)]
-fichiers <- fichiers[vapply(fichiers, rel, character(1)) != "tests/controles/absence_java.R"]
+fichiers <- fichiers[grepl(EXTENSIONS, fichiers, ignore.case = TRUE) | grepl(NOMS, basename(fichiers))]
+fichiers <- fichiers[!(vapply(fichiers, rel, character(1)) %in% EXCLUS) &
+                       !Reduce(`|`, lapply(DOSSIERS_EXCLUS, function(d) startsWith(vapply(fichiers, rel, character(1)), d)))]
 
 B <- "(^|[^A-Za-z0-9._])"
 E <- "($|[^A-Za-z0-9._])"
 CHARGEUR <- "(library|require|requireNamespace|loadNamespace|attachNamespace|import|importFrom)"
-INSTALLATEUR <- "(install\\.packages|install_version|install_cran|p_load|pkg_install|renv::install|needs)"
+FONCTIONS_CHARGEMENT <- c("library", "require", "requireNamespace", "loadNamespace", "attachNamespace")
+FONCTIONS_INSTALLATION <- c("install.packages", "install_version", "install_cran", "install_github",
+                            "install_url", "p_load", "pkg_install", "needs", "pak", "install")
+INSTALLATEUR <- paste0(B, "(", paste(gsub(".", "\\.", FONCTIONS_INSTALLATION, fixed = TRUE), collapse = "|"),
+                       ")($|[^A-Za-z0-9_])")
 LISTE_YAML <- "(extra-packages|packages|needs)[ \t]*[:=]"
-# Contexte de chargement ou d'installation de `p` sur une ligne sans commentaire.
-charge <- function(p, ligne) {
-  grepl(paste0(CHARGEUR, "[ \t]*\\([ \t]*[\"']?", p, "[\"']?[ \t]*[,)]"), ligne) ||
-    grepl(paste0(B, p, ":::?"), ligne) ||
-    (grepl(INSTALLATEUR, ligne) && grepl(paste0("[\"']", p, "[\"']"), ligne)) ||
-    (grepl(LISTE_YAML, ligne) && grepl(paste0(B, p, E), ligne))
+PREFIXE_DEPOT <- "[A-Za-z]+::([^ \t,;\"']*/)?"   # any::p, cran::p, github::depot/p
+# Contexte de chargement ou d'installation de `p` dans des lignes (ou des chaines) : vecteur.
+charge <- function(p, lignes) {
+  grepl(paste0(CHARGEUR, "[ \t]*\\([ \t]*(package[ \t]*=[ \t]*)?[\"']?", p, "[\"']?[ \t]*[,)]"), lignes) |
+    grepl(paste0(B, p, ":::?"), lignes) |
+    grepl(paste0(PREFIXE_DEPOT, p, E), lignes) |
+    (grepl(INSTALLATEUR, lignes) & grepl(paste0("[\"']", p, "[\"']"), lignes)) |
+    (grepl(LISTE_YAML, lignes) & grepl(paste0(B, p, E), lignes))
+}
+mot <- function(p) paste0(B, p, E)
+
+# Commentaire d'une ligne de shell, YAML ou Dockerfile : un `#` ouvre un commentaire s'il
+# commence un mot, hors guillemets.
+sans_commentaire_mot <- function(ligne) {
+  if (!grepl("#", ligne, fixed = TRUE)) return(ligne)
+  car <- strsplit(ligne, "")[[1L]]
+  guillemet <- ""
+  saut <- FALSE
+  for (k in seq_along(car)) {
+    if (saut) { saut <- FALSE; next }
+    if (nzchar(guillemet)) {
+      if (car[k] == "\\" && guillemet == "\"") saut <- TRUE else if (car[k] == guillemet) guillemet <- ""
+    } else if (car[k] %in% c("\"", "'")) {
+      guillemet <- car[k]
+    } else if (car[k] == "#" && (k == 1L || car[k - 1L] %in% c(" ", "\t"))) {
+      return(substr(ligne, 1L, k - 1L))
+    }
+  }
+  ligne
+}
+
+# Blocs YAML indentes qui suivent une cle packages: / extra-packages: / needs: (liste sur
+# plusieurs lignes) : vecteur logique des lignes du bloc.
+bloc_yaml <- function(lignes) {
+  dans <- rep(FALSE, length(lignes))
+  vide <- !nzchar(trimws(lignes))
+  indentation <- nchar(sub("[^ ].*$", "", lignes))
+  for (k in which(grepl(paste0("^[ ]*(-[ ]+)?", LISTE_YAML), lignes))) {
+    cle <- regexpr("(extra-packages|packages|needs)", lignes[k]) - 1L
+    j <- k + 1L
+    while (j <= length(lignes) && (vide[j] || indentation[j] > min(cle, indentation[k] + 1L))) {
+      dans[j] <- !vide[j]
+      j <- j + 1L
+    }
+  }
+  dans
+}
+
+# Appels de chargement et d'installation d'un fichier R, d'apres les donnees d'analyse `pd`
+# (sans commentaires) : data.frame ligne, fonction, noms (arguments pertinents, un par element).
+appels_r <- function(pd) {
+  enfants <- split(seq_len(nrow(pd)), pd$parent)
+  fils <- function(i) enfants[[as.character(pd$id[i])]]
+  descendants <- function(i) {
+    sortie <- integer(0)
+    pile <- fils(i)
+    while (length(pile) > 0L) {
+      k <- pile[1L]
+      pile <- pile[-1L]
+      sortie <- c(sortie, k)
+      pile <- c(pile, fils(k))
+    }
+    sortie
+  }
+  nom_de <- function(k) {  # symbole ou chaine d'une expression reduite a un jeton
+    d <- fils(k)
+    if (length(d) == 1L && pd$token[d] %in% c("SYMBOL", "STR_CONST")) gsub("[\"'`]", "", pd$text[d]) else NA_character_
+  }
+  lignes <- integer(0)
+  fonctions <- character(0)
+  noms <- list()
+  for (i in which(pd$token == "SYMBOL_FUNCTION_CALL")) {
+    fonction <- gsub("`", "", pd$text[i])
+    if (!(fonction %in% c(FONCTIONS_CHARGEMENT, "import", "importFrom", FONCTIONS_INSTALLATION))) next
+    nom_appel <- match(pd$parent[i], pd$id)
+    appel <- match(pd$parent[nom_appel], pd$id)
+    if (is.na(appel)) next
+    k <- fils(appel)
+    k <- k[-(1:2)]                                       # apres le nom de fonction et `(`
+    k <- k[pd$token[k] != "')'"]
+    positionnels <- integer(0)
+    nommes <- character(0)
+    j <- 1L
+    while (j <= length(k)) {
+      if (pd$token[k[j]] == "SYMBOL_SUB") {
+        nommes[pd$text[k[j]]] <- NA_character_
+        valeur <- k[j + 2L]
+        if (!is.na(valeur)) nommes[pd$text[k[j]]] <- as.character(valeur)
+        j <- j + 3L
+      } else if (pd$token[k[j]] == "expr") {
+        positionnels <- c(positionnels, k[j])
+        j <- j + 1L
+      } else {
+        j <- j + 1L
+      }
+    }
+    if (fonction %in% FONCTIONS_CHARGEMENT || fonction == "importFrom") {
+      premier <- if ("package" %in% names(nommes)) as.integer(nommes[["package"]]) else positionnels[1L]
+      cibles <- if (is.na(premier)) character(0) else nom_de(premier)
+    } else if (fonction == "import") {
+      cibles <- vapply(positionnels, nom_de, character(1))
+    } else {
+      cibles <- character(0)
+      for (d in descendants(appel)) {
+        if (pd$token[d] %in% c("SYMBOL", "STR_CONST")) cibles <- c(cibles, gsub("[\"'`]", "", pd$text[d]))
+      }
+    }
+    lignes <- c(lignes, pd$line1[i])
+    fonctions <- c(fonctions, fonction)
+    noms[[length(noms) + 1L]] <- cibles[!is.na(cibles)]
+  }
+  list(lignes = lignes, fonctions = fonctions, noms = noms)
+}
+
+# Unites de texte d'un fichier : list(texte, ligne, chaine, appels, yaml). Un fichier R
+# est analyse par ses jetons ; en cas d'echec de l'analyse (ou pour un autre fichier), par
+# ses lignes.
+ascii <- function(x) iconv(enc2utf8(x), "UTF-8", "ASCII", sub = "?")  # seuls les noms ASCII comptent
+unites <- function(f) {
+  nom <- basename(f)
+  if (grepl("\\.R$", nom) || grepl(NOMS_R, nom)) {
+    pd <- tryCatch({
+      exprs <- parse(file = f, keep.source = TRUE, encoding = "UTF-8")
+      getParseData(exprs)
+    }, error = function(e) NULL)
+    if (!is.null(pd)) {
+      pd <- pd[pd$token != "COMMENT", ]
+      terminaux <- pd[pd$terminal, ]
+      terminaux <- terminaux[order(terminaux$line1, terminaux$col1), ]
+      return(list(texte = ascii(terminaux$text), ligne = terminaux$line1,
+                  chaine = terminaux$token == "STR_CONST", jeton = terminaux$token,
+                  appels = appels_r(pd), yaml = NULL))
+    }
+  }
+  lignes <- ascii(readLines(f, warn = FALSE, encoding = "UTF-8"))
+  if (!grepl(SANS_COMMENTAIRE, nom)) lignes <- vapply(lignes, sans_commentaire_mot, character(1), USE.NAMES = FALSE)
+  list(texte = lignes, ligne = seq_along(lignes), chaine = rep(TRUE, length(lignes)),
+       jeton = rep(NA_character_, length(lignes)), appels = NULL,
+       yaml = if (grepl("\\.ya?ml$", nom)) bloc_yaml(lignes) else NULL)
+}
+
+vus <- character(0)
+signaler <- function(message, f, ligne) {
+  cle <- paste(f, ligne, message)
+  if (!(cle %in% vus)) {
+    vus <<- c(vus, cle)
+    echec(message, f, ligne)
+  }
 }
 
 avant <- .n_echec
 for (f in sort(unique(fichiers), method = "radix")) {
-  lignes <- readLines(f, warn = FALSE, encoding = "UTF-8")
-  lignes <- iconv(lignes, "UTF-8", "ASCII", sub = "?")  # seuls les noms ASCII comptent
-  lignes <- sub("#.*$", "", lignes)                     # commentaires R, shell, YAML ignores
-  for (i in seq_along(lignes)) {
-    ligne <- lignes[i]
-    for (p in PAQUETS_JAVA_SANS_AMBIGUITE) {
-      if (grepl(paste0(B, p, E), ligne)) echec(sprintf("package dependant de Java : `%s`", p), f, i)
+  u <- unites(f)
+  # Noms sans ambiguite : toute occurrence comme mot.
+  for (p in PAQUETS_JAVA_SANS_AMBIGUITE) {
+    for (i in which(grepl(mot(p), u$texte))) signaler(sprintf("package dependant de Java : `%s`", p), f, u$ligne[i])
+  }
+  # Noms ambigus : contexte de chargement ou d'installation.
+  for (p in PAQUETS_JAVA_EN_CONTEXTE) {
+    chaines <- which(u$chaine)
+    for (i in chaines[charge(p, u$texte[chaines])]) signaler(sprintf("package dependant de Java : `%s`", p), f, u$ligne[i])
+    if (!is.null(u$yaml)) {
+      for (i in which(u$yaml & grepl(mot(p), u$texte))) signaler(sprintf("package dependant de Java : `%s`", p), f, u$ligne[i])
     }
-    for (p in PAQUETS_JAVA_EN_CONTEXTE) {
-      if (charge(p, ligne)) echec(sprintf("package dependant de Java : `%s`", p), f, i)
+    if (!is.null(u$appels)) {
+      for (i in which(u$jeton == "SYMBOL_PACKAGE" & u$texte == p)) {
+        signaler(sprintf("package dependant de Java : `%s`", p), f, u$ligne[i])
+      }
+      for (a in seq_along(u$appels$lignes)) {
+        if (p %in% u$appels$noms[[a]]) signaler(sprintf("package dependant de Java : `%s`", p), f, u$appels$lignes[a])
+      }
     }
-    for (motif in MOTIFS_ENVIRONNEMENT_JAVA) {
-      if (grepl(motif, ligne, ignore.case = TRUE)) {
-        echec(sprintf("environnement Java (motif `%s`)", gsub("\\", "", motif, fixed = TRUE)), f, i)
+  }
+  # Environnement Java.
+  for (motif in MOTIFS_ENVIRONNEMENT_JAVA) {
+    for (i in which(grepl(motif, u$texte, ignore.case = TRUE))) {
+      signaler(sprintf("environnement Java (motif `%s`)", gsub("\\", "", motif, fixed = TRUE)), f, u$ligne[i])
+    }
+  }
+  # Fichiers R : `.jinit(` et `.jcall(` sont deux jetons (nom, parenthese) : le nom suffit.
+  if (!is.null(u$appels)) {
+    for (nom in c(".jinit", ".jcall")) {
+      for (i in which(u$jeton %in% c("SYMBOL_FUNCTION_CALL", "SYMBOL") & gsub("`", "", u$texte, fixed = TRUE) == nom)) {
+        signaler(sprintf("environnement Java (motif `%s`)", nom), f, u$ligne[i])
       }
     }
   }

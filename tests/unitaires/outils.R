@@ -466,6 +466,34 @@ verifier("restauration en echec : .Random.seed de l'appelant tout de meme retabl
 verifier_egal("restauration en echec : genres de l'appelant retablis", RNGkind(), genres_avant)
 suppressWarnings(RNGkind("Mersenne-Twister", "Inversion", "Rejection"))
 
+# Appelant sous la combinaison « Buggy Kinderman-Ramage » et « Rounding » (#27) : le
+# retablissement n'etouffe que l'avertissement de l'echantillonneur ; celui du generateur de
+# normales REMONTE (erreur sous warn = 2), l'etat de l'appelant etant retabli. Contre la
+# version qui retablissait les trois genres d'un coup sous suppressWarnings(), cet
+# avertissement etait avale.
+suppressWarnings(RNGkind("Mersenne-Twister", "Buggy Kinderman-Ramage", "Rounding"))
+set.seed(5)
+etat_avant <- .Random.seed
+genres_avant <- RNGkind()
+message_restauration <- tryCatch({ avec_graine(99L, runif(2)); "aucune erreur" },
+                                 error = function(e) conditionMessage(e))
+verifier("restauration depuis Buggy Kinderman-Ramage + Rounding : l'avertissement Buggy remonte (erreur sous warn = 2)",
+         grepl("Kinderman-Ramage", message_restauration, fixed = TRUE))
+verifier("restauration depuis Buggy + Rounding : .Random.seed de l'appelant retabli",
+         identical(.Random.seed, etat_avant))
+verifier_egal("restauration depuis Buggy + Rounding : genres de l'appelant retablis", RNGkind(), genres_avant)
+message_restauration <- tryCatch({ avec_graine(99L, stop("boum")); "aucune erreur" },
+                                 error = function(e) conditionMessage(e))
+verifier("restauration depuis Buggy + Rounding, expression en erreur : etat de l'appelant retabli",
+         is.character(message_restauration) && identical(.Random.seed, etat_avant) && identical(RNGkind(), genres_avant))
+avertissements <- character(0)
+withCallingHandlers(
+  tryCatch(avec_graine(99L, runif(2)), error = function(e) NULL),
+  warning = function(w) { avertissements <<- c(avertissements, conditionMessage(w)); invokeRestart("muffleWarning") })
+verifier("restauration depuis Buggy + Rounding : un seul avertissement, celui de Buggy",
+         length(avertissements) == 1L && grepl("Kinderman-Ramage", avertissements, fixed = TRUE))
+suppressWarnings(RNGkind("Mersenne-Twister", "Inversion", "Rejection"))
+
 rm(".Random.seed", envir = globalenv())
 invisible(avec_graine(99L, runif(3)))
 verifier("sans graine préalable : aucune graine laissée", !exists(".Random.seed", envir = globalenv()))

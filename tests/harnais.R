@@ -1,7 +1,8 @@
 # Harnais de tests sans testthat (ADR 0010, point 25), sourcé par chaque batterie.
 # Sortie : une ligne par vérification -- [OK], [ECHEC], [ATTENDU] (échec attendu, avec
 # l'issue), [SUCCES INATTENDU] (un échec attendu qui réussit : la batterie échoue et la
-# marque est alors retirée) -- puis, avec bilan(), le décompte et le statut de sortie.
+# marque est alors retirée) -- puis, avec bilan(), le décompte et le statut de sortie ; les
+# lignes [INFO] (informer()) sont hors décompte.
 # Les batteries tournent avec options(warn = 2) : un avertissement fait échouer la
 # vérification en cours.
 
@@ -111,6 +112,13 @@ attendu_echec <- function(nom, issue, expr) {
     .harnais_compter("attendu")
     .harnais_ligne("ATTENDU", nom, issue)
   }
+  invisible(NULL)
+}
+
+# Ligne d'information hors décompte (ADR 0011, point 23) : [INFO], ni OK ni ECHEC ; mesure
+# consignée sans devenir un critère (portabilité de l'empreinte du résultat).
+informer <- function(nom, detail = NULL) {
+  .harnais_ligne("INFO", nom, detail)
   invisible(NULL)
 }
 

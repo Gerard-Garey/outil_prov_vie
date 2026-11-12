@@ -1,0 +1,4 @@
+code_garantie,poste,famille,composantes,regle_combinaison,provision_comptes_sociaux,meilleure_estimation,methodes,temoins
+deces,sinistres_declares_non_regles,engagement,,,psap_vie,TRUE,capital_dossier;capital_dossier_reglement,
+deces,capitaux_non_reclames,engagement,,,psap_vie,TRUE,capital_revalorise;capital_revalorise_reglement,
+deces,provision_mathematique_temporaire_deces,risque_en_cours,,,provision_mathematique_vie,FALSE,individuel:prospective_prime_pure;individuel:prospective_prime_declaree;collectif:prorata_cotisation,individuel:retrospective

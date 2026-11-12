@@ -1,0 +1,4 @@
+etat,individu,absorbant,description
+actif,assure,FALSE,Assuré couvert et vivant
+deces,assure,TRUE,Assuré décédé (fait générateur du capital décès)
+iad,assure,TRUE,Invalidité absolue et définitive : capital versé par anticipation ; couverture décès éteinte

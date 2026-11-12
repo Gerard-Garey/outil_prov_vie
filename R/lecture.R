@@ -3,7 +3,9 @@
 # Format : celui du dictionnaire, § 1.2 (CSV UTF-8 sans marque d'ordre, virgule, point
 # décimal, guillemets doubles, dates AAAA-MM-JJ, logiques TRUE / FALSE) et § 1.6 (le champ
 # vide est le seul marqueur de manquant). Un fichier par table : <dossier>/<table>.csv.
-# N'appelle que les modules `dictionnaire` et `outils`. Ne parle pas (point 12).
+# N'appelle que les modules `dictionnaire`, `outils` et `tables` (lire_table() : colonnes des
+# formats et construction de la table_provie ; arête lecture -> tables de la spécification de
+# B2, § 3.3, hors de la chaîne du moteur). Ne parle pas (point 12).
 # Code ASCII hors commentaires (M112) : les accents des chaînes s'écrivent en \uXXXX.
 # Convention de ce fichier : une fonction dont le nom commence par un point est un
 # auxiliaire du module ; la concordance documentation <-> code ne recense que les autres.
@@ -272,6 +274,59 @@ lire_base <- function(dossier) {
   ligne <- findInterval(isoles[1L], fins_ligne)
   mal_forme(paste0("guillemet non ferm\u00e9, ",
                    if (ligne == 0L) "en-t\u00eate" else paste0("ligne de donn\u00e9es ", ligne)))
+}
+
+# --- Tables en entrée ------------------------------------------------------------
+
+# Lit une table au format natif `format` (un format de formats_tables()) dans le fichier CSV
+# `chemin`, au format CSV d'une table de la base (dictionnaire, § 1.2 ; même lecture « fidélité
+# ou refus » que lire_base(), par .lire_table_csv()), et la rend en table_provie par
+# tables::construire_table(identifiant, statut, provenance) (spécification de B2, § 3.3).
+# Refuse sans convertir : format_table_inconnu (format hors liste ; colonnes autres que
+# celles du format, dans son ordre ; contrainte du format violée), fichier_invalide (chemin
+# qui n'est pas une chaîne unique, fichier introuvable ou mal formé), type_incompatible
+# (colonne dont une valeur ne se lit pas dans le type du format : le message nomme la
+# colonne et la première ligne de données), liste_invalide (identifiant, statut ou
+# provenance mal formés). L'empreinte du fichier n'est pas portée par la table : elle va dans
+# l'argument `provenance` de calculer_provisions().
+lire_table <- function(chemin, format, identifiant, statut, provenance) {
+  if (!is.character(chemin) || length(chemin) != 1L || is.na(chemin) || !nzchar(chemin)) {
+    .refus_lecture("lire_table() : `chemin` doit \u00eatre un chemin (cha\u00eene unique)")
+  }
+  formats <- formats_tables()
+  if (!(is.character(format) && length(format) == 1L && !is.na(format) && format %in% formats$format)) {
+    refuser(paste0("lire_table() : format de table hors de la liste (", paste(formats$format, collapse = ", "), ")"),
+            "format_table_inconnu", module = "lecture",
+            recu = if (is.character(format) && length(format) == 1L) format else NA_character_)
+  }
+  if (!(is.character(identifiant) && length(identifiant) == 1L && !is.na(identifiant) && nzchar(identifiant))) {
+    refuser("lire_table() : `identifiant` doit \u00eatre une cha\u00eene non vide", "liste_invalide", module = "lecture")
+  }
+  if (!file.exists(chemin) || dir.exists(chemin)) {
+    .refus_lecture(paste0("lire_table() : fichier introuvable : ", chemin))
+  }
+  ligne <- formats[formats$format == format, , drop = FALSE]
+  colonnes <- data.frame(colonne = strsplit(ligne$colonnes, ";", fixed = TRUE)[[1L]],
+                         type = strsplit(ligne$types, ";", fixed = TRUE)[[1L]], stringsAsFactors = FALSE)
+  brut <- .lire_table_csv(chemin, identifiant, colonnes)
+  if (!identical(names(brut), colonnes$colonne)) {
+    refuser(paste0("lire_table() : table ", identifiant, " (format ", format, ") : colonnes attendues, dans cet ordre : ",
+                   paste(colonnes$colonne, collapse = ", "), " ; lues : ", paste(names(brut), collapse = ", ")),
+            "format_table_inconnu", module = "lecture", table = identifiant)
+  }
+  # une colonne restée en texte alors que le format attend un autre type : une valeur au moins
+  # ne s'y lit pas (lire_texte_type()) ; refus sans conversion, à la première ligne illisible
+  for (k in seq_len(nrow(colonnes))) {
+    if (colonnes$type[k] != "character" && is.character(brut[[k]])) {
+      lu <- lire_texte_type(brut[[k]], colonnes$type[k])
+      i <- lu$illisibles[1L]
+      refuser(paste0("lire_table() : table ", identifiant, ", colonne ", colonnes$colonne[k], ", ligne de donn\u00e9es ",
+                     i, " : valeur illisible dans le type ", colonnes$type[k], lu$precision, " (aucune conversion)"),
+              "type_incompatible", module = "lecture", table = identifiant, colonne = colonnes$colonne[k],
+              identifiants = as.character(i), attendu = colonnes$type[k], recu = brut[[k]][i])
+    }
+  }
+  construire_table(brut, format, identifiant, statut, provenance)
 }
 
 # --- Écriture --------------------------------------------------------------------

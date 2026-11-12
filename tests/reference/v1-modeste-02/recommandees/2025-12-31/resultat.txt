@@ -1,0 +1,106 @@
+provie-liste 1
+provisions/garantie	character	deces	deces	deces	deces
+provisions/referentiel	character	comptes_sociaux	comptes_sociaux	comptes_sociaux	comptes_sociaux
+provisions/poste	character	capitaux_non_reclames	provision_mathematique_temporaire_deces	sinistres_declares_non_regles	total
+provisions/famille	character	engagement	risque_en_cours	engagement	\N
+provisions/provision	character	psap_vie	provision_mathematique_vie	psap_vie	\N
+provisions/segmentation	character	ensemble	ensemble	ensemble	ensemble
+provisions/segment	character	ensemble	ensemble	ensemble	ensemble
+provisions/niveau	character	calcul	calcul	calcul	agregat
+provisions/montant	double	NA	0	NA	NA
+provisions/nombre_dossiers	integer	NA	0	NA	NA
+provisions/methode	character	capital_revalorise	individuel:prospective_prime_pure;collectif:prorata_cotisation	capital_dossier	\N
+provisions/statut_methode	character	recommandee	recommandee	recommandee	\N
+provisions/statut_resultat	character	\N	exact	\N	\N
+provisions/statut_calcul	character	arrete	calcule	arrete	arrete
+provisions/motif_arret	character	D09	\N	D09	poste_arrete:capitaux_non_reclames;sinistres_declares_non_regles
+dossiers/id_dossier	character
+dossiers/id_sinistre	character
+dossiers/garantie	character
+dossiers/referentiel	character
+dossiers/poste	character
+dossiers/etat	character
+dossiers/date_entree_etat	date
+dossiers/montant	double
+dossiers/methode	character
+dossiers/statut_resultat	character
+dossiers/hypotheses_defaut	character
+echeanciers	null
+triangles	null
+passage	null
+indicateurs/regle	character
+indicateurs/poste	character
+indicateurs/garantie	character
+indicateurs/valeur_regle	double
+indicateurs/valeur_retenue	double
+indicateurs/depassement	logical
+indicateurs/detail	character
+donnees/controles/code	character	D03b	D03a	D03a	D03c	D13	D02b	D05	D06	D02a	D09	D03g	D01b	D01b	D04b
+donnees/controles/table	character	assures	assures	assures	affiliations	sinistres	evenements	evenements	evenements	prestations	prestations	prestations	cotisations	cotisations	cotisations
+donnees/controles/colonne	character	sexe	date_naissance	date_naissance	salaire_reference	date_instruction	date_saisie	motif	justificatif	fin_periode	montant	date_saisie	\N	\N	id_garantie_souscrite
+donnees/controles/detection	character	exacte	exacte	exacte	exacte	exacte	exacte	exacte	exacte	exacte	exacte	exacte	exacte	exacte	exacte
+donnees/controles/nombre	integer	6	11	11	11	4	3	2	3	2	1	1	4	4	4
+donnees/controles/identifiants	character	AS0045;AS0089;AS0105;AS0232;AS0295;AS0415	AS0066;AS0077;AS0134;AS0136;AS0271;AS0316;AS0339;AS0367;AS0434;AS0471	AS0066;AS0077;AS0134;AS0136;AS0271;AS0316;AS0339;AS0367;AS0434;AS0471	AF0001;AF0029;AF0038;AF0050;AF0169;AF0195;AF0224;AF0299;AF0307;AF0400	SI0018;SI0019;SI0023;SI0043	EV00024;EV00044;EV00059	EV00030;EV00066	EV00036;EV00106;EV00122	PR00027;PR00039	PR00010	PR00027	CO0223;CO0224;CO0225;CO0226	CO0223;CO0224;CO0225;CO0226	CO0044;CO0080;CO0138;CO0172
+donnees/controles_non_executes/code	character	D03h	D09	D03d	D09	D14	D08	D11	D10e	D07	D09	D10d	D10f	D12	D01b	D09	prestations_ecartees	D09
+donnees/controles_non_executes/table	character	garanties_souscrites	parametres	assures	affiliations	famille	sinistres	sinistres	beneficiaires	evenements	evenements	evenements	evenements	evenements	prestations	prestations	prestations	cotisations
+donnees/controles_non_executes/colonne	character	\N	\N	situation_familiale	\N	\N	\N	date_survenance	qualite	\N	\N	\N	\N	type_evenement	\N	\N	montant	\N
+donnees/controles_non_executes/cause	character	non_lisible	non_implemente	non_implemente	non_implemente	non_implemente	non_implemente	non_implemente	non_implemente	non_implemente	non_implemente	non_implemente	non_implemente	non_implemente	D09	non_implemente	D09	non_implemente
+donnees/refus_tables/table	character	prestations
+donnees/refus_tables/colonne	character	montant
+donnees/refus_tables/motif	character	D09
+donnees/refus_tables/portee	character	colonne
+donnees/refus_tables/origine	character	\N
+donnees/refus_tables/nombre	integer	1
+donnees/refus_tables/nombre_visibles	integer	1
+donnees/refus_tables/identifiants	character	PR00010
+donnees/refus_tables/nombre_dossiers	integer	1
+donnees/refus_tables/postes_arretes	character	deces/capitaux_non_reclames;deces/sinistres_declares_non_regles
+donnees/exclusions/motif	character	D01b	D01b	D01b	D01b	D02a	D02a	D02a	D02a	D04b	D04b	D04b	D04b
+donnees/exclusions/famille	character	engagement	triangle	risque_en_cours	regle_comptable	engagement	triangle	risque_en_cours	regle_comptable	engagement	triangle	risque_en_cours	regle_comptable
+donnees/exclusions/action	character	exclure	exclure	exclure	exclure	conserver	exclure	conserver	conserver	exclure	exclure	exclure	exclure
+donnees/exclusions/nombre_lignes	integer	4	4	4	4	2	2	2	2	4	4	4	4
+donnees/exclusions/nombre_dossiers	integer	0	0	0	0	2	2	2	2	0	0	0	0
+donnees/hypotheses_defaut/motif	character	D03a	D03a	D03b	D03b	D03c	D03c
+donnees/hypotheses_defaut/referentiel	character	comptes_sociaux	solvabilite_2	comptes_sociaux	solvabilite_2	comptes_sociaux	solvabilite_2
+donnees/hypotheses_defaut/poste	character	tous	tous	tous	tous	tous	tous
+donnees/hypotheses_defaut/valeur	character	age_par_defaut_du_segment	age_par_defaut_du_segment	sexe_par_defaut_du_poste	sexe_par_defaut_du_poste	salaire_par_defaut_du_college	salaire_par_defaut_du_college
+donnees/hypotheses_defaut/nombre	integer	11	11	6	6	11	11
+donnees/signalements/code	character	D03a	D13	D02b	D05	D06	D03g	D01b
+donnees/signalements/table	character	assures	sinistres	evenements	evenements	evenements	prestations	cotisations
+donnees/signalements/colonne	character	date_naissance	date_instruction	date_saisie	motif	justificatif	date_saisie	\N
+donnees/signalements/detection	character	exacte	exacte	exacte	exacte	exacte	exacte	exacte
+donnees/signalements/nombre	integer	11	4	3	2	3	1	4
+donnees/signalements/identifiants	character	AS0066;AS0077;AS0134;AS0136;AS0271;AS0316;AS0339;AS0367;AS0434;AS0471	SI0018;SI0019;SI0023;SI0043	EV00024;EV00044;EV00059	EV00030;EV00066	EV00036;EV00106;EV00122	PR00027	CO0223;CO0224;CO0225;CO0226
+donnees/declarations_requises/rubrique	character
+donnees/declarations_requises/motif	character
+donnees/declarations_requises/cle	character
+donnees/declarations_requises/traitements_admis	character
+donnees/declarations_requises/nombre_lignes	integer
+donnees/enjeu/table	character	prestations	prestations	prestations	prestations	prestations	prestations	prestations	prestations	prestations	prestations	cotisations	cotisations	cotisations	cotisations	cotisations	cotisations	cotisations	cotisations	cotisations	cotisations	cotisations	cotisations	cotisations	cotisations	cotisations	cotisations	cotisations	cotisations	cotisations	cotisations	cotisations	cotisations	cotisations	cotisations	cotisations	cotisations	cotisations	cotisations	cotisations	cotisations	cotisations	cotisations	cotisations	cotisations	cotisations	cotisations	cotisations	cotisations	cotisations	cotisations	cotisations	cotisations	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N
+donnees/enjeu/colonne	character	fin_periode	fin_periode	fin_periode	fin_periode	fin_periode	fin_periode	fin_periode	fin_periode	montant	montant	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	id_garantie_souscrite	id_garantie_souscrite	id_garantie_souscrite	id_garantie_souscrite	id_garantie_souscrite	id_garantie_souscrite	id_garantie_souscrite	id_garantie_souscrite	id_garantie_souscrite	id_garantie_souscrite	id_garantie_souscrite	id_garantie_souscrite	id_garantie_souscrite	id_garantie_souscrite	id_garantie_souscrite	id_garantie_souscrite	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N
+donnees/enjeu/motif	character	D02a	D02a	D02a	D02a	D02a	D02a	D02a	D02a	D09	D09	D01b	D01b	D01b	D01b	D01b	D01b	D01b	D01b	D01b	D01b	D01b	D01b	D01b	D01b	D01b	D01b	D01b	D01b	D01b	D01b	D01b	D01b	D01b	D01b	D01b	D01b	D04b	D04b	D04b	D04b	D04b	D04b	D04b	D04b	D04b	D04b	D04b	D04b	D04b	D04b	D04b	D04b	ensemble	ensemble	ensemble	ensemble	ensemble	ensemble	ensemble	ensemble	ensemble	ensemble	ensemble	ensemble	ensemble	ensemble	ensemble	ensemble	ensemble	ensemble	ensemble	ensemble	ensemble	ensemble	ensemble	ensemble	ensemble	ensemble	ensemble	ensemble	ensemble	ensemble	ensemble	ensemble	ensemble	ensemble	ensemble	ensemble	ensemble	ensemble	ensemble	ensemble	ensemble	ensemble
+donnees/enjeu/famille	character	engagement	engagement	triangle	triangle	risque_en_cours	risque_en_cours	regle_comptable	regle_comptable	ensemble	ensemble	engagement	engagement	engagement	engagement	engagement	engagement	triangle	triangle	triangle	triangle	triangle	triangle	risque_en_cours	risque_en_cours	risque_en_cours	risque_en_cours	risque_en_cours	risque_en_cours	risque_en_cours	risque_en_cours	regle_comptable	regle_comptable	regle_comptable	regle_comptable	regle_comptable	regle_comptable	engagement	engagement	engagement	engagement	triangle	triangle	triangle	triangle	risque_en_cours	risque_en_cours	risque_en_cours	risque_en_cours	regle_comptable	regle_comptable	regle_comptable	regle_comptable	engagement	engagement	engagement	engagement	engagement	engagement	engagement	engagement	engagement	engagement	triangle	triangle	triangle	triangle	triangle	triangle	triangle	triangle	triangle	triangle	risque_en_cours	risque_en_cours	risque_en_cours	risque_en_cours	risque_en_cours	risque_en_cours	risque_en_cours	risque_en_cours	risque_en_cours	risque_en_cours	regle_comptable	regle_comptable	regle_comptable	regle_comptable	regle_comptable	regle_comptable	regle_comptable	regle_comptable	regle_comptable	regle_comptable	ensemble	ensemble
+donnees/enjeu/action	character	conserver	conserver	exclure	exclure	conserver	conserver	conserver	conserver	refus	refus	exclure	exclure	exclure	exclure	exclure	exclure	exclure	exclure	exclure	exclure	exclure	exclure	exclure	exclure	exclure	exclure	exclure	exclure	exclure	exclure	exclure	exclure	exclure	exclure	exclure	exclure	exclure	exclure	exclure	exclure	exclure	exclure	exclure	exclure	exclure	exclure	exclure	exclure	exclure	exclure	exclure	exclure	conserver	conserver	exclure	exclure	exclure	exclure	exclure	exclure	exclure	exclure	exclure	exclure	exclure	exclure	exclure	exclure	exclure	exclure	exclure	exclure	conserver	conserver	exclure	exclure	exclure	exclure	exclure	exclure	exclure	exclure	conserver	conserver	exclure	exclure	exclure	exclure	exclure	exclure	exclure	exclure	refus	refus
+donnees/enjeu/garantie	character	incapacite	ensemble	incapacite	ensemble	incapacite	ensemble	incapacite	ensemble	incapacite	ensemble	deces	deces	incapacite	incapacite	ensemble	ensemble	deces	deces	incapacite	incapacite	ensemble	ensemble	deces	deces	deces	deces	incapacite	incapacite	ensemble	ensemble	deces	deces	incapacite	incapacite	ensemble	ensemble	non_rattache	non_rattache	ensemble	ensemble	non_rattache	non_rattache	ensemble	ensemble	non_rattache	non_rattache	ensemble	ensemble	non_rattache	non_rattache	ensemble	ensemble	incapacite	ensemble	deces	deces	incapacite	incapacite	non_rattache	non_rattache	ensemble	ensemble	deces	deces	incapacite	incapacite	incapacite	non_rattache	non_rattache	ensemble	ensemble	ensemble	incapacite	ensemble	deces	deces	incapacite	incapacite	non_rattache	non_rattache	ensemble	ensemble	incapacite	ensemble	deces	deces	incapacite	incapacite	non_rattache	non_rattache	ensemble	ensemble	incapacite	ensemble
+donnees/enjeu/poste	character	ensemble	ensemble	ensemble	ensemble	ensemble	ensemble	ensemble	ensemble	ensemble	ensemble	ensemble	ensemble	ensemble	ensemble	ensemble	ensemble	ensemble	ensemble	ensemble	ensemble	ensemble	ensemble	ensemble	provision_mathematique_temporaire_deces	ensemble	provision_mathematique_temporaire_deces	ensemble	ensemble	ensemble	ensemble	ensemble	ensemble	ensemble	ensemble	ensemble	ensemble	ensemble	ensemble	ensemble	ensemble	ensemble	ensemble	ensemble	ensemble	ensemble	ensemble	ensemble	ensemble	ensemble	ensemble	ensemble	ensemble	ensemble	ensemble	ensemble	ensemble	ensemble	ensemble	ensemble	ensemble	ensemble	ensemble	ensemble	ensemble	ensemble	ensemble	ensemble	ensemble	ensemble	ensemble	ensemble	ensemble	ensemble	ensemble	ensemble	ensemble	ensemble	ensemble	ensemble	ensemble	ensemble	ensemble	ensemble	ensemble	ensemble	ensemble	ensemble	ensemble	ensemble	ensemble	ensemble	ensemble	ensemble	ensemble
+donnees/enjeu/composante	character	prestations_ecartees	prestations_ecartees	prestations_ecartees	prestations_ecartees	prestations_ecartees	prestations_ecartees	prestations_ecartees	prestations_ecartees	prestations_ecartees	prestations_ecartees	cotisations_emises_nettes	cotisations_encaissees	cotisations_emises_nettes	cotisations_encaissees	cotisations_emises_nettes	cotisations_encaissees	cotisations_emises_nettes	cotisations_encaissees	cotisations_emises_nettes	cotisations_encaissees	cotisations_emises_nettes	cotisations_encaissees	cotisations_emises_nettes	cotisations_emises_nettes	cotisations_encaissees	cotisations_encaissees	cotisations_emises_nettes	cotisations_encaissees	cotisations_emises_nettes	cotisations_encaissees	cotisations_emises_nettes	cotisations_encaissees	cotisations_emises_nettes	cotisations_encaissees	cotisations_emises_nettes	cotisations_encaissees	cotisations_emises_nettes	cotisations_encaissees	cotisations_emises_nettes	cotisations_encaissees	cotisations_emises_nettes	cotisations_encaissees	cotisations_emises_nettes	cotisations_encaissees	cotisations_emises_nettes	cotisations_encaissees	cotisations_emises_nettes	cotisations_encaissees	cotisations_emises_nettes	cotisations_encaissees	cotisations_emises_nettes	cotisations_encaissees	prestations_ecartees	prestations_ecartees	cotisations_emises_nettes	cotisations_encaissees	cotisations_emises_nettes	cotisations_encaissees	cotisations_emises_nettes	cotisations_encaissees	cotisations_emises_nettes	cotisations_encaissees	cotisations_emises_nettes	cotisations_encaissees	prestations_ecartees	cotisations_emises_nettes	cotisations_encaissees	cotisations_emises_nettes	cotisations_encaissees	prestations_ecartees	cotisations_emises_nettes	cotisations_encaissees	prestations_ecartees	prestations_ecartees	cotisations_emises_nettes	cotisations_encaissees	cotisations_emises_nettes	cotisations_encaissees	cotisations_emises_nettes	cotisations_encaissees	cotisations_emises_nettes	cotisations_encaissees	prestations_ecartees	prestations_ecartees	cotisations_emises_nettes	cotisations_encaissees	cotisations_emises_nettes	cotisations_encaissees	cotisations_emises_nettes	cotisations_encaissees	cotisations_emises_nettes	cotisations_encaissees	prestations_ecartees	prestations_ecartees
+donnees/enjeu/unite	character	euro	euro	euro	euro	euro	euro	euro	euro	euro	euro	euro	euro	euro	euro	euro	euro	euro	euro	euro	euro	euro	euro	euro	euro	euro	euro	euro	euro	euro	euro	euro	euro	euro	euro	euro	euro	euro	euro	euro	euro	euro	euro	euro	euro	euro	euro	euro	euro	euro	euro	euro	euro	euro	euro	euro	euro	euro	euro	euro	euro	euro	euro	euro	euro	euro	euro	euro	euro	euro	euro	euro	euro	euro	euro	euro	euro	euro	euro	euro	euro	euro	euro	euro	euro	euro	euro	euro	euro	euro	euro	euro	euro	euro	euro
+donnees/enjeu/montant	double	NA	NA	NA	NA	NA	NA	NA	NA	NA	NA	0	18438.310000000001	0	18734.84	0	37173.150000000001	0	18438.310000000001	0	18734.84	0	37173.150000000001	0	0	18438.310000000001	18438.310000000001	0	18734.84	0	37173.150000000001	0	18438.310000000001	0	18734.84	0	37173.150000000001	61949.760000000002	0	61949.760000000002	0	61949.760000000002	0	61949.760000000002	0	61949.760000000002	0	61949.760000000002	0	61949.760000000002	0	61949.760000000002	0	NA	NA	0	18438.310000000001	0	18734.84	61949.760000000002	0	61949.760000000002	37173.150000000001	0	18438.310000000001	NA	0	18734.84	61949.760000000002	0	NA	61949.760000000002	37173.150000000001	NA	NA	0	18438.310000000001	0	18734.84	61949.760000000002	0	61949.760000000002	37173.150000000001	NA	NA	0	18438.310000000001	0	18734.84	61949.760000000002	0	61949.760000000002	37173.150000000001	NA	NA
+donnees/enjeu/nombre_dossiers	integer	2	2	2	2	2	2	2	2	1	1	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	2	2	0	0	0	0	0	0	0	0	0	0	2	0	0	0	0	2	0	0	2	2	0	0	0	0	0	0	0	0	2	2	0	0	0	0	0	0	0	0	1	1
+donnees/enjeu/nombre_valeurs	integer	NA	NA	NA	NA	NA	NA	NA	NA	NA	NA	0	2	0	2	0	4	0	2	0	2	0	4	0	0	2	2	0	2	0	4	0	2	0	2	0	4	4	0	4	0	4	0	4	0	4	0	4	0	4	0	4	0	NA	NA	0	2	0	2	4	0	4	4	0	2	NA	0	2	4	0	NA	4	4	NA	NA	0	2	0	2	4	0	4	4	NA	NA	0	2	0	2	4	0	4	4	NA	NA
+donnees/enjeu/cause	character	D09	D09	D09	D09	D09	D09	D09	D09	D09	D09	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	D09	D09	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	D09	\N	\N	\N	\N	D09	\N	\N	D09	D09	\N	\N	\N	\N	\N	\N	\N	\N	D09	D09	\N	\N	\N	\N	\N	\N	\N	\N	D09	D09
+donnees/vue/date_arrete	date	2025-12-31
+donnees/vue/date_extraction	date	2025-12-31
+donnees/vue/visibilite_non_determinee/table	character
+donnees/vue/visibilite_non_determinee/colonne	character
+donnees/vue/visibilite_non_determinee/motif	character
+donnees/vue/visibilite_non_determinee/origine	character
+donnees/vue/visibilite_non_determinee/nombre	integer
+donnees/vue/visibilite_non_determinee/identifiants	character
+donnees/vue/provisoire	logical	F
+donnees/segments/id_dossier	character
+donnees/segments/id_sinistre	character
+donnees/segments/id_contrat	character
+donnees/segments/segmentation	character
+donnees/segments/segment	character
+donnees/tables_absentes	character	catastrophes	victimes	evaluations_gestion	designations	ayants_droit_sante

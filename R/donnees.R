@@ -43,12 +43,13 @@ ACTIONS_EXCLUSION <- c("exclure", "conserver")
 # 0010, neuvième série) : le constat va dans `signalements`.
 .VALEUR_SIGNALEMENT <- "signalement"
 # Seuil du délai de D03g (décision du mainteneur, D5 ; nom provisoire) : liste nommée par
-# table de `seuils`, en jours, sans valeur par défaut, commune aux deux référentiels.
-.SEUIL_DELAI_D03G <- "d03g_delai_jours"
+# table de `seuils`, en jours, sans valeur par défaut, commune aux deux référentiels. Sans
+# point : lue aussi par `plan` (ADR 0010, quatrième série, (c)).
+SEUIL_DELAI_D03G <- "d03g_delai_jours"
 # Bornes de vraisemblance de l'âge de D02c (spécification, § 5.4 ; ADR 0010, neuvième série) :
 # deux listes nommées par emploi de `seuils`, en années entières, sans valeur par défaut ;
-# table de la personne de chaque emploi.
-.SEUILS_AGE_D02C <- c("d02c_age_min", "d02c_age_max")
+# table de la personne de chaque emploi. Sans point : lue aussi par `plan`.
+SEUILS_AGE_D02C <- c("d02c_age_min", "d02c_age_max")
 .EMPLOIS_D02C <- c(assures_sinistre = "assures", assures_affiliation = "assures", famille = "famille",
                    designations = "designations", ayants_droit_sante = "ayants_droit_sante")
 # Âge non défini (date de référence antérieure à la naissance, spécification, § 5.2) : le
@@ -89,10 +90,11 @@ COMPOSANTES_ENJEU <- data.frame(
 # Sous-éléments admis des arguments `declarations` (sous-schéma `donnees` du plan, ADR 0010,
 # point 17) et `conventions` (section `conventions` du plan, M153).
 RUBRIQUES_DECLARATIONS <- c("exclusions", "hypotheses", "seuils", "evaluations_gestion")
-# `instant_date`, `repartition_annee` et `fractionnement` sont admises sans contrôle de valeur :
-# leur domaine n'est écrit ni dans l'ADR 0010 (point 17 : noms seuls) ni dans la
-# spécification ; valider_plan() le fixera en B2.
-ENTREES_CONVENTIONS <- c("age", "instant_date", "repartition_annee", "fractionnement", "limite_age")
+# `instant_date`, `repartition_annee`, `fractionnement` et `decompte_jours` (entrée nouvelle de
+# B2) sont admises sans contrôle de valeur : leur domaine est contrôlé par valider_plan()
+# (spécification de B2, docs/specifications/b2-capital-deces-v1.md, § 2.6).
+ENTREES_CONVENTIONS <- c("age", "instant_date", "repartition_annee", "fractionnement", "decompte_jours",
+                         "limite_age")
 
 # Contrôles prévus par la spécification (§ 2.4) et reportés (décision du mainteneur : #18 se
 # ferme avec un report déclaré ; #34) : rendus dans
@@ -230,9 +232,37 @@ CONVENTIONS_LIMITE_AGE <- c("revolu", "millesime")
 # tête), puis par code (exclusions, hypotheses_defaut, declarations_requises : par motif,
 # puis famille ou référentiel dans l'ordre de leur liste) ; `identifiants` porte les dix premières valeurs de la clé primaire,
 # triées (sort radix), jointes par « ; » (colonnes d'une clé composite jointes par « | »).
+# Le bilan est celui de la vue à l'arrêté (vue_a_date()$bilan, spécification de B2, § 4.2).
 controler_base <- function(donnees, arrete, declarations = NULL, conventions = NULL) {
   if (missing(arrete)) {
     refuser("controler_base() : date d'arr\u00eat\u00e9 absente (`arrete`, obligatoire, sans valeur par d\u00e9faut)",
+            "plan_incomplet", module = "donnees")
+  }
+  vue_a_date(donnees, arrete, declarations, conventions)$bilan
+}
+
+# Vue à l'arrêté (spécification de B2, docs/specifications/b2-capital-deces-v1.md, § 4.2 ;
+# ADR 0010, point 14, annoté) : construite une seule fois par `donnees`, lue par les familles
+# de calcul (etats_a_date(), valeurs_vue()), jamais la base brute. Mêmes arguments et mêmes
+# refus d'appel que controler_base(), sans valeur par défaut (`declarations` et `conventions` :
+# NULL pour aucune déclaration, aucune convention). Rend une liste de classe `vue_provie` :
+#   bilan : la liste que rend controler_base() (controler_base() en est la lecture) ;
+#   retenu : par table, lignes retenues dans la vue (logique ; .construire_vue()) ;
+#   parties : par table à partie de ligne, logique de Kleene (.visibilite_a(), mode "vue") :
+#     TRUE connue à l'arrêté, FALSE inconnue de façon déterminée, NA non déterminée ou
+#     illisible par sa forme (#51) ;
+#   exclu : par famille de calcul (FAMILLES_CALCUL) puis par table, lignes exclues par une
+#     exclusion déclarée d'action `exclure` pour cette famille, cascade du dictionnaire
+#     (§ 1.10 : un sinistre exclu exclut ses dossiers, rentes, bénéficiaires, événements,
+#     prestations et évaluations) comprise ;
+#   hypotheses : hypothèses par défaut appliquées (placement des constats H déclarés), une
+#     entrée par (motif, référentiel, poste, valeur, table) avec ses lignes ;
+#   ctx : environnement interne, lu par valeurs_vue() et etats_a_date() seulement.
+# Sans point : appelée hors du module par les familles de calcul et l'orchestration (B2),
+# non exportée.
+vue_a_date <- function(donnees, arrete, declarations, conventions) {
+  if (missing(arrete)) {
+    refuser("vue_a_date() : date d'arr\u00eat\u00e9 absente (`arrete`, obligatoire, sans valeur par d\u00e9faut)",
             "plan_incomplet", module = "donnees")
   }
   dico <- dictionnaire()
@@ -248,7 +278,7 @@ controler_base <- function(donnees, arrete, declarations = NULL, conventions = N
             recu = format(arrete))
   }
   conventions <- .lire_conventions(conventions)
-  declarations <- .lire_declarations(declarations, dico)
+  declarations <- lire_declarations(declarations, dico)
 
   ctx <- .contexte(donnees, dico, extraction, arrete)
   ctx$declarations <- declarations
@@ -261,7 +291,320 @@ controler_base <- function(donnees, arrete, declarations = NULL, conventions = N
   .regle_p(ctx)
   .construire_vue(ctx)
   .regle_v(ctx)
-  .bilan(ctx)
+  bilan <- .bilan(ctx)
+  structure(list(bilan = bilan, retenu = ctx$retenu, parties = .visibilite_a(ctx, "vue")$parties,
+                 exclu = .exclu_vue(ctx), hypotheses = ctx$placement$hypotheses, ctx = ctx),
+            class = "vue_provie")
+}
+
+# Valeurs d'une colonne dans la vue `vue` (objet vue_a_date()) : .valeurs_vue(). Son NA veut
+# dire « hors de la vue » (ligne non retenue, partie de ligne inconnue, non déterminée ou
+# illisible), jamais « absente » : un lecteur qui doit distinguer lit `vue$parties`
+# (spécification de B2, § 4.3). Sans point : appelée hors du module par les familles de
+# calcul, non exportée.
+valeurs_vue <- function(vue, table, colonne) {
+  if (!inherits(vue, "vue_provie")) stop("valeurs_vue() : `vue` doit \u00eatre un objet vue_provie", call. = FALSE)
+  .valeurs_vue(vue$ctx, table, colonne)
+}
+
+# Tables de la cascade d'une exclusion (dictionnaire, § 1.10) : un sinistre exclu exclut, dans
+# la même famille, ses dossiers, rentes, bénéficiaires, événements, prestations et
+# évaluations ; la cascade suit les clés étrangères simples de ces tables vers les tables de
+# la cascade et vers sinistres.
+.TABLES_CASCADE_EXCLUSION <- c("dossiers", "rentes", "beneficiaires", "evenements", "prestations", "evaluations_gestion")
+
+# Lignes exclues par famille de calcul (vue_a_date()$exclu) : lignes des exclusions placées
+# (.placer(), action `exclure`) de la famille, puis cascade jusqu'au point fixe (une ligne
+# d'une table de la cascade est exclue si la ligne qu'elle vise par une clé étrangère l'est).
+.exclu_vue <- function(ctx) {
+  tables <- setdiff(ctx$tables, "extraction")
+  liens <- .liens_visibilite(ctx$dico)
+  liens <- liens[liens$table %in% intersect(tables, .TABLES_CASCADE_EXCLUSION) &
+                   liens$table_cible %in% intersect(tables, c("sinistres", .TABLES_CASCADE_EXCLUSION)), , drop = FALSE]
+  res <- list()
+  for (f in FAMILLES_CALCUL) {
+    x <- lapply(stats::setNames(tables, tables), function(t) rep(FALSE, NROW(ctx$base[[t]])))
+    for (e in ctx$placement$exclusions) {
+      if (e$famille == f && e$action == "exclure" && e$table %in% tables) x[[e$table]][e$lignes] <- TRUE
+    }
+    repeat {
+      change <- FALSE
+      for (i in seq_len(nrow(liens))) {
+        t <- liens$table[i]
+        u <- liens$table_cible[i]
+        if (!any(x[[u]])) next
+        cles <- as.character(.valeurs(ctx, u, liens$colonne_cible[i]))[x[[u]]]
+        nouveau <- x[[t]] | as.character(.valeurs(ctx, t, liens$colonne[i])) %in% cles[!is.na(cles)]
+        if (!identical(nouveau, x[[t]])) {
+          x[[t]] <- nouveau
+          change <- TRUE
+        }
+      }
+      if (!change) break
+    }
+    res[[f]] <- x
+  }
+  res
+}
+
+# --- États à une date ----------------------------------------------------------------
+
+# Garanties dont etats_a_date() reconstitue les dossiers (B2 : deces seule ; spécification de
+# B2, § 4.2) ; colonnes rendues, dans cet ordre.
+.GARANTIES_ETATS <- "deces"
+.COLONNES_ETATS <- c("id_sinistre", "id_dossier", "etat", "date_entree_etat", "categorie_invalidite",
+                     "montant_en_vigueur", "etat_dossier", "date_etat_dossier", "motif_cloture", "instruit")
+
+# États à l'arrêté des dossiers de la vue `vue` (objet vue_a_date()) dont la garantie souscrite
+# a un code de `garanties` (B2 : "deces" seule ; tout autre code est une erreur de
+# programmation), pour la famille de calcul `famille` (exigée, sans valeur par défaut, un code
+# de FAMILLES_CALCUL ; autre valeur : erreur de programmation) (spécification de B2, § 4.2,
+# erratum v1.0.5 ; ADR 0010, point 14, annoté). Une ligne par dossier retenu, dans l'ordre de
+# la table dossiers, exclus pour la famille compris (l'appelant les filtre par
+# vue$exclu[[famille]]$dossiers) ; colonnes .COLONNES_ETATS :
+#   etat : "deces" (sinistre deces) ou "iad" (sinistre iad), NA sinon ; date_entree_etat :
+#     sinistres.date_survenance ; categorie_invalidite : NA (B5) ;
+#   montant_en_vigueur : montant du dernier fixation_capital du dossier retenu et non exclu
+#     pour la famille (NA sans fixation) ;
+#   etat_dossier ("ouvert", "capital_du", "clos"), date_etat_dossier (date d'effet de
+#     l'événement qui l'a fixé, date_ouverture pour l'ouvert initial), motif_cloture (motif du
+#     cloture_dossier en vigueur si clos, NA sinon) : automate du dossier deces sur les
+#     événements de la vue de niveau dossier non exclus pour la famille
+#     (vue$exclu[[famille]]$evenements), de date d'effet au plus l'arrêté (comme les
+#     composantes de l'enjeu et D07 (c)), dans l'ordre de .dernier_evenement() (date d'effet,
+#     ordre des types du § 4, date de saisie, id_evenement) : départ ouvert ; fixation_capital
+#     ouvert -> capital_du (montant mis à jour ; sur un clos, montant mis à jour, état
+#     inchangé) ; cloture_dossier -> clos ; reouverture_dossier : clos -> capital_du si un montant est en vigueur (fixation retenue
+#     antérieure à la réouverture), ouvert sinon, à la date d'effet de la réouverture ; les
+#     autres types sont sans effet ;
+#   instruit : logique de Kleene, NA si la partie sinistres.date_instruction vaut NA dans
+#     `vue$parties`, sinon partie ET date d'instruction présente (spécification de B2, § 4.3).
+# Sans point : appelée hors du module par la famille « engagement », non exportée.
+etats_a_date <- function(vue, garanties, famille) {
+  if (!inherits(vue, "vue_provie")) stop("etats_a_date() : `vue` doit \u00eatre un objet vue_provie", call. = FALSE)
+  if (missing(famille) || !is.character(famille) || length(famille) != 1L || is.na(famille) ||
+      !(famille %in% FAMILLES_CALCUL)) {
+    stop(paste0("erreur interne de provie : etats_a_date() : `famille` doit \u00eatre un code de FAMILLES_CALCUL (",
+                paste(FAMILLES_CALCUL, collapse = ", "), ")"), call. = FALSE)
+  }
+  if (!is.character(garanties) || length(garanties) < 1L || anyNA(garanties) || !all(garanties %in% .GARANTIES_ETATS)) {
+    stop(paste0("erreur interne de provie : etats_a_date() ne reconstitue que les garanties ",
+                paste(.GARANTIES_ETATS, collapse = ", ")), call. = FALSE)
+  }
+  ctx <- vue$ctx
+  vv <- function(t, c1) .valeurs_vue(ctx, t, c1)
+  jointure <- function(x, t, cle, c1) vv(t, c1)[match(as.character(x), as.character(vv(t, cle)), incomparables = NA)]
+  gs <- vv("dossiers", "id_garantie_souscrite")
+  code <- jointure(gs, "garanties_souscrites", "id_garantie_souscrite", "code_garantie")
+  k <- which(ctx$retenu$dossiers & code %in% garanties)
+  n <- length(k)
+  id_dossier <- vv("dossiers", "id_dossier")[k]
+  id_sinistre <- vv("dossiers", "id_sinistre")[k]
+  i_sin <- match(as.character(id_sinistre), as.character(vv("sinistres", "id_sinistre")), incomparables = NA)
+  nature <- vv("sinistres", "nature_sinistre")[i_sin]
+  etat <- ifelse(nature %in% "deces", "deces", ifelse(nature %in% "iad", "iad", NA_character_))
+  date_entree <- vv("sinistres", "date_survenance")[i_sin]
+  ouverture <- vv("dossiers", "date_ouverture")[k]
+  # automate du dossier, sur les événements retenus de niveau dossier, d'effet au plus l'arrêté
+  a <- as.numeric(ctx$arrete)
+  type <- vv("evenements", "type_evenement")
+  effet <- as.numeric(vv("evenements", "date_effet"))
+  ev <- which(!is.na(type) & !is.na(effet) & effet <= a & !is.na(vv("evenements", "id_dossier")) &
+                !vue$exclu[[famille]]$evenements)
+  p <- .paires(vv("evenements", "id_dossier")[ev], id_dossier)
+  etat_dossier <- rep("ouvert", n)
+  date_etat <- ouverture
+  montant <- rep(NA_real_, n)
+  motif_cloture <- rep(NA_character_, n)
+  if (nrow(p) > 0L) {
+    te <- ctx$dico$types_evenements
+    i <- ev[p$i]
+    o <- order(p$j, effet[i], te$ordre[match(type[i], te$type_evenement)], as.numeric(vv("evenements", "date_saisie"))[i],
+               vv("evenements", "id_evenement")[i], method = "radix")
+    i <- i[o]
+    j <- p$j[o]
+    montant_ev <- vv("evenements", "montant")
+    motif_ev <- vv("evenements", "motif")
+    for (m in seq_along(i)) {
+      e <- i[m]
+      d <- j[m]
+      switch(type[e],
+        fixation_capital = {
+          montant[d] <- montant_ev[e]
+          if (etat_dossier[d] != "clos") {
+            etat_dossier[d] <- "capital_du"
+            date_etat[d] <- effet[e]
+          }
+        },
+        cloture_dossier = {
+          etat_dossier[d] <- "clos"
+          date_etat[d] <- effet[e]
+          motif_cloture[d] <- motif_ev[e]
+        },
+        reouverture_dossier = {
+          if (etat_dossier[d] == "clos") {
+            etat_dossier[d] <- if (is.na(montant[d])) "ouvert" else "capital_du"
+            date_etat[d] <- effet[e]
+            motif_cloture[d] <- NA_character_
+          }
+        },
+        NULL)
+    }
+  }
+  # instruit : la partie de ligne (Kleene) ; une date présente sous une partie connue
+  partie <- vue$parties$sinistres[i_sin]
+  instruction <- .valeurs(ctx, "sinistres", "date_instruction")[i_sin]
+  instruit <- ifelse(is.na(partie), NA, partie & !is.na(instruction))
+  res <- data.frame(id_sinistre = id_sinistre, id_dossier = id_dossier, etat = etat, date_entree_etat = date_entree,
+                    categorie_invalidite = rep(NA_character_, n), montant_en_vigueur = montant,
+                    etat_dossier = etat_dossier, date_etat_dossier = structure(as.numeric(date_etat), class = "Date"),
+                    motif_cloture = motif_cloture, instruit = as.logical(instruit), stringsAsFactors = FALSE)
+  rownames(res) <- NULL
+  res[.COLONNES_ETATS]
+}
+
+# Garanties souscrites dont la couverture est exclue pour la famille `famille` (code de
+# FAMILLES_CALCUL) (spécification de B2, § 5.1, § 5.3, § 5.5 et § 5.6, erratum v1.0.13) :
+# identifiants (id_garantie_souscrite, triés radix) des garanties souscrites retenues dont la
+# ligne de garanties_souscrites est exclue pour la famille (vue$exclu[[famille]]), ou dont le
+# contrat a une ligne retenue de contrats exclue pour la famille. Seule implémentation de la
+# règle de population : un dossier (P1, P2, famille engagement) ou un contrat (P3, famille
+# risque_en_cours) d'une telle garantie sort de la population, sans arrêt ; seules les clés
+# (id_garantie_souscrite, id_contrat) des lignes exclues sont lues. Une exclusion pour une
+# autre famille est sans effet ; le dictionnaire (§ 1.10) n'est pas étendu : vue$exclu des
+# autres tables est inchangé. Sans point : appelée par les familles engagement et
+# risque_en_cours et par segments_vue() ; non exportée.
+garanties_couverture_exclue <- function(vue, famille) {
+  if (!inherits(vue, "vue_provie")) {
+    stop("garanties_couverture_exclue() : `vue` doit \u00eatre un objet vue_provie", call. = FALSE)
+  }
+  if (!is.character(famille) || length(famille) != 1L || is.na(famille) || !(famille %in% FAMILLES_CALCUL)) {
+    stop(paste0("erreur interne de provie : garanties_couverture_exclue() : `famille` doit \u00eatre un code de ",
+                "FAMILLES_CALCUL (", paste(FAMILLES_CALCUL, collapse = ", "), ")"), call. = FALSE)
+  }
+  ctx <- vue$ctx
+  exclu <- vue$exclu[[famille]]
+  vv <- function(t, c1) .valeurs_vue(ctx, t, c1)
+  ct_exclus <- as.character(vv("contrats", "id_contrat"))[ctx$retenu$contrats & exclu$contrats]
+  r_gs <- ctx$retenu$garanties_souscrites
+  gs_exclue <- r_gs & (exclu$garanties_souscrites |
+                         as.character(vv("garanties_souscrites", "id_contrat")) %in% ct_exclus)
+  sort(unique(as.character(vv("garanties_souscrites", "id_garantie_souscrite"))[gs_exclue]), method = "radix")
+}
+
+# Mois de la période d'une cotisation par périodicité (dictionnaire, § 9, D03f ; spécification de
+# B2, § 5.5, erratum v1.0.15) : `unique` et toute autre valeur n'ont pas de période.
+.MOIS_PERIODE_COTISATION <- c(annuelle = 12L, semestrielle = 6L, trimestrielle = 3L, mensuelle = 1L)
+
+# Période couverte d'une cotisation sous l'hypothèse D03f (règle du dictionnaire, § 9 : période
+# de la périodicité de la garantie souscrite qui commence au premier jour du mois du
+# mouvement ; spécification de B2, § 5.5, champ (b), erratum v1.0.15) : `date_mouvement`
+# (Date) et `periodicite` (periodicite_cotisation, character), de même longueur ; début =
+# premier jour du mois de date_mouvement, fin = début + p mois - 1 jour, p = 12, 6, 3, 1
+# (annuelle, semestrielle, trimestrielle, mensuelle). Rend list(debut, fin) (Date) ; NA pour
+# une date NA, la périodicité `unique` ou une valeur non lisible (règle non applicable). Seule
+# implémentation de la règle : lue par `risque_en_cours` (P3, prorata_cotisation), et par
+# toute lecture future de cotisations (PPNA). Sans point ; non exportée.
+periode_cotisation_regle <- function(date_mouvement, periodicite) {
+  n <- .longueur_commune(length(date_mouvement), length(periodicite), "periode_cotisation_regle")
+  d <- rep_len(as.numeric(date_mouvement), n)
+  mois <- unname(.MOIS_PERIODE_COTISATION[rep_len(as.character(periodicite), n)])
+  ok <- !is.na(d) & !is.na(mois)
+  debut <- rep(NA_real_, n)
+  fin <- rep(NA_real_, n)
+  if (any(ok)) {
+    c0 <- .composantes_date(d[ok])
+    debut[ok] <- .jour_de(c0$annee, c0$mois, 1L)
+    fin[ok] <- ajouter_mois(debut[ok], mois[ok]) - 1
+  }
+  list(debut = structure(debut, class = "Date"), fin = structure(fin, class = "Date"))
+}
+
+# --- Segments ----------------------------------------------------------------------
+
+# Règles de segmentation admises en B2 (spécification de B2, § 2.2, erratum v1.0.12), parmi
+# celles du schéma de la v1 (REGLES_SEGMENTATION de `plan`) : les autres (adherent,
+# secteur_activite, college, gestionnaire) sont refusées par valider_plan() (plan_invalide),
+# reportées après B2. Tenue ici, où segments_vue() calcule la clé de segment de chacune ; lue
+# par `plan` (graphe de l'ADR 0010, point 1 : `plan` appelle `donnees`).
+REGLES_SEGMENTATION_B2 <- c("contrat", "nature_contrat", "annee_survenance", "ligne_activite")
+
+# Segments des unités de calcul de la vue `vue` (objet vue_a_date()) pour les segmentations
+# déclarées `segmentations` (plan$perimetre$segmentations canonique : nom -> list(regle,
+# correspondance)) et les garanties `garanties` (codes) (ADR 0010, points 9 et 17 ; spécification
+# de B2, § 2.2, § 5.5 et § 7.7). Unités : chaque dossier retenu dont la garantie souscrite retenue a un
+# code de `garanties` et n'est pas dans garanties_couverture_exclue(vue, "engagement")
+# (id_dossier, id_sinistre, id_contrat de la garantie souscrite) ; chaque contrat retenu qui
+# porte une garantie souscrite retenue de ces codes hors de garanties_couverture_exclue(vue,
+# "risque_en_cours") (id_dossier et id_sinistre NA) (erratum v1.0.13 : aucune colonne d'une
+# ligne exclue n'est lue pour une unité). Clé : `contrat` : id_contrat ; `nature_contrat` : contrats.nature_contrat ;
+# `ligne_activite` : correspondance[code_garantie] (pour un contrat, une valeur par code
+# porté, réunies par « ; » triées) ; `annee_survenance` : année de sinistres.date_survenance du
+# sinistre du dossier, `hors_survenance` pour un contrat (erratum v1.0.12). Les règles sont
+# celles de REGLES_SEGMENTATION_B2, contrôlées par valider_plan() à l'étape `plan` de
+# calculer_provisions() : une autre règle ici est une erreur de programmation. Rend le
+# data.frame `segments` du bilan (id_dossier, id_sinistre, id_contrat, segmentation, segment),
+# trié par segmentation, id_contrat, id_dossier (sort radix, NA en tête) ; segment NA si la clé
+# est hors de la vue. Sans point : appelée par l'orchestration, non exportée.
+segments_vue <- function(vue, segmentations, garanties) {
+  if (!inherits(vue, "vue_provie")) stop("segments_vue() : `vue` doit \u00eatre un objet vue_provie", call. = FALSE)
+  vide <- data.frame(id_dossier = character(0), id_sinistre = character(0), id_contrat = character(0),
+                     segmentation = character(0), segment = character(0), stringsAsFactors = FALSE)
+  if (length(segmentations) == 0L) return(vide)
+  regles <- vapply(segmentations, function(s) s$regle, "")
+  if (!all(regles %in% REGLES_SEGMENTATION_B2)) {
+    stop("erreur interne de provie : r\u00e8gle de segmentation hors de REGLES_SEGMENTATION_B2 (",
+         paste(setdiff(regles, REGLES_SEGMENTATION_B2), collapse = ", "), ")", call. = FALSE)
+  }
+  ctx <- vue$ctx
+  vv <- function(t, c1) .valeurs_vue(ctx, t, c1)
+  r_gs <- which(ctx$retenu$garanties_souscrites & vv("garanties_souscrites", "code_garantie") %in% garanties)
+  gs_id <- as.character(vv("garanties_souscrites", "id_garantie_souscrite"))[r_gs]
+  gs_contrat <- as.character(vv("garanties_souscrites", "id_contrat"))[r_gs]
+  gs_code <- vv("garanties_souscrites", "code_garantie")[r_gs]
+  ct_id <- as.character(vv("contrats", "id_contrat"))
+  ct_nature <- vv("contrats", "nature_contrat")
+  # unités : dossiers, puis contrats
+  # couverture exclue (erratum v1.0.13) : un dossier d'une garantie souscrite exclue pour engagement
+  # (unités de P1 et P2) et un contrat dont les garanties souscrites sont exclues pour
+  # risque_en_cours (unités de P3) ne sont pas des unités : aucune colonne de la ligne exclue n'est lue
+  exclue_eng <- gs_id %in% garanties_couverture_exclue(vue, "engagement")
+  exclue_rec <- gs_id %in% garanties_couverture_exclue(vue, "risque_en_cours")
+  k <- which(ctx$retenu$dossiers)
+  i_gs <- match(as.character(vv("dossiers", "id_garantie_souscrite"))[k], gs_id, incomparables = NA)
+  i_gs[!is.na(i_gs)][exclue_eng[i_gs[!is.na(i_gs)]]] <- NA_integer_
+  k <- k[!is.na(i_gs)]
+  i_gs <- i_gs[!is.na(i_gs)]
+  contrats_u <- sort(unique(gs_contrat[!exclue_rec & gs_contrat %in% ct_id[ctx$retenu$contrats]]), method = "radix")
+  u_dossier <- c(as.character(vv("dossiers", "id_dossier"))[k], rep(NA_character_, length(contrats_u)))
+  u_sinistre <- c(as.character(vv("dossiers", "id_sinistre"))[k], rep(NA_character_, length(contrats_u)))
+  u_contrat <- c(gs_contrat[i_gs], contrats_u)
+  codes_contrat <- vapply(contrats_u, function(c1) {
+    paste(sort(unique(gs_code[!exclue_rec & gs_contrat == c1]), method = "radix"), collapse = ";")
+  }, "", USE.NAMES = FALSE)
+  u_codes <- c(gs_code[i_gs], codes_contrat)
+  si_survenance <- vv("sinistres", "date_survenance")
+  u_annee <- c(as.character(as.POSIXlt(si_survenance[match(u_sinistre[seq_along(k)],
+                                                            as.character(vv("sinistres", "id_sinistre")),
+                                                            incomparables = NA)])$year + 1900L),
+               rep("hors_survenance", length(contrats_u)))
+  lignes <- lapply(names(segmentations), function(nom) {
+    s <- segmentations[[nom]]
+    segment <- switch(s$regle,
+      contrat = u_contrat,
+      annee_survenance = u_annee,
+      nature_contrat = ct_nature[match(u_contrat, ct_id, incomparables = NA)],
+      ligne_activite = vapply(u_codes, function(x) {
+        paste(sort(unique(vapply(strsplit(x, ";", fixed = TRUE)[[1L]], function(g) s$correspondance[[g]], "")),
+                   method = "radix"), collapse = ";")
+      }, "", USE.NAMES = FALSE))
+    data.frame(id_dossier = u_dossier, id_sinistre = u_sinistre, id_contrat = u_contrat,
+               segmentation = rep(nom, length(u_contrat)), segment = as.character(segment), stringsAsFactors = FALSE)
+  })
+  res <- do.call(rbind, lignes)
+  res <- res[order(res$segmentation, res$id_contrat, res$id_dossier, method = "radix", na.last = FALSE), , drop = FALSE]
+  rownames(res) <- NULL
+  res
 }
 
 # --- Refus d'appel -----------------------------------------------------------------
@@ -345,7 +688,7 @@ controler_base <- function(donnees, arrete, declarations = NULL, conventions = N
     if (colonnes$type[i] == "Date" && as.numeric(x) < as.numeric(as.Date("1901-01-01"))) {
       refus(paste0("colonne ", colonne, " ant\u00e9rieure au 1901-01-01"), colonne = colonne, recu = format(x))
     }
-    modalites <- .eclater_champ(colonnes$modalites[i])
+    modalites <- eclater_champ(colonnes$modalites[i])
     if (length(modalites) > 0L && !(x %in% modalites)) {
       refus(paste0("colonne ", colonne, " hors domaine : \u00ab ", x, " \u00bb"), colonne = colonne,
             attendu = paste(modalites, collapse = ";"), recu = x)
@@ -358,7 +701,8 @@ controler_base <- function(donnees, arrete, declarations = NULL, conventions = N
   list(date_extraction = extraction$date_extraction, debut_historique = extraction$debut_historique)
 }
 
-.eclater_champ <- function(x) if (identical(x, "") || is.na(x)) character(0) else strsplit(x, ";", fixed = TRUE)[[1L]]
+# Éclate un champ « a;b » d'un CSV du dictionnaire ; sans point : appelée aussi par `plan`.
+eclater_champ <- function(x) if (identical(x, "") || is.na(x)) character(0) else strsplit(x, ";", fixed = TRUE)[[1L]]
 
 .refus_plan <- function(message) {
   refuser(paste0("controler_base() : ", message), "plan_invalide", module = "donnees")
@@ -411,8 +755,9 @@ controler_base <- function(donnees, arrete, declarations = NULL, conventions = N
 # unique (.MOTIFS_TRAITEMENT_UNIQUE) ne se déclare pas dans les deux rubriques (D8).
 # `seuils` : liste nommée ; seul d03g_delai_jours est lu (liste nommée par table de D03g,
 # jours entiers positifs ou nuls) ; `evaluations_gestion` : liste réduite à `diagnostics`
-# (logical), lue par les diagnostics (B2), jamais par le bilan.
-.lire_declarations <- function(declarations, dico) {
+# (logical), lue par les diagnostics (B2), jamais par le bilan. Sans point : appelée aussi par
+# valider_plan() (`plan`), non exportée.
+lire_declarations <- function(declarations, dico) {
   if (is.null(declarations)) declarations <- list()
   nommee <- function(x) {
     is.list(x) && !is.data.frame(x) &&
@@ -433,15 +778,15 @@ controler_base <- function(donnees, arrete, declarations = NULL, conventions = N
                        length(eg$diagnostics) != 1L || is.na(eg$diagnostics))) {
     .refus_plan("declarations$evaluations_gestion doit porter `diagnostics` (TRUE ou FALSE), et lui seul")
   }
-  dl <- declarations$seuils[[.SEUIL_DELAI_D03G]]
+  dl <- declarations$seuils[[SEUIL_DELAI_D03G]]
   if (!is.null(dl)) {
     jours <- function(x) is.numeric(x) && length(x) == 1L && is.finite(x) && x >= 0 && x == round(x)
     if (!nommee(dl) || length(dl) == 0L || !all(names(dl) %in% .TABLES_D03G) || !all(vapply(dl, jours, NA))) {
-      .refus_plan(paste0("declarations$seuils$", .SEUIL_DELAI_D03G, " : liste nomm\u00e9e par table de D03g (",
+      .refus_plan(paste0("declarations$seuils$", SEUIL_DELAI_D03G, " : liste nomm\u00e9e par table de D03g (",
                          paste(.TABLES_D03G, collapse = ", "), "), d\u00e9lai en jours (nombre entier positif ou nul)"))
     }
   }
-  for (nom in .SEUILS_AGE_D02C) {
+  for (nom in SEUILS_AGE_D02C) {
     sa <- declarations$seuils[[nom]]
     if (is.null(sa)) next
     age <- function(x) is.numeric(x) && length(x) == 1L && is.finite(x) && x >= 0 && x == round(x)
@@ -450,8 +795,8 @@ controler_base <- function(donnees, arrete, declarations = NULL, conventions = N
                          paste(names(.EMPLOIS_D02C), collapse = ", "), "), \u00e2ge en ann\u00e9es enti\u00e8res positif ou nul"))
     }
   }
-  amin <- declarations$seuils[[.SEUILS_AGE_D02C[1L]]]
-  amax <- declarations$seuils[[.SEUILS_AGE_D02C[2L]]]
+  amin <- declarations$seuils[[SEUILS_AGE_D02C[1L]]]
+  amax <- declarations$seuils[[SEUILS_AGE_D02C[2L]]]
   communs <- intersect(names(amin), names(amax))
   if (any(vapply(communs, function(e) amin[[e]] > amax[[e]], NA))) {
     .refus_plan("declarations$seuils : d02c_age_min sup\u00e9rieur \u00e0 d02c_age_max pour un emploi")
@@ -521,7 +866,7 @@ controler_base <- function(donnees, arrete, declarations = NULL, conventions = N
   hy <- ctx$declarations$hypotheses
   if (is.na(partie) && all(FAMILLES_CALCUL %in% ex$famille[ex$motif == "D03g"])) return("X")
   if (all(REFERENTIELS %in% hy$referentiel[hy$motif == "D03g"]) &&
-      !is.null(ctx$declarations$seuils[[.SEUIL_DELAI_D03G]][[table]])) return("H")
+      !is.null(ctx$declarations$seuils[[SEUIL_DELAI_D03G]][[table]])) return("H")
   NA_character_
 }
 
@@ -532,7 +877,7 @@ controler_base <- function(donnees, arrete, declarations = NULL, conventions = N
   sous_cas <- motif %in% names(.TRAITEMENTS_SOUS_CAS_D10)
   traitements <- ifelse(sous_cas, .TRAITEMENTS_SOUS_CAS_D10[motif], dico$defauts$traitements[match(motif, dico$defauts$code)])
   connu <- motif %in% dico$defauts$code | sous_cas
-  connu & !is.na(traitements) & vapply(traitements, function(x) t %in% .eclater_champ(x), NA, USE.NAMES = FALSE)
+  connu & !is.na(traitements) & vapply(traitements, function(x) t %in% eclater_champ(x), NA, USE.NAMES = FALSE)
 }
 
 # Rubrique `exclusions` ou `hypotheses` du sous-schéma `donnees` (« liste de triplets »,
@@ -814,7 +1159,7 @@ controler_base <- function(donnees, arrete, declarations = NULL, conventions = N
   if (table == "evaluations_gestion" || code == "D10a" || is.na(colonne)) return("table")
   portee <- dico$controles$portee[dico$controles$code == code]
   if (length(portee) == 1L && portee %in% c("table", "colonne")) return(portee)
-  cle <- .eclater_champ(dico$tables$cle_primaire[dico$tables$table == table])
+  cle <- eclater_champ(dico$tables$cle_primaire[dico$tables$table == table])
   ref <- dico$colonnes$reference[dico$colonnes$table == table & dico$colonnes$colonne == colonne]
   if (colonne %in% cle || (length(ref) == 1L && nzchar(ref))) "table" else "colonne"
 }
@@ -931,7 +1276,7 @@ controler_base <- function(donnees, arrete, declarations = NULL, conventions = N
   col <- col[col$colonne == colonne, , drop = FALSE]
   d <- if (table == "evenements" && colonne == "type_evenement") {
     ctx$dico$types_evenements$type_evenement
-  } else if (col$type == "logical") c(TRUE, FALSE) else .eclater_champ(col$modalites)
+  } else if (col$type == "logical") c(TRUE, FALSE) else eclater_champ(col$modalites)
   if (length(d) == 0L) stop("erreur interne de provie : domaine de ", table, ".", colonne, " non \u00e9num\u00e9r\u00e9",
                             call. = FALSE)
   if (col$obligatoire != "O") d <- c(d, NA)
@@ -1187,7 +1532,7 @@ controler_base <- function(donnees, arrete, declarations = NULL, conventions = N
       if (col$type == "character") {
         .regle(ctx, "chaine_vide", table, colonne, character(0), "R", "exacte",
                function() !is.na(x) & x == "")
-        modalites <- .eclater_champ(col$modalites)
+        modalites <- eclater_champ(col$modalites)
         if (length(modalites) > 0L) {
           .regle(ctx, "hors_domaine", table, colonne, character(0), "R", "exacte",
                  function() !is.na(x) & x != "" & !(x %in% modalites))
@@ -1212,7 +1557,7 @@ controler_base <- function(donnees, arrete, declarations = NULL, conventions = N
         .regle(ctx, "hors_domaine", table, colonne, character(0), "R", "exacte",
                function() is.nan(x) | is.infinite(x))
       }
-      if (col$obligatoire == "O" && !any(.eclater_champ(col$defauts) %in% .DEFAUTS_MANQUANT)) {
+      if (col$obligatoire == "O" && !any(eclater_champ(col$defauts) %in% .DEFAUTS_MANQUANT)) {
         .regle(ctx, "manquant_obligatoire", table, colonne, character(0), "R", "exacte",
                function() is.na(x) & !is.nan(x))
       }
@@ -1241,7 +1586,7 @@ controler_base <- function(donnees, arrete, declarations = NULL, conventions = N
   prog <- te$programmable[match(.valeurs(ctx, "evenements", "type_evenement"), te$type_evenement)]
   par_motif <- vapply(seq_along(prog), function(i) {
     !is.na(prog[i]) && startsWith(prog[i], "oui:") && !is.na(motif[i]) &&
-      motif[i] %in% .eclater_champ(substring(prog[i], 5L))
+      motif[i] %in% eclater_champ(substring(prog[i], 5L))
   }, NA)
   !is.na(prog) & (prog == "oui" | par_motif)
 }
@@ -1524,14 +1869,14 @@ controler_base <- function(donnees, arrete, declarations = NULL, conventions = N
       sinistre_seul <- !is.na(niveau) & niveau == "sinistre"
       hors_nature <- sinistre_seul & !is.na(x$nat) & x$nat != "arret_travail"
       hors_garantie <- !sinistre_seul & !is.na(x$g) & !is.na(garanties) & garanties != "toutes" &
-        !mapply(function(gg, liste) gg %in% .eclater_champ(liste), x$g, garanties)
+        !mapply(function(gg, liste) gg %in% eclater_champ(liste), x$g, garanties)
       hors_nature | hors_garantie
     })
   }, partiel = TRUE)
   requiert <- function(type, colonne) {
     k <- match(type, te$type_evenement)
     ifelse(is.na(k), NA, vapply(te$colonnes_requises[ifelse(is.na(k), 1L, k)],
-                                function(r) colonne %in% .eclater_champ(r), NA))
+                                function(r) colonne %in% eclater_champ(r), NA))
   }
   .regle_condition(ctx, "evenements", "categorie_invalidite", "evenements.type_evenement",
                    function(x) requiert(x$type, "categorie_invalidite"), type3, defaut_manquant = TRUE)
@@ -1546,7 +1891,7 @@ controler_base <- function(donnees, arrete, declarations = NULL, conventions = N
     .verdict3(list(motif = soi("evenements.motif"), type = e3("evenements.type_evenement")), function(x) {
       k <- match(x$type, te$type_evenement)
       !is.na(x$motif) & !is.na(k) &
-        !mapply(function(m, liste) m %in% .eclater_champ(liste), x$motif, te$motifs[ifelse(is.na(k), 1L, k)])
+        !mapply(function(m, liste) m %in% eclater_champ(liste), x$motif, te$motifs[ifelse(is.na(k), 1L, k)])
     })
   }, partiel = TRUE)
   .regle(ctx, "manquant_obligatoire", "evenements", "motif",
@@ -1626,7 +1971,7 @@ controler_base <- function(donnees, arrete, declarations = NULL, conventions = N
 .regle_cles <- function(ctx) {
   dico <- ctx$dico
   for (table in setdiff(ctx$tables, "extraction")) {
-    cle <- .eclater_champ(dico$tables$cle_primaire[dico$tables$table == table])
+    cle <- eclater_champ(dico$tables$cle_primaire[dico$tables$table == table])
     lit <- paste(table, cle, sep = ".")
     .regle(ctx, "D01a", table, cle[1L], lit, "R", "exacte", function() {
       duplicated(as.data.frame(lapply(cle, function(c1) .valeurs(ctx, table, c1)), stringsAsFactors = FALSE))
@@ -1691,7 +2036,7 @@ controler_base <- function(donnees, arrete, declarations = NULL, conventions = N
     colonnes <- .colonnes_dico(ctx, table)
     for (i in which(nzchar(colonnes$reference))) {
       colonne <- colonnes$colonne[i]
-      cibles <- strsplit(.eclater_champ(colonnes$reference[i]), ".", fixed = TRUE)
+      cibles <- strsplit(eclater_champ(colonnes$reference[i]), ".", fixed = TRUE)
       table_cible <- cibles[[1L]][1L]
       cols_cible <- vapply(cibles, `[`, "", 2L)
       locales <- if (length(cibles) == 1L) colonne else cols_cible
@@ -1727,7 +2072,7 @@ controler_base <- function(donnees, arrete, declarations = NULL, conventions = N
             peut <- r %in% TRUE & cle_l %in% cle_c
             for (m in s) {
               col_cible <- .colonnes_dico(ctx, table_cible)
-              domaine <- .eclater_champ(col_cible$modalites[col_cible$colonne == cols_cible[m]])
+              domaine <- eclater_champ(col_cible$modalites[col_cible$colonne == cols_cible[m]])
               if (length(domaine) > 0L) peut <- peut & valeurs_locales[[m]] %in% domaine
             }
             if (any(peut)) {
@@ -1818,7 +2163,7 @@ controler_base <- function(donnees, arrete, declarations = NULL, conventions = N
     if (k$traitement != "R") next
     if (.portee_effective(ctx$dico, k$code, k$table, k$colonne) == "table") {
       if (is.null(tables[[k$table]])) tables[[k$table]] <- k$code
-      if (k$code == "refus_induit") origines[[k$table]] <- .eclater_champ(k$origine)
+      if (k$code == "refus_induit") origines[[k$table]] <- eclater_champ(k$origine)
       else directs[[k$table]] <- rbind(directs[[k$table]], data.frame(code = k$code, colonne = k$colonne,
                                                                        stringsAsFactors = FALSE))
     } else {
@@ -1913,6 +2258,12 @@ controler_base <- function(donnees, arrete, declarations = NULL, conventions = N
   list(table = "contrats", colonnes = c("date_fin", "motif_fin", "date_saisie_fin"), date = "date_saisie_fin"),
   list(table = "affiliations", colonnes = c("date_fin", "motif_fin", "date_saisie_fin"), date = "date_saisie_fin"),
   list(table = "sinistres", colonnes = "date_instruction", date = "date_instruction"))
+
+# Parties de ligne (.PARTIES_LIGNE) : liste de list(table, colonnes), une par partie. Une
+# colonne d'une partie vaut pour toute la partie (spécification de B2, § 6.2, erratum
+# v1.0.5). Sans point : lue par les familles de calcul, qui la passent à
+# garanties::postes_a_arreter() (aucune arête garanties -> donnees) ; non exportée.
+parties_ligne <- function() lapply(.PARTIES_LIGNE, function(p) list(table = p$table, colonnes = p$colonnes))
 
 # Liens de la règle 1 du § 6 (une ligne fille n'est visible que si sa parente l'est) : clés
 # étrangères simples de colonnes.csv, hors adherents et assures (visibles par référence).
@@ -2282,7 +2633,7 @@ controler_base <- function(donnees, arrete, declarations = NULL, conventions = N
   lisible <- function(t, c1) is.na(.cause(ctx, t, c1, forme_seule = TRUE))
   # une valeur refusée n'est pas lue (M199) : inconnue
   lire <- function(t, c1) .date_connue(ctx, t, c1)
-  delai <- ctx$declarations$seuils[[.SEUIL_DELAI_D03G]]
+  delai <- ctx$declarations$seuils[[SEUIL_DELAI_D03G]]
   tables <- setdiff(ctx$tables, "extraction")
   # date de saisie retenue (NA hors hypothèse) ; dates propres de visibilité de chaque ligne
   for (t in tables) ctx$date_g[[t]] <- rep(NA_real_, nrow(ctx$base[[t]]))
@@ -2539,24 +2890,24 @@ controler_base <- function(donnees, arrete, declarations = NULL, conventions = N
   res
 }
 
-# Valeurs d'une colonne dans la vue : manquantes pour une ligne non retenue et pour une
-# partie de ligne inconnue à l'arrêté (fin d'un contrat ou d'une affiliation saisie après,
-# ou de saisie non déterminée ; instruction postérieure ; partie dont une colonne lue par la
-# vue est refusée pour sa valeur) ; une jointure sur ces valeurs ne
-# voit donc que la vue.
+# Valeurs d'une colonne dans la vue : manquantes pour une ligne non retenue et, à un arrêté
+# antérieur à l'extraction, pour une partie de ligne qui n'est pas connue à l'arrêté de façon
+# déterminée : partie lue sur l'évaluation unique de la visibilité (`parties` de
+# .visibilite_a(), mode "vue" ; M216), jamais recalculée ici, et date de partie jamais
+# convertie (#54, spécification de B2, § 4.3) : fin d'un contrat ou d'une affiliation saisie
+# après, ou de saisie non déterminée ; instruction postérieure ; partie dont une colonne lue
+# par la vue est refusée pour sa valeur ; date de partie illisible par sa forme (#51). Le NA
+# rendu veut dire « hors de la vue », non « absente » ; une jointure sur ces valeurs ne voit
+# donc que la vue. La table extraction (une ligne, contrôlée par les refus d'appel) n'a pas de
+# vue : elle est lue telle quelle.
 .valeurs_vue <- function(ctx, table, colonne) {
   x <- .valeurs(ctx, table, colonne)
+  if (table == "extraction") return(x)
   masque <- !ctx$retenu[[table]]
   if (!.vue_totale(ctx)) {
-    a <- as.numeric(ctx$arrete)
     for (p in .PARTIES_LIGNE) {
       if (p$table == table && colonne %in% p$colonnes) {
-        d <- as.numeric(.valeurs(ctx, table, p$date))
-        # fin connue à la date que retient l'hypothèse déclarée de D03g
-        dh <- ctx$partie_h[[table]]
-        if (!is.null(dh) && p$date == "date_saisie_fin") d <- ifelse(is.na(dh), d, dh)
-        # partie de visibilité non déterminée (règle P, ou refus de valeur, .refus_vue())
-        masque <- masque | is.na(d) | d > a | ctx$partie_nd[[table]]
+        masque <- masque | !(.visibilite_a(ctx, "vue")$parties[[table]] %in% TRUE)
       }
     }
   }
@@ -2580,7 +2931,7 @@ controler_base <- function(donnees, arrete, declarations = NULL, conventions = N
 .regle_vue <- function(ctx, code, table, colonne, lit, traitement, detection, f, colonne_ne = colonne,
                        vue = character(0)) {
   if (is.null(ctx$base[[table]])) return(invisible(integer(0)))
-  cle <- paste(table, .eclater_champ(ctx$dico$tables$cle_primaire[ctx$dico$tables$table == table])[1L], sep = ".")
+  cle <- paste(table, eclater_champ(ctx$dico$tables$cle_primaire[ctx$dico$tables$table == table])[1L], sep = ".")
   # à l'arrêté égal à l'extraction, aucune ligne n'est non déterminée (spécification, § 2.2,
   # (g)) : les colonnes lues pour la vue (famille : version valable) sont lues comme valeurs
   totale <- .vue_totale(ctx)
@@ -2995,7 +3346,7 @@ controler_base <- function(donnees, arrete, declarations = NULL, conventions = N
   for (table in names(.CONTENUS_D01B)) {
     colonnes <- .CONTENUS_D01B[[table]]
     date <- .DATES_VISIBILITE[[table]][1L]
-    cle <- .eclater_champ(ctx$dico$tables$cle_primaire[ctx$dico$tables$table == table])[1L]
+    cle <- eclater_champ(ctx$dico$tables$cle_primaire[ctx$dico$tables$table == table])[1L]
     copies <- function() {
       retenu <- ctx$retenu[[table]]
       o <- order(as.numeric(.valeurs(ctx, table, date)), .valeurs(ctx, table, cle), method = "radix", na.last = TRUE)
@@ -3259,7 +3610,7 @@ controler_base <- function(donnees, arrete, declarations = NULL, conventions = N
     if (!present(t)) next
     manque <- is.null(conv)
     sans_convention <- sans_convention || manque
-    for (nom in .SEUILS_AGE_D02C) {
+    for (nom in SEUILS_AGE_D02C) {
       if (is.null(seuils[[nom]][[emploi]])) {
         .requerir(ctx, "seuils", "D02c", paste0(nom, "$", emploi))
         manque <- TRUE
@@ -3270,8 +3621,8 @@ controler_base <- function(donnees, arrete, declarations = NULL, conventions = N
       next
     }
     e <- emplois[[emploi]]
-    mini <- seuils[[.SEUILS_AGE_D02C[1L]]][[emploi]]
-    maxi <- seuils[[.SEUILS_AGE_D02C[2L]]][[emploi]]
+    mini <- seuils[[SEUILS_AGE_D02C[1L]]][[emploi]]
+    maxi <- seuils[[SEUILS_AGE_D02C[2L]]][[emploi]]
     invraisemblable <- function() {
       r <- e$ref()
       naissance <- vv(t, "date_naissance")[r$p]
@@ -3321,13 +3672,17 @@ controler_base <- function(donnees, arrete, declarations = NULL, conventions = N
 # détection (dossiers : aucun autre enfant non éteint de façon déterminée ; rentes : un seul
 # enfant, toujours). Traitement
 # H ou S. Sans conventions$limite_age : non exécuté (cause declaration_absente) et
-# déclaration requise (rubrique conventions, cles limite_age$regle et limite_age$age).
+# déclaration requise (rubrique conventions, cles limite_age$regle et limite_age$age), s'il
+# existe au moins une ligne candidate (.candidats_d07c()) ; sans ligne candidate, exécuté à
+# vide, sans exigence (spécification de B2, docs/specifications/b2-capital-deces-v1.md,
+# § 6.3, niveau 1 : une déclaration qui ne peut changer aucune ligne du bilan ne bloque pas).
 # Constat sur la table qui porte la charge (rentes, dossiers), colonne NA ; D07 (a) et (b),
 # sur evenements, restent déclarés non implémentés (report).
 .regle_v_limite_age <- function(ctx) {
   tables <- intersect(c("rentes", "dossiers"), names(ctx$base))
   la <- ctx$conventions$limite_age
   if (is.null(la)) {
+    if (!.candidats_d07c(ctx)) return(invisible(NULL))
     for (t in tables) .ajouter_non_execute(ctx, "D07", t, NA_character_, "declaration_absente")
     if (length(tables) > 0L) {
       .requerir(ctx, "conventions", "D07", "limite_age$regle", paste(REGLES_LIMITE_AGE, collapse = ";"))
@@ -3564,6 +3919,33 @@ controler_base <- function(donnees, arrete, declarations = NULL, conventions = N
   invisible(NULL)
 }
 
+# Existence d'au moins une ligne candidate de D07 (c) (spécification de B2, § 6.3, niveau 1) :
+# une ligne de rentes, dans la vue (retenue ou de visibilité non déterminée, .nd_vue()), dont
+# le dossier relève d'une garantie souscrite rente_education, ou une ligne de dossiers, dans la
+# vue, de garantie souscrite double_effet (jointure sur les valeurs brutes, comme D07 (c)). Si
+# une colonne de la jointure ne se lit pas (refus de forme, de valeur ou de portée table,
+# .cause()), chaque ligne de la table compte comme candidate (sens prudent : la déclaration
+# est demandée). Rend TRUE ou FALSE.
+.candidats_d07c <- function(ctx) {
+  code_lus <- c("garanties_souscrites.id_garantie_souscrite", "garanties_souscrites.code_garantie")
+  candidats <- function(table, lus, code, gs_de) {
+    n <- NROW(ctx$base[[table]])
+    if (n == 0L) return(FALSE)
+    if (!is.null(.cause_lecture(ctx, c(lus, code_lus)))) return(TRUE)
+    dans_vue <- ctx$retenu[[table]] | .nd_vue(ctx, table)
+    gs <- gs_de()
+    any(dans_vue & .joindre(ctx, "garanties_souscrites", "id_garantie_souscrite", "code_garantie", gs) %in% code)
+  }
+  gs_rentes <- function() {
+    dossier <- .valeurs(ctx, "rentes", "id_dossier")
+    .joindre(ctx, "dossiers", "id_dossier", "id_garantie_souscrite", dossier)
+  }
+  candidats("rentes", c("rentes.id_dossier", "dossiers.id_dossier", "dossiers.id_garantie_souscrite"),
+            "rente_education", gs_rentes) ||
+    candidats("dossiers", "dossiers.id_garantie_souscrite", "double_effet",
+              function() .valeurs(ctx, "dossiers", "id_garantie_souscrite"))
+}
+
 # --- Placement des constats et enjeu -----------------------------------------------------
 
 # Visibilité d'une ligne à l'arrêté, pour les comptes du bilan (nombre_visibles d'un refus,
@@ -3757,7 +4139,7 @@ controler_base <- function(donnees, arrete, declarations = NULL, conventions = N
                                     c("victimes", "id_assure"), c("ayants_droit_sante", "id_assure_membre")))
   for (t in intersect(names(references), tables)) {
     if (totale) next
-    cle_t <- .eclater_champ(ctx$dico$tables$cle_primaire[ctx$dico$tables$table == t])[1L]
+    cle_t <- eclater_champ(ctx$dico$tables$cle_primaire[ctx$dico$tables$table == t])[1L]
     if (!lisible(t, cle_t)) { statut[[t]] <- rep(NA, n_de(t)); next }
     cle <- as.character(.valeurs(ctx, t, cle_t))
     vrai <- character(0)
@@ -3773,13 +4155,21 @@ controler_base <- function(donnees, arrete, declarations = NULL, conventions = N
     statut[[t]] <- ifelse(cle %in% vrai[!is.na(vrai)], TRUE, ifelse(cle %in% indet[!is.na(indet)], NA, FALSE))
     propre[[t]] <- statut[[t]]
   }
-  # parties de ligne
+  # parties de ligne ; une date de partie illisible par sa forme (valeur écrite que l'outil ne
+  # sait pas lire, champ non vide) est inconnue, NA dans les deux modes, sans conversion ; un
+  # champ vide garde sa valeur (#51 ; spécification de B2, § 4.3 : « illisible » vaut
+  # « inconnu », non « absente »)
   parties <- list()
   for (p in .PARTIES_LIGNE) {
     t <- p$table
     if (!(t %in% tables)) next
-    if (totale) { parties[[t]] <- rep(TRUE, n_de(t)); next }
-    # date de la partie illisible par sa forme : non lue (aucune conversion), partie masquée
+    illisible <- if (lisible(t, p$date)) rep(FALSE, n_de(t)) else !is.na(.valeurs(ctx, t, p$date))
+    if (totale) {
+      x <- rep(TRUE, n_de(t))
+      x[illisible] <- NA
+      parties[[t]] <- x
+      next
+    }
     d <- if (lisible(t, p$date)) as.numeric(.valeurs(ctx, t, p$date)) else rep(NA_real_, n_de(t))
     dh <- ctx$partie_h[[t]]
     if (!is.null(dh) && p$date == "date_saisie_fin") d <- ifelse(is.na(dh), d, dh)
@@ -3792,6 +4182,7 @@ controler_base <- function(donnees, arrete, declarations = NULL, conventions = N
       x[k$lignes] <- y
     }
     for (k in refus) if (k$table == t && identical(k$colonne, p$date)) x[k$lignes] <- NA
+    x[illisible] <- NA
     parties[[t]] <- x & statut[[t]]
   }
   res <- list(statut = statut, propre = propre, valable = valable, candidate = candidate, membre = membre,
@@ -3988,7 +4379,7 @@ controler_base <- function(donnees, arrete, declarations = NULL, conventions = N
   # comptent qu'une fois (D10, réserve M1) ; celles qui divergent rendent la composante sans
   # valeur (.divergences_d01a()) ; un identifiant manquant n'est pas regroupé
   distinctes <- function(table, l, p) {
-    cle <- .eclater_champ(ctx$dico$tables$cle_primaire[ctx$dico$tables$table == table])
+    cle <- eclater_champ(ctx$dico$tables$cle_primaire[ctx$dico$tables$table == table])
     vc <- lapply(cle, function(c1) as.character(.valeurs(ctx, table, c1))[l][p$i])
     id <- do.call(paste, c(vc, list(p$j), sep = "\r"))
     manque <- Reduce(`|`, lapply(vc, is.na))
@@ -4122,7 +4513,7 @@ controler_base <- function(donnees, arrete, declarations = NULL, conventions = N
   ajouter <- function(liste, x) { liste[[length(liste) + 1L]] <- x; liste }
   for (n in seq_along(constats)) {
     k <- constats[[n]]
-    t <- .eclater_champ(k$traitement)
+    t <- eclater_champ(k$traitement)
     base_ecart <- list(table = k$table, colonne = k$colonne, motif = k$code)
     if (identical(t, "R")) {
       if (k$code != "refus_induit") {
@@ -4197,8 +4588,8 @@ controler_base <- function(donnees, arrete, declarations = NULL, conventions = N
       }
     }
     # délai de D03g : lu par l'application de l'hypothèse, tant que l'exclusion ne couvre pas
-    if (k$code == "D03g" && !x_ok && is.null(ctx$declarations$seuils[[.SEUIL_DELAI_D03G]][[k$table]])) {
-      requises <- ajouter(requises, list(rubrique = "seuils", motif = k$code, cle = paste0(.SEUIL_DELAI_D03G, "$", k$table),
+    if (k$code == "D03g" && !x_ok && is.null(ctx$declarations$seuils[[SEUIL_DELAI_D03G]][[k$table]])) {
+      requises <- ajouter(requises, list(rubrique = "seuils", motif = k$code, cle = paste0(SEUIL_DELAI_D03G, "$", k$table),
                                          traitements_admis = NA_character_, table = k$table, lignes = lignes))
     }
   }
@@ -4556,7 +4947,7 @@ controler_base <- function(donnees, arrete, declarations = NULL, conventions = N
 # écart D01a, porte des valeurs différentes de `colonne` entre ses lignes en double (D10) ;
 # integer(0) si toutes concordent (doublons à l'identique : chiffrés).
 .divergences_d01a <- function(ctx, table, lignes, colonne) {
-  cle <- .eclater_champ(ctx$dico$tables$cle_primaire[ctx$dico$tables$table == table])
+  cle <- eclater_champ(ctx$dico$tables$cle_primaire[ctx$dico$tables$table == table])
   if (colonne %in% cle) return(integer(0))
   k <- do.call(paste, c(lapply(cle, function(c1) as.character(.valeurs(ctx, table, c1))), sep = "\r"))
   grp <- which(k %in% k[lignes])
@@ -4722,7 +5113,7 @@ controler_base <- function(donnees, arrete, declarations = NULL, conventions = N
 # si la clé n'est pas lisible.
 .identifiants <- function(ctx, table, lignes) {
   if (length(lignes) == 0L) return("")
-  cle <- .eclater_champ(ctx$dico$tables$cle_primaire[ctx$dico$tables$table == table])
+  cle <- eclater_champ(ctx$dico$tables$cle_primaire[ctx$dico$tables$table == table])
   if (length(cle) == 0L || any(!is.na(vapply(cle, function(c1) .cause(ctx, table, c1, forme_seule = TRUE), "")))) return("")
   valeurs <- lapply(cle, function(c1) .valeurs(ctx, table, c1)[lignes])
   ordre <- do.call(order, c(valeurs, list(method = "radix", na.last = TRUE)))
@@ -4826,6 +5217,7 @@ controler_base <- function(donnees, arrete, declarations = NULL, conventions = N
   ordre <- order(traitement, method = "radix")   # départage reproductible de deux traitements d'une même clé
   constats <- constats[ordre]
   placement <- .placer(ctx, constats)
+  ctx$placement <- placement
   enjeu <- .enjeu(ctx, placement$ecarts, dico)
 
   ne <- ctx$non_executes

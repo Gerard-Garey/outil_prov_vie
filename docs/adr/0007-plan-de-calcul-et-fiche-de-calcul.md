@@ -57,3 +57,13 @@ Arrêtée par le mainteneur le 7 novembre 2026 (Q33, Q21, Q12, Q25 ; G10 ; recom
 - **Vocabulaire** : `CONTEXT.md`, « Plan de calcul », « Fiche de calcul », « Option », « Sensibilité », « Méthode », « Témoin », « Rejeu », « Empreinte », « Tableau avant / après », « Visa ».
 
 Issues : #4 (ADR de cadrage).
+
+## Annotation du 11 novembre 2026 — lecture du point 10 par l'ADR 0011
+
+*Rédigée par `architect` le 11 novembre 2026 (branche `claude/capital-deces`, PR #61, tête `6a00a06`), sur l'acceptation de l'ADR 0011 par le mainteneur le même jour (M256 à M260 de `docs/feuille-de-route.md`, § 4). Le texte ci-dessus n'est pas réécrit.*
+
+- **« Un plan de référence par méthode de la v1 »** (point 10) se lit comme une exigence de **couverture**, contrôlée par script : pour chaque méthode, recommandée ou alternative, du catalogue d'une garantie implémentée, il existe au moins un **couple de référence** (données, plan de référence, arrêté) dont le calcul rend une cellule `niveau = "calcul"` de cette méthode, au statut `calcule`, de montant non nul ; pour un poste à champs (P3 du capital décès), la segmentation `nature_contrat` les sépare. Un plan de référence ne porte donc pas une seule méthode : `recommandees` et `alternatives` en portent plusieurs (ADR 0011, points 12 et 15). Un total nul ou arrêté est sous référence mais ne compte pas dans la couverture (ADR 0011, point 9). Une méthode sans couverture est un échec de la batterie de reproductibilité, ou un échec attendu avec renvoi à son issue.
+- En B2, les sept méthodes du capital décès (`postes.csv`, colonne `methodes`) doivent être couvertes par les couples C1 à C4 (base construite `construite-deces-01`) et V1, V2 (jeu `v1-modeste-03` de #69) ; C2 à C4 sont gardés par le mainteneur (M257, M258). La couverture effective se mesure par le script, aux premières références.
+- « Références produites par la CI seule » et « comparées valeur par valeur à tolérance » sont précisées par l'ADR 0011 (points 7, 8 et 16 à 20) : candidat produit par un workflow de régénération en lecture seule, commit de référence par la session principale après visa ; comparaison feuille par feuille, tolérance mixte ε = 1e-10.
+
+**Effet sur les résultats** : aucun. Issues : #67, #69 ; PR #61.

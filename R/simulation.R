@@ -22,6 +22,14 @@
 # défauts d'une même table touchent des colonnes distinctes ou des lignes éligibles
 # disjointes ; activer ou désactiver un défaut ne change donc ni le jeu propre ni les autres
 # défauts (E4.9).
+# Format de loi vraie version 2 (spécification de B2, § 7.9.2 ; #69), additif : la version 1
+# reste lue, sortie inchangée ; la version 2 ajoute deux flux, chacun sous sa graine et en un
+# seul appel d'avec_graine(), tirés après `information` et avant les défauts : `individuels`
+# (temporaires décès individuelles : souscription, tarif, résiliation, décès, délais
+# d'information ; uniformes de taille fixe par contrat) et `suites_deces` (capitaux non
+# réclamés et fixations différées ; trois uniformes par décès, collectif puis individuel,
+# dans l'ordre d'assemblage), plus la majoration du conjoint et les périodes de cotisation à
+# l'anniversaire du contrat collectif.
 #
 # Modèle (jugement d'expert déclaré dans la loi vraie, jamais une valeur par défaut) :
 # assurés affiliés à des contrats collectifs obligatoires qui portent trois garanties liées
@@ -40,9 +48,14 @@
 # exacts de l'argument `graines` de simuler_base().
 FLUX_SIMULATION <- c("population", "famille", "sinistres", "information")
 GRAINES_SIMULATION <- c(FLUX_SIMULATION, "defauts")
+# Flux ajoutés par le format de loi vraie version 2, tirés après FLUX_SIMULATION, et noms
+# exacts de l'argument `graines` pour une loi de version 2, dans l'ordre des tirages.
+FLUX_SIMULATION_V2 <- c("individuels", "suites_deces")
+GRAINES_SIMULATION_V2 <- c(FLUX_SIMULATION, FLUX_SIMULATION_V2, "defauts")
 
-# Version du format de la loi vraie lue par simuler_base() (`loi_vraie$version`).
-VERSION_LOI_VRAIE <- 1L
+# Version courante du format de la loi vraie lue par simuler_base() (`loi_vraie$version`) ; la
+# version 1 reste lue, sortie inchangée (spécification de B2, § 7.9.2).
+VERSION_LOI_VRAIE <- 2L
 
 # Version du simulateur, consignée au manifeste (ADR 0010, onzième série, (c)) et soumise au
 # test d'identité des jeux versionnés. Règle d'incrément : toute modification de ce module qui
@@ -149,8 +162,9 @@ SCHEMA_VERITE <- list(
 # --- Point d'entrée ----------------------------------------------------------------
 
 # Tire une base brute fictive sous la loi vraie `loi_vraie` (liste nommée sérialisable par
-# ecrire_liste(), version VERSION_LOI_VRAIE ; forme décrite par .controler_loi_vraie()), avec
-# les graines `graines` (liste nommée d'entiers, noms GRAINES_SIMULATION), à la date
+# ecrire_liste(), version 1 ou VERSION_LOI_VRAIE ; forme décrite par .controler_loi_vraie()),
+# avec les graines `graines` (liste nommée d'entiers, noms GRAINES_SIMULATION pour une loi de
+# version 1, GRAINES_SIMULATION_V2 pour une loi de version 2), à la date
 # d'extraction `date_extraction` (Date de longueur 1). `nom` (`<jalon>-<volumetrie>-<nn>`) et
 # `description` (chaîne) vont au manifeste ; `date_visa` (Date, NA tant que le jeu n'est pas
 # visé) aussi. `declarations` : liste nommée `declarations` et `conventions` (arguments de
@@ -177,14 +191,17 @@ SCHEMA_VERITE <- list(
 # arrondi du salaire nul, valeur non finie), paramètre de défaut inconnu ou hors de [0 ; 1],
 # date d'extraction non entière ou non finie, antérieure ou égale au début de l'historique ou
 # antérieure à l'effet du dernier contrat possible, horizon d'invalidité plus long que les
-# uniformes tirées (.taille_invalidite()).
+# uniformes tirées (.taille_invalidite()) ; en version 2, dernière souscription individuelle
+# postérieure à l'extraction ou antérieure au début de l'historique, premier palier du taux
+# du tarif postérieur à l'année du début de l'historique.
 simuler_base <- function(loi_vraie, graines, date_extraction, nom, description, declarations = NULL,
                          date_visa = NULL) {
   if (missing(loi_vraie) || missing(graines) || missing(date_extraction) || missing(nom) || missing(description)) {
     .refus_simulation("simuler_base() : loi_vraie, graines, date_extraction, nom et description sont obligatoires")
   }
   .controler_loi_vraie(loi_vraie)
-  graines <- .controler_graines(graines)
+  v2 <- identical(loi_vraie$version, 2L)
+  graines <- .controler_graines(graines, if (v2) GRAINES_SIMULATION_V2 else GRAINES_SIMULATION)
   if (!identical(class(date_extraction), "Date") || length(date_extraction) != 1L || !is.finite(date_extraction) ||
       as.numeric(date_extraction) != floor(as.numeric(date_extraction))) {
     .refus_simulation(paste0("simuler_base() : `date_extraction` doit \u00eatre une Date renseign\u00e9e de longueur 1, ",
@@ -219,13 +236,33 @@ simuler_base <- function(loi_vraie, graines, date_extraction, nom, description, 
                              "l'historique d\u00e9cal\u00e9 de decalage_effet_mois_max mois post\u00e9rieur \u00e0 la date ",
                              "d'extraction)"))
   }
+  # Préconditions des contrats individuels (version 2) : effets de debut_historique à
+  # derniere_souscription, au plus tard à l'extraction ; un palier de taux du tarif pour
+  # l'année de chaque effet possible.
+  if (v2) {
+    x <- loi_vraie$individuels
+    if (as.numeric(x$derniere_souscription) > ext) {
+      .refus_simulation("simuler_base() : loi vraie, `individuels/derniere_souscription` post\u00e9rieure \u00e0 l'extraction")
+    }
+    if (x$taux_tarif$annee[1L] > as.POSIXlt(p$debut_historique)$year + 1900L) {
+      .refus_simulation(paste0("simuler_base() : loi vraie, `individuels/taux_tarif/annee` : premier palier ",
+                               "post\u00e9rieur \u00e0 l'ann\u00e9e du d\u00e9but de l'historique"))
+    }
+  }
   dico <- dictionnaire()
 
   pop <- avec_graine(graines$population, .tirer_population(loi_vraie, ext))
   fam <- avec_graine(graines$famille, .tirer_familles(loi_vraie, pop))
   sin <- avec_graine(graines$sinistres, .tirer_sinistres(loi_vraie, pop, ext))
   inf <- avec_graine(graines$information, .tirer_information(loi_vraie, pop, sin))
-  propre <- .assembler_jeu(loi_vraie, pop, fam, sin, inf, ext, dico)
+  ind <- NULL
+  suites <- NULL
+  if (v2) {
+    ind <- avec_graine(graines$individuels, .tirer_individuels(loi_vraie, ext))
+    n_deces <- length(sin$deces) + sum(!is.na(ind$deces))
+    suites <- avec_graine(graines$suites_deces, matrix(runif(n_deces * 3L), nrow = n_deces, ncol = 3L, byrow = TRUE))
+  }
+  propre <- .assembler_jeu(loi_vraie, pop, fam, sin, inf, ext, dico, ind, suites)
   injection <- .injecter_defauts(propre$base, loi_vraie$defauts, graines$defauts, ext, dico$types_evenements)
 
   verite <- propre$verite
@@ -290,17 +327,19 @@ print.jeu_simule <- function(x, ...) {
   else if (is.logical(x)) "logical" else "numeric"
 }
 
-.controler_graines <- function(graines) {
-  if (!is.list(graines) || is.data.frame(graines) || !setequal(names(graines), GRAINES_SIMULATION) ||
-      length(graines) != length(GRAINES_SIMULATION) ||
+# `noms` : noms exacts des graines selon la version de la loi vraie (GRAINES_SIMULATION ou
+# GRAINES_SIMULATION_V2) ; rend les graines dans cet ordre.
+.controler_graines <- function(graines, noms) {
+  if (!is.list(graines) || is.data.frame(graines) || !setequal(names(graines), noms) ||
+      length(graines) != length(noms) ||
       !all(vapply(graines, function(g) is.integer(g) && length(g) == 1L && !is.na(g), NA))) {
     .refus_simulation(paste0("simuler_base() : `graines` doit \u00eatre une liste nomm\u00e9e d'entiers renseign\u00e9s (",
-                             paste(GRAINES_SIMULATION, collapse = ", "), ")"))
+                             paste(noms, collapse = ", "), ")"))
   }
   if (any(vapply(graines, function(g) abs(as.numeric(g)) > .Machine$integer.max - nrow(DEFAUTS_SIMULES), NA))) {
     .refus_simulation("simuler_base() : graine trop grande (graine des d\u00e9fauts + rang hors des entiers)")
   }
-  graines[GRAINES_SIMULATION]
+  graines[noms]
 }
 
 # Forme attendue de la loi vraie : chemins, type et longueur de chaque feuille (longueur NA :
@@ -351,6 +390,37 @@ print.jeu_simule <- function(x, ...) {
   c("cadences/saisie_radiation", "double", 1), c("cadences/emission_cotisation", "double", 1),
   c("cadences/encaissement_cotisation", "double", 1))
 
+# Feuilles ajoutées par le format version 2 (spécification de B2, § 7.9.3), toutes
+# obligatoires en version 2 et refusées en version 1 (clé inconnue) ; même forme que
+# .SCHEMA_LOI_VRAIE. Sémantique : garanties/periode_cotisation (`civile`, comportement de la
+# version 1, ou `anniversaire` : périodes annuelles commençant à l'effet du contrat collectif) ;
+# garanties/deces/majoration_conjoint (fraction du salaire ajoutée au taux du capital si
+# l'assuré a un conjoint) ; individuels/* (temporaires décès individuelles, .tirer_individuels())
+# ; suites_deces/* (capitaux non réclamés et fixations différées, .assembler_jeu()).
+.SCHEMA_LOI_VRAIE_V2 <- list(
+  c("garanties/periode_cotisation", "character", 1), c("garanties/deces/majoration_conjoint", "double", 1),
+  c("individuels/nombre_contrats", "integer", 1), c("individuels/derniere_souscription", "Date", 1),
+  c("individuels/age_souscription_min", "double", 1), c("individuels/age_souscription_max", "double", 1),
+  c("individuels/part_femmes", "double", 1), c("individuels/part_conjoint", "double", 1),
+  c("individuels/ecart_age_conjoint_max", "double", 1), c("individuels/part_prime_unique", "double", 1),
+  c("individuels/duree_prime_unique_min", "integer", 1), c("individuels/duree_prime_unique_max", "integer", 1),
+  c("individuels/duree_periodique_min", "integer", 1), c("individuels/duree_periodique_max", "integer", 1),
+  c("individuels/part_trimestrielle", "double", 1), c("individuels/capitaux", "double", NA),
+  c("individuels/age_fin_garantie", "double", 1), c("individuels/taux_resiliation", "double", 1),
+  c("individuels/taux_tarif/annee", "integer", NA), c("individuels/taux_tarif/taux", "double", NA),
+  c("individuels/tarif/q0", "double", 1), c("individuels/tarif/q2", "double", 1),
+  c("individuels/tarif/age_ref", "double", 1), c("individuels/tarif/chargement", "double", 1),
+  c("suites_deces/part_non_reclames", "double", 1), c("suites_deces/part_fixation_differee", "double", 1),
+  c("suites_deces/delai_fixation_differee", "double", 1))
+
+# Périodes de cotisation admises en version 2 (garanties/periode_cotisation).
+.PERIODES_COTISATION <- c("civile", "anniversaire")
+
+# Schéma de la loi vraie de la version `version` (1 ou 2).
+.schema_loi_vraie <- function(version) {
+  if (identical(version, 2L)) c(.SCHEMA_LOI_VRAIE, .SCHEMA_LOI_VRAIE_V2) else .SCHEMA_LOI_VRAIE
+}
+
 .feuille <- function(x, chemin) {
   for (nom in strsplit(chemin, "/", fixed = TRUE)[[1L]]) {
     if (!is.list(x) || is.null(names(x)) || !(nom %in% names(x))) return(NULL)
@@ -363,10 +433,11 @@ print.jeu_simule <- function(x, ...) {
   if (!is.list(lv) || is.data.frame(lv) || is.null(names(lv))) {
     .refus_simulation("simuler_base() : `loi_vraie` doit \u00eatre une liste nomm\u00e9e")
   }
-  if (!identical(lv$version, VERSION_LOI_VRAIE)) {
-    .refus_simulation(paste0("simuler_base() : loi vraie de version ", VERSION_LOI_VRAIE, " attendue (`version`)"))
+  if (!identical(lv$version, 1L) && !identical(lv$version, VERSION_LOI_VRAIE)) {
+    .refus_simulation(paste0("simuler_base() : loi vraie de version 1 ou ", VERSION_LOI_VRAIE, " attendue (`version`)"))
   }
-  for (s in .SCHEMA_LOI_VRAIE) {
+  schema <- .schema_loi_vraie(lv$version)
+  for (s in schema) {
     x <- .feuille(lv, s[1L])
     ok <- !is.null(x) && is.atomic(x) &&
       (if (s[2L] == "Date") identical(names(attributes(x)), "class") && identical(class(x), "Date") && is.double(x)
@@ -382,7 +453,7 @@ print.jeu_simule <- function(x, ...) {
   # Domaine des valeurs numériques (revue finale, m6) : taux, cadences, âges, durées et
   # montants positifs ou nuls, sauf la moyenne du logarithme du salaire ; volumétrie d'au moins
   # un contrat de un assuré ; arrondi du salaire strictement positif ; âges d'entrée ordonnés.
-  for (s in .SCHEMA_LOI_VRAIE) {
+  for (s in schema) {
     if (!(s[2L] %in% c("double", "integer")) || s[1L] == "portefeuille/salaire_log_moyenne") next
     if (any(.feuille(lv, s[1L]) < 0)) .refus_simulation(paste0("simuler_base() : loi vraie, `", s[1L], "` n\u00e9gatif"))
   }
@@ -409,7 +480,10 @@ print.jeu_simule <- function(x, ...) {
               "tables/maintien_incapacite/passage_au_terme", "tables/invalidite/reprise_mensuelle",
               "tables/invalidite/deces_mensuel", "tables/sans_suite/part", "tables/mortalite/qx_femmes",
               "tables/mortalite/qx_hommes", "tables/maintien_incapacite/reprise", "tables/maintien_incapacite/deces",
-              "tables/maintien_incapacite/passage")
+              "tables/maintien_incapacite/passage",
+              if (identical(lv$version, 2L)) c("individuels/part_femmes", "individuels/part_conjoint",
+                                               "individuels/part_prime_unique", "individuels/part_trimestrielle",
+                                               "suites_deces/part_non_reclames", "suites_deces/part_fixation_differee"))
   for (p in probas) {
     x <- .feuille(lv, p)
     if (any(x < 0 | x > 1)) .refus_simulation(paste0("simuler_base() : loi vraie, `", p, "` hors de [0 ; 1]"))
@@ -439,12 +513,46 @@ print.jeu_simule <- function(x, ...) {
     .refus_simulation(paste0("simuler_base() : loi vraie, `defauts` : une intensit\u00e9 dans [0 ; 1] par d\u00e9faut simul\u00e9, ",
                              "sans valeur par d\u00e9faut (", paste(DEFAUTS_SIMULES$parametre, collapse = ", "), ")"))
   }
-  # Clés inconnues (revue finale, m6) : toute feuille de la loi vraie est lue par le simulateur.
-  admises <- c(vapply(.SCHEMA_LOI_VRAIE, `[`, "", 1L), paste0("defauts/", DEFAUTS_SIMULES$parametre))
+  if (identical(lv$version, 2L)) .controler_loi_vraie_v2(lv)
+  # Clés inconnues (revue finale, m6) : toute feuille de la loi vraie est lue par le simulateur ;
+  # une clé de la version 2 dans une loi de version 1 est inconnue.
+  admises <- c(vapply(schema, `[`, "", 1L), paste0("defauts/", DEFAUTS_SIMULES$parametre))
   inconnues <- setdiff(.chemins_feuilles(lv), admises)
   if (length(inconnues) > 0L) {
     .refus_simulation(paste0("simuler_base() : loi vraie, cl\u00e9(s) inconnue(s) ou mal nomm\u00e9e(s) : ",
                              paste(inconnues, collapse = ", ")))
+  }
+  invisible(NULL)
+}
+
+# Domaines propres aux clés de la version 2 (spécification de B2, § 7.9.2, critère J.2), après
+# les contrôles de forme, de signe et de probabilité communs : période de cotisation en liste
+# fermée ; âges de souscription ordonnés, l'âge maximal augmenté du décalage de naissance tiré
+# (au plus 27 jours, .tirer_individuels()) sous l'âge de fin de garantie ; durées entières d'au
+# moins un an, min <= max ; paliers du taux du tarif de même longueur, années strictement
+# croissantes ; dernière souscription au plus tôt au début de l'historique.
+.controler_loi_vraie_v2 <- function(lv) {
+  x <- lv$individuels
+  if (!(lv$garanties$periode_cotisation %in% .PERIODES_COTISATION)) {
+    .refus_simulation(paste0("simuler_base() : loi vraie, `garanties/periode_cotisation` hors de ",
+                             paste(.PERIODES_COTISATION, collapse = ", ")))
+  }
+  if (x$age_souscription_min > x$age_souscription_max || x$age_souscription_max + 28 / .AN_JOURS >= x$age_fin_garantie) {
+    .refus_simulation(paste0("simuler_base() : loi vraie, individuels : age_souscription_min <= age_souscription_max ",
+                             "et age_souscription_max + 28 / 365,25 < age_fin_garantie"))
+  }
+  if (x$duree_prime_unique_min < 1L || x$duree_prime_unique_min > x$duree_prime_unique_max ||
+      x$duree_periodique_min < 1L || x$duree_periodique_min > x$duree_periodique_max) {
+    .refus_simulation("simuler_base() : loi vraie, individuels : dur\u00e9es d'au moins un an, min <= max")
+  }
+  tt <- x$taux_tarif
+  if (length(tt$annee) != length(tt$taux) || any(diff(tt$annee) <= 0L)) {
+    .refus_simulation(paste0("simuler_base() : loi vraie, `individuels/taux_tarif` : annee et taux de m\u00eame ",
+                             "longueur, ann\u00e9es strictement croissantes"))
+  }
+  if (as.numeric(x$derniere_souscription) < as.numeric(lv$portefeuille$debut_historique)) {
+    .refus_simulation(paste0("simuler_base() : loi vraie, `individuels/derniere_souscription` ant\u00e9rieure au ",
+                             "d\u00e9but de l'historique"))
   }
   invisible(NULL)
 }
@@ -696,6 +804,122 @@ print.jeu_simule <- function(x, ...) {
     saisie_evenement = matrix(.delai(u_s[, 9:16, drop = FALSE], cad$saisie_evenement), nrow = ns))
 }
 
+# --- Flux individuels (loi vraie version 2) -----------------------------------------------
+
+# Colonnes des uniformes d'un contrat individuel (largeur fixe, spécification de B2, § 7.9.4) :
+# souscription (effet, âge, jour de naissance, sexe, conjoint, écart d'âge du conjoint, prime
+# unique, fractionnement trimestriel, durée, capital, résiliation), seize délais d'information
+# du sinistre éventuel (mêmes rubriques et même ordre que .tirer_information()), saisie de la
+# fin du contrat, puis deux par pas de 30 jours de la trajectoire (décès, jour dans le pas).
+.U_SOUSCRIPTION <- 11L
+.U_INFORMATION <- .U_SOUSCRIPTION + 1:16
+.U_SAISIE_FIN <- .U_SOUSCRIPTION + 17L
+
+# Temporaires décès individuelles (spécification de B2, § 7.9.4) : souscription, tarif
+# commercial déclaré, fin de garantie (terme, âge de fin de garantie, résiliation des primes
+# périodiques à la première échéance qui suit strictement la notification), décès seul par pas
+# de 30 jours jusqu'au plus tôt de la fin de garantie et de l'extraction (table de mortalité du
+# sexe, comme au collectif), délais d'information. Uniformes de taille fixe par contrat (le
+# nombre de pas couvre l'historique entier). Rend une liste de vecteurs par contrat (deces : date
+# du décès, NA sans décès au plus tard à l'extraction ; fin_garantie et motif_fin : fin hors
+# décès ; information : délais, mêmes champs que .tirer_information(), plus saisie_fin).
+.tirer_individuels <- function(lv, ext) {
+  p <- lv$portefeuille
+  x <- lv$individuels
+  cad <- lv$cadences
+  n <- x$nombre_contrats
+  debut <- as.numeric(p$debut_historique)
+  n_pas <- ceiling((ext - debut) / .PAS_JOURS) + 2L
+  largeur <- .U_SAISIE_FIN + 2L * n_pas
+  u <- matrix(runif(n * largeur), nrow = n, ncol = largeur, byrow = TRUE)
+  if (n == 0L) return(list(n = 0L, deces = numeric(0)))
+  lt <- as.POSIXlt(.date(c(debut, as.numeric(x$derniere_souscription))))
+  mois <- (lt$year[2L] - lt$year[1L]) * 12L + lt$mon[2L] - lt$mon[1L]
+  effet <- .debut_mois(debut, floor(u[, 1L] * (mois + 1)))
+  age <- x$age_souscription_min + u[, 2L] * (x$age_souscription_max - x$age_souscription_min)
+  naissance <- effet - floor(age * .AN_JOURS) - floor(u[, 3L] * 28)
+  sexe <- ifelse(u[, 4L] < x$part_femmes, "F", "M")
+  conjoint <- u[, 5L] < x$part_conjoint
+  ecart <- floor((2 * u[, 6L] - 1) * x$ecart_age_conjoint_max * .AN_JOURS)
+  unique_p <- u[, 7L] < x$part_prime_unique
+  periodicite <- ifelse(unique_p, "unique", ifelse(u[, 8L] < x$part_trimestrielle, "trimestrielle", "annuelle"))
+  dmin <- ifelse(unique_p, x$duree_prime_unique_min, x$duree_periodique_min)
+  dmax <- ifelse(unique_p, x$duree_prime_unique_max, x$duree_periodique_max)
+  duree <- as.integer(dmin + floor(u[, 9L] * (dmax - dmin + 1)))
+  terme <- .debut_mois(effet, 12L * duree)
+  capital <- x$capitaux[floor(u[, 10L] * length(x$capitaux)) + 1L]
+  # taux du tarif : dernier palier dont l'année est au plus celle de l'effet
+  taux_tarif <- x$taux_tarif$taux[findInterval(as.POSIXlt(.date(effet))$year + 1900L, x$taux_tarif$annee)]
+  # tarif commercial : q_t(x) au milieu de la durée, chargé ; prime par échéance ou unique
+  xt <- calculer_age(.date(naissance), .date(effet), "revolu") + duree / 2
+  taux_annuel <- (x$tarif$q0 + x$tarif$q2 * (xt - x$tarif$age_ref)^2) * (1 + x$tarif$chargement)
+  par_an <- ifelse(periodicite == "trimestrielle", 4, 1)
+  prime <- ifelse(unique_p, round(capital * taux_annuel * duree, 2), round(capital * taux_annuel / par_an, 2))
+  date_age <- as.numeric(date_atteinte_age(.date(naissance), rep(x$age_fin_garantie, n), "revolu"))
+  fin_contractuelle <- pmin(terme, date_age)
+  # résiliation (primes périodiques) : notification exponentielle, fin à la première échéance
+  # qui suit strictement la notification, si elle précède la fin contractuelle
+  notification <- if (x$taux_resiliation > 0) effet + floor(-log1p(-u[, 11L]) / x$taux_resiliation * .AN_JOURS) else
+    rep(Inf, n)
+  periode <- ifelse(periodicite == "trimestrielle", 3L, 12L)
+  fin_garantie <- fin_contractuelle
+  motif_fin <- rep("terme", n)
+  for (i in which(!unique_p & notification < fin_contractuelle)) {
+    k <- 0L
+    repeat {
+      e <- .debut_mois(effet[i], periode[i] * k)
+      if (e > notification[i]) break
+      k <- k + 1L
+    }
+    if (e < fin_contractuelle[i]) {
+      fin_garantie[i] <- e
+      motif_fin[i] <- "resiliation_adherent"
+    }
+  }
+  # décès : pas de 30 jours, de l'effet au plus tôt de la fin de garantie et de l'extraction
+  ages <- 0:.AGE_LIMITE_SIMULATION
+  anniv <- matrix(as.numeric(date_atteinte_age(.date(rep(naissance, each = length(ages))), rep(ages, n), "revolu")),
+                  nrow = length(ages), ncol = n)
+  t <- lv$tables
+  mu <- list(F = -log1p(-.par_age(t$mortalite, "qx_femmes", ages)), M = -log1p(-.par_age(t$mortalite, "qx_hommes", ages)))
+  deces <- rep(NA_real_, n)
+  for (i in seq_len(n)) {
+    mu_i <- mu[[sexe[i]]]
+    tps <- effet[i]
+    fin_act <- min(fin_garantie[i], ext)
+    j <- 0L
+    while (tps < fin_act) {
+      j <- j + 1L
+      fin_pas <- min(tps + .PAS_JOURS, fin_act)
+      d <- fin_pas - tps
+      m_a <- mu_i[findInterval(tps, anniv[, i])]
+      p_dc <- if (is.infinite(m_a)) 1 else 1 - exp(-m_a * d / .AN_JOURS)
+      if (u[i, .U_SAISIE_FIN + 2L * j - 1L] < p_dc) {
+        deces[i] <- tps + floor(u[i, .U_SAISIE_FIN + 2L * j] * d)
+        break
+      }
+      tps <- fin_pas
+    }
+  }
+  ui <- u[, .U_INFORMATION, drop = FALSE]
+  information <- list(
+    declaration = .delai(ui[, 1L], cad$declaration_deces),
+    saisie_sinistre = .delai(ui[, 2L], cad$saisie_sinistre),
+    instruction = .delai(ui[, 3L], cad$instruction),
+    ouverture = .delai(ui[, 4L], cad$ouverture_dossier),
+    ouverture_inv = .delai(ui[, 5L], cad$ouverture_dossier),
+    saisie_famille = .delai(ui[, 6L], cad$saisie_famille),
+    reglement_capital = .delai(ui[, 7L], cad$reglement_capital),
+    reglement_prestation = .delai(ui[, 8L], cad$reglement_prestation),
+    saisie_evenement = matrix(.delai(ui[, 9:16, drop = FALSE], cad$saisie_evenement), nrow = n),
+    saisie_fin = .delai(u[, .U_SAISIE_FIN], cad$saisie_radiation))
+  list(n = n, effet = effet, naissance = naissance, sexe = sexe, conjoint = conjoint,
+       sexe_conjoint = ifelse(sexe == "F", "M", "F"), naissance_conjoint = naissance + ecart,
+       periodicite = periodicite, periode = ifelse(unique_p, NA_integer_, periode), duree = duree, terme = terme,
+       capital = capital, taux_tarif = taux_tarif, prime = prime, age_fin_garantie = x$age_fin_garantie,
+       fin_garantie = fin_garantie, motif_fin = motif_fin, deces = deces, information = information)
+}
+
 # --- Assemblage du jeu propre -----------------------------------------------------------
 
 # Table `table` du dictionnaire à partir de colonnes nommées (valeurs ou NA du type) ; colonnes
@@ -738,25 +962,47 @@ print.jeu_simule <- function(x, ...) {
 
 # Assemble la base vraie (toutes les lignes, saisies avant ou après l'extraction), puis garde
 # les lignes connues à l'extraction ; rend la base propre et les tables de vérité (sans le
-# registre des défauts).
-.assembler_jeu <- function(lv, pop, fam, sin, inf, ext, dico) {
+# registre des défauts). Version 2 (`ind` : flux individuels, NULL en version 1 ; `suites` :
+# matrice des uniformes des suites des décès, NULL en version 1) : les décès individuels
+# suivent les décès collectifs dans les sinistres (assuré d'indice pop$n + rang du contrat) ;
+# identifiants des tables partagées en numérotation commune.
+.assembler_jeu <- function(lv, pop, fam, sin, inf, ext, dico, ind = NULL, suites = NULL) {
   g <- lv$garanties
   p <- lv$portefeuille
   nc <- pop$nc
+  v2 <- identical(lv$version, 2L)
+  sd <- lv$suites_deces
+  mc <- if (v2) g$deces$majoration_conjoint else 0
+  anniversaire <- v2 && g$periode_cotisation == "anniversaire"
+  ni <- if (is.null(ind)) 0L else ind$n
   id_contrat <- .ids("CT", nc, 2L)
   id_assure <- .ids("AS", pop$n, 4L)
+  id_ci <- .ids("CI", ni, 3L)
+  id_gi <- .ids("GI", ni, 3L)
+  id_ai <- .ids("AI", ni, 4L)
+  id_assure_tout <- c(id_assure, id_ai)
   codes <- c("deces", "incapacite", "invalidite")
   id_gs <- matrix(.ids("GS", nc * 3L, 3L), nrow = nc, ncol = 3L, byrow = TRUE, dimnames = list(NULL, codes))
 
-  # --- sinistres : arrêts (ordre du flux) puis décès
+  # --- sinistres : arrêts (ordre du flux) puis décès collectifs, puis décès individuels
+  # (ordre des contrats)
   na <- length(sin$arrets)
   nd <- length(sin$deces)
-  ns <- na + nd
-  s_assure <- c(vapply(sin$arrets, `[[`, 0L, "assure"), vapply(sin$deces, `[[`, 0L, "assure"))
-  s_surv <- c(vapply(sin$arrets, `[[`, 0, "debut"), vapply(sin$deces, `[[`, 0, "date"))
-  s_nature <- c(rep("arret_travail", na), rep("deces", nd))
+  k_ind <- if (ni) which(!is.na(ind$deces)) else integer(0)
+  ndi <- length(k_ind)
+  ns <- na + nd + ndi
+  s_assure <- c(vapply(sin$arrets, `[[`, 0L, "assure"), vapply(sin$deces, `[[`, 0L, "assure"), pop$n + k_ind)
+  s_surv <- c(vapply(sin$arrets, `[[`, 0, "debut"), vapply(sin$deces, `[[`, 0, "date"), ind$deces[k_ind])
+  s_nature <- c(rep("arret_travail", na), rep("deces", nd + ndi))
   # arrêt d'origine d'un décès en arrêt ou en invalidité (rang dans les arrêts, NA sinon)
-  s_origine <- c(rep(NA_integer_, na), vapply(sin$deces, function(d) as.integer(d$origine), 0L))
+  s_origine <- c(rep(NA_integer_, na), vapply(sin$deces, function(d) as.integer(d$origine), 0L), rep(NA_integer_, ndi))
+  # contrat individuel du décès (rang), NA pour un sinistre collectif
+  s_ind <- c(rep(NA_integer_, na + nd), k_ind)
+  if (ndi) {
+    ii <- ind$information
+    for (nm in setdiff(names(inf), "saisie_evenement")) inf[[nm]] <- c(inf[[nm]], ii[[nm]][k_ind])
+    inf$saisie_evenement <- rbind(inf$saisie_evenement, ii$saisie_evenement[k_ind, , drop = FALSE])
+  }
   ordre <- order(s_surv, s_assure, s_nature, method = "radix")
   id_sin <- character(ns)
   id_sin[ordre] <- .ids("SI", ns, 4L)
@@ -765,9 +1011,9 @@ print.jeu_simule <- function(x, ...) {
   s_instr <- s_saisie + inf$instruction
   s_contrat <- pop$contrat[s_assure]
   s_salaire <- pop$salaire[s_assure]
-  sans_suite <- c(vapply(sin$arrets, function(a) a$motif_fin == "sans_suite", NA), rep(FALSE, nd))
+  sans_suite <- c(vapply(sin$arrets, function(a) a$motif_fin == "sans_suite", NA), rep(FALSE, nd + ndi))
   # instruction d'un arrêt sans suite : sa décision de classement (date de la sortie)
-  fin_arret <- c(vapply(sin$arrets, `[[`, 0, "fin"), rep(NA_real_, nd))
+  fin_arret <- c(vapply(sin$arrets, `[[`, 0, "fin"), rep(NA_real_, nd + ndi))
   s_instr[sans_suite] <- pmax(s_saisie[sans_suite], fin_arret[sans_suite])
 
   # fin d'affiliation : décès survenu pendant l'affiliation (en activité ou en arrêt)
@@ -782,6 +1028,7 @@ print.jeu_simule <- function(x, ...) {
 
   # --- lignes vraies : dossiers, rentes, événements, prestations, famille, bénéficiaires
   dos <- list(); ren <- list(); eve <- list(); pre <- list(); fml <- list(); ben <- list(); etats <- list()
+  depots <- list()
   ajouter <- function(l, x) { l[[length(l) + 1L]] <- x; l }
   ev <- function(sinistre, dossier, rente, type, effet, saisie, montant = NA_real_, motif = NA_character_,
                  justificatif = NA_character_, categorie = NA_character_) {
@@ -802,25 +1049,53 @@ print.jeu_simule <- function(x, ...) {
     sid <- id_sin[k]
     c_k <- s_contrat[k]
     if (s_nature[k] == "deces") {
+      j <- s_ind[k]
+      collectif <- is.na(j)
       d_id <- nouveau_dossier()
       ouv <- s_saisie[k] + inf$ouverture[k]
-      dos <- ajouter(dos, list(id_dossier = d_id, id_sinistre = sid, id_garantie_souscrite = id_gs[c_k, "deces"],
+      dos <- ajouter(dos, list(id_dossier = d_id, id_sinistre = sid,
+                               id_garantie_souscrite = if (collectif) id_gs[c_k, "deces"] else id_gi[j],
                                date_ouverture = ouv))
-      capital <- round(g$deces$taux_capital * s_salaire[k], 2)
+      conjoint <- if (collectif) fam$conjoint[i] else ind$conjoint[j]
+      # capital : taux du capital (majoré du conjoint en version 2) x salaire ; capital
+      # forfaitaire d'un contrat individuel
+      capital <- if (collectif) round((g$deces$taux_capital + mc * conjoint) * s_salaire[k], 2) else ind$capital[j]
       fix <- max(s_instr[k], ouv)
+      # suites du décès (version 2) : non réclamé, fixation différée
+      non_reclame <- FALSE
+      if (v2) {
+        u_s <- suites[k - na, ]
+        non_reclame <- u_s[1L] < sd$part_non_reclames
+        if (u_s[2L] < sd$part_fixation_differee) fix <- fix + .delai(u_s[3L], sd$delai_fixation_differee)
+      }
       eve <- ajouter(eve, ev(sid, d_id, NA_character_, "fixation_capital", fix, fix + se[8L], montant = capital))
-      regl <- fix + inf$reglement_capital[k]
-      pre <- ajouter(pre, pr(d_id, NA_character_, "capital", regl, NA_real_, NA_real_, capital))
-      eve <- ajouter(eve, ev(sid, d_id, NA_character_, "cloture_dossier", regl, regl + se[5L], motif = "regle"))
-      fam_saisie <- s_instr[k] + inf$saisie_famille[k]
-      if (fam$conjoint[i]) {
-        m_id <- sprintf("ME%04d", i)
-        fml <- ajouter(fml, list(id_membre = m_id, id_assure = id_assure[i], lien = "conjoint", sexe = fam$sexe[i],
-                                 date_naissance = fam$naissance[i], id_sinistre = sid, date_saisie = fam_saisie))
-        ben <- ajouter(ben, list(id_dossier = d_id, id_membre = m_id, qualite = "conjoint_survivant", part = 1,
-                                 date_saisie = max(ouv, fam_saisie)))
+      if (non_reclame) {
+        # aucune prestation ni clôture ; vérité : dépôt du capital fixé, nominal, à la
+        # déclaration + 10 ans (anniversaire)
+        depots <- ajouter(depots, list(k = k, id_dossier = d_id, montant = capital,
+                                       date = as.numeric(date_atteinte_age(.date(s_decl[k]), 10L, "revolu"))))
       } else {
+        regl <- fix + inf$reglement_capital[k]
+        pre <- ajouter(pre, pr(d_id, NA_character_, "capital", regl, NA_real_, NA_real_, capital))
+        eve <- ajouter(eve, ev(sid, d_id, NA_character_, "cloture_dossier", regl, regl + se[5L], motif = "regle"))
+      }
+      fam_saisie <- s_instr[k] + inf$saisie_famille[k]
+      if (conjoint) {
+        m_id <- if (collectif) sprintf("ME%04d", i) else sprintf("MI%04d", j)
+        fml <- ajouter(fml, list(id_membre = m_id, id_assure = id_assure_tout[i], lien = "conjoint",
+                                 sexe = if (collectif) fam$sexe[i] else ind$sexe_conjoint[j],
+                                 date_naissance = if (collectif) fam$naissance[i] else ind$naissance_conjoint[j],
+                                 id_sinistre = sid, date_saisie = fam_saisie))
+        if (!non_reclame) {
+          ben <- ajouter(ben, list(id_dossier = d_id, id_membre = m_id, qualite = "conjoint_survivant", part = 1,
+                                   date_saisie = max(ouv, fam_saisie)))
+        }
+      } else if (!non_reclame) {
         ben <- ajouter(ben, list(id_dossier = d_id, id_membre = NA_character_, qualite = "heritiers", part = 1,
+                                 date_saisie = max(ouv, s_instr[k])))
+      }
+      if (non_reclame) {
+        ben <- ajouter(ben, list(id_dossier = d_id, id_membre = NA_character_, qualite = "non_identifie", part = 1,
                                  date_saisie = max(ouv, s_instr[k])))
       }
       next
@@ -928,7 +1203,12 @@ print.jeu_simule <- function(x, ...) {
 
   # --- flux futurs (prestations réglées après l'extraction) et sinistres non déclarés
   futur <- !vis(P$date_reglement)
-  gar_dossier <- function(d) codes[(match(D$id_garantie_souscrite[match(d, D$id_dossier)], id_gs) - 1L) %/% nc + 1L]
+  gar_dossier <- function(d) {
+    gs <- D$id_garantie_souscrite[match(d, D$id_dossier)]
+    code <- codes[(match(gs, id_gs) - 1L) %/% nc + 1L]
+    code[gs %in% id_gi] <- "deces"
+    code
+  }
   sin_dossier <- D$id_sinistre[match(P$id_dossier, D$id_dossier)]
   k_futur <- match(sin_dossier[futur], id_sin)
   flux_futurs <- data.frame(id_sinistre = sin_dossier[futur],
@@ -940,9 +1220,25 @@ print.jeu_simule <- function(x, ...) {
                             montant = P$montant[futur],
                             id_sinistre_origine = .si_texte(s_surv[k_futur] > ext, id_sin[s_origine[k_futur]]),
                             sinistre_connu = s_vis[k_futur], stringsAsFactors = FALSE)
+  # capitaux non réclamés (version 2) : dépôt postérieur à l'extraction, ligne capital au
+  # montant nominal fixé ; flux_futurs reste trié comme les prestations (règlement, dossier,
+  # début de période)
+  depots <- Filter(function(x) x$date > ext, depots)
+  if (length(depots)) {
+    kd <- vapply(depots, `[[`, 0L, "k")
+    dd <- vapply(depots, `[[`, "", "id_dossier")
+    flux_futurs <- rbind(flux_futurs, data.frame(
+      id_sinistre = id_sin[kd], date_survenance = .date(s_surv[kd]), id_dossier = dd, code_garantie = gar_dossier(dd),
+      type_prestation = "capital", date_reglement = .date(vapply(depots, `[[`, 0, "date")),
+      debut_periode = .date(rep(NA_real_, length(kd))), fin_periode = .date(rep(NA_real_, length(kd))),
+      montant = vapply(depots, `[[`, 0, "montant"), id_sinistre_origine = .si_texte(s_surv[kd] > ext, id_sin[s_origine[kd]]),
+      sinistre_connu = s_vis[kd], stringsAsFactors = FALSE))
+    flux_futurs <- flux_futurs[order(as.numeric(flux_futurs$date_reglement), flux_futurs$id_dossier,
+                                     as.numeric(flux_futurs$debut_periode), method = "radix"), , drop = FALSE]
+  }
   nd_ <- !s_vis & s_surv <= ext
   o_nd <- order(id_sin[nd_], method = "radix")
-  sinistres_non_declares <- data.frame(id_sinistre = id_sin[nd_][o_nd], id_assure = id_assure[s_assure[nd_]][o_nd],
+  sinistres_non_declares <- data.frame(id_sinistre = id_sin[nd_][o_nd], id_assure = id_assure_tout[s_assure[nd_]][o_nd],
                                        nature_sinistre = s_nature[nd_][o_nd],
                                        date_survenance = .date(s_surv[nd_][o_nd]),
                                        date_declaration = .date(s_decl[nd_][o_nd]),
@@ -958,6 +1254,13 @@ print.jeu_simule <- function(x, ...) {
                                                         Fm$id_membre[vis(Fm$date_saisie)],
                                                       sprintf("ME%04d", which(fam$conjoint))),
                                 stringsAsFactors = FALSE)
+  if (ni && any(ind$conjoint)) {
+    cj <- which(ind$conjoint)
+    m_cj <- sprintf("MI%04d", cj)
+    familles_vraies <- rbind(familles_vraies, data.frame(
+      id_assure = id_ai[cj], lien = "conjoint", sexe = ind$sexe_conjoint[cj], date_naissance = .date(ind$naissance_conjoint[cj]),
+      id_membre = .si_texte(m_cj %in% Fm$id_membre[vis(Fm$date_saisie)], m_cj), stringsAsFactors = FALSE))
+  }
 
   # --- base connue à l'extraction
   af_saisie <- pop$entree + inf$saisie_affiliation
@@ -966,32 +1269,58 @@ print.jeu_simule <- function(x, ...) {
   sel_af <- which(af_vis)
   # assurés connus : par une affiliation ou par un sinistre saisis au plus tard à l'extraction
   sel_as <- which(af_vis | seq_len(pop$n) %in% s_assure[s_vis])
+  # contrats individuels : fin (décès, sinon fin de garantie) et saisie de la fin (saisie du
+  # sinistre pour un décès), connues à l'extraction seulement si toutes deux y sont au plus
+  i_fin <- i_motif <- i_saisie_fin <- numeric(0)
+  if (ni) {
+    k_dc <- match(seq_len(ni), s_ind)
+    dc <- !is.na(k_dc)
+    i_fin <- ifelse(dc, ind$deces, ind$fin_garantie)
+    i_motif <- ifelse(dc, "deces_assure", ind$motif_fin)
+    i_saisie_fin <- ifelse(dc, s_saisie[k_dc], i_fin + ind$information$saisie_fin)
+    i_connue <- vis(i_fin) & vis(i_saisie_fin)
+    i_fin[!i_connue] <- NA
+    i_motif[!i_connue] <- NA
+    i_saisie_fin[!i_connue] <- NA
+  }
+  mois_effet <- function(d) as.POSIXlt(.date(d))$mon + 1L
   extraction <- .table(dico, "extraction", list(date_extraction = ext, debut_historique = p$debut_historique,
                                                  type_organisme = p$type_organisme, version_dictionnaire = dico$version,
                                                  devise = "EUR"), 1L)
   adherents <- .table(dico, "adherents", list(id_adherent = .ids("AD", nc, 2L)), nc)
   contrats <- .table(dico, "contrats", list(
-    id_contrat = id_contrat, nature_contrat = "collectif_obligatoire", id_adherent = .ids("AD", nc, 2L),
-    date_effet = pop$effet_contrat, mois_echeance = 1L, jour_echeance = 1L, preavis_mois = 2L,
-    tacite_reconduction = TRUE, gestionnaire = "interne", date_debut_gestion = pop$effet_contrat), nc)
+    id_contrat = c(id_contrat, id_ci), nature_contrat = rep(c("collectif_obligatoire", "individuel"), c(nc, ni)),
+    id_adherent = c(.ids("AD", nc, 2L), rep(NA_character_, ni)), id_assure = c(rep(NA_character_, nc), id_ai),
+    date_effet = c(pop$effet_contrat, ind$effet), date_terme = c(rep(NA_real_, nc), ind$terme),
+    date_fin = c(rep(NA_real_, nc), i_fin), motif_fin = c(rep(NA_character_, nc), i_motif),
+    date_saisie_fin = c(rep(NA_real_, nc), i_saisie_fin),
+    mois_echeance = c(if (anniversaire) mois_effet(pop$effet_contrat) else rep(1L, nc), mois_effet(ind$effet)),
+    jour_echeance = 1L, preavis_mois = 2L, tacite_reconduction = rep(c(TRUE, FALSE), c(nc, ni)),
+    gestionnaire = "interne", date_debut_gestion = c(pop$effet_contrat, ind$effet)), nc + ni)
   gs_code <- rep(codes, nc)
   gs_contrat <- rep(seq_len(nc), each = 3L)
   inc <- gs_code == "incapacite"
   inv <- gs_code == "invalidite"
   dc <- gs_code == "deces"
   per <- ifelse(inc, g$incapacite$periodicite_prestation, ifelse(inv, g$invalidite$periodicite_prestation, NA))
+  sans <- rep(NA, ni)
   garanties_souscrites <- .table(dico, "garanties_souscrites", list(
-    id_garantie_souscrite = as.vector(t(id_gs)), id_contrat = id_contrat[gs_contrat], code_garantie = gs_code,
-    college = g$college, date_effet = pop$effet_contrat[gs_contrat], type_assiette = "salaire_reference",
-    type_franchise = ifelse(inc, g$incapacite$type_franchise, NA),
-    regle_complement = ifelse(inc, g$incapacite$regle_complement, ifelse(inv, g$invalidite$regle_complement, NA)),
-    option_iad = ifelse(dc, g$deces$option_iad, NA), periodicite_prestation = per,
-    terme_prestation = ifelse(inc, g$incapacite$terme_prestation, ifelse(inv, g$invalidite$terme_prestation, NA)),
-    periodicite_cotisation = g$periodicite_cotisation,
-    clause_type_beneficiaire = ifelse(dc, g$deces$clause_type_beneficiaire, NA)), nc * 3L)
+    id_garantie_souscrite = c(as.vector(t(id_gs)), id_gi), id_contrat = c(id_contrat[gs_contrat], id_ci),
+    code_garantie = c(gs_code, rep("deces", ni)),
+    college = g$college, date_effet = c(pop$effet_contrat[gs_contrat], ind$effet),
+    type_assiette = rep(c("salaire_reference", "forfait"), c(nc * 3L, ni)),
+    type_franchise = c(ifelse(inc, g$incapacite$type_franchise, NA), sans),
+    regle_complement = c(ifelse(inc, g$incapacite$regle_complement, ifelse(inv, g$invalidite$regle_complement, NA)), sans),
+    option_iad = c(ifelse(dc, g$deces$option_iad, NA), rep(FALSE, ni)), periodicite_prestation = c(per, sans),
+    terme_prestation = c(ifelse(inc, g$incapacite$terme_prestation, ifelse(inv, g$invalidite$terme_prestation, NA)), sans),
+    periodicite_cotisation = c(rep(g$periodicite_cotisation, nc * 3L), ind$periodicite),
+    taux_technique_tarif = c(rep(NA_real_, nc * 3L), ind$taux_tarif),
+    clause_type_beneficiaire = c(ifelse(dc, g$deces$clause_type_beneficiaire, NA),
+                                 rep("conjoint_enfants_heritiers", ni))), nc * 3L + ni)
   par_gs <- list(
-    deces = list(c("taux_capital", g$deces$taux_capital), c("age_fin_garantie", g$deces$age_fin_garantie),
-                 c("taux_cotisation", g$deces$taux_cotisation)),
+    deces = c(list(c("taux_capital", g$deces$taux_capital), c("age_fin_garantie", g$deces$age_fin_garantie),
+                   c("taux_cotisation", g$deces$taux_cotisation)),
+              if (mc > 0) list(c("majoration_conjoint", mc))),
     incapacite = list(c("franchise_jours", g$incapacite$franchise_jours), c("taux_indemnite", g$incapacite$taux_indemnite),
                       c("duree_max_jours", g$incapacite$duree_max_jours),
                       c("delai_rechute_jours", g$incapacite$delai_rechute_jours),
@@ -1008,13 +1337,24 @@ print.jeu_simule <- function(x, ...) {
                                   categorie_invalidite = if (length(x) == 3L) x[3L] else NA_character_,
                                   valeur = as.numeric(x[2L]))
   }
+  # contrats individuels : capital forfaitaire, âge de fin de garantie, prime par échéance
+  for (j in seq_len(ni)) {
+    noms <- c("capital_forfaitaire", "age_fin_garantie", if (!is.na(ind$periode[j])) "prime_periodique")
+    valeurs <- c(ind$capital[j], ind$age_fin_garantie, if (!is.na(ind$periode[j])) ind$prime[j])
+    for (m in seq_along(noms)) {
+      lp[[length(lp) + 1L]] <- list(id_garantie_souscrite = id_gi[j], parametre = noms[m],
+                                    categorie_invalidite = NA_character_, valeur = valeurs[m])
+    }
+  }
   lp <- .rbind_listes(lp, c(id_garantie_souscrite = "character", parametre = "character",
                            categorie_invalidite = "character", valeur = "numeric"))
   parametres <- .table(dico, "parametres", lp, length(lp$valeur))
   assures <- .table(dico, "assures", list(
-    id_assure = id_assure[sel_as], sexe = pop$sexe[sel_as], date_naissance = pop$naissance[sel_as],
-    situation_familiale = ifelse(fam$conjoint[sel_as], "marie", "celibataire"),
-    date_situation_familiale = pop$entree[sel_as]), length(sel_as))
+    id_assure = c(id_assure[sel_as], id_ai), sexe = c(pop$sexe[sel_as], ind$sexe),
+    date_naissance = c(pop$naissance[sel_as], ind$naissance),
+    situation_familiale = c(ifelse(fam$conjoint[sel_as], "marie", "celibataire"),
+                            ifelse(ind$conjoint, "marie", "celibataire")),
+    date_situation_familiale = c(pop$entree[sel_as], ind$effet)), length(sel_as) + ni)
   affiliations <- .table(dico, "affiliations", list(
     id_affiliation = .ids("AF", pop$n, 4L)[sel_af], id_assure = id_assure[sel_af],
     id_contrat = id_contrat[pop$contrat[sel_af]], college = g$college, type_affiliation = "cotisant",
@@ -1027,7 +1367,7 @@ print.jeu_simule <- function(x, ...) {
   ks <- ks[order(id_sin[ks], method = "radix")]
   instr_connue <- vis(s_instr[ks])
   sinistres <- .table(dico, "sinistres", list(
-    id_sinistre = id_sin[ks], id_assure = id_assure[s_assure[ks]], nature_sinistre = s_nature[ks],
+    id_sinistre = id_sin[ks], id_assure = id_assure_tout[s_assure[ks]], nature_sinistre = s_nature[ks],
     date_survenance = s_surv[ks], date_declaration = s_decl[ks],
     date_instruction = ifelse(instr_connue, s_instr[ks], NA),
     canal_declaration = ifelse(s_nature[ks] == "deces", "beneficiaire", "assure"), gestionnaire = "interne",
@@ -1046,7 +1386,7 @@ print.jeu_simule <- function(x, ...) {
   Pv <- sel(P, vis(P$date_saisie) & vis(P$date_reglement))
   Pv$nature_mouvement <- rep("paiement", length(Pv$id_prestation))
   prestations <- .table(dico, "prestations", Pv, length(Pv$id_prestation))
-  cotisations <- .cotisations(lv, pop, fin_aff, id_gs, codes, ext, dico)
+  cotisations <- .cotisations(lv, pop, fin_aff, id_gs, codes, ext, dico, ind, id_gi, s_ind)
 
   base <- list(extraction = extraction, adherents = adherents, contrats = contrats,
                garanties_souscrites = garanties_souscrites, parametres = parametres, assures = assures,
@@ -1060,35 +1400,70 @@ print.jeu_simule <- function(x, ...) {
 
 # Cotisations annuelles de chaque garantie souscrite : émission (au début de la période plus
 # le délai d'émission) et encaissement (délai d'encaissement après l'émission), période de
-# l'année civile commencée à l'effet du contrat, assiette = somme des salaires des assurés
-# affiliés au début de la période, au prorata des jours de la période ; mouvements datés au
-# plus tard à l'extraction.
-.cotisations <- function(lv, pop, fin_aff, id_gs, codes, ext, dico) {
+# l'année civile commencée à l'effet du contrat (version 2, periode_cotisation `anniversaire` :
+# période d'un an commençant à l'effet du contrat ou à l'un de ses anniversaires), assiette =
+# somme des salaires des assurés affiliés au début de la période, au prorata des jours de la
+# période ; mouvements datés au plus tard à l'extraction. Contrats individuels (version 2 ;
+# `ind`, `id_gi`, `s_ind` : rang du contrat individuel de chaque sinistre) : prime unique, une
+# émission à l'effet plus le délai d'émission, période de l'effet à la veille du terme ; primes
+# périodiques, une émission par échéance antérieure à la fin du contrat (décès, sinon fin de
+# garantie), période de l'échéance à la veille de la suivante.
+.cotisations <- function(lv, pop, fin_aff, id_gs, codes, ext, dico, ind = NULL, id_gi = character(0),
+                         s_ind = integer(0)) {
   g <- lv$garanties
   cad <- lv$cadences
   l <- list()
+  mouvements <- function(gs, debut, fin, montant) {
+    emission <- debut + cad$emission_cotisation
+    encaissement <- emission + cad$encaissement_cotisation
+    for (k in 1:2) {
+      date <- if (k == 1L) emission else encaissement
+      if (date > ext) next
+      l[[length(l) + 1L]] <<- list(id_garantie_souscrite = gs, nature_mouvement = if (k == 1L) "emission" else "encaissement",
+                                   debut_periode = debut, fin_periode = fin, date_mouvement = date, montant = montant)
+    }
+  }
+  anniversaire <- identical(lv$version, 2L) && g$periode_cotisation == "anniversaire"
   annee_ext <- as.POSIXlt(.date(ext))$year + 1900L
   for (c_k in seq_len(pop$nc)) {
     effet <- pop$effet_contrat[c_k]
-    a0 <- as.POSIXlt(.date(effet))$year + 1900L
-    for (a in a0:annee_ext) {
-      debut <- max(effet, as.numeric(as.Date(sprintf("%04d-01-01", a))))
-      fin <- as.numeric(as.Date(sprintf("%04d-12-31", a)))
+    if (anniversaire) {
+      debuts <- numeric(0)
+      repeat {
+        d <- .debut_mois(effet, 12L * length(debuts))
+        if (d > ext) break
+        debuts <- c(debuts, d)
+      }
+      fins <- .debut_mois(effet, 12L * seq_along(debuts)) - 1
+    } else {
+      a0 <- as.POSIXlt(.date(effet))$year + 1900L
+      debuts <- vapply(a0:annee_ext, function(a) max(effet, as.numeric(as.Date(sprintf("%04d-01-01", a)))), 0)
+      fins <- vapply(a0:annee_ext, function(a) as.numeric(as.Date(sprintf("%04d-12-31", a))), 0)
+    }
+    for (q in seq_along(debuts)) {
+      debut <- debuts[q]
+      fin <- fins[q]
       membres <- pop$contrat == c_k & pop$entree <= debut & fin_aff > debut
       assiette <- sum(pop$salaire[membres]) * (fin - debut + 1) / 365
-      emission <- debut + cad$emission_cotisation
-      encaissement <- emission + cad$encaissement_cotisation
       for (code in codes) {
         montant <- round(g[[code]]$taux_cotisation * assiette, 2)
         if (montant <= 0) next
-        for (k in 1:2) {
-          date <- if (k == 1L) emission else encaissement
-          if (date > ext) next
-          l[[length(l) + 1L]] <- list(id_garantie_souscrite = id_gs[c_k, code],
-                                      nature_mouvement = if (k == 1L) "emission" else "encaissement",
-                                      debut_periode = debut, fin_periode = fin, date_mouvement = date, montant = montant)
-        }
+        mouvements(id_gs[c_k, code], debut, fin, montant)
       }
+    }
+  }
+  for (j in seq_len(if (is.null(ind)) 0L else ind$n)) {
+    if (is.na(ind$periode[j])) {
+      mouvements(id_gi[j], ind$effet[j], ind$terme[j] - 1, ind$prime[j])
+      next
+    }
+    fin_j <- if (j %in% s_ind) ind$deces[j] else ind$fin_garantie[j]
+    k <- 0L
+    repeat {
+      e <- .debut_mois(ind$effet[j], ind$periode[j] * k)
+      if (e >= fin_j || e > ext) break
+      mouvements(id_gi[j], e, .debut_mois(ind$effet[j], ind$periode[j] * (k + 1L)) - 1, ind$prime[j])
+      k <- k + 1L
     }
   }
   l <- .rbind_listes(l, c(id_garantie_souscrite = "character", nature_mouvement = "character",
