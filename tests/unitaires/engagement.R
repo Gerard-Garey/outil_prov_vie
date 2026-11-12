@@ -74,6 +74,22 @@ verifier_egal("valeur_actuelle_probable() : flux x probabilité x (1 + taux)^(-t
 verifier_egal("valeur_actuelle_probable() : un flux daté de l'origine est une erreur de programmation",
               tryCatch({ ns$valeur_actuelle_probable(transform(ech_test, date = A), list(type = "taux", taux = 0.02, origine = A), conv)
                          "aucune" }, error = function(e) grepl("erreur interne", conditionMessage(e))), TRUE)
+verifier_egal("valeur_actuelle_probable() : actualisation$type hors de TYPES_ACTUALISATION (courbe), de longueur 2, NA, facteur ou absent : erreur",
+              vapply(list(list(type = "courbe"), list(type = c("aucune", "taux")), list(type = NA_character_),
+                          list(type = factor("aucune")), list()),
+                     function(a) tryCatch({ ns$valeur_actuelle_probable(ech_test, a, conv); FALSE },
+                                          error = function(e) grepl("actualisation\\$type", conditionMessage(e))), NA),
+              rep(TRUE, 5L))
+# type admis par TYPES_ACTUALISATION sans branche de calcul (courbe ajoutée à la constante dans
+# ce processus, puis rétablie) : erreur interne, jamais un facteur 1
+types_act <- get("TYPES_ACTUALISATION", envir = ns)
+unlockBinding("TYPES_ACTUALISATION", ns); assign("TYPES_ACTUALISATION", c(types_act, "courbe"), envir = ns)
+err_courbe <- tryCatch({ ns$valeur_actuelle_probable(ech_test, list(type = "courbe"), conv); "aucune" },
+                       error = function(e) conditionMessage(e))
+assign("TYPES_ACTUALISATION", types_act, envir = ns); lockBinding("TYPES_ACTUALISATION", ns)
+verifier("valeur_actuelle_probable() : type admis par TYPES_ACTUALISATION sans branche (courbe) : erreur interne ; constante rétablie",
+         startsWith(err_courbe, "erreur interne de provie") && grepl("courbe", err_courbe) &&
+           identical(get("TYPES_ACTUALISATION", envir = ns), c("aucune", "taux")))
 
 # (3.7) une seule définition de valeur_actuelle_probable() et de facteur_revalorisation() dans R/
 definitions <- function(nom) {
@@ -291,8 +307,8 @@ verifier_egal("Q-a : ouvert -> clos -> fixation 100 000 -> réouverture : capita
                 list(e$etat_dossier, e$montant_en_vigueur, e$date_etat_dossier, eng(b_qa, p)$cellules$montant) },
               list("capital_du", 100000, D("2024-12-01"), 103936), tolerance = TOL)
 # affiliation exclue pour la famille engagement (D03c, salaire manquant, exclusion déclarée) :
-# elle ne couvre rien, affiliation_non_determinee ; sans exclusion : assiette_non_determinee
-# (lecture de D03c par P1 et P2 : question ouverte, #75)
+# elle ne couvre rien, affiliation_non_determinee ; sans exclusion ni hypothèse :
+# assiette_non_determinee (garde ; lecture de D03c sous H : critère (4.9), #75)
 b_d03c <- b2_base_capital(capital = NA)
 b_d03c$affiliations$salaire_reference <- NA_real_
 excl_d03c <- list(exclusions = data.frame(motif = "D03c", famille = ns$FAMILLES_CALCUL,
@@ -352,7 +368,7 @@ OPS_REC <- c("which", "match", "split", "unique", "order", "rep", "c", "==", "!=
 travail_rec <- function(n) {
   v <- b2_vue(base_perf(n), A)
   e <- ns$etats_a_date(v, "deces", "engagement")
-  travail_de(ns$.reconstituer_capital, v, e, p$postes$deces[[P1]]$parametres, p$conventions, ops = OPS_REC,
+  travail_de(ns$.reconstituer_capital, v, e, p$postes$deces[[P1]]$parametres, p$conventions, P1, ops = OPS_REC,
              sous = fonctions_de(ns))
 }
 nd_perf <- nrow(b2_vue(base_perf(500L), A)$bilan$vue$visibilite_non_determinee)
@@ -488,7 +504,7 @@ excl_gs <- function(gs) {
                                         deux_gs$parametres$id_garantie_souscrite %in% gs)] <- TRUE
   e <- ns$etats_a_date(v, "deces", "engagement")
   e <- e[e$etat_dossier == "ouvert", , drop = FALSE]
-  rc <- ns$.reconstituer_capital(v, e, pB$postes$deces[[P1]]$parametres, pB$conventions)
+  rc <- ns$.reconstituer_capital(v, e, pB$postes$deces[[P1]]$parametres, pB$conventions, P1)
   r <- ns$calculer_engagement(v, pB, tb, cat_g, "deces", P1)
   list(r$cellules$motif_arret, attr(r$cellules, "identifiant_arret"), rc$capital[match(c("DO1", "DO2"), e$id_dossier)],
        rc$arret[match(c("DO1", "DO2"), e$id_dossier)])
@@ -602,3 +618,115 @@ verifier_egal("plan canonique (#67) : R1 sur le plan canonique, 103 936 (cas R1)
 verifier("plan canonique (#67) : P3 (T1, T3) identique au plan validé",
          meme_resultat(b2_base_p3(), b2_plan(tb, D("2025-01-01")), D("2025-01-01")) &&
            meme_resultat(b2_base_p3("annuelle", 2300), b2_plan(tb, D("2025-01-01")), D("2025-01-01")))
+
+section("engagement : lecture de D03c sous H par P1 et P2 (critère (4.9), § 5.9, décision E16-1, option B), #75")
+
+# Base R5 (a) au salaire manquant (AF1), plan de (4.7) sans D03g : b2_plan() dont `donnees` est
+# celui du plan `recommandees` de la base construite (seuils de D02c), plus la déclaration de
+# D03c ; de bout en bout, par calculer_provisions(). Valeurs en dur : § 7.7, critère (4.9)
+# (avant : arrêt assiette_non_determinee, m28). DO1 instruit : conjoint ME1 et enfant ME2
+# (10 ans), majorations 0,5 et 0,25 ; facteur de R1 1,015 x 1,024 = 1,03936.
+tid <- stats::setNames(unname(tb), vapply(tb, function(t) t$identifiant, ""))
+p49 <- modifier(p, "donnees", list(seuils = list(
+  d02c_age_min = list(assures_sinistre = 16, assures_affiliation = 16, famille = 0),
+  d02c_age_max = list(assures_sinistre = 75, assures_affiliation = 70, famille = 110))))
+hyp_d <- function(motif, valeur, poste = "tous") {
+  lapply(ns$REFERENTIELS, function(r) list(motif = motif, referentiel = r, poste = poste, valeur = valeur))
+}
+plan_49 <- function(hypotheses = list(), exclusions = NULL) {
+  q <- p49
+  q$donnees$hypotheses <- hypotheses
+  if (!is.null(exclusions)) q$donnees$exclusions <- exclusions
+  q
+}
+b_49 <- b2_base_capital(capital = NA)
+b_49$affiliations$salaire_reference <- NA_real_
+do1_49 <- function(r) {
+  d <- r$dossiers[r$dossiers$poste == P1, , drop = FALSE]
+  list(d$id_dossier, d$montant, d$statut_resultat, d$hypotheses_defaut)
+}
+p1_49 <- function(r) {
+  q <- r$provisions[r$provisions$poste == P1 & r$provisions$segmentation == "ensemble", , drop = FALSE]
+  list(q$montant, q$statut_resultat, q$statut_calcul, q$motif_arret)
+}
+verifier_egal("(4.9) D03c H, valeur ensemble=30000 : DO1 85 747,20, jugement_expert, D03c (= (30 000 x 2 + 30 000 x (0,5 + 0,25)) x 1,015 x 1,024 ; avant : arrêt assiette_non_determinee) ; cellule de P1 jugement_expert",
+              { r <- calculer_provisions(b_49, plan_49(hyp_d("D03c", "ensemble=30000")), tid)
+                c(do1_49(r), p1_49(r)[1:3]) },
+              list("DO1", (30000 * 2 + 30000 * (0.5 + 0.25)) * 1.015 * 1.024, "jugement_expert", "D03c",
+                   85747.2, "jugement_expert", "calcule"), tolerance = TOL)
+verifier_egal("(4.9) D03c H, valeur ensemble=40000 : DO1 114 329,60 (= 40 000 x 2,75 x 1,03936), jugement_expert, D03c",
+              do1_49(calculer_provisions(b_49, plan_49(hyp_d("D03c", "ensemble=40000")), tid)),
+              list("DO1", 114329.6, "jugement_expert", "D03c"), tolerance = TOL)
+verifier_egal("(4.9) D03c H, valeur salaire_par_defaut_du_college : refus plan_invalide ; cadres=40000 : refus plan_incomplet",
+              list(motif_de(calculer_provisions(b_49, plan_49(hyp_d("D03c", "salaire_par_defaut_du_college")), tid)),
+                   motif_de(calculer_provisions(b_49, plan_49(hyp_d("D03c", "cadres=40000")), tid))),
+              list("plan_invalide", "plan_incomplet"))
+verifier_egal("(4.9) D03c H déclarée pour le seul poste capitaux_non_reclames : P1 arrêté assiette_non_determinee (garde)",
+              p1_49(calculer_provisions(b_49, plan_49(hyp_d("D03c", "ensemble=30000", P2)), tid)),
+              list(NA_real_, NA_character_, "arrete", "assiette_non_determinee"))
+verifier_egal("(4.9) D03c X pour engagement (conserver ailleurs) : P1 arrêté affiliation_non_determinee (inchangé)",
+              p1_49(calculer_provisions(b_49, plan_49(exclusions = excl_fam("D03c", "engagement")$exclusions), tid)),
+              list(NA_real_, NA_character_, "arrete", "affiliation_non_determinee"))
+# témoin D03a (IP6) : salaire renseigné, date de naissance de l'enfant ME2 (né le 2014-01-01)
+# manquante, D03a déclarée en H : valeur non lue, arrêt famille_non_determinee (inchangé)
+b_49a <- b2_base_capital(capital = NA)
+b_49a$famille$date_naissance[b_49a$famille$id_membre == "ME2"] <- as.Date(NA)
+verifier_egal("(4.9) témoin D03a : R5 (a), date de naissance de ME2 (né le 2014-01-01) manquante, D03a H : P1 arrêté famille_non_determinee (D03a non lue sous H, IP6)",
+              p1_49(calculer_provisions(b_49a, plan_49(hyp_d("D03a", "age_par_defaut_du_segment")), tid)),
+              list(NA_real_, NA_character_, "arrete", "famille_non_determinee"))
+# cas de la règle hors des valeurs du critère : P2 lit D03c comme P1 ; hypothèse du poste de
+# préférence à celle de `tous` (comme D03h) ; refus levé seulement si aucun dossier n'arrête
+# le poste (§ 5.9 : après les règles d'arrêt) ; valeur de forme invalide.
+b_49n <- b2_base_capital(capital = NA, qualite = "non_identifie")
+b_49n$affiliations$salaire_reference <- NA_real_
+verifier_egal("(4.9) P2 (bénéficiaire non identifié) : D03c H ensemble=30000, DO1 jugement_expert, D03c, 85 747,20 (frais nuls)",
+              { r <- calculer_provisions(b_49n, plan_49(hyp_d("D03c", "ensemble=30000")), tid)
+                d <- r$dossiers[r$dossiers$poste == P2, , drop = FALSE]
+                list(d$id_dossier, d$montant, d$statut_resultat, d$hypotheses_defaut) },
+              list("DO1", 85747.2, "jugement_expert", "D03c"), tolerance = TOL)
+verifier_egal("(4.9) préférence : D03c du poste P1 (ensemble=40000) et de tous (ensemble=30000) : P1 lit celle du poste, 114 329,60 ; P2 (non identifié) celle de tous, 85 747,20",
+              { h <- c(hyp_d("D03c", "ensemble=30000"), list(list(motif = "D03c", referentiel = "comptes_sociaux", poste = P1,
+                                                                   valeur = "ensemble=40000")))
+                c(do1_49(calculer_provisions(b_49, plan_49(h), tid))[[2L]],
+                  calculer_provisions(b_49n, plan_49(h), tid)$dossiers$montant) },
+              c(114329.6, 85747.2), tolerance = TOL)
+b_49f <- b_49
+b_49f$famille$date_naissance[b_49f$famille$id_membre == "ME2"] <- as.Date(NA)
+verifier_egal("(4.9) valeur invalide et dossier arrêté (ME2 d'âge inconnu, D03a conserver) : arrêt famille_non_determinee, sans refus ; formes refusées (plan_invalide) : ensemble=30000; ; ensemble = 30000 ; ensemble=3e4 ; ensemble=30000;ensemble=40000 ; ensemble=-1",
+              list(p1_49(calculer_provisions(b_49f, plan_49(hyp_d("D03c", "n_importe"), excl_fam("D03a", character(0), F3)$exclusions),
+                                             tid))[[4L]],
+                   vapply(c("ensemble=30000;", "ensemble = 30000", "ensemble=3e4", "ensemble=30000;ensemble=40000", "ensemble=-1"),
+                          function(v) motif_de(calculer_provisions(b_49, plan_49(hyp_d("D03c", v)), tid)), "",
+                          USE.NAMES = FALSE)),
+              list("famille_non_determinee", rep("plan_invalide", 5L)))
+verifier_egal("(4.9) liste à deux collèges cadres=50000;ensemble=40000 : collège ensemble lu, 114 329,60 ; montant décimal ensemble=30000.50",
+              c(do1_49(calculer_provisions(b_49, plan_49(hyp_d("D03c", "cadres=50000;ensemble=40000")), tid))[[2L]],
+                do1_49(calculer_provisions(b_49, plan_49(hyp_d("D03c", "ensemble=30000.50")), tid))[[2L]]),
+              c(114329.6, 30000.5 * 2.75 * 1.03936), tolerance = TOL)
+# unité à montant nul (§ 5.8, décision E16-5, option (a)) : un dossier lu sous D03c reste
+# restitué, montant 0, jugement_expert, D03c, et compte dans nombre_dossiers ; témoin : même
+# solde négatif sans hypothèse (salaire renseigné), aucun dossier (règle du § 5.3 inchangée)
+paye_49 <- data.frame(date = D("2025-03-01"), montant = 100000)
+b_49p <- b2_base_capital(capital = NA, paiements = paye_49)
+b_49p$affiliations$salaire_reference <- NA_real_
+p1_n <- function(r) {
+  q <- r$provisions[r$provisions$poste == P1 & r$provisions$segmentation == "ensemble", , drop = FALSE]
+  list(q$montant, q$nombre_dossiers, q$statut_resultat)
+}
+verifier_egal("(4.9) unité à montant nul : D03c ensemble=0 : DO1 0, jugement_expert, D03c, P1 0 sur 1 dossier jugement_expert ; paiement de 100 000 et D03c ensemble=30000 (solde négatif) : DO1 0, jugement_expert, D03c ; témoin, salaire renseigné, même paiement : aucun dossier, P1 0 sur 0 exact",
+              { r0 <- calculer_provisions(b_49, plan_49(hyp_d("D03c", "ensemble=0")), tid)
+                rp <- calculer_provisions(b_49p, plan_49(hyp_d("D03c", "ensemble=30000")), tid)
+                rt <- calculer_provisions(b2_base_capital(capital = NA, paiements = paye_49), plan_49(), tid)
+                list(do1_49(r0), p1_n(r0), do1_49(rp), p1_n(rp), nrow(rt$dossiers), p1_n(rt)) },
+              list(list("DO1", 0, "jugement_expert", "D03c"), list(0, 1L, "jugement_expert"),
+                   list("DO1", 0, "jugement_expert", "D03c"), list(0, 1L, "jugement_expert"), 0L, list(0, 0L, "exact")))
+verifier("hypothese_vue() : seule sélection d'une hypothèse par ligne, définie une fois, dans R/engagement.R, appelée par .reconstituer_capital() (D03c), .hypothese_d03h() (D03h) et provisions_collectives() (D03f) ; vue$hypotheses lue dans le code de R/ par hypothese_vue() seule",
+         { src <- unlist(lapply(list.files(file.path(racine, "R"), "\\.R$", full.names = TRUE), readLines, encoding = "UTF-8"))
+           sum(grepl("^hypothese_vue <- function", src)) == 1L &&
+             any(grepl("^hypothese_vue <- function", readLines(file.path(racine, "R", "engagement.R"), encoding = "UTF-8"))) &&
+             "hypothese_vue" %in% all.names(body(ns$.reconstituer_capital)) &&
+             "hypothese_vue" %in% all.names(body(ns$.hypothese_d03h)) &&
+             "hypothese_vue" %in% all.names(body(ns$provisions_collectives)) &&
+             !any(grepl("x\\$motif == \"D03[fh]\"", src)) &&
+             sum(grepl("vue\\$hypotheses", sub("#.*$", "", src))) == 1L &&
+             any(grepl("vue\\$hypotheses", sub("#.*$", "", deparse(ns$hypothese_vue)))) })

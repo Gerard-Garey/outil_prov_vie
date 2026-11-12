@@ -283,15 +283,13 @@ provisions_individuelles <- function(vue, plan, tables, temoin) {
 }
 
 # Valeur de l'hypothèse D03h appliquée à la ligne `ligne` de garanties_souscrites
-# (vue$hypotheses : motif D03h, référentiel comptes_sociaux, poste P3 de préférence à `tous`),
-# lue comme un taux décimal ; NULL sans hypothèse appliquée. Une valeur qui n'est pas un
-# nombre décimal à point est un refus plan_invalide (aucune conversion silencieuse).
+# (hypothese_vue() de `engagement`, seule sélection : motif D03h, référentiel comptes_sociaux,
+# poste P3 de préférence à `tous`), lue comme un taux décimal ; NULL sans hypothèse appliquée.
+# Une valeur qui n'est pas un nombre décimal à point est un refus plan_invalide (aucune
+# conversion silencieuse).
 .hypothese_d03h <- function(vue, ligne) {
-  h <- Filter(function(x) x$motif == "D03h" && x$referentiel == .REFERENTIEL_P3 && x$table == "garanties_souscrites" &&
-                ligne %in% x$lignes && x$poste %in% c(.POSTE_P3, "tous"), vue$hypotheses)
-  if (length(h) == 0L) return(NULL)
-  postes <- vapply(h, `[[`, "", "poste")
-  valeur <- h[[if (.POSTE_P3 %in% postes) match(.POSTE_P3, postes) else 1L]]$valeur
+  valeur <- hypothese_vue(vue, "D03h", .REFERENTIEL_P3, "garanties_souscrites", ligne, .POSTE_P3)
+  if (is.na(valeur)) return(NULL)
   if (!grepl("^-?[0-9]+(\\.[0-9]+)?([eE][-+]?[0-9]+)?$", valeur)) {
     refuser(paste0("plan : hypoth\u00e8se D03h (comptes_sociaux) : valeur \u00ab ", valeur,
                    " \u00bb, taux d\u00e9cimal attendu (taux du tarif retenu)"), "plan_invalide", module = "risque_en_cours",
@@ -391,9 +389,10 @@ provisions_collectives <- function(vue, plan) {
   echue_connue <- !is.na(fin) & fin <= a
   # (2) période couverte manquante (D03f) : hypothèse H appliquée aux deux bornes, sinon Kleene
   manque <- (is.na(debut) | is.na(fin)) & !echue_connue
-  h_d03f <- Filter(function(x) x$motif == "D03f" && x$referentiel == .REFERENTIEL_P3 &&
-                     x$table == "cotisations" && x$poste %in% c(.POSTE_P3, "tous"), vue$hypotheses)
-  sous_h <- manque & co %in% unlist(lapply(h_d03f, function(x) x$lignes))
+  # valeur de D03f par cotisation retenue (hypothese_vue() de `engagement`, seule sélection :
+  # poste P3 de préférence à `tous`) ; NA sans hypothèse appliquée à la ligne
+  h_d03f <- hypothese_vue(vue, "D03f", .REFERENTIEL_P3, "cotisations", co, .POSTE_P3)
+  sous_h <- manque & !is.na(h_d03f)
   if (any(sous_h)) {
     regle <- periode_cotisation_regle(vv("cotisations", "date_mouvement")[co[sous_h]],
                                       vv("garanties_souscrites", "periodicite_cotisation")[i_gs[sous_h]])
@@ -407,7 +406,7 @@ provisions_collectives <- function(vue, plan) {
   if (any(non_determine)) {
     return(resultat(character(0), numeric(0), "parametre_non_determine", contrat[which(non_determine)[1L]]))
   }
-  if (any(sous_h)) .valeur_d03f(h_d03f, co[sous_h])
+  if (any(sous_h)) .valeur_d03f(h_d03f[sous_h])
   hypothese <- sort(unique(contrat[sous_h]), method = "radix")
   # (4) prorata des cotisations de fin postérieure à A (bornes connues, ou par la règle H)
   garde <- fin > a
@@ -429,15 +428,12 @@ provisions_collectives <- function(vue, plan) {
   resultat(ids, montant, hypothese = hypothese)
 }
 
-# Valeur de l'hypothèse D03f appliquée aux lignes `lignes` de cotisations (`h` : hypothèses
-# D03f de vue$hypotheses retenues pour P3 ; poste P3 de préférence à `tous`, comme pour D03h) :
+# Contrôle des valeurs de l'hypothèse D03f lues pour les cotisations sous hypothèse
+# (`valeurs` : choisies par hypothese_vue(), dans l'ordre des cotisations de la vue) :
 # `regle` seule admise (#92 Q1, erratum v1.0.16) ; toute autre valeur est un refus
-# plan_invalide (aucune valeur ignorée en silence). Ne rend rien.
-.valeur_d03f <- function(h, lignes) {
-  for (l in lignes) {
-    hl <- Filter(function(x) l %in% x$lignes, h)
-    postes <- vapply(hl, `[[`, "", "poste")
-    valeur <- hl[[if (.POSTE_P3 %in% postes) match(.POSTE_P3, postes) else 1L]]$valeur
+# plan_invalide, sur la première en cause (aucune valeur ignorée en silence). Ne rend rien.
+.valeur_d03f <- function(valeurs) {
+  for (valeur in valeurs) {
     if (!identical(valeur, "regle")) {
       refuser(paste0("plan : hypoth\u00e8se D03f (comptes_sociaux) : valeur \u00ab ", valeur,
                      " \u00bb, seule la valeur \u00ab regle \u00bb est admise (r\u00e8gle du dictionnaire)"),
