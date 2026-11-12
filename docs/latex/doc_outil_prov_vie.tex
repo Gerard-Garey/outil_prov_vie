@@ -2747,8 +2747,8 @@ conversion vers une représentation commune, catalogue des tables
 embarquées, courbes des taux sans risque de l'EIOPA, série de taux des
 plafonds réglementaires, plafonds réglementaires. Dans l'état du code, il
 porte les formats, la représentation commune, la résolution des tables par
-usage et les indicateurs \code{R132\_3\_1} et \code{A132\_1}, sans aucune
-table embarquée (section~\ref{sec:tables-indicateurs}). Le calcul de l'âge n'en
+usage, les indicateurs \code{R132\_3\_1} et \code{A132\_1} et la ligne
+\code{hors\_axes\_derniere\_valeur}, sans aucune table embarquée (section~\ref{sec:tables-indicateurs}). Le calcul de l'âge n'en
 fait pas partie~: il est dans le module \code{outils}, qui sert aussi
 \code{donnees} et le simulateur (section~\ref{sec:age}). Le module \code{tables} ne
 peut appeler que \code{outils}. Sa fonction \code{formats\_tables()} est exportée.
@@ -2773,7 +2773,7 @@ peut appeler que \code{outils}. Sa fonction \code{formats\_tables()} est export�
 \code{plafond\_a132\_1()} & \code{serie}, \code{date}, \code{nature\_primes}, \code{duree\_au\_plus\_\allowbreak 8\_ans}, \code{decalage} & Taux de référence de l'article A132-1 à des dates (75~\% du TME semestriel en prime unique sur huit ans au plus, sinon le minimum de 3,5~\% et de 60~\% de ce taux), bornes de l'échelle de l'article A132-1-1 (hors de la branche à 75~\%, sur 60~\% du TME non plafonné, puis plafonnées à 3,5~\%) et drapeau \code{reference\_plafonnee\_3\_5}. \\
 \code{indicateur\_r132\_3\_1()} & \code{serie}, \code{annee}, \code{decalage}, \code{taux\_retenu}, \code{poste}, \code{garantie}, \code{type\_organisme} & Rend une ligne d'indicateur \code{R132\_3\_1} par année~: minimum de \code{minimum\_r132\_3\_1()}, taux retenu, et \code{depassement} vrai si le taux retenu est inférieur au minimum de plus de $10^{-12}$ (faux à l'égalité, manquant si le minimum l'est). \\
 \code{indicateur\_a132\_1()} & \code{serie}, \code{date}, \code{nature\_primes}, \code{date\_effet}, \code{date\_terme}, \code{decalage}, \code{taux\_tarif}, \code{id\_contrat}, \code{poste}, \code{garantie}, \code{type\_organisme}, \code{approximation\_\allowbreak arrete} & Rend une ligne d'indicateur \code{A132\_1} par contrat~: taux de référence de \code{plafond\_a132\_1()}, taux du tarif, dépassement à trois valeurs (certain, exclu, indéterminé) au regard des bornes de l'échelle. \\
-\code{indicateur\_hors\_axes()} & \code{table}, \code{points}, \code{valeurs}, \code{usage}, \code{id\_contrat}, \code{poste}, \code{garantie} & Seule construction de la ligne d'indicateur \code{hors\_axes\_derniere\_valeur} d'une unité dont un point est lu hors des axes sous \code{derniere\_valeur}~: nombre de points hors des axes, \code{depassement} vrai (signal), usage, table, axe et valeurs hors des axes dans \code{detail}\fsp; aucune ligne sans point hors des axes. \\
+\code{indicateur\_hors\_axes()} & \code{table}, \code{points}, \code{valeurs}, \code{usage}, \code{id\_contrat}, \code{poste}, \code{garantie} & Seule construction de la ligne d'indicateur \code{hors\_axes\_derniere\_valeur} d'une unité dont un point est lu hors des axes sous \code{derniere\_valeur}~: nombre de points hors des axes, répétitions comprises, \code{depassement} vrai (signal), usage, table, axe et valeurs distinctes hors des axes dans \code{detail}\fsp; aucune ligne sans point hors des axes\fsp; table à un axe seulement. \\
 \code{format.table\_provie()} & \code{x}, \code{...} & Décrit une table en lignes de texte~: identifiant, nature, statut, pas, nombre de points par axe, format natif, conversion, empreinte. \\
 \code{print.table\_provie()} & \code{x}, \code{...} & Imprime \code{format(x)} et rend la table, invisible. \\
 \end{longtable}
@@ -2895,6 +2895,29 @@ pas tranchées). En
   (\code{terme\_absent})~; en prime unique, la ligne est alors manquante,
   sans hypothèse par défaut.
 \end{itemize}
+
+\textbf{Extrapolation hors des axes.} La ligne
+\code{hors\_axes\_derniere\_valeur} n'est pas un indicateur
+réglementaire~: elle trace une table lue hors de ses axes sous la
+déclaration \code{derniere\_valeur}, l'unité concernée étant restituée
+au statut \code{jugement\_expert} (spécification de la branche B2,
+version~1.0.16, §~5.8, source~S3~; issue~91 du dépôt). Elle est construite
+par la seule \code{indicateur\_hors\_axes()}, appelée par toute famille
+qui lit une table sous cette déclaration (dans l'état du code, la
+provision mathématique de la temporaire décès, usage
+\code{mortalite\_tarif}, section~\ref{sec:risque-en-cours-p3}), et
+jamais par une famille elle-même. Une ligne par unité et par usage
+extrapolé~: \code{valeur\_regle} manquante, \code{depassement} à
+\code{TRUE} (signal), \code{valeur\_retenue} égale au \emph{nombre de
+points lus hors des axes, répétitions comprises} (un même âge passé deux
+fois compte deux fois), et \code{detail} de la forme
+\code{usage=...;identifiant=...;id\_contrat=...;axe=...;valeurs=...}, où les
+valeurs hors des axes sont \emph{distinctes}, croissantes, jointes par une
+virgule. Le décompte et la liste peuvent donc différer quand un point est
+lu plusieurs fois~; c'est sans effet dans l'état du code, où la provision
+mathématique lit un âge par année d'assurance, sans répétition. Seule une
+table à un axe est admise~: la forme de la ligne pour plusieurs axes n'est
+pas fixée, et un appel sur une telle table est une erreur interne.
 
 Les comparaisons des deux indicateurs se font à $10^{-12}$ près~: c'est une
 approximation numérique, le seuil étant très au-dessus de l'erreur
@@ -3341,7 +3364,7 @@ fonctions n'est exportée.
 \rowcolor{tableheader}
 \textcolor{financeblue}{\textbf{Fonction}} & \textcolor{financeblue}{\textbf{Arguments}} & \textcolor{financeblue}{\textbf{Rôle}} \\
 \code{calculer\_risque\_en\_cours()} & \code{vue}, \code{plan}, \code{tables}, \code{catalogue}, \code{garantie}, \code{poste} & Point d'appel de la provision mathématique de la temporaire décès\fsp; rend une cellule pour le poste (champs individuel et collectif réunis), les échéanciers des contrats individuels, les indicateurs et les contrats valorisés par champ (unités de la restitution par segment)\fsp; un poste arrêté rend une cellule \code{arrete}. \\
-\code{provisions\_individuelles()} & \code{vue}, \code{plan}, \code{tables}, \code{temoin} & Calcule, contrat individuel par contrat, la population, l'échéancier et la provision (plancher nul par contrat)\fsp; le témoin rétrospectif n'est calculé que si \code{temoin} vaut \code{TRUE} (\code{NA} en prime unique). \\
+\code{provisions\_individuelles()} & \code{vue}, \code{plan}, \code{tables}, \code{temoin} & Calcule, contrat individuel par contrat, la population, l'échéancier et la provision (plancher nul par contrat)\fsp; marque les contrats dont un âge est lu hors des axes sous \code{derniere\_valeur} et rend leurs lignes \code{hors\_axes\_derniere\_valeur}\fsp; le témoin rétrospectif n'est calculé que si \code{temoin} vaut \code{TRUE} (\code{NA} en prime unique). \\
 \code{provisions\_collectives()} & \code{vue}, \code{plan} & Calcule, par contrat collectif, la provision au prorata des cotisations nettes de chargement sur les jours postérieurs à l'arrêté (\code{prorata\_cotisation}), sous le traitement déclaré de la période couverte manquante (D03f)\fsp; rend aussi le motif d'arrêt et le premier contrat en cause, et les contrats valorisés sous l'hypothèse de D03f. \\
 \end{tabular}
 \end{center}
@@ -3478,7 +3501,9 @@ n'est pas une donnée lue de la base, et le témoin vaudrait le coût du
 risque passé changé de signe, sans rapport avec la prospective.
 Un taux du tarif manquant suit l'hypothèse D03h déclarée par le plan, sans
 quoi l'appel est refusé (\code{declaration\_manquante})~; le contrat est
-alors au statut \code{jugement\_expert}, et \code{exact} sinon.
+alors au statut \code{jugement\_expert}, comme un contrat dont un âge est
+lu hors des axes de la table du tarif sous \code{derniere\_valeur}
+(ci-dessous), et \code{exact} sinon.
 
 \textbf{Champ collectif.} Sous \code{prorata\_cotisation}, hors couverture
 exclue pour la famille «~risque en cours~» (même fonction), la provision
@@ -3588,9 +3613,20 @@ souscription~», la seconde étant un indicateur d'information (M85~;
 section~\ref{sec:tables-indicateurs}).
 Une table lue hors de ses axes sous la déclaration \code{refus} arrête le
 poste (\code{hors\_axes}). Sous \code{derniere\_valeur}, la table du tarif
-est prolongée par la valeur de l'axe la plus proche, mais le contrat reste
-au statut \code{exact} et aucune trace ne dit quels contrats ni quels âges
-ont été extrapolés~: limite connue, renvoyée à l'issue~91 du dépôt.
+est prolongée par la valeur de l'axe la plus proche~; le contrat dont un
+âge est lu hors des axes est restitué au statut \code{jugement\_expert}
+(issue~91 du dépôt), et le poste émet pour lui une ligne
+\code{hors\_axes\_derniere\_valeur}, placée après les lignes
+\code{A132\_1}, dans l'ordre des contrats
+(section~\ref{sec:tables-indicateurs}). Les âges lus sont ceux des années
+d'assurance de la date d'effet à la fin de couverture contractuelle,
+c'est-à-dire l'ensemble dont un point hors des axes arrête le poste sous
+\code{refus}~; en prime unique, les âges des années antérieures à celle de
+l'arrêté, lus sans entrer dans le montant (conditionnement par la survie à
+l'arrêté), comptent aussi, par cohérence avec l'arrêt sous \code{refus}
+(choix prudent~: un statut plus faible, jamais un montant différent).
+L'extrapolation est donc tracée et marque le statut, mais aucun montant
+n'en est modifié.
 
 
 \partie{Partie XII}{Module regles\_comptables}
