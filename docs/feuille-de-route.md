@@ -456,9 +456,9 @@ Tenue par `architect`, après chaque série de PR fusionnées. Chaque mise à jo
 - **Décisions M** : bloc **M295 à M399** (§ 4.1). **ADR** : 0013 réservé si besoin (ADR 0012, point 14).
 - **Consultations Fable** : 1/3 (`architect-approfondi`, point d'étape et ADR 0012, 12 novembre 2026, accord explicite du mainteneur ; § 5).
 
-### 1.8 Branche d'outillage : `claude/outillage-controles` (Bo, décidée, parallèle, non ouverte)
+### 1.8 Branche d'outillage : `claude/outillage-controles` (Bo, parallèle, ouverte le 12 novembre 2026 sur `aeba496`)
 
-*Fiche proposée par `architect-approfondi` le 12 novembre 2026 (vingt-sixième série), sur la demande du mainteneur du même jour. **Arrêtée par le mainteneur le 12 novembre 2026** (vingt-septième série) : ADR 0012 accepté (M295) ; Bo ouverte maintenant, dans une session cloud séparée, en parallèle de Br, fusionnée avant Br (M298). Les quatre décisions de #62 se prennent à l'ouverture de Bo.*
+*Fiche proposée par `architect-approfondi` le 12 novembre 2026 (vingt-sixième série), sur la demande du mainteneur du même jour. **Arrêtée par le mainteneur le 12 novembre 2026** (vingt-septième série) : ADR 0012 accepté (M295) ; Bo ouverte maintenant, dans une session cloud séparée, en parallèle de Br, fusionnée avant Br (M298). Les quatre décisions de #62 se prennent à l'ouverture de Bo. **Ouverte le 12 novembre 2026 sur `aeba496`** (tête de `main` après la fusion de la PR d'ouverture #93, M296).*
 
 - **Branche** : `claude/outillage-controles`, à partir de la tête de `main` après la fusion de la PR d'ouverture (M296). PR brouillon au premier push ; session cloud et clone propres (M298 ; ADR 0012, points 10 et 11 : le brief de la session nomme la branche). Corps de la PR, un `Closes #N` par ligne :
 
