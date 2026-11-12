@@ -76,6 +76,24 @@ verifier("âge 43 hors axes, refus : NA, indice du point signalé",
 r <- ns$probabilite(mortalite, age = c(43L, 39L), hors_axes = "derniere_valeur")
 verifier("âge 43 hors axes, derniere_valeur : 0,03 (et âge 39 : 0,01), points signalés",
          abs(r[1L] - 0.03) <= 1e-15 && abs(r[2L] - 0.01) <= 1e-15 && identical(attr(r, "hors_axes"), 1:2))
+# ligne S3 (spécification de B2, erratum v1.0.16, § 5.8 ; #91) : seule construction par
+# indicateur_hors_axes() ; points 43, 39, 44, 43 : trois distincts hors des axes, quatre lus
+pts <- list(age = c(43L, 41L, 39L, 44L, 43L))
+h <- ns$indicateur_hors_axes(mortalite, pts, ns$probabilite(mortalite, age = pts$age, hors_axes = "derniere_valeur"),
+                             "mortalite_tarif", "CT9", "provision_mathematique_temporaire_deces", "deces")
+verifier_egal("indicateur_hors_axes() (#91) : une ligne hors_axes_derniere_valeur, valeur_regle NA, valeur_retenue = points lus hors des axes (4), depassement TRUE, valeurs distinctes croissantes",
+              list(names(h), h$regle, h$valeur_regle, h$valeur_retenue, h$depassement, h$detail),
+              list(ns$COLONNES_INDICATEURS, "hors_axes_derniere_valeur", NA_real_, 4, TRUE,
+                   "usage=mortalite_tarif;identifiant=mortalite_fictive_b2;id_contrat=CT9;axe=age;valeurs=39,43,44"))
+h0 <- ns$indicateur_hors_axes(mortalite, list(age = 40:42), ns$probabilite(mortalite, age = 40:42, hors_axes = "derniere_valeur"),
+                              "mortalite_tarif", "CT9", "provision_mathematique_temporaire_deces", "deces")
+verifier("indicateur_hors_axes() : aucun point hors des axes : zéro ligne, colonnes des indicateurs ; valeurs sans attribut hors_axes, ou points d'un autre axe : erreur",
+         nrow(h0) == 0L && identical(names(h0), ns$COLONNES_INDICATEURS) &&
+           identical(erreur_de(ns$indicateur_hors_axes(mortalite, list(age = 40L), 0.01, "mortalite_tarif", "CT9", "p", "deces")),
+                     "erreur") &&
+           identical(erreur_de(ns$indicateur_hors_axes(mortalite, list(x = 43L),
+                                                       ns$probabilite(mortalite, age = 43L, hors_axes = "derniere_valeur"),
+                                                       "mortalite_tarif", "CT9", "p", "deces")), "erreur"))
 verifier("point hors axes sans hors_axes déclaré : erreur (aucun défaut)",
          identical(erreur_de(ns$probabilite(mortalite, age = 43L)), "erreur"))
 verifier("hors_axes hors de la liste : erreur",

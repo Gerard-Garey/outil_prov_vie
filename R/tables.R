@@ -598,6 +598,47 @@ indicateur_a132_1 <- function(serie, date, nature_primes, date_effet, date_terme
   .lignes_indicateurs("A132_1", poste, garantie, p$taux_reference, taux_tarif, depassement, detail)
 }
 
+# Ligne d'indicateur hors_axes_derniere_valeur (spécification de B2, erratum v1.0.16, § 5.8,
+# source S3 ; #91) : seule construction de cette ligne, appelée par toute famille qui lit une
+# table sous hors_axes = "derniere_valeur" (en B2 : provisions_individuelles(), usage
+# mortalite_tarif) ; une famille ne la construit jamais elle-même. `table` : la table lue
+# (table_provie, à un axe : seule forme de B2) ; `points` : liste nommée des points passés à
+# probabilite() pour l'unité ; `valeurs` : rendu de probabilite() sur ces points (attribut
+# hors_axes : indices des points hors des axes) ; `usage`, `id_contrat` (unité), `poste`,
+# `garantie` : chaînes uniques. Rend zéro ligne si aucun point n'est hors des axes ; sinon une
+# ligne : valeur_regle NA, valeur_retenue = nombre de points lus hors des axes (double),
+# depassement TRUE (signal), detail « usage=...;identifiant=<identifiant de la table>;
+# id_contrat=...;axe=<axe>;valeurs=<valeurs hors des axes, distinctes, croissantes, jointes par
+# ,> ».
+indicateur_hors_axes <- function(table, points, valeurs, usage, id_contrat, poste, garantie) {
+  if (!inherits(table, "table_provie")) stop("indicateur_hors_axes() : `table` doit \u00eatre une table_provie", call. = FALSE)
+  for (x in list(usage, id_contrat, poste, garantie)) {
+    if (!(is.character(x) && length(x) == 1L && !is.na(x))) {
+      stop("indicateur_hors_axes() : `usage`, `id_contrat`, `poste` et `garantie` doivent \u00eatre des cha\u00eenes uniques",
+           call. = FALSE)
+    }
+  }
+  if (length(table$axes) != 1L) {
+    stop("indicateur_hors_axes() : table \u00e0 un axe attendue (forme de la ligne pour plusieurs axes non fix\u00e9e)",
+         call. = FALSE)
+  }
+  if (!(is.list(points) && identical(names(points), names(table$axes)))) {
+    stop(paste0("indicateur_hors_axes() : `points` : liste nomm\u00e9e des axes de la table (", names(table$axes), ")"),
+         call. = FALSE)
+  }
+  dehors <- attr(valeurs, "hors_axes")
+  if (!is.integer(dehors) || length(valeurs) != length(points[[1L]])) {
+    stop("indicateur_hors_axes() : `valeurs` doit \u00eatre le rendu de probabilite() sur `points` (attribut hors_axes)",
+         call. = FALSE)
+  }
+  if (length(dehors) == 0L) return(.lignes_indicateurs(character(0), character(0), character(0), numeric(0), numeric(0),
+                                                       logical(0), character(0)))
+  detail <- paste0("usage=", usage, ";identifiant=", table$identifiant, ";id_contrat=", id_contrat,
+                   ";axe=", names(table$axes), ";valeurs=",
+                   paste(.reel_detail(sort(unique(points[[1L]][dehors]))), collapse = ","))
+  .lignes_indicateurs("hors_axes_derniere_valeur", poste, garantie, NA_real_, length(dehors), TRUE, detail)
+}
+
 # --- Méthodes de la classe table_provie (décomptes seuls) ------------------------------
 
 format.table_provie <- function(x, ...) {

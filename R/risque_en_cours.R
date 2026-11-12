@@ -106,13 +106,16 @@
 
 # Contrats individuels de P3 (spécification de B2, § 5.5, champ (a)) : population, échéanciers
 # et provisions par contrat. Rend list(contrats : data.frame (id_contrat, id_garantie_souscrite,
-# capital, taux_tarif, taux_retenu, hypothese_d03h, a_effet, a_double_effet (ä à l'effet),
+# capital, taux_tarif, taux_retenu, hypothese_d03h, extrapole (un point de mortalite_tarif lu
+# hors des axes sous derniere_valeur, source S3 du § 5.8, #91), a_effet, a_double_effet (ä à l'effet),
 # prime, valeur (avant plancher), montant (plancher nul par contrat), retro_avant_prime,
 # retro_apres_prime (témoin rétrospectif, calculé seulement si `temoin` vaut TRUE ; NA sinon,
 # ou si l'arrêté n'est pas une date de pas ou si la prime est unique),
 # nature_primes, date_effet, date_terme, date_souscription), echeancier (flux à l'arrêté,
 # taux retenu), arret (motif né de la famille : hors_axes, parametre_non_determine ; NA),
-# identifiant (premier contrat en cause)). Sans point : lue par les tests du module (cas T1 à
+# identifiant (premier contrat en cause), hors_axes (lignes d'indicateur
+# hors_axes_derniere_valeur de indicateur_hors_axes(), une par contrat extrapolé, dans l'ordre
+# des contrats ; NULL sans extrapolation)). Sans point : lue par les tests du module (cas T1 à
 # T6) et par calculer_risque_en_cours() (`temoin` = FALSE : le témoin n'est jamais restitué) ;
 # non exportée. `temoin` : TRUE ou FALSE, exigé.
 provisions_individuelles <- function(vue, plan, tables, temoin) {
@@ -213,13 +216,21 @@ provisions_individuelles <- function(vue, plan, tables, temoin) {
   age0 <- calculer_age(naissance, structure(effet, class = "Date"), conventions$age)
   hors <- plan$tables$mortalite_tarif$hors_axes
   q_de <- list()
+  # points lus hors des axes sous derniere_valeur (source S3, § 5.8, #91) : ligne d'indicateur
+  # construite par indicateur_hors_axes() (`tables`, seule implémentation) ; contrat extrapolé
+  extrapole <- rep(FALSE, length(gs))
+  hors_axes <- list()
   for (i in k) {
     n_annees <- 0L
     while (ajouter_mois(effet[i], 12L * n_annees) < fin_contractuelle[i]) n_annees <- n_annees + 1L
-    q <- probabilite(tables$mortalite_tarif, age = age0[i] + seq_len(n_annees) - 1L, hors_axes = hors)
+    points <- list(age = age0[i] + seq_len(n_annees) - 1L)
+    q <- probabilite(tables$mortalite_tarif, age = points$age, hors_axes = hors)
     if (length(attr(q, "hors_axes"))) {
       if (identical(hors, "refus")) return(list(contrats = NULL, echeancier = NULL, arret = "hors_axes",
                                                 identifiant = id_ct[i]))
+      extrapole[i] <- TRUE
+      hors_axes[[length(hors_axes) + 1L]] <- indicateur_hors_axes(tables$mortalite_tarif, points, q, "mortalite_tarif",
+                                                                  id_ct[i], .POSTE_P3, "deces")
     }
     q_de[[as.character(i)]] <- as.vector(q)
   }
@@ -258,7 +269,8 @@ provisions_individuelles <- function(vue, plan, tables, temoin) {
     }
     lignes[[length(lignes) + 1L]] <- data.frame(
       id_contrat = cle, id_garantie_souscrite = id_gs[i], capital = capital$valeur[i], taux_tarif = tarif[i],
-      taux_retenu = taux_r, hypothese_d03h = d03h[i], a_effet = a_effet, a_double_effet = a_dbl, prime = prime,
+      taux_retenu = taux_r, hypothese_d03h = d03h[i], extrapole = extrapole[i], a_effet = a_effet,
+      a_double_effet = a_dbl, prime = prime,
       valeur = v$total, montant = max(0, v$total), retro_avant_prime = retro[1L], retro_apres_prime = retro[2L],
       nature_primes = if (unique_p) "unique" else "periodique", date_effet = structure(effet[i], class = "Date"),
       date_terme = structure(terme[i], class = "Date"),
@@ -267,7 +279,7 @@ provisions_individuelles <- function(vue, plan, tables, temoin) {
     echeancier[[length(echeancier) + 1L]] <- v$echeancier
   }
   list(contrats = do.call(rbind, lignes), echeancier = do.call(rbind, echeancier), arret = NA_character_,
-       identifiant = NA_character_)
+       identifiant = NA_character_, hors_axes = do.call(rbind, hors_axes))
 }
 
 # Valeur de l'hypothèse D03h appliquée à la ligne `ligne` de garanties_souscrites
@@ -443,12 +455,14 @@ provisions_collectives <- function(vue, plan) {
 # n'a pas de dossier), echeanciers (contrats individuels, cle = id_contrat, flux à l'arrêté au
 # taux retenu, avant plancher), indicateurs (par contrat individuel valorisé : tarif_vie, taux
 # retenu > taux du tarif, et deux lignes A132_1, à la date d'effet de la version de garantie
-# et à l'arrêté), contrats (id_contrat, champ `individuel` ou `collectif`, montant après
-# plancher, statut_resultat ; un contrat par champ, triés ; vide pour un poste arrêté : unités
-# de la restitution par segment, #67)). Une seule cellule pour le poste (champs individuel et collectif réunis) :
+# et à l'arrêté ; puis une ligne hors_axes_derniere_valeur par contrat extrapolé, § 5.8),
+# contrats (id_contrat, champ `individuel` ou `collectif`, montant après plancher,
+# statut_resultat ; un contrat par champ, triés ; vide pour un poste arrêté : unités de la
+# restitution par segment, #67)). Une seule cellule pour le poste (champs individuel et collectif réunis) :
 # méthode « individuel:<méthode>;collectif:<méthode> », statut_methode `alternative` si l'une
 # l'est, statut_resultat le plus faible des contrats (jugement_expert si D03h entre dans le
-# montant ; approximation_numerique pour un contrat collectif, jugement_expert sous
+# montant, ou un point de mortalite_tarif lu hors des axes sous derniere_valeur, S3, #91 ;
+# approximation_numerique pour un contrat collectif, jugement_expert sous
 # l'hypothèse D03f), nombre_dossiers 0. Poste arrêté (bilan, ou hors_axes,
 # parametre_non_determine, dont la période couverte non déterminée d'une cotisation du champ
 # (b)) : cellule `arrete`, premier contrat en cause dans l'attribut `identifiant_arret`. Un
@@ -504,7 +518,11 @@ calculer_risque_en_cours <- function(vue, plan, tables, catalogue, garantie, pos
   ct <- ind$contrats
   # statut d'un contrat collectif : jugement_expert sous l'hypothèse D03f (erratum v1.0.15)
   statut_col <- ifelse(col$id_contrat %in% attr(col, "hypothese_d03f"), "jugement_expert", "approximation_numerique")
-  statuts <- c(if (!is.null(ct)) ifelse(ct$hypothese_d03h, "jugement_expert", "exact"), statut_col)
+  # statut d'un contrat individuel (règle unique du § 5.8, erratum v1.0.16) : jugement_expert si
+  # une valeur fournie par le plan entre dans son montant, hypothèse D03h (S1) ou point de
+  # mortalite_tarif lu hors des axes sous derniere_valeur (S3, #91)
+  statut_ind <- if (!is.null(ct)) ifelse(ct$hypothese_d03h | ct$extrapole, "jugement_expert", "exact")
+  statuts <- c(statut_ind, statut_col)
   montants <- c(if (!is.null(ct)) ct$montant, col$montant)
   if (anyNA(montants)) stop("erreur interne de provie : montant NA dans le total de P3", call. = FALSE)
   total <- sum(sort(montants))
@@ -522,7 +540,9 @@ calculer_risque_en_cours <- function(vue, plan, tables, catalogue, garantie, pos
       indicateur_a132_1(tables$serie_tme, date, ct$nature_primes, ct$date_effet, ct$date_terme,
                         st$decalage_publication_mois, ct$taux_tarif, ct$id_contrat, poste, garantie, type_organisme, approx)
     }
-    indicateurs <- rbind(tarif_vie, a132(ct$date_souscription, FALSE), a132(vue$bilan$vue$date_arrete, TRUE))
+    # lignes hors_axes_derniere_valeur (S3, § 5.8) après les lignes A132_1, dans l'ordre des contrats
+    indicateurs <- rbind(tarif_vie, a132(ct$date_souscription, FALSE), a132(vue$bilan$vue$date_arrete, TRUE),
+                         ind$hors_axes)
     rownames(indicateurs) <- NULL
     e <- ind$echeancier
     echeanciers <- data.frame(cle = e$cle, referentiel = rep(.REFERENTIEL_P3, nrow(e)), poste = rep(poste, nrow(e)),
@@ -534,7 +554,7 @@ calculer_risque_en_cours <- function(vue, plan, tables, catalogue, garantie, pos
   contrats <- rbind(contrats_vides,
                     if (!is.null(ct)) data.frame(id_contrat = ct$id_contrat, champ = rep("individuel", nrow(ct)),
                                                  montant = ct$montant,
-                                                 statut_resultat = ifelse(ct$hypothese_d03h, "jugement_expert", "exact"),
+                                                 statut_resultat = statut_ind,
                                                  stringsAsFactors = FALSE),
                     if (nrow(col)) data.frame(id_contrat = col$id_contrat, champ = rep("collectif", nrow(col)),
                                               montant = col$montant, statut_resultat = statut_col,

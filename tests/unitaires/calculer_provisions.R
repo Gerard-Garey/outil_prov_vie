@@ -758,6 +758,51 @@ verifier("(4.6) (j) une seule constante des mois par périodicité dans R/ : MOI
              !exists(".MOIS_PERIODICITE", envir = ns, inherits = FALSE) && !exists(".MOIS_PERIODE_COTISATION", envir = ns, inherits = FALSE)
          }))
 
+section("extrapolation de mortalite_tarif sous derniere_valeur : statut et trace (critère (4.8), § 5.8, S3, #91)")
+# Cas T8 du § 7.4 de bout en bout : base de P3 (b2_base_p3()) avec date_terme de CT2 au
+# 2028-01-01, A = 2025-01-01, plan b2_plan() complété de la section donnees du plan
+# recommandees de la base construite ; valeurs mesurées le 12/11/2026 (avant #91 : P3
+# 7 473,9357625788 exact, trois lignes d'indicateurs).
+A_t8 <- D("2025-01-01")
+b_t8 <- b2_base_p3()
+b_t8$contrats$date_terme[1L] <- D("2028-01-01")
+plan_t8 <- function(hors) {
+  p <- b2_plan(tb, A_t8)
+  p$donnees <- b2_plan_reference("recommandees", A_t8, tb)$donnees
+  p$tables$mortalite_tarif$hors_axes <- hors
+  p
+}
+cel_t8 <- function(r) r$provisions[r$provisions$poste == "provision_mathematique_temporaire_deces" &
+                                     r$provisions$segmentation == "ensemble", , drop = FALSE]
+r_t8 <- calculer_provisions(b_t8, plan_t8("derniere_valeur"), tid)
+verifier_egal("(4.8) T8 (b) de bout en bout : P3 7 473,9357625788, jugement_expert (avant : exact) ; indicateurs tarif_vie, A132_1, A132_1, puis la ligne hors_axes_derniere_valeur (valeur_retenue 1, depassement TRUE, valeurs=43)",
+              list(cel_t8(r_t8)$montant, cel_t8(r_t8)$statut_resultat, r_t8$indicateurs$regle,
+                   r_t8$indicateurs$valeur_retenue[4L], r_t8$indicateurs$depassement[4L], r_t8$indicateurs$detail[4L]),
+              list(7473.9357625788, "jugement_expert", c("tarif_vie", "A132_1", "A132_1", "hors_axes_derniere_valeur"), 1, TRUE,
+                   "usage=mortalite_tarif;identifiant=mortalite_fictive_b2;id_contrat=CT2;axe=age;valeurs=43"), tolerance = EPS)
+verifier_egal("(4.8) T8 (a) de bout en bout, hors_axes = refus : P3 arrêté (hors_axes), aucune ligne hors_axes_derniere_valeur ; (c) témoin T1 sous derniere_valeur : 4 786,6205305652 exact, aucune ligne",
+              { r_a <- calculer_provisions(b_t8, plan_t8("refus"), tid)
+                r_c <- calculer_provisions(b2_base_p3(), plan_t8("derniere_valeur"), tid)
+                list(cel_t8(r_a)$statut_calcul, cel_t8(r_a)$motif_arret, sum(r_a$indicateurs$regle == "hors_axes_derniere_valeur"),
+                     cel_t8(r_c)$montant, cel_t8(r_c)$statut_resultat, sum(r_c$indicateurs$regle == "hors_axes_derniere_valeur")) },
+              list("arrete", "hors_axes", 0L, 4786.6205305652, "exact", 0L), tolerance = EPS)
+verifier("(4.8) une seule implémentation : la chaîne hors_axes_derniere_valeur n'apparaît qu'une fois dans le code de R/ (hors commentaires), dans indicateur_hors_axes(), définie une fois, dans R/tables.R, et appelée par provisions_individuelles()",
+         local({
+           fichiers <- list.files(file.path(racine, "R"), pattern = "\\.R$", full.names = TRUE)
+           chaines <- unlist(lapply(fichiers, function(f) {
+             d <- utils::getParseData(parse(f, keep.source = TRUE, encoding = "UTF-8"))
+             s <- d$text[d$token == "STR_CONST"]
+             rep(basename(f), sum(s %in% c("\"hors_axes_derniere_valeur\"", "'hors_axes_derniere_valeur'")))
+           }))
+           defs <- unlist(lapply(fichiers, function(f) {
+             if (any(grepl("^indicateur_hors_axes <- function", readLines(f, warn = FALSE)))) basename(f) else NULL
+           }))
+           dans <- function(f, x) grepl(x, paste(deparse(f), collapse = "\n"), fixed = TRUE)
+           identical(chaines, "tables.R") && identical(defs, "tables.R") &&
+             dans(ns$indicateur_hors_axes, "\"hors_axes_derniere_valeur\"") &&
+             dans(ns$provisions_individuelles, "indicateur_hors_axes(")
+         }))
+
 section("échec attendu #83 (critère (4.4), § 5.3, « Limite connue »)")
 b_ge <- base   # GSC1 : effet postérieur à l'arrêté, invisible à A, ses dossiers aussi (règle 1)
 b_ge$garanties_souscrites$date_effet[1L] <- D("2026-03-01")

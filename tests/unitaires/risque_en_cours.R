@@ -132,6 +132,39 @@ verifier_egal("arrêt hors_axes (hors_axes = refus) : assuré de 45 ans à l'eff
                 list(r$cellules$statut_calcul, r$cellules$motif_arret, attr(r$cellules, "identifiant_arret"),
                      risque(b, p_dv)$cellules$statut_calcul) },
               list("arrete", "hors_axes", "CT2", "calcule"))
+# T8 (spécification de B2, § 7.4, erratum v1.0.16 ; #91, source S3 du § 5.8) : T1 avec
+# date_terme 2028-01-01, âges lus 40 à 43, 43 hors des axes de la table (40 à 42). Valeur en
+# dur : formule fermée T1 + 100 000 x 0,98 x 0,97 x 0,03 x 1,02^(-t3), t3 = 364/365 + 2 +
+# 1/366 (durées en fin de journée, exact_exact) ; mesurée le 12/11/2026 (7 473,9357625788 ;
+# avant #91 : même montant, statut exact, aucune ligne).
+b_t8 <- b2_base_p3()
+b_t8$contrats$date_terme[1L] <- D("2028-01-01")
+p_t8 <- plan_p3()
+p_t8$tables$mortalite_tarif$hors_axes <- "derniere_valeur"
+r_t8 <- risque(b_t8, p_t8)
+s3_t8 <- r_t8$indicateurs[r_t8$indicateurs$regle == "hors_axes_derniere_valeur", , drop = FALSE]
+verifier_egal("T8 (a) (#91) : hors_axes = refus : arrêt hors_axes, CT2",
+              { r <- risque(b_t8, plan_p3()); list(r$cellules$statut_calcul, r$cellules$motif_arret, attr(r$cellules, "identifiant_arret")) },
+              list("arrete", "hors_axes", "CT2"))
+verifier_egal("T8 (b) (#91) : derniere_valeur : 7 473,9357625788 (formule fermée, t3 = 2,9999925144), jugement_expert (cellule et contrat CT2 ; avant : exact)",
+              list(r_t8$cellules$montant, r_t8$cellules$montant - (t1$montant + 100000 * 0.98 * 0.97 * 0.03 * 1.02^(-(364 / 365 + 2 + 1 / 366))),
+                   r_t8$cellules$statut_resultat, r_t8$contrats$statut_resultat),
+              list(7473.9357625788, 0, "jugement_expert", "jugement_expert"), tolerance = TOL)
+verifier_egal("T8 (b) (#91) : une ligne hors_axes_derniere_valeur, après les lignes A132_1 : valeur_regle NA, valeur_retenue 1, depassement TRUE, detail usage=mortalite_tarif;identifiant=mortalite_fictive_b2;id_contrat=CT2;axe=age;valeurs=43",
+              list(r_t8$indicateurs$regle, s3_t8$poste, s3_t8$garantie, s3_t8$valeur_regle, s3_t8$valeur_retenue, s3_t8$depassement,
+                   s3_t8$detail),
+              list(c("tarif_vie", "A132_1", "A132_1", "hors_axes_derniere_valeur"), P3, "deces", NA_real_, 1, TRUE,
+                   "usage=mortalite_tarif;identifiant=mortalite_fictive_b2;id_contrat=CT2;axe=age;valeurs=43"))
+verifier_egal("T8 (c) (#91) : témoin T1 (terme 2027-01-01) sous derniere_valeur : 4 786,6205305652, exact, aucune ligne hors_axes_derniere_valeur",
+              { r <- risque(b2_base_p3(), p_t8)
+                list(r$cellules$montant, r$cellules$statut_resultat, sum(r$indicateurs$regle == "hors_axes_derniere_valeur"),
+                     indiv(b2_base_p3(), p_t8)$contrats$extrapole) },
+              list(4786.6205305652, "exact", 0L, FALSE), tolerance = TOL)
+verifier_egal("T8 (#91) : une seule règle de statut : D03h et extrapolation réunies, contrat jugement_expert, mention hypothese_D03h et ligne S3",
+              { r <- risque(local({ b <- b_t8; b$garanties_souscrites$taux_technique_tarif[1L] <- NA; b }), p_t8, declarations = d03h)
+                list(r$cellules$statut_resultat, r$contrats$statut_resultat, r$indicateurs$detail[1L],
+                     sum(r$indicateurs$regle == "hors_axes_derniere_valeur")) },
+              list("jugement_expert", "jugement_expert", "id_contrat=CT2;hypothese_D03h", 1L))
 verifier_egal("population : contrat dont l'assuré a un sinistre deces survenu au plus l'arrêté : hors de P3 ; couverture échue (arrêté au terme) : hors de P3",
               { b <- b2_base_p3()
                 b$sinistres <- b2_tab("sinistres", id_sinistre = "SI9", id_assure = "AS2", nature_sinistre = "deces",
