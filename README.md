@@ -4,7 +4,7 @@ Outil de **validation actuarielle** qui recalcule, à une date d'arrêté décla
 
 Issu du dépôt modèle `Gerard-Garey/Modele_vibe_code` (organisation Claude Code : sous-agents, circuits, règles Git, traçabilité). Règles : `CLAUDE.md` ; cahier des charges : `docs/exigences.md` ; vocabulaire : `CONTEXT.md` ; décisions : `docs/cadrage/`, `docs/adr/` et `docs/feuille-de-route.md` (§ 4).
 
-**État** : cadrage fait (entretiens du 7 novembre 2026) ; aucun code encore. Les deux premières branches de code portent sur les données (dictionnaire de la base, simulateur) puis sur le capital décès (M66).
+**État** (12 novembre 2026) : package `provie` en version `0.5.0` — dictionnaire, lecture et contrôles de la base, simulateur et jeux simulés versionnés, plan et fiche de calcul, tables, familles « engagement » et « risque en cours » du capital décès, `calculer_provisions()` et premières références de non-régression (branche B2, fusionnée le 12 novembre 2026) ; pas encore d'application Shiny. Suivent les reliquats du capital décès et l'outillage des contrôles, puis les tardifs (famille « triangle ») : `docs/feuille-de-route.md`.
 
 ## Contenu
 
@@ -42,7 +42,7 @@ bash .github/creer_labels.sh Gerard-Garey/outil_prov_vie   # libellés d'issues 
 
 ## Façon de travailler
 
-- **Une branche de travail à la fois**, au périmètre fermé d'issues, PR brouillon dès la création ; fusion par le mainteneur, par commit de fusion, CI verte.
+- **Une branche de travail à la fois, par défaut** (au plus deux branches de code en parallèle, à l'initiative exclusive du mainteneur, ADR 0012), au périmètre fermé d'issues, PR brouillon dès la création ; fusion par le mainteneur, par commit de fusion, CI verte.
 - **Ceux qui écrivent ne vérifient pas, ceux qui vérifient n'écrivent pas** ; un agent n'entre dans le circuit que si la modification touche son domaine.
 - **Toute affirmation sur le code s'adosse à une mesure** exécutée ; tout changement de résultat a son tableau avant / après et son visa (mainteneur pour une provision totale ou un verdict, `actuary` sinon).
 - **Audit léger en cours, revue finale complète avant la sortie du brouillon** ; documentation écrite une seule fois, en fin de branche.
