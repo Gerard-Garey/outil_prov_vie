@@ -202,6 +202,9 @@ if (nzchar(Sys.which("git"))) {
 AMONT <- list("R/simulation.R" = "simuler_base <- function(x) x", "R/lecture.R" = "lire_base <- function(d) d")
 cas_graphe <- function(engagement, ...) .essai("graphe_modules", c(AMONT, list("R/engagement.R" = engagement), list(...)))
 ARETE <- "arete hors du graphe"
+# Un outils.R fictif tient l'exception globalenv() de avec_graine() (M412) : sans elle, elle serait
+# périmée (échec) dès que outils.R est présent.
+AVEC_GRAINE <- "avec_graine <- function(graine, expr) globalenv()"
 
 section("contrôles : graphe_modules.R (N3, N6, M236)")
 r <- cas_graphe("calcul_e <- function(x) simuler_base(x)")
@@ -220,7 +223,7 @@ r2 <- .essai("graphe_modules", list("R/simulation.R" = c("simuler_base <- functi
                                                          "assign(\"fonction_assign\", function(x) x)"),
                                     "R/engagement.R" = "calcul_e <- function(x) fonction_assign(x)"))
 verifier("N3b : assign() au premier niveau refusé, simulation.R:2", .echoue_en(r2, "R/simulation.R", 2L, "assign()"))
-r2 <- .essai("graphe_modules", list("R/outils.R" = "ecrire_dans <- function(e) assign(\"a\", 1, envir = e)"))
+r2 <- .essai("graphe_modules", list("R/outils.R" = c("ecrire_dans <- function(e) assign(\"a\", 1, envir = e)", AVEC_GRAINE)))
 verifier("N3b, cas licite : assign() dans une fonction", .passe(r2))
 r <- cas_graphe(c("calcul_e <- function(x) {",
                   "  a <- loadNamespace(\"x\")", "  b <- requireNamespace(\"x\")",
@@ -265,22 +268,22 @@ r <- .essai("graphe_modules", list("R/dictionnaire.R" = c(".aux_d <- function(x)
 verifier("#74, cas licite : identifiant à point employé dans son propre fichier, appelé hors module sans point", .passe(r))
 # Exceptions déclarées (EXCEPTIONS_POINT, renvoi #102) : tenues, elles passent ; absentes, elles échouent.
 r <- .essai("graphe_modules", list(
-  "R/outils.R" = c(".longueur_commune <- function(n) n", ".composantes_date <- function(j) j", ".jour_de <- function(j) j"),
+  "R/outils.R" = c(".longueur_commune <- function(n) n", ".composantes_date <- function(j) j", ".jour_de <- function(j) j", AVEC_GRAINE),
   "R/donnees.R" = c("donnees_f <- function(x) {", "  .longueur_commune(x)", "  .composantes_date(x)", "  .jour_de(x)", "}")))
 verifier("#74, cas licite : emplois déclarés en exception (#102), le contrôle passe", .passe(r))
 r <- .essai("graphe_modules", list(
-  "R/outils.R" = c(".longueur_commune <- function(n) n", ".composantes_date <- function(j) j", ".jour_de <- function(j) j"),
+  "R/outils.R" = c(".longueur_commune <- function(n) n", ".composantes_date <- function(j) j", ".jour_de <- function(j) j", AVEC_GRAINE),
   "R/donnees.R" = c("donnees_f <- function(x) {", "  .longueur_commune(x)", "  .jour_de(x)", "}")))
 verifier("#74 : exception déclarée qui ne se produit plus (.composantes_date), donnees.R sans ligne", {
   .echoue_en(r, "R/donnees.R", NA_integer_, ".composantes_date") &&
     !any(grepl("[ECHEC] R/donnees.R:", r$sortie, fixed = TRUE))
 })
 r <- .essai("graphe_modules", list(
-  "R/outils.R" = c(".longueur_commune <- function(n) n", ".composantes_date <- function(j) j", ".jour_de <- function(j) j"),
+  "R/outils.R" = c(".longueur_commune <- function(n) n", ".composantes_date <- function(j) j", ".jour_de <- function(j) j", AVEC_GRAINE),
   "R/donnees.R" = c("donnees_f <- function(x) {", "  .longueur_commune(x)", "  .composantes_date(x)", "  .jour_de(x)", "  .autre(x)", "}"),
   "R/dictionnaire.R" = ".autre <- function(x) x"))
 verifier("#74 : un emploi non déclaré à côté d'exceptions tenues, donnees.R:5", .echoue_en(r, "R/donnees.R", 5L, ".autre"))
-r <- .essai("graphe_modules", list("R/outils.R" = ".longueur_commune <- function(n) n",
+r <- .essai("graphe_modules", list("R/outils.R" = c(".longueur_commune <- function(n) n", AVEC_GRAINE),
                                    "R/donnees.R" = "donnees_f <- function(x) x"))
 verifier("#74 : exception déclarée dont l'identifiant n'est plus employé (donnees.R n'appelle rien), donnees.R sans ligne",
          .echoue_en(r, "R/donnees.R", NA_integer_, ".longueur_commune"))
@@ -293,10 +296,116 @@ verifier("#74 : le dépôt réel passe (aucun emploi hors de son fichier hors de
     !any(startsWith(sortie, "[ECHEC]"))
 })
 
+# M403 : introspection de pile et d'environnement, dans l'esprit de M236 (issue #62).
+section("contrôles : graphe_modules.R, introspection de pile (#62, M403)")
+r <- cas_graphe(c("calcul_e <- function(x) {", "  a <- parent.frame()", "  b <- sys.function()",
+                  "  c <- parent.env(a)", "  d <- topenv()", "  e <- sys.call()", "  x", "}"))
+verifier("M403 : parent.frame, engagement.R:2", .echoue_en(r, "R/engagement.R", 2L, "parent.frame()"))
+verifier("M403 : sys.function, engagement.R:3", .echoue_en(r, "R/engagement.R", 3L, "sys.function()"))
+verifier("M403 : parent.env, engagement.R:4", .echoue_en(r, "R/engagement.R", 4L, "parent.env()"))
+verifier("M403 : topenv, engagement.R:5", .echoue_en(r, "R/engagement.R", 5L, "topenv()"))
+verifier("M403 : sys.call, engagement.R:6", .echoue_en(r, "R/engagement.R", 6L, "sys.call()"))
+r <- cas_graphe(c("calcul_e <- function(x) {", "  y <- x$topenv", "  z <- list(sys.call = 1, parent.frame = 2)",
+                  "  parent_frame <- 1", "  y", "}"))
+verifier("M403, cas licite : champs, noms d'arguments et noms voisins qui ressemblent aux appels interdits", .passe(r))
+r <- cas_graphe(c("calcul_e <- function(x) {", "  a <- sys.frame(0)", "  b <- sys.frames()", "  c <- sys.calls()",
+                  "  d <- sys.parent()", "  sys.on.exit()", "  e <- match.call()", "  x", "}"))
+verifier("M411 : sys.frame, engagement.R:2", .echoue_en(r, "R/engagement.R", 2L, "sys.frame()"))
+verifier("M411 : sys.frames, engagement.R:3", .echoue_en(r, "R/engagement.R", 3L, "sys.frames()"))
+verifier("M411 : sys.calls, engagement.R:4", .echoue_en(r, "R/engagement.R", 4L, "sys.calls()"))
+verifier("M411 : sys.parent, engagement.R:5", .echoue_en(r, "R/engagement.R", 5L, "sys.parent()"))
+verifier("M411 : sys.on.exit, engagement.R:6", .echoue_en(r, "R/engagement.R", 6L, "sys.on.exit()"))
+verifier("M411 : match.call, engagement.R:7", .echoue_en(r, "R/engagement.R", 7L, "match.call()"))
+
+# M1 de l'audit : un fichier dont le dernier jeton est une chaîne ne fait pas planter le script.
+for (cas in list(list("VERSION_X <- \"1.0\"", "fichier réduit à une affectation de chaîne"),
+                 list("f <- function(x) x$\"a\"", "champ par une chaîne en fin de fichier"),
+                 list(c("SEP <- \";\"  # fin", "# commentaire"), "chaîne suivie d'un commentaire"))) {
+  r <- .essai("graphe_modules", list("R/dictionnaire.R" = cas[[1L]]))
+  verifier(paste0("m1 (audit) : dernier jeton une chaîne, ", cas[[2L]], " : le contrôle passe"),
+           .passe(r) && !any(grepl("missing value", r$sortie, fixed = TRUE)))
+}
+r <- .essai("graphe_modules", list("R/dictionnaire.R" = c(".aux <- function(x) x"), "R/lecture.R" = "lire_e <- function(x) vapply(x, \".aux\", 1)"))
+verifier("m1 (audit) : un nom passé en chaîne en dernier jeton du fichier reste vu, lecture.R:1", .echoue_en(r, "R/lecture.R", 1L, ".aux"))
+
+# M409 : exception d'introspection déclarée en dur (topenv() dans empreinte_code() du module rapport).
+section("contrôles : graphe_modules.R, exception d'introspection (#62, M409)")
+EMPREINTE <- c("empreinte_code <- function() {", "  objets <- eapply(topenv(), function(x) x)", "  objets", "}")
+r <- .essai("graphe_modules", list("R/rapport.R" = EMPREINTE))
+verifier("M409 : topenv() dans empreinte_code() de rapport.R, exception déclarée : le contrôle passe",
+         .passe(r) && any(grepl("M409, M412 : 2 declaree(s), 1 constatee(s)", r$sortie, fixed = TRUE)))
+r <- .essai("graphe_modules", list("R/rapport.R" = c(EMPREINTE, "autre_f <- function() topenv()")))
+verifier("M409 : topenv() dans une autre fonction de rapport.R échoue, rapport.R:5", .echoue_en(r, "R/rapport.R", 5L, "topenv()"))
+verifier("M409 : l'exception ne couvre que la ligne de empreinte_code (rapport.R:2 sans ECHEC)",
+         !any(startsWith(r$sortie, "[ECHEC] R/rapport.R:2 ")))
+r <- .essai("graphe_modules", list("R/rapport.R" = c(EMPREINTE, "topenv_haut <- topenv()")))
+verifier("M409 : topenv() au premier niveau de rapport.R échoue, rapport.R:5", .echoue_en(r, "R/rapport.R", 5L, "topenv()"))
+r <- cas_graphe("calcul_e <- function(x) topenv()")
+verifier("M409 : topenv() dans un autre module échoue, engagement.R:1", .echoue_en(r, "R/engagement.R", 1L, "topenv()"))
+r <- .essai("graphe_modules", list("R/rapport.R" = c("empreinte_code <- function() {", "  parent.frame()", "}")))
+verifier("M409 : l'exception est propre à topenv, parent.frame() dans empreinte_code échoue, rapport.R:2 ; et l'exception périmée aussi",
+         .echoue_en(r, "R/rapport.R", 2L, "parent.frame()") && .echoue_en(r, "R/rapport.R", NA_integer_, "exception declaree"))
+r <- .essai("graphe_modules", list("R/rapport.R" = c("empreinte_code <- function() {", "  1", "}")))
+verifier("M409 : exception périmée (empreinte_code n'appelle plus topenv), rapport.R sans numéro de ligne",
+         .echoue_en(r, "R/rapport.R", NA_integer_, "exception declaree") &&
+           !any(grepl("[ECHEC] R/rapport.R:", r$sortie, fixed = TRUE)))
+r <- .essai("graphe_modules", list("R/rapport.R" = c(EMPREINTE, "empreinte_code2 <- function() 1")))
+verifier("M409 : sans outils.R dans la racine, l'exception globalenv n'est pas contrôlée (fichier absent), le contrôle passe", .passe(r))
+r <- cas_graphe("calcul_e <- function(x) x")
+verifier("M409 : sans rapport.R dans la racine, l'exception n'est pas contrôlée (fichier absent)", .passe(r))
+
+# M412 : globalenv() interdit, exception déclarée pour avec_graine() du module outils.
+section("contrôles : graphe_modules.R, globalenv (#62, M412)")
+GRAINE <- c("avec_graine <- function(graine, expr) {", "  global <- globalenv()", "  global", "}")
+r <- .essai("graphe_modules", list("R/outils.R" = GRAINE))
+verifier("M412 : globalenv() dans avec_graine() de outils.R, exception déclarée : le contrôle passe",
+         .passe(r) && any(grepl("M409, M412 : 2 declaree(s), 1 constatee(s)", r$sortie, fixed = TRUE)))
+r <- .essai("graphe_modules", list("R/outils.R" = c(GRAINE, "autre_f <- function() globalenv()")))
+verifier("M412 : globalenv() dans une autre fonction de outils.R échoue, outils.R:5", .echoue_en(r, "R/outils.R", 5L, "globalenv()"))
+verifier("M412 : l'exception ne couvre que avec_graine (outils.R:2 sans ECHEC)", !any(startsWith(r$sortie, "[ECHEC] R/outils.R:2 ")))
+r <- .essai("graphe_modules", list("R/outils.R" = c(GRAINE, "haut <- globalenv()")))
+verifier("M412 : globalenv() au premier niveau de outils.R échoue, outils.R:5", .echoue_en(r, "R/outils.R", 5L, "globalenv()"))
+r <- cas_graphe("calcul_e <- function(x) globalenv()")
+verifier("M412 : globalenv() dans un autre module échoue, engagement.R:1", .echoue_en(r, "R/engagement.R", 1L, "globalenv()"))
+r <- .essai("graphe_modules", list("R/rapport.R" = c("empreinte_code <- function() {", "  globalenv()", "  topenv()", "}")))
+verifier("M412 : globalenv() dans empreinte_code (exception de topenv) échoue, rapport.R:2",
+         .echoue_en(r, "R/rapport.R", 2L, "globalenv()") && !any(startsWith(r$sortie, "[ECHEC] R/rapport.R:3 ")))
+r <- .essai("graphe_modules", list("R/outils.R" = c("avec_graine <- function(graine, expr) {", "  topenv()", "}")))
+verifier("M412 : topenv() dans avec_graine échoue (chaque exception a son appel), outils.R:2, et l'exception périmée aussi",
+         .echoue_en(r, "R/outils.R", 2L, "topenv()") && .echoue_en(r, "R/outils.R", NA_integer_, "exception declaree"))
+r <- .essai("graphe_modules", list("R/outils.R" = c("avec_graine <- function(graine, expr) {", "  graine", "}")))
+verifier("M412 : exception périmée (avec_graine n'appelle plus globalenv), outils.R sans numéro de ligne",
+         .echoue_en(r, "R/outils.R", NA_integer_, "exception declaree") && !any(grepl("[ECHEC] R/outils.R:", r$sortie, fixed = TRUE)))
+
+# m1 : un nom d'auxiliaire à point passé en chaîne (match.fun) est un emploi (issue #74, audit).
+section("contrôles : graphe_modules.R, noms passés en chaîne (#74, m1)")
+cas_chaine <- function(lecture) .essai("graphe_modules", list("R/dictionnaire.R" = c(".aux <- function(x) x", "dico_f <- function(x) x"),
+                                                              "R/lecture.R" = lecture))
+r <- cas_chaine("lire_e <- function(x) vapply(x, \".aux\", 1)")
+verifier("m1 : vapply(x, \".aux\", 1) vers un auxiliaire à point d'un autre module, lecture.R:1",
+         .echoue_en(r, "R/lecture.R", 1L, ".aux"))
+r <- cas_chaine(c("lire_e <- function(x) {", "  a <- Reduce(\".aux\", x)", "  b <- Map('.aux', x)", "  a", "}"))
+verifier("m1 : Reduce(\".aux\", x), lecture.R:2", .echoue_en(r, "R/lecture.R", 2L, ".aux"))
+verifier("m1 : Map('.aux', x) (guillemets simples), lecture.R:3", .echoue_en(r, "R/lecture.R", 3L, ".aux"))
+r <- cas_chaine(c("lire_e <- function(x) {", "  y <- list(\".aux\" = 1)", "  z <- x$\".aux\"", "  \".aux\" <- 3",
+                  "  w <- \"aux\"", "  v <- \".aux.\"", "  y", "}"))
+verifier("m1, cas licites : nom d'argument, champ, cible d'affectation, chaînes voisines (aux, .aux.)", .passe(r))
+r <- cas_chaine("lire_e <- function(x) vapply(x, \"dico_f\", 1)")
+verifier("m1, limite documentée : un nom de fonction sans point passé en chaîne n'est pas compté (noms de colonnes), le contrôle passe",
+         .passe(r))
+r <- .essai("graphe_modules", list("R/outils.R" = c(".longueur_commune <- function(n) n", ".composantes_date <- function(j) j", ".jour_de <- function(j) j", AVEC_GRAINE),
+                                   "R/donnees.R" = c("donnees_f <- function(x) {", "  .longueur_commune(x)", "  .composantes_date(x)", "  .jour_de(x)", "}")))
+verifier("m2 : exceptions déclarées 4, constatées 3 (racine fictive sans plan.R)",
+         .passe(r) && any(grepl("4 exception(s) declaree(s), 3 constatee(s)", r$sortie, fixed = TRUE)))
+r <- .essai("graphe_modules", list("R/dictionnaire.R" = "dico_f <- function(x) x"))
+verifier("m2 : exceptions déclarées 4, constatées 0 (et non « hors des 0 exception(s) déclarée(s) »)",
+         .passe(r) && any(grepl("4 exception(s) declaree(s), 0 constatee(s)", r$sortie, fixed = TRUE)) &&
+           !any(grepl("hors des 0 exception", r$sortie, fixed = TRUE)))
+
 # --- frontiere_calcul_affichage.R (N4, M236) ----------------------------------------------------
 cas_frontiere <- function(lignes) .essai("frontiere_calcul_affichage", list("R/engagement.R" = lignes))
 
-section("contrôles : frontiere_calcul_affichage.R (N4, M236)")
+section("contrôles : frontiere_calcul_affichage.R (N4, M236, M400 à M402)")
 r <- cas_frontiere(c("f_e <- function(x) {", "  cat(\"x\")", "  set.seed(1)", "  x", "}"))
 verifier("témoin positif : cat(), engagement.R:2", .echoue_en(r, "R/engagement.R", 2L, "cat()"))
 verifier("témoin positif : set.seed(), engagement.R:3", .echoue_en(r, "R/engagement.R", 3L, "set.seed"))
@@ -307,10 +416,134 @@ verifier("N4a : set.seed entre accents graves, engagement.R:3", .echoue_en(r, "R
 verifier("N4a : .Random.seed entre accents graves, engagement.R:4", .echoue_en(r, "R/engagement.R", 4L, ".Random.seed"))
 verifier("N4a : RNGkind entre accents graves, engagement.R:5", .echoue_en(r, "R/engagement.R", 5L, "RNGkind"))
 verifier("N4a : cat par une chaîne en position d'appel, engagement.R:6", .echoue_en(r, "R/engagement.R", 6L, "cat()"))
-# N4b : faux négatif connu (issue ouverte à part) : la variable locale masque la référence.
-r <- cas_frontiere(c("f_e <- function(x) {", "  lapply(x, print)", "  print <- 1", "  x", "}"))
-verifier("N4b, limite documentée : `lapply(x, print)` masqué par `print <- 1` (faux négatif connu), le contrôle passe",
+# N4b, M400 : variable locale = argument formel ou affectée avant la référence (ordre du source).
+r <- cas_frontiere("f_e <- function(x) { lapply(x, print); print <- 1; h <- set.seed; set.seed <- 2; x }")
+verifier("M400 : témoin de l'issue #62 (une ligne), engagement.R:1 : `lapply(x, print)` puis `print <- 1` refusé",
+         .echoue_en(r, "R/engagement.R", 1L, "print (reference sans appel)"))
+verifier("M400 : témoin de l'issue #62, `h <- set.seed` puis `set.seed <- 2` refusé, engagement.R:1",
+         .echoue_en(r, "R/engagement.R", 1L, "set.seed"))
+r <- cas_frontiere(c("f_e <- function(x) {", "  lapply(x, print)", "  print <- 1", "  h <- set.seed", "  set.seed <- 2", "  x", "}"))
+verifier("M400 : lecture avant l'affectation, engagement.R:2 (print) et :4 (set.seed)",
+         .echoue_en(r, "R/engagement.R", 2L, "print") && .echoue_en(r, "R/engagement.R", 4L, "set.seed"))
+verifier("M400 : la cible d'une affectation n'est pas une référence (aucun [ECHEC] aux lignes 3 et 5)",
+         !any(startsWith(r$sortie, "[ECHEC] R/engagement.R:3 ")) && !any(startsWith(r$sortie, "[ECHEC] R/engagement.R:5 ")))
+r <- cas_frontiere(c("f_e <- function(x) {", "  print <- print", "  x", "}"))
+verifier("M400 : `print <- print`, la lecture à droite précède l'affectation, engagement.R:2",
+         .echoue_en(r, "R/engagement.R", 2L, "print (reference sans appel)"))
+r <- cas_frontiere(c("f_e <- function(x) {", "  g <- function(print) print", "  lapply(x, print)", "}"))
+verifier("M400 : l'argument formel d'une fonction sœur ne masque pas, engagement.R:3", .echoue_en(r, "R/engagement.R", 3L, "print"))
+r <- cas_frontiere(c("f_e <- function(x) {", "  g <- function() { print <- 1 }", "  lapply(x, print)", "}"))
+verifier("M400 : l'affectation dans une fonction fille ne masque pas, engagement.R:3", .echoue_en(r, "R/engagement.R", 3L, "print"))
+r <- cas_frontiere(c("f_e <- function(x) {", "  for (i in lapply(x, cat)) i", "  cat <- 1", "  x", "}"))
+verifier("M400 : lecture dans la clause d'un for avant l'affectation, engagement.R:2", .echoue_en(r, "R/engagement.R", 2L, "cat"))
+r <- cas_frontiere(c("f_e <- function(message, x) {", "  m <- message", "  lapply(x, message)", "  m", "}"))
+verifier("M400, cas licite : argument formel homonyme d'une fonction interdite (message)", .passe(r))
+r <- cas_frontiere(c("f_e <- function(x) {", "  date <- 1", "  y <- date", "  cat <- function(z) z", "  lapply(x, cat)", "  y", "}"))
+verifier("M400, cas licite : variable affectée avant la référence (date, cat)", .passe(r))
+r <- cas_frontiere(c("f_e <- function(cat) {", "  g <- function(y) {", "    h <- function() lapply(y, cat)", "    h()", "  }", "  g(1)", "}"))
+verifier("M400, cas licite : argument formel d'une fonction englobante, repris dans une fonction fille", .passe(r))
+r <- cas_frontiere(c("f_e <- function(x) {", "  g <- \\(cat) cat", "  for (print in x) print", "  lapply(x, print)", "  g(x)", "}"))
+verifier("M400, cas licite : fonction anonyme \\(cat) et variable de for", .passe(r))
+
+# Audit de #62 (m1, m2) : local() ouvre une portée ; limites de l'ordre du source.
+r <- cas_frontiere(c("f_e <- function(x) {", "  local({ print <- 1 })", "  lapply(x, print)", "}"))
+verifier("audit m1 : l'affectation dans local({...}) ne masque pas la lecture qui suit, engagement.R:3", .echoue_en(r, "R/engagement.R", 3L, "print"))
+r <- cas_frontiere(c("f_e <- function(x) {", "  local(print <- 1)", "  lapply(x, print)", "}"))
+verifier("audit m1 : idem local(print <- 1) (l'affectation est l'argument), engagement.R:3", .echoue_en(r, "R/engagement.R", 3L, "print"))
+r <- cas_frontiere(c("f_e <- function(x) {", "  local({ cat <- 1 }, envir = e)", "  lapply(x, cat)", "}"))
+verifier("audit m1 : idem avec envir = ..., engagement.R:3", .echoue_en(r, "R/engagement.R", 3L, "cat"))
+r <- cas_frontiere(c("f_e <- function(x) {", "  local({ print <- 1; lapply(x, print) })", "  local(expr = { cat <- 1; cat }, envir = new.env())", "}"))
+verifier("audit m1, cas licite : la lecture dans la portée de local() après l'affectation", .passe(r))
+r <- cas_frontiere(c("f_e <- function(x) {", "  if (x) print <- 1", "  lapply(x, print)", "}"))
+verifier("audit m1, limite documentée : affectation conditionnelle, la lecture qui suit est masquée (ordre du source, M400), le contrôle passe",
          .passe(r))
+r <- cas_frontiere(c("f_e <- function(x) {", "  for (i in 1:2) { lapply(x, print); print <- 1 }", "  while (x) { lapply(x, cat); cat <- 1 }", "}"))
+verifier("audit m2 : lecture en tête de boucle, affectation en queue : refusée (for, engagement.R:2 ; while, :3)",
+         .echoue_en(r, "R/engagement.R", 2L, "print") && .echoue_en(r, "R/engagement.R", 3L, "cat"))
+
+# N4c, M401 : sorties console non listées (issue #62).
+r <- cas_frontiere(c("f_e <- function(x, f) {", "  str(x)", "  show(x)", "  sink(\"a\")", "  print.default(x)", "  print.foo(x)",
+                     "  write(x, \"\")", "  write(x, file = \"\")", "  write(x, stdout())", "  write(file = stderr(), x)",
+                     "  write.table(x)", "  write.csv(x, \"\")", "  write.csv(x, file = stdout())", "  lapply(x, write)",
+                     "  base::print.default(x)", "  \"str\"(x)", "  x", "}"))
+verifier("M401 : str(), engagement.R:2", .echoue_en(r, "R/engagement.R", 2L, "str()"))
+verifier("M401 : show(), engagement.R:3", .echoue_en(r, "R/engagement.R", 3L, "show()"))
+verifier("M401 : sink(), engagement.R:4", .echoue_en(r, "R/engagement.R", 4L, "sink()"))
+verifier("M401 : print.default(), engagement.R:5", .echoue_en(r, "R/engagement.R", 5L, "print.default()"))
+verifier("M401 : appel direct d'une méthode print.*, engagement.R:6", .echoue_en(r, "R/engagement.R", 6L, "print.foo()"))
+verifier("M401 : write(x, \"\") (file en deuxième position), engagement.R:7", .echoue_en(r, "R/engagement.R", 7L, "write() vers la console"))
+verifier("M401 : write(x, file = \"\"), engagement.R:8", .echoue_en(r, "R/engagement.R", 8L, "write() vers la console"))
+verifier("M401 : write(x, stdout()), engagement.R:9", .echoue_en(r, "R/engagement.R", 9L, "write() vers la console"))
+verifier("M401 : write(file = stderr(), x), engagement.R:10", .echoue_en(r, "R/engagement.R", 10L, "write() vers la console"))
+verifier("M401 : write.table(x) (défaut file = \"\" : la console), engagement.R:11", .echoue_en(r, "R/engagement.R", 11L, "write.table() vers la console"))
+verifier("M401 : write.csv(x, \"\"), engagement.R:12", .echoue_en(r, "R/engagement.R", 12L, "write.csv() vers la console"))
+verifier("M401 : write.csv(x, file = stdout()), engagement.R:13", .echoue_en(r, "R/engagement.R", 13L, "write.csv() vers la console"))
+verifier("M401 : référence sans appel à write, engagement.R:14", .echoue_en(r, "R/engagement.R", 14L, "write (reference sans appel)"))
+verifier("M401 : base::print.default(), engagement.R:15", .echoue_en(r, "R/engagement.R", 15L, "print.default()"))
+verifier("M401 : str par une chaîne en position d'appel, engagement.R:16", .echoue_en(r, "R/engagement.R", 16L, "str()"))
+r <- cas_frontiere(c("f_e <- function(x, f) {", "  write(x, \"a.txt\")", "  write(x)", "  write(x, f)", "  write(x, \"a.txt\", \"\")",
+                     "  write.csv(x, f)", "  write.table(x, file = \"a.csv\")", "  write.table(x, ...)", "  format.foo(x)",
+                     "  y <- x$str", "  show <- 1", "  show", "  x", "}"))
+verifier("M401, cas licites : write vers un fichier ou une variable (défaut file = \"data\"), write.* vers un fichier, ... : indécidable, format.foo(x), champ x$str, variable show",
+         .passe(r))
+r <- cas_frontiere(c("print.fiche <- function(x, ...) {", "  print.default(x)", "  write(x, \"\")", "  str(x)", "  sink(NULL)",
+                     "  print.foo(x)", "  write.table(x)", "  write.dcf(x)", "  write.csv2(x)", "  invisible(x)", "}"))
+verifier("M401, cas licite : une méthode print.* reste exemptée des sorties console", .passe(r))
+
+# Audit de #62 (m3, m4) : correspondance partielle des noms d'arguments, stdout() préfixé.
+r <- cas_frontiere(c("f_e <- function(x) {", "  write(x, f = \"\")", "  write(x, fi = \"\")", "  write(x, a = TRUE, \"\")",
+                     "  write.dcf(x, fi = \"\")", "  write(x, base::stdout())", "  write(x, base:::stderr())",
+                     "  write(file = base::stdout(), x)", "  x", "}"))
+verifier("audit m3 : write(x, f = \"\") (correspondance partielle), engagement.R:2", .echoue_en(r, "R/engagement.R", 2L, "write() vers la console"))
+verifier("audit m3 : write(x, fi = \"\"), engagement.R:3", .echoue_en(r, "R/engagement.R", 3L, "write() vers la console"))
+verifier("audit m3 : write(x, a = TRUE, \"\") (append partiel, file en position), engagement.R:4", .echoue_en(r, "R/engagement.R", 4L, "write() vers la console"))
+verifier("audit m3 : write.dcf(x, fi = \"\"), engagement.R:5", .echoue_en(r, "R/engagement.R", 5L, "write.dcf() vers la console"))
+verifier("audit m4 : write(x, base::stdout()), engagement.R:6", .echoue_en(r, "R/engagement.R", 6L, "write() vers la console"))
+verifier("audit m4 : write(x, base:::stderr()), engagement.R:7", .echoue_en(r, "R/engagement.R", 7L, "write() vers la console"))
+verifier("audit m4 : write(file = base::stdout(), x), engagement.R:8", .echoue_en(r, "R/engagement.R", 8L, "write() vers la console"))
+r <- cas_frontiere(c("f_e <- function(x) {", "  write.dcf(x, f = \"a\")", "  write.dcf(x, fi = \"a\")", "  write(x, foo::stdout())",
+                     "  write(x, a = TRUE, \"a.txt\")", "  x", "}"))
+verifier("audit m3, cas licite : write.dcf(x, f = \"a\") écrit dans un fichier ; stdout() d'un autre package ; append partiel avec un fichier",
+         .passe(r))
+
+# M411 : write.csv2 et write.dcf (défaut file = "" : la console).
+r <- cas_frontiere(c("f_e <- function(x, f) {", "  write.csv2(x)", "  write.csv2(x, \"\")", "  write.csv2(x, file = stdout())",
+                     "  write.dcf(x)", "  write.dcf(x, file = \"\")", "  write.dcf(x, stderr())", "  lapply(x, write.dcf)", "  x", "}"))
+verifier("M411 : write.csv2(x) (défaut : la console), engagement.R:2", .echoue_en(r, "R/engagement.R", 2L, "write.csv2() vers la console"))
+verifier("M411 : write.csv2(x, \"\"), engagement.R:3", .echoue_en(r, "R/engagement.R", 3L, "write.csv2() vers la console"))
+verifier("M411 : write.csv2(x, file = stdout()), engagement.R:4", .echoue_en(r, "R/engagement.R", 4L, "write.csv2() vers la console"))
+verifier("M411 : write.dcf(x) (défaut file = \"\"), engagement.R:5", .echoue_en(r, "R/engagement.R", 5L, "write.dcf() vers la console"))
+verifier("M411 : write.dcf(x, file = \"\"), engagement.R:6", .echoue_en(r, "R/engagement.R", 6L, "write.dcf() vers la console"))
+verifier("M411 : write.dcf(x, stderr()), engagement.R:7", .echoue_en(r, "R/engagement.R", 7L, "write.dcf() vers la console"))
+verifier("M411 : référence sans appel à write.dcf, engagement.R:8", .echoue_en(r, "R/engagement.R", 8L, "write.dcf (reference sans appel)"))
+r <- cas_frontiere(c("f_e <- function(x, f) {", "  write.csv2(x, f)", "  write.csv2(x, file = \"a.csv\")", "  write.dcf(x, \"a.dcf\")",
+                     "  write.dcf(x, file = f)", "  x", "}"))
+verifier("M411, cas licite : write.csv2 et write.dcf vers un fichier ou une variable", .passe(r))
+
+# N4e, M402 et M410 : l'horloge est interdite dans une méthode format.* comme dans print.*.
+r <- cas_frontiere(c("print.fiche <- function(x, ...) {", "  cat(\"x\")", "  a <- Sys.time()", "  b <- Sys.Date()", "  c <- date()",
+                     "  d <- Sys.time", "  invisible(x)", "}"))
+verifier("M410 : Sys.time() dans print.*, engagement.R:3", .echoue_en(r, "R/engagement.R", 3L, "Sys.time()"))
+verifier("M410 : Sys.Date() dans print.*, engagement.R:4", .echoue_en(r, "R/engagement.R", 4L, "Sys.Date()"))
+verifier("M410 : date() dans print.*, engagement.R:5", .echoue_en(r, "R/engagement.R", 5L, "date()"))
+verifier("M410 : référence sans appel à Sys.time dans print.*, engagement.R:6", .echoue_en(r, "R/engagement.R", 6L, "Sys.time (reference sans appel)"))
+verifier("M410 : la sortie console cat() reste admise dans print.* (aucun ECHEC à la ligne 2)",
+         !any(startsWith(r$sortie, "[ECHEC] R/engagement.R:2 ")))
+r <- cas_frontiere(c("print.fiche <- function(x, ...) {", "  print.default(x)", "  str(x)", "  invisible(x)", "}"))
+verifier("M410, cas licite : print.* sans horloge, avec ses sorties console", .passe(r))
+r <- cas_frontiere("format.fiche_essai <- function(x, ...) paste(x, Sys.time())")
+verifier("M402 : témoin de l'issue #62, Sys.time() dans format.*, engagement.R:1", .echoue_en(r, "R/engagement.R", 1L, "Sys.time()"))
+r <- cas_frontiere(c("format.fiche_essai <- function(x, ...) {", "  a <- Sys.Date()", "  b <- date()", "  c <- Sys.time", "  paste(x, a, b)", "}"))
+verifier("M402 : Sys.Date(), engagement.R:2", .echoue_en(r, "R/engagement.R", 2L, "Sys.Date()"))
+verifier("M402 : date(), engagement.R:3", .echoue_en(r, "R/engagement.R", 3L, "date()"))
+verifier("M402 : référence sans appel à Sys.time, engagement.R:4", .echoue_en(r, "R/engagement.R", 4L, "Sys.time (reference sans appel)"))
+r <- cas_frontiere(c("format.fiche_essai <- function(x, ...) {", "  cat(\"x\")", "  print(x)", "  paste(x, format(x))", "}"))
+verifier("M402, cas licite : format.* qui écrit sans lire l'horloge (exemption des sorties console conservée)", .passe(r))
+r <- cas_frontiere(c("f_e <- function(x) {", "  a <- Sys.time()", "  x", "}"))
+verifier("M402 : l'horloge hors d'une méthode reste refusée, engagement.R:2", .echoue_en(r, "R/engagement.R", 2L, "Sys.time()"))
+r <- cas_frontiere(c("format.fiche_essai <- function(x, ...) {", "  Sys.time <- function() 1", "  paste(x, Sys.time())", "}"))
+verifier("M402 : l'appel d'une fonction locale homonyme de l'horloge reste refusé (les appels ne sont pas masqués), engagement.R:3",
+         .echoue_en(r, "R/engagement.R", 3L, "Sys.time()"))
 r <- cas_frontiere(c("f_e <- function(input, x) {", "  a <- eventReactive(x, x)",
                      "  b <- input[[\"choix\"]]", "  req(x)", "  s <- session$userData", "  o <- output$sortie",
                      "  updateSelectInput(session, \"id\")", "  showNotification(\"m\")", "  bindEvent(x)",
