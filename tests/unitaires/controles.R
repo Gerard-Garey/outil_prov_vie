@@ -321,3 +321,44 @@ verifier("N5b : un fragment sans \\documentclass est ignoré", .passe(r))
 r <- cas_latex("docs/latex/doc.tex" = c("\\newcommand{\\debut}{\\begin{document}}", charte))
 verifier("N5c : \\begin{document} dans une macro avant \\documentclass : ligne >= 1, doc.tex:1",
          .echoue_en(r, "docs/latex/doc.tex", 1L))
+
+# --- recensement_tolerances.R (#79) ---------------------------------------------------------------
+cas_recensement <- function(lignes) .essai("recensement_tolerances", list("tests/unitaires/temoin.R" = lignes))
+
+section("contrôles : recensement_tolerances.R (#79)")
+r <- cas_recensement(c("TOL <- 1e-10",
+                       "verifier_egal(\"a\", c(1e8, 100), c(1e8, 100), tolerance = TOL)",
+                       "verifier_egal(\"b\", 1, 1)",
+                       "verifier_egal(\"c\", 1, 1, tolerance = 0)",
+                       "verifier_egal(\"d\", c(1, 2), c(1, 2), 1e-8)",
+                       "verifier_egal(\"e\", x, list(a = z), tolerance = 1e-8)",
+                       "verifier(\"f\", isTRUE(all.equal(x, c(1, 100), tolerance = 1e-9)))"))
+verifier("recensement : statut 0 (sortie informative, aucun [ECHEC])", .passe(r))
+verifier("recensement : trois appels de verifier_egal() à tolérance > 0 (symbole, positionnelle, littérale), ni sans tolérance ni à 0",
+         any(grepl("a tolerance > 0 : 3 appels", r$sortie, fixed = TRUE)))
+verifier("recensement : l'appel d'ordres différents est signalé à sa ligne (temoin.R:2, tolérance 1e-10, max/min = 1e+06)",
+         any(grepl("tests/unitaires/temoin.R:2 tolerance 1e-10 2 feuilles, max/min = 1e+06", r$sortie, fixed = TRUE)))
+verifier("recensement : un composite non évaluable est indéterminé (temoin.R:6)",
+         any(grepl("tests/unitaires/temoin.R:6 tolerance 1e-08", r$sortie, fixed = TRUE)))
+verifier("recensement : l'appel direct de all.equal(tolerance = ...) est listé à part (temoin.R:7)",
+         any(grepl("tests/unitaires/temoin.R:7 tolerance 1e-09", r$sortie, fixed = TRUE)))
+# Aucun argument n'est execute hors liste blanche (environnement de parent emptyenv()).
+effet <- tempfile("effet-")
+r <- cas_recensement(c(sprintf("verifier_egal(\"a\", x, {file.create(\"%s\"); c(1, 100)}, tolerance = 1e-8)", effet),
+                       sprintf("verifier_egal(\"b\", x, c(file.create(\"%s\"), 1), tolerance = 1e-8)", effet)))
+verifier("recensement : un argument à effet de bord n'est pas exécuté (fichier non créé), il est indéterminé (temoin.R:1 et :2)",
+         .passe(r) && !file.exists(effet) && any(grepl("tests/unitaires/temoin.R:1 tolerance 1e-08", r$sortie, fixed = TRUE)) &&
+           any(grepl("tests/unitaires/temoin.R:2 tolerance 1e-08", r$sortie, fixed = TRUE)))
+unlink(effet)
+r <- cas_recensement(c("verifier_egal(\"a\", x, quit(status = 0), tolerance = 1e-8)",
+                       "verifier_egal(\"b\", x, c(1e8, 100), tolerance = 1e-8)"))
+verifier("recensement : un quit() dans un argument n'interrompt pas le recensement, qui va à son terme (temoin.R:2 signalé, appels all.equal listés)",
+         .passe(r) && any(grepl("tests/unitaires/temoin.R:1 tolerance 1e-08", r$sortie, fixed = TRUE)) &&
+           any(grepl("tests/unitaires/temoin.R:2 tolerance 1e-08 2 feuilles", r$sortie, fixed = TRUE)) &&
+           any(grepl("all.equal(tolerance = ...) direct", r$sortie, fixed = TRUE)))
+r <- cas_recensement(c("verifier_egal(\"a\", x, calcule(1, \"exact\"), tolerance = 1e-8)"))
+verifier("recensement : un appel de fonction hors liste blanche est indéterminé et listé (temoin.R:1)",
+         .passe(r) && any(grepl("INDETERMINE (non evaluable sans les donnees des tests, a controler) : 1 appels", r$sortie, fixed = TRUE)) &&
+           any(grepl("tests/unitaires/temoin.R:1 tolerance 1e-08", r$sortie, fixed = TRUE)))
+r <- cas_recensement(c("f <- function( {"))
+verifier("recensement : un fichier non analysable est un échec, temoin.R", .echoue_en(r, "tests/unitaires/temoin.R"))
