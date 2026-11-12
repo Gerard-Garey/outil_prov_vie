@@ -1635,7 +1635,7 @@ calcul. Il ne peut appeler que \code{dictionnaire} et
 \code{lire\_declarations()} & \code{declarations}, \code{dico} & Contrôle le sous-schéma \code{donnees} du plan (rubriques, motifs, familles, référentiels, seuils, \code{evaluations\_gestion}) et le rend, \code{exclusions} et \code{hypotheses} mises en \code{data.frame}\fsp; refus \code{plan\_invalide}. Non exportée, appelée aussi par \code{valider\_plan()}. \\
 \code{vue\_a\_date()} & \code{donnees}, \code{arrete}, \code{declarations}, \code{conventions} & Construit une fois la vue à l'arrêté (classe \code{vue\_provie}), seule lecture de la base par les familles de calcul~: bilan de \code{controler\_base()}, lignes retenues, parties de ligne connues, lignes exclues par famille de calcul, hypothèses par défaut appliquées\fsp; mêmes refus d'appel que \code{controler\_base()}. Non exportée. \\
 \code{valeurs\_vue()} & \code{vue}, \code{table}, \code{colonne} & Rend les valeurs d'une colonne dans la vue\fsp; \code{NA} signifie «~hors de la vue~», jamais «~absente~». Non exportée. \\
-\code{cles\_lignes\_hypothese()} & \code{vue}, \code{table}, \code{lignes}, \code{colonne} & Rend la valeur de la base d'une colonne d'identifiant (\code{id\_*}, clé primaire ou clé étrangère) pour des lignes placées sous une hypothèse de la vue, visibles ou non à l'arrêté\fsp; tout autre appel est une erreur interne\fsp; seul rattachement d'une ligne cachée à son unité, pour un statut, jamais lu pour un montant. Non exportée, appelée par \code{engagement}. \\
+\code{cles\_lignes\_hypothese()} & \code{vue}, \code{table}, \code{lignes}, \code{colonne} & Rend la valeur de la base d'une colonne d'identifiant (\code{id\_*}, clé primaire ou clé étrangère) pour des lignes placées sous une hypothèse de la vue, visibles ou non à l'arrêté, désignées par \code{lignes}, vecteur numérique d'indices entiers, finis et positifs\fsp; tout autre appel (dont un \code{lignes} logique, \code{TRUE} par exemple) est une erreur interne\fsp; seul rattachement d'une ligne cachée à son unité, pour un statut, jamais lu pour un montant. Non exportée, appelée par \code{engagement}. \\
 \code{etats\_a\_date()} & \code{vue}, \code{garanties}, \code{famille} & Rend l'état à l'arrêté de chaque dossier des garanties demandées (B2~: \code{deces}), pour une famille de calcul exigée~: état, montant en vigueur, état du dossier (\code{ouvert}, \code{capital\_du}, \code{clos}) par l'automate du dossier, instruction\fsp; les dossiers exclus pour la famille sont rendus, et l'appelant les filtre. Non exportée. \\
 \code{garanties\_couverture\_exclue()} & \code{vue}, \code{famille} & Rend les identifiants des garanties souscrites retenues dont la ligne, ou celle de leur contrat, est exclue pour la famille de calcul\fsp; seule implémentation de la règle de population sous couverture exclue, appelée par les familles \code{engagement} et \code{risque\_en\_cours}. Non exportée. \\
 \code{periode\_cotisation\_regle()} & \code{date\_mouvement}, \code{periodicite} & Rend la période couverte d'une cotisation sous l'hypothèse par défaut de D03f (dictionnaire de la base, §~9)~: du premier jour du mois du mouvement à ce jour plus $p$~mois moins un jour, $p = 12$, 6, 3 ou 1 pour une périodicité annuelle, semestrielle, trimestrielle ou mensuelle\fsp; \code{NA} pour la périodicité \code{unique}, une valeur illisible ou un mouvement manquant\fsp; seule implémentation de la règle, appelée par la famille \code{risque\_en\_cours} (section~\ref{sec:risque-en-cours-p3}). Non exportée. \\
@@ -3250,7 +3250,9 @@ décidée par le mainteneur le 12~novembre~2026)~:
   «~;~», le montant étant un nombre décimal à point, positif ou nul, en
   euros (par exemple \code{A=40000;B=25000.50} pour deux collèges \code{A} et \code{B}). La forme
   est stricte~: une espace, une notation exponentielle, un «~;~» final, un
-  montant négatif ou un collège répété font refuser l'appel
+  montant négatif, un montant non fini (une suite de chiffres hors de la
+  plage des nombres en double précision, lue comme infinie) ou un
+  collège répété font refuser l'appel
   (\code{plan\_invalide}), un collège de l'affiliation absent de la liste
   aussi (\code{plan\_incomplet})~; ces refus ne sont levés que si un
   dossier lit l'assiette et qu'aucun dossier n'arrête le poste. Le dossier
@@ -3264,7 +3266,11 @@ décidée par le mainteneur le 12~novembre~2026)~:
 \noindent La forme stricte a une limite, retenue par le mainteneur
 (M315)~: un code de collège qui contient une espace, «~=~» ou «~;~» ne
 peut pas être déclaré. Le contrôle de la valeur à la validation du plan,
-et non à la lecture par un poste, est renvoyé à l'issue~99 du dépôt. La
+et non à la lecture par un poste, est renvoyé à l'issue~99 du dépôt. Un
+montant fini mais énorme (de l'ordre de $10^{308}$) passe la forme et
+fait échouer plus loin le calcul de la valeur actuelle probable, par une
+erreur qui n'est pas un refus classé~: cette limite est ouverte
+(issue~113 du dépôt). La
 valeur est un jugement d'expert déclaré par l'utilisateur, l'outil n'en
 propose aucune~: un salaire par défaut bas minore le capital reconstitué,
 et la prudence de la valeur relève de qui la déclare. L'âge inconnu d'un
@@ -3494,9 +3500,17 @@ M320 et M321)~:
   saisie, fin contractuelle au plus l'arrêté) établit la sortie~: aucune
   ligne sous hypothèse n'en décide alors, et le contrat n'est pas
   restitué\fsp;
-\item \textbf{contrat collectif}~: sous une valeur S1 ou S2, il est
-  restitué même quand aucune de ses cotisations n'a de fin de période
-  postérieure à l'arrêté.
+\item \textbf{contrat collectif}~: quand une de ses cotisations est lue
+  sous l'hypothèse par défaut de D03f (S1), il est restitué même si
+  aucune de ses cotisations n'a de fin de période postérieure à
+  l'arrêté. Un contrat dont seule la ligne de \code{contrats} porte une
+  hypothèse de la vue (D03g sur \code{date\_saisie\_fin}) n'est pas
+  restitué sans cotisation de fin postérieure à l'arrêté~: le champ
+  collectif ne lit pas la partie de fin, qui ne décide donc pas de sa
+  sortie~; avec une telle cotisation, il garde le statut
+  \code{jugement\_expert}. Aucune hypothèse de la vue ne porte sur une
+  ligne de \code{cotisations} (ni D02b ni D03g n'admettent cette
+  table)~: la restitution par S2 d'une cotisation n'est pas codée.
 \end{itemize}
 
 \noindent Une unité de montant nul sans valeur S1 à S3 reste hors de la
@@ -3597,7 +3611,7 @@ fonctions n'est exportée.
 \textcolor{financeblue}{\textbf{Fonction}} & \textcolor{financeblue}{\textbf{Arguments}} & \textcolor{financeblue}{\textbf{Rôle}} \\
 \code{calculer\_risque\_en\_cours()} & \code{vue}, \code{plan}, \code{tables}, \code{catalogue}, \code{garantie}, \code{poste} & Point d'appel de la provision mathématique de la temporaire décès\fsp; rend une cellule pour le poste (champs individuel et collectif réunis), les échéanciers des contrats individuels (deux lignes de flux nul par contrat sorti restitué), les indicateurs et les contrats valorisés par champ (unités de la restitution par segment)\fsp; un poste arrêté rend une cellule \code{arrete}. \\
 \code{provisions\_individuelles()} & \code{vue}, \code{plan}, \code{tables}, \code{temoin} & Calcule, contrat individuel par contrat, la population, l'échéancier et la provision (plancher nul par contrat)\fsp; marque les contrats dont un âge est lu hors des axes sous \code{derniere\_valeur} et rend leurs lignes \code{hors\_axes\_derniere\_valeur}\fsp; rend les codes des hypothèses de la vue de chaque contrat et les contrats sortis à restituer à montant nul\fsp; le témoin rétrospectif n'est calculé que si \code{temoin} vaut \code{TRUE} (\code{NA} en prime unique). \\
-\code{provisions\_collectives()} & \code{vue}, \code{plan} & Calcule, par contrat collectif, la provision au prorata des cotisations nettes de chargement sur les jours postérieurs à l'arrêté (\code{prorata\_cotisation}), sous le traitement déclaré de la période couverte manquante (D03f)\fsp; rend aussi le motif d'arrêt et le premier contrat en cause, et les contrats sous une hypothèse (D03f, ou hypothèse de la vue), restitués même de montant nul. \\
+\code{provisions\_collectives()} & \code{vue}, \code{plan} & Calcule, par contrat collectif, la provision au prorata des cotisations nettes de chargement sur les jours postérieurs à l'arrêté (\code{prorata\_cotisation}), sous le traitement déclaré de la période couverte manquante (D03f)\fsp; rend aussi le motif d'arrêt et le premier contrat en cause, et les contrats sous une hypothèse (D03f, ou hypothèse de la vue), qui fondent le statut\fsp; un contrat sans cotisation de fin postérieure à l'arrêté n'est restitué, de montant nul, que si une de ses cotisations est lue sous D03f. \\
 \end{tabular}
 \end{center}
 
