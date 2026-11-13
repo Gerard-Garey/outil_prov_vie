@@ -98,6 +98,13 @@ par_identifiant <- function(tables) {
   stats::setNames(unname(tables), vapply(tables, function(t) t$identifiant, ""))
 }
 
+# Seuil de D07 (b) des plans de référence (spécification `donnees` v1.6, § 8.12 ; M337, visa de
+# principe du mainteneur du 13 novembre 2026) : d07b_mois = 6, déclaré dans les seuls plans des
+# couples qui ont une unité en service à l'arrêté (J2, J4, V1, V2), dont le calcul est refusé
+# sans lui (declaration_manquante) ; les autres plans sont inchangés.
+SEUIL_D07B_REFERENCE <- 6L
+COUPLES_D07B <- c("J2", "J4", "V1", "V2")
+
 # Entrées du couple i : list(base, plan, tables) ; plan des jeux : plan_reference_jeu()
 # (tests/b2_bases.R, spécification de B2, § 7.9.6), seul plan `recommandees` des jeux.
 entrees_couple <- function(i) {
@@ -114,6 +121,7 @@ entrees_couple <- function(i) {
     base <- jeu$base
     plan <- plan_reference_jeu(jeu, arrete, tables)
   }
+  if (COUPLES_REFERENCE$couple[i] %in% COUPLES_D07B) plan$donnees$seuils$d07b_mois <- SEUIL_D07B_REFERENCE
   list(base = base, plan = plan, tables = par_identifiant(tables))
 }
 

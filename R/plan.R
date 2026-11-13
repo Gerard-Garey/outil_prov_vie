@@ -496,7 +496,7 @@ COLONNES_TABLES_RETENUES <- c("usage", "garantie", "identifiant", "statut", "for
       refuser(paste0("plan : ", chemin, " : ", sub("^controler_base\\(\\) : ", "", conditionMessage(e))),
               e$motif, module = "plan", attendu = chemin)
     })
-    seuils_connus <- c(SEUIL_DELAI_D03G, SEUILS_AGE_D02C)
+    seuils_connus <- c(SEUIL_DELAI_D03G, SEUILS_AGE_D02C, SEUIL_MOIS_D07B)
     if (!is.null(x[["seuils"]])) {
       inconnus <- setdiff(names(x[["seuils"]]), seuils_connus)
       if (length(inconnus) > 0L) .refus_invalide(.sous_chemin(.sous_chemin(chemin, "seuils"), inconnus[1L]), "entr\u00e9e inconnue du sch\u00e9ma")
@@ -523,13 +523,18 @@ COLONNES_TABLES_RETENUES <- c("usage", "garantie", "identifiant", "statut", "for
   lignes
 }
 
-# Seuils canoniques : noms triés à deux niveaux, valeurs en integer ; un seuil au-delà des
-# entiers de R (.Machine$integer.max) est refusé (as.integer() rendrait NA en silence).
+# Seuils canoniques : noms triés à deux niveaux, valeurs en integer ; un seuil à un niveau
+# (d07b_mois, nombre) reste un nombre ; un seuil au-delà des entiers de R
+# (.Machine$integer.max) est refusé (as.integer() rendrait NA en silence).
 .seuils_canoniques <- function(seuils, chemin) {
   if (length(seuils) == 0L) return(list())
   noms <- sort(names(seuils), method = "radix")
   stats::setNames(lapply(noms, function(n) {
     s <- seuils[[n]]
+    if (!is.list(s)) {
+      if (abs(s) > .Machine$integer.max) .refus_invalide(.sous_chemin(chemin, n), "seuil au-del\u00e0 des entiers de R (.Machine$integer.max)")
+      return(as.integer(s))
+    }
     if (length(s) == 0L) return(list())
     cles <- sort(names(s), method = "radix")
     stats::setNames(lapply(cles, function(k) {

@@ -313,8 +313,12 @@ verifier("D01b : encaissements datés de l'extraction non copiés, chaque copie 
                  co$date_mouvement[match(reg$valeur_injectee, co$id_cotisation)]))
 
 section("simulation : controler_base() accepte chaque jeu (critère 8)")
+# Déclarations du jeu complétées du seuil de D07 (b), d07b_mois = 6 (valeur des plans de
+# référence, M337 ; spécification `donnees` v1.6, § 8.12) : sans lui, une unité en service à
+# l'arrêté demande la déclaration (les jeux versionnés ne la portent pas, M189).
+avec_d07b <- function(declarations) { declarations$seuils$d07b_mois <- 6L; declarations }
 bilan_de <- function(j, arrete) {
-  controler_base(j$base, arrete, j$declarations$declarations, j$declarations$conventions)
+  controler_base(j$base, arrete, avec_d07b(j$declarations$declarations), j$declarations$conventions)
 }
 # Nombre de lignes injectées par (code, table) : identifiants distincts du registre.
 injectees <- function(reg) {
@@ -363,7 +367,9 @@ for (arrete in list(A, A0)) {
 # hors de la population des règles V : aucune ligne de controles_non_executes pour son propre
 # verdict (D02a sur prestations.fin_periode la détecte quand elle est visible) ; les autres
 # lignes non exécutées sont celles du bilan avec déclarations, plus les seuils de D02c et la
-# composante paiements_cumules de l'enjeu (inchangées à 325555f)
+# composante paiements_cumules de l'enjeu (inchangées à 325555f), et D07 (b) sans son seuil
+# d07b_mois (un dossier incapacite en service, spécification `donnees` v1.6, § 8.2 ; le bilan
+# avec déclarations le porte, avec_d07b())
 r_sans <- controler_base(j2$base, A0, conventions = j2$declarations$conventions)
 r_avec <- bilan_de(j2, A0)
 cles_ne <- function(r) with(r$controles_non_executes, paste(code, table, colonne, cause))
@@ -373,7 +379,7 @@ verifier_egal("W8 (#40) : v1-modeste-02 sans déclaration au 2024-12-31 : PR0002
                    setdiff(cles_ne(r_sans), cles_ne(r_avec)),
                    r_sans$controles$identifiants[r_sans$controles$code == "D02a"]),
               list("PR00027", 0L, c("D02c assures NA declaration_absente", "D02c famille NA declaration_absente",
-                                    "paiements_cumules prestations montant D09"), "PR00039"))
+                                    "D07 dossiers NA declaration_absente", "paiements_cumules prestations montant D09"), "PR00039"))
 
 section("lecture : ecrire_jeu() et lire_jeu() (ADR 0010, point 20)")
 dossier <- tempfile("jeu-")
@@ -730,7 +736,7 @@ P3 <- "provision_mathematique_temporaire_deces"
 calcul3 <- list()
 for (arrete in list(A0, A)) {
   et_a <- format(arrete)
-  bil <- controler_base(b3, arrete, j3$declarations$declarations, j3$declarations$conventions)
+  bil <- controler_base(b3, arrete, avec_d07b(j3$declarations$declarations), j3$declarations$conventions)
   verifier(paste0("V.1 à ", et_a, " : declarations_requises, refus_tables et visibilités non déterminées vides ; registre vide"),
            nrow(bil$declarations_requises) == 0L && nrow(bil$refus_tables) == 0L &&
              nrow(bil$vue$visibilite_non_determinee) == 0L && nrow(j3$verite$defauts) == 0L)
