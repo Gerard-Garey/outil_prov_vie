@@ -2885,7 +2885,9 @@ simulés est renvoyée à l'issue~117.
   n'est lu que pour sa partie lisible~: le décès dont le sous-cas devient
   inconnu est écarté, et la ligne prend la cause directe de la colonne
   illisible, départagée comme toute cause (décision du mainteneur du
-  13~novembre~2026). Limite renvoyée à l'issue~128~: une rechute
+  13~novembre~2026)\fsp; aucune ligne \code{non\_lisible} n'est alors
+  écrite, car, sans la clôture, aucun sinistre ne relève certainement du
+  sous-cas. Limite renvoyée à l'issue~128~: une rechute
   postérieure à la sortie et antérieure à la fin de couverture n'est pas
   lue. Traitement signalement et exclusion par famille (deux constats de
   même clé), détection exacte, constat sur
@@ -2922,7 +2924,10 @@ simulés est renvoyée à l'issue~117.
   fonctions que D07~(c)), et qui n'a aucun dossier \code{double\_effet}.
   Un enfant de la famille rattachée né après la survenance compte comme
   à naître, sans borne de délai (décision du mainteneur du 13~novembre
-  2026\fsp; D07~(c) inchangé). Un enfant né sans date de naissance (D03a)
+  2026\fsp; D07~(c) inchangé)\fsp; cette ligne reste détectée par D02a
+  (naissance postérieure à la survenance du sinistre rattaché), et D14 ne
+  lit que les lignes retenues selon le traitement déclaré de D02a~:
+  cohabitation déclarée, à reprendre au dictionnaire~1.6. Un enfant né sans date de naissance (D03a)
   compte comme possible~: s'il décide du verdict, le sinistre est écarté
   et la ligne prend la cause \code{age\_non\_defini} (même décision). Sans
   \code{conventions\$limite\_age}, un sinistre est candidat si son verdict
