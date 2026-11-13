@@ -2254,7 +2254,7 @@ précision P2 de M222\fsp; version~1.5.4, M226).
   et la règle garde une ligne dans \code{controles\_non\_executes}, avec la
   cause~($\gamma$) ci-dessous. À l'arrêté égal à l'extraction, aucun
   élément n'est non déterminé.
-\item \textbf{Clés exposées.} Dix-huit clés (code, table, colonne) ont un
+\item \textbf{Clés exposées.} Vingt-quatre clés (code, table, colonne) ont un
   verdict qui lit une autre ligne de la vue, une partie de ligne ou une
   version de \code{famille} (tableau ci-dessous). Les autres règles~V ont
   un verdict propre à la ligne, ou ne lisent qu'une parente ou une ligne
@@ -2276,12 +2276,15 @@ précision P2 de M222\fsp; version~1.5.4, M226).
   dépôt).
 \end{itemize}
 
-\begin{center}
-\small
+{\small
 \rowcolors{2}{tablerow}{white}
-\begin{tabular}{@{}>{\raggedright\arraybackslash}p{4.9cm}>{\raggedright\arraybackslash}p{3.3cm}p{6.9cm}@{}}
+\begin{longtable}{@{}>{\raggedright\arraybackslash}p{4.9cm}>{\raggedright\arraybackslash}p{3.3cm}p{6.9cm}@{}}
 \rowcolor{tableheader}
 \textcolor{financeblue}{\textbf{Clé}} & \textcolor{financeblue}{\textbf{Lu hors de la ligne}} & \textcolor{financeblue}{\textbf{Verdict à trois valeurs}} \\
+\endfirsthead
+\rowcolor{tableheader}
+\textcolor{financeblue}{\textbf{Clé}} & \textcolor{financeblue}{\textbf{Lu hors de la ligne}} & \textcolor{financeblue}{\textbf{Verdict à trois valeurs}} \\
+\endhead
 \code{somme\_parts} sur \code{beneficiaires.part} & Parts des autres bénéficiaires du dossier & Voir ci-dessous. \\
 D03a, D03b, D02a, D02c sur \code{famille} & Version valable du membre & Verdict sur chaque candidate\fsp; inconnu s'ils diffèrent. \\
 D02a sur \code{contrats.date\_fin} et \code{affiliations.date\_fin} & Partie de ligne de la fin & Partie connue~: comparaison\fsp; partie non connue à l'arrêté, de façon déterminée~: faux\fsp; partie non déterminée~: inconnu si la date de début dépasse la date de fin, faux sinon. \\
@@ -2290,10 +2293,16 @@ D06 sur \code{evenements.justificatif} & Prestations du dossier & Clôture de mo
 D13 sur \code{sinistres.date\_instruction} & Prestations en capital des dossiers décès du sinistre & Vrai si une telle prestation est visible, faux si aucune n'est visible ni non déterminée, inconnu sinon. \\
 D10c sur \code{dossiers} & Autres dossiers du sinistre\fsp; versions décès de la garantie souscrite & Conjonction de «~aucun dossier décès dans la vue~» et de «~décès souscrit à la survenance~», chacun vrai, faux ou inconnu selon les lignes visibles et non déterminées. \\
 D02c sur \code{assures} (deux emplois) & Sinistres, affiliations et contrats individuels qui citent l'assuré & Vrai si une référence visible donne un âge hors bornes\fsp; faux si aucune référence visible ni non déterminée n'en donne\fsp; inconnu sinon. \\
-D07 sur \code{rentes} & Événements de la rente, version valable de l'enfant & «~En service~» inconnu si un événement non déterminé, d'effet au plus l'arrêté ou inconnu, peut suivre le dernier retenu avec une autre classe\fsp; enfant lu sur chaque candidate\fsp; conjonction. \\
-D07 sur \code{dossiers} & Clôtures et seconds décès, enfants de l'assuré & «~Candidat~» inconnu si une clôture ou un second décès non déterminé existe\fsp; «~chaque enfant à charge éteint~» faux si un enfant visible n'est pas éteint de façon déterminée, inconnu si un enfant non déterminé, ou une candidate, peut être à charge non éteint\fsp; conjonction. \\
-\end{tabular}
-\end{center}
+D07 sur \code{rentes} & Événements de la rente, version valable de l'enfant\fsp; pour (a), décès connus ailleurs\fsp; pour (b), prestations & Statut de service inconnu si un événement non déterminé, d'effet au plus l'arrêté ou inconnu, peut suivre le dernier retenu avec une classe de verdict différent\fsp; enfant lu sur chaque candidate\fsp; décès de (a) vrai s'il est visible, inconnu s'il n'est que non déterminé\fsp; date de référence de (b) entre la plus petite et la plus grande date possibles\fsp; conjonction. \\
+D07 sur \code{dossiers} & Clôtures et seconds décès, enfants de l'assuré\fsp; pour (a) et (b), comme sur \code{rentes} (statut de service du dossier \code{incapacite}, clôture et sortie comprises) & «~Candidat~» inconnu si une clôture ou un second décès non déterminé existe\fsp; «~chaque enfant à charge éteint~» faux si un enfant visible n'est pas éteint de façon déterminée, inconnu si un enfant non déterminé, ou une candidate, peut être à charge non éteint\fsp; conjonction. \\
+D08 sur \code{sinistres} & Sorties des autres sinistres de l'assuré & Inconnu si une sortie non déterminée, d'effet au plus l'arrêté ou inconnu, peut former une paire détectée. \\
+D10d sur \code{evenements} & Dossiers du sinistre, versions de la garantie \code{invalidite}\fsp; sans dossier, couvertures de la survenance & Inconnu si un dossier, une version, une affiliation ou un contrat non déterminé peut changer l'existence d'une version en vigueur. \\
+D10f sur \code{evenements} & Dossier \code{double\_effet} et rente de conjoint du sinistre, leurs événements & Statut de service de la rente comme pour D07\fsp; inconnu si la rente, le dossier ou le \code{second\_deces} est de visibilité non déterminée et peut changer le verdict. \\
+D11 sur \code{sinistres.date\_survenance} & Dossiers, affiliations et contrats de l'assuré\fsp; pour le sous-cas du maintien, sinistres d'arrêt de travail et sorties & Non-couverture inconnue si une couverture possible (affiliation ou contrat non déterminé) ou un dossier non déterminé peut couvrir la survenance\fsp; sous-cas inconnu si une sortie ou un sinistre non déterminé peut l'ouvrir. \\
+D12 sur \code{evenements.type\_evenement} & Autres événements de l'automate du sinistre & Verdict commun sur chaque sous-ensemble des événements non déterminés placés avant le dernier retenu, inconnu s'il varie\fsp; au-delà de dix, chaque événement retenu du sinistre est inconnu (limite de calcul). \\
+D14 sur \code{sinistres} & Dossiers du sinistre, versions de la garantie \code{double\_effet}, membres de la famille rattachée & Inconnu si un dossier, une version ou un membre de visibilité non déterminée peut changer le verdict. \\
+\end{longtable}
+}
 
 \begin{itemize}[itemsep=2pt]
 \item \textbf{\code{somme\_parts}.} On note V la somme des parts visibles
@@ -2369,7 +2378,7 @@ ordre~:
 \code{controles} & Toute détection~: code, table, colonne, détection (exacte ou présomptive), nombre de lignes, identifiants. \\
 \code{controles\_non\_executes} & Contrôle empêché, ou exécuté en partie (détection partielle), une ligne par (code, table, colonne), avec sa cause (ci-dessous). \\
 \code{refus\_tables} & Refus~R~: table, colonne, motif, portée effective (\code{colonne} ou \code{table}), origine d'un refus induit, nombre de lignes, lignes visibles à l'arrêté (\code{NA} si indéterminé), identifiants, dossiers rattachés à l'arrêté (\code{NA} si le rattachement d'un dossier n'est pas déterminé), postes arrêtés (\code{NA} dans le bilan de \code{controler\_base()}\fsp; dans le résultat de \code{calculer\_provisions()}, postes que la ligne arrête, section~\ref{sec:garanties-arrets}). \\
-\code{exclusions} & Exclusions déclarées~: motif, famille de calcul, action (\code{exclure} ou \code{conserver}), nombre de lignes et de dossiers rattachés à l'arrêté. \\
+\code{exclusions} & Exclusions déclarées~: motif, famille de calcul, action (\code{exclure} ou \code{conserver}), nombre de lignes (de sinistres pour D12, dont l'exclusion porte sur le sinistre) et de dossiers rattachés à l'arrêté. \\
 \code{hypotheses\_defaut} & Hypothèses par défaut déclarées~: motif, référentiel, poste, valeur, nombre. \\
 \code{signalements} & Constats traités en signalement, ou dont le signalement est déclaré~: mêmes colonnes que \code{controles}. \\
 \code{declarations\_requises} & Déclaration attendue par un constat ou par un contrôle~: rubrique (\code{exclusions}, \code{hypotheses}, \code{seuils} ou \code{conventions}), motif, clé (famille, référentiel, seuil ou entrée de convention), traitements ou valeurs admis, nombre de lignes. \\
@@ -2549,11 +2558,13 @@ exacte pour \code{famille}, que l'issue~49 demande.
   dépend le verdict d'une règle~V\fsp; dans les deux cas, la déclaration
   manquante figure dans \code{declarations\_requises}\fsp;
 \item \code{non\_lisible}~: sous-cas qu'aucune colonne de la base ne permet
-  de lire\fsp;
+  de lire (D03h, sous-cas du maintien de la garantie décès de D11)\fsp;
 \item \code{age\_non\_defini}~: date de référence antérieure à la
-  naissance\fsp;
+  naissance\fsp; pour D14, enfant né sans date de naissance dont l'âge
+  décide du verdict\fsp;
 \item \code{parametre\_non\_defini}~: limite d'âge non déterminable pour la
-  fin de charge d'un enfant.
+  fin de charge d'un enfant (D07~(c), D14), ou délai de rechute absent ou
+  à plusieurs valeurs pour une paire qui peut décider (D08).
 \end{itemize}
 
 Une composante de l'enjeu empêchée par un refus y figure aussi, sous le
@@ -2736,15 +2747,201 @@ ligne candidate, D07~(c) est exécuté à vide, sans exigence~: une
 déclaration qui ne peut changer aucune ligne du bilan ni aucune provision
 ne bloque pas le calcul (spécification de la branche B2, §~6.3).
 
+\textbf{Contrôles écrits à la fermeture partielle de l'issue~34}
+(spécification \code{donnees}, version~1.6, §~8, et errata~1.6.2
+et~1.6.3\fsp; décisions du mainteneur du 13~novembre~2026, M335 et
+M337). Tous sont des règles~V, détectées sur la vue à l'arrêté\fsp; aucun
+n'est un refus~R. Chacun, sauf D10~(e), lit une autre ligne que la
+sienne~: c'est une clé exposée (tableau des clés exposées ci-dessus), dont
+une ligne au verdict inconnu est écartée, avec la cause~($\gamma$). Une
+règle qui lit comme valeur une colonne refusée reste bloquée (M169). Une
+déclaration n'est requise que si un constat ou une ligne candidate peut
+changer une ligne du bilan, comme pour D07~(c). Le simulateur n'injecte
+aucun de ces défauts~: chaque contrôle est éprouvé sur des bases
+construites à valeurs en dur, et la mesure de la détection sur des jeux
+simulés est renvoyée à l'issue~117.
+
+\begin{itemize}[itemsep=2pt]
+\item \textbf{Statut de service à l'arrêté}, seule implémentation, lue par
+  D07~(a), (b) et~(c) et par D10~(f). Pour une rente, ou pour un dossier
+  \code{incapacite}, c'est la classe du dernier événement retenu de date
+  d'effet au plus l'arrêté~: \emph{service} (\code{ouverture\_service},
+  \code{modification\_montant}, \code{reprise\_service}),
+  \emph{suspension}, \emph{extinction} (\code{fin\_service}\fsp; pour un
+  dossier \code{incapacite}, aussi la \code{sortie} de son sinistre et la
+  \code{cloture\_dossier} du dossier, quel qu'en soit le motif),
+  \emph{non ouvert} sans événement. \code{reouverture\_dossier}, comme
+  \code{rechute}, ne porte pas de classe~: seul un événement de service
+  postérieur rend la classe \emph{service}. Une rente garde la classe de
+  ses propres événements, même si son dossier est clos. Motif de la
+  clôture (jugement d'expert, version~1.6.2)~: un dossier clos ne sert
+  plus de prestation\fsp; alternative écartée~: faire de
+  \code{reouverture\_dossier} un événement de service, qui rallumerait le
+  service sans montant.
+\item \textbf{D07~(a)}, extinction non enregistrée d'une unité dont le
+  bénéficiaire a un décès connu ailleurs. Unité non éteinte (service ou
+  suspension), rente ou dossier \code{incapacite}, dont le bénéficiaire a
+  un décès connu de date au plus l'arrêté~: sinistre \code{deces} de
+  l'assuré bénéficiaire\fsp; \code{second\_deces} d'un dossier
+  \code{double\_effet} dont le sinistre a pour membre rattaché, de lien
+  \code{conjoint}, \code{partenaire\_pacs} ou \code{concubin}, le
+  bénéficiaire de la rente\fsp; \code{fin\_service} de motif
+  \code{deces\_beneficiaire} d'une autre rente du même membre. La rente de
+  conjoint d'un même sinistre que le dossier \code{double\_effet} (égalité
+  rente par rente) relève de D10~(f) seul, pour qu'un même fait ne soit
+  compté qu'une fois. Traitement hypothèse par défaut ou signalement,
+  détection exacte, même clé que D07~(c).
+\item \textbf{D07~(b)}, extinction présumée. Unité en service dont la
+  date de référence~--- règlement du dernier paiement visible, de date au
+  plus l'arrêté, à défaut effet de la première ouverture de service~---
+  vérifie \code{ajouter\_mois(référence, d07b\_mois)} antérieure à
+  l'arrêté («~depuis plus de N mois~», au sens strict). Le nombre de mois
+  \code{seuils\$d07b\_mois} est un entier au moins égal à~1, commun aux deux
+  référentiels, sans valeur par défaut, et au plus égal à 2\,147\,363\,648~:
+  ce plafond est une limite de calcul, non un jugement d'expert, au-delà
+  de laquelle l'arithmétique en entiers de \code{ajouter\_mois()} déborde
+  pour une date de l'année~9999~; un seuil plus grand est refusé
+  (\code{plan\_invalide}). Sans le seuil, D07~(b) n'est pas exécuté
+  (\code{declaration\_absente}) et la ligne \code{seuils}
+  \code{d07b\_mois} est requise, s'il existe une unité en service, retenue
+  ou de visibilité non déterminée\fsp; sinon il est exécuté à vide.
+  Traitement signalement ou exclusion par famille, détection
+  présomptive, second constat de la clé de D07. Limite déclarée~: une
+  rente annuelle sous un seuil inférieur à douze mois est une fausse
+  alarme par construction.
+\item \textbf{D08}, rechute enregistrée comme nouveau sinistre. Sinistre
+  \code{arret\_travail} S2 et \code{sortie} de motif
+  \code{reprise\_travail} d'un autre sinistre \code{arret\_travail} S1 du
+  même assuré, l'écart entre la survenance de S2 et l'effet de la sortie
+  étant positif ou nul et inférieur, au sens strict («~de moins de~»), au
+  paramètre \code{delai\_rechute\_jours} de la garantie \code{incapacite}
+  d'un dossier de S1\fsp; paramètre absent ou à plusieurs valeurs pour une
+  paire qui peut décider~: \code{parametre\_non\_defini}. Traitement
+  hypothèse par défaut ou signalement, détection présomptive, constat sur
+  \code{sinistres} (S2).
+\item \textbf{D10~(d)}, passage en invalidité sans garantie invalidité.
+  Événement \code{passage\_invalidite} dont le sinistre n'a, pour aucun
+  (contrat, collège) de ses dossiers, de version \code{invalidite} en
+  vigueur à la survenance (fonction de garantie en vigueur commune avec
+  D10~(c) et D14). Sans dossier, la version est cherchée pour chaque
+  contrat qui couvre la survenance (couverture définie au point de D11
+  ci-dessous), sous le collège de
+  l'affiliation, ou sous le seul contrat pour un contrat individuel\fsp;
+  aucun contrat~: détecté. Motif du collège (jugement d'expert,
+  version~1.6.2)~: un même fait reçoit le même verdict avec ou sans
+  dossier. Traitement signalement, détection exacte.
+\item \textbf{D10~(e)}, qualité du bénéficiaire incompatible avec la
+  garantie de son dossier, selon une matrice fixée par la spécification
+  (jugement d'expert)~: \code{deces}~: \code{conjoint\_survivant},
+  \code{enfant\_a\_charge}, \code{designe}, \code{heritiers},
+  \code{non\_identifie}\fsp; \code{double\_effet}~:
+  \code{enfant\_a\_charge}, \code{non\_identifie}\fsp;
+  \code{rente\_conjoint}~: \code{conjoint\_survivant}\fsp;
+  \code{rente\_education}~: \code{enfant\_a\_charge}\fsp; \code{incapacite}
+  et \code{invalidite}~: aucune, l'assuré étant le bénéficiaire.
+  Traitement exclusion par famille, détection exacte, constat sur
+  \code{beneficiaires.qualite}\fsp; clé non exposée, la règle ne lisant
+  que des lignes parentes ou référencées.
+\item \textbf{D10~(f)}, décès du conjoint saisi sur un dossier et pas sur
+  l'autre, pour un sinistre qui a un dossier \code{double\_effet} et une
+  rente de conjoint~: \code{second\_deces} sur le dossier
+  \code{double\_effet} et rente de conjoint non éteinte\fsp; ou
+  \code{fin\_service} de motif \code{deces\_beneficiaire} sur la rente
+  sans \code{second\_deces}. Traitement hypothèse par défaut ou
+  signalement, détection exacte, constat sur \code{evenements}. Limite
+  déclarée et acceptée par le mainteneur (13~novembre~2026, issue~128)~:
+  la configuration n'est définie que par le sinistre\fsp; quand un
+  sinistre porte plusieurs rentes de conjoint (ex-conjoint et conjoint),
+  une fausse alarme est possible dans les deux sens, l'alarme restant
+  déclarable en signalement.
+\item \textbf{D11}, sinistre hors période de couverture (forme D11a du
+  projet de dictionnaire~1.6, sous le code \code{D11}). Une date est
+  couverte par un contrat si une affiliation de l'assuré au contrat la
+  contient, bornes incluses, une fin inconnue à l'arrêté étant ouverte,
+  ou, pour un contrat individuel, si elle est comprise entre sa date
+  d'effet et la plus petite de sa date de fin connue et de sa date de
+  terme\fsp; le collège n'y entre pas. Est détecté un sinistre dont, pour
+  au moins un de ses dossiers, le contrat de la garantie ne couvre pas la
+  survenance, ou, sans dossier, qu'aucun contrat ne couvre. Le cœur du
+  contrôle ne lit ni \code{evenements} ni
+  \code{sinistres.nature\_sinistre}. Sous-cas du maintien de la garantie
+  décès~: un sinistre \code{deces} non couvert dont l'assuré a un
+  sinistre \code{arret\_travail} survenu pendant une couverture d'un
+  contrat en cause, de fin connue et antérieure au décès, et non clos à
+  cette fin (aucune \code{sortie} d'effet au plus la fin), n'est pas
+  détecté, et (D11, \code{sinistres}, \code{NA}) prend la cause
+  \code{non\_lisible}~: le dictionnaire~1.5 ne dit pas si un contrat porte
+  le maintien, et détecter ou non supposerait une hypothèse non
+  déclarée. Si une colonne que lit ce seul sous-cas est illisible, il
+  n'est lu que pour sa partie lisible~: le décès dont le sous-cas devient
+  inconnu est écarté, et la ligne prend la cause directe de la colonne
+  illisible, départagée comme toute cause (décision du mainteneur du
+  13~novembre~2026). Limite renvoyée à l'issue~128~: une rechute
+  postérieure à la sortie et antérieure à la fin de couverture n'est pas
+  lue. Traitement signalement et exclusion par famille (deux constats de
+  même clé), détection exacte, constat sur
+  \code{sinistres.date\_survenance}.
+\item \textbf{D12}, suite d'états impossible. L'automate du §~4 du
+  dictionnaire, lu dans \code{types\_evenements.csv}, est appliqué à la
+  lettre aux événements de niveau sinistre retenus d'un sinistre
+  \code{arret\_travail}, toutes dates d'effet, dans l'ordre de la date
+  d'effet, du type, puis de l'identifiant\fsp; l'identifiant est le
+  premier événement à partir duquel l'automate échoue, un par sinistre.
+  Une suite valable à l'extraction peut être impossible à un arrêté
+  antérieur, quand un événement antérieur est saisi après un événement
+  postérieur~: c'est l'information connue à l'arrêté, et la détection y
+  est juste. Traitement~: exclusion pour \code{engagement}, portée par le
+  sinistre de l'événement avec la cascade du dictionnaire, de sorte que
+  le nombre de lignes de l'exclusion D12 dans \code{exclusions} compte des
+  sinistres\fsp; signalement pour \code{triangle},
+  \code{risque\_en\_cours} et \code{regle\_comptable}, qui ne lisent pas
+  les états, une exclusion déclarée pour l'une d'elles étant refusée
+  (\code{plan\_invalide}). Verdict à trois valeurs~: chaque sous-ensemble
+  des événements non déterminés du sinistre placés avant son dernier
+  événement retenu est essayé (les suivants sont sans effet~: élagage
+  exact), au plus dix (constante interne
+  \code{.MAX\_EVENEMENTS\_ND\_D12})\fsp; au-delà, chaque événement retenu
+  du sinistre est inconnu. Ce plafond est une limite de calcul, non un
+  jugement d'expert~; le verdict exact sans plafond est renvoyé à
+  l'issue~129.
+\item \textbf{D14}, dossier double effet non ouvert. Sinistre
+  \code{deces} instruit à l'arrêté, dont un dossier \code{deces} a une
+  garantie \code{double\_effet} en vigueur à la survenance pour son
+  (contrat, collège), dont la famille rattachée compte un conjoint de
+  lien visé par \code{conjoint\_vise}, non décédé avant la survenance, et
+  un enfant à naître ou à charge sous sa limite à la survenance (mêmes
+  fonctions que D07~(c)), et qui n'a aucun dossier \code{double\_effet}.
+  Un enfant de la famille rattachée né après la survenance compte comme
+  à naître, sans borne de délai (décision du mainteneur du 13~novembre
+  2026\fsp; D07~(c) inchangé). Un enfant né sans date de naissance (D03a)
+  compte comme possible~: s'il décide du verdict, le sinistre est écarté
+  et la ligne prend la cause \code{age\_non\_defini} (même décision). Sans
+  \code{conventions\$limite\_age}, un sinistre est candidat si son verdict
+  diffère selon que chaque enfant né compte comme sous sa limite ou
+  qu'aucun ne compte~: avec un candidat, D14 n'est pas exécuté
+  (\code{declaration\_absente}) et les deux entrées de la limite d'âge
+  sont requises sous le motif D14\fsp; sans candidat, il s'exécute avec
+  les seuls enfants à naître. Traitement hypothèse par défaut ou
+  signalement, détection exacte, constat sur \code{sinistres}.
+\end{itemize}
+
 \textbf{État partiel déclaré.} Le bilan dit lui-même qu'il est partiel~:
-les contrôles prévus par la spécification et reportés à l'issue~34 du
-dépôt par décision du mainteneur (M181) figurent, pour chaque table
+les contrôles prévus par la spécification et reportés par décision du
+mainteneur (M181, issue~34 du dépôt) figurent, pour chaque table
 présente, dans les contrôles non exécutés, avec la cause
-\code{non\_implemente}. Ils sont énumérés en quatorze lignes (code, table,
-colonne) sur dix codes par la constante \code{CONTROLES\_NON\_IMPLEMENTES}~: D03d\fsp; D07 sur \code{evenements} (sous-cas~(a)
-et~(b))\fsp; D08\fsp; D09 aux seuils, sur cinq tables\fsp; D10d\fsp; D10e\fsp;
-D10f\fsp; D11\fsp; D12\fsp; D14. Aucun seuil de ces contrôles n'est
-attendu dans \code{declarations\_requises}.
+\code{non\_implemente}. L'issue~34 a été fermée en partie (spécification
+\code{donnees}, version~1.6, §~8\fsp; M335 et M338)~: D07~(a) et~(b), D08,
+D10~(d) à~(f), D11, D12 et D14 sont désormais écrits (paragraphe
+«~Contrôles écrits à la fermeture partielle de l'issue~34~» ci-dessus). Il
+reste six lignes (code, table, colonne) sur deux codes dans la constante
+\code{CONTROLES\_NON\_IMPLEMENTES}~: D03d sur
+\code{assures.situation\_familiale}, renvoyé à la branche~B4 (issue~116),
+dont le poste fixe la population et le seuil de péremption\fsp; D09 aux
+seuils, sur cinq tables (\code{parametres}, \code{affiliations},
+\code{evenements}, \code{prestations}, \code{cotisations}), renvoyé à
+l'issue~115 (M336), qui porte le choix de la statistique et des seuils.
+Aucun seuil de ces deux contrôles n'est attendu dans
+\code{declarations\_requises}.
 
 Les constantes du module sont citées d'après le code (\code{R/donnees.R})~:
 
@@ -2760,7 +2957,7 @@ Les constantes du module sont citées d'après le code (\code{R/donnees.R})~:
 \code{RUBRIQUES\_DECLARATIONS} & \code{exclusions}, \code{hypotheses}, \code{seuils}, \code{evaluations\_gestion}~: rubriques admises de \code{declarations}. \\
 \code{SEUIL\_DELAI\_D03G} & \code{"d03g\_delai\_jours"}~: entrée de \code{seuils} qui porte le délai du défaut D03g, en jours, par table, commun aux deux référentiels\fsp; lue aussi par le module \code{plan} (entrées admises de \code{seuils}). \\
 \code{SEUILS\_AGE\_D02C} & \code{d02c\_age\_min}, \code{d02c\_age\_max}~: entrées de \code{seuils} qui portent les bornes basse et haute de l'âge du défaut D02c, en années entières, par emploi\fsp; lues aussi par le module \code{plan} (entrées admises de \code{seuils}). \\
-\code{SEUIL\_MOIS\_D07B} & \code{"d07b\_mois"}~: entrée de \code{seuils} qui porte le nombre de mois du défaut D07~(b), entier au moins égal à 1, commun aux deux référentiels\fsp; lue aussi par le module \code{plan} (entrées admises de \code{seuils}). \\
+\code{SEUIL\_MOIS\_D07B} & \code{"d07b\_mois"}~: entrée de \code{seuils} qui porte le nombre de mois du défaut D07~(b), entier au moins égal à 1 et au plus égal au plafond technique \code{.MOIS\_D07B\_MAX} (2\,147\,363\,648, limite de calcul de \code{ajouter\_mois()}), commun aux deux référentiels\fsp; lue aussi par le module \code{plan} (entrées admises de \code{seuils}). \\
 \code{ENTREES\_CONVENTIONS} & \code{age}, \code{instant\_date}, \code{repartition\_annee}, \code{fractionnement}, \code{decompte\_jours}, \code{limite\_age}~: entrées admises de \code{conventions}\fsp; seules \code{age} et \code{limite\_age} sont contrôlées et lues par \code{controler\_base()}, \code{valider\_plan()} contrôlant les valeurs de toutes (section~\ref{sec:plan-schema}). \\
 \code{REGLES\_LIMITE\_AGE} & \code{atteinte}, \code{depassement}~: règle de limite d'âge du défaut D07~(c). \\
 \code{CONVENTIONS\_LIMITE\_AGE} & \code{revolu}, \code{millesime}~: conventions d'âge admises pour le défaut D07~(c). \\
@@ -2769,7 +2966,7 @@ Les constantes du module sont citées d'après le code (\code{R/donnees.R})~:
 \code{COMPOSANTES\_ENJEU} & Tableau des composantes de l'enjeu (composante, unité, définition), dix lignes. \\
 \code{CAUSE\_NON\_IMPLEMENTE} & \code{"non\_implemente"}~: cause d'un contrôle reporté. \\
 \code{CAUSE\_NON\_LISIBLE} & \code{"non\_lisible"}~: cause d'un sous-cas illisible dans la base. \\
-\code{CONTROLES\_NON\_IMPLEMENTES} & Tableau des contrôles reportés (code, table, colonne), six lignes. \\
+\code{CONTROLES\_NON\_IMPLEMENTES} & Tableau des contrôles reportés (code, table, colonne), six lignes~: D03d sur \code{assures.situation\_familiale}, D09 aux seuils sur cinq tables. \\
 \end{tabular}
 \end{center}
 
