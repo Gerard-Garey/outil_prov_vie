@@ -2476,7 +2476,8 @@ verifier_egal("#56, point 6, site 39 : AF1 (id_contrat « NA », collège ensemb
 # point 1 : site 39, toutes les colonnes cibles d'une ligne cible inconnues (`k` vide) : copie de
 # l'espace de noms dont .refus_valeur_de() refuse id_contrat et college de GS1 ; AF1 de collège
 # C9 (orpheline des lignes connues) peut porter la clé de GS1 : écartée, cause hors_domaine
-# (avant #56 : erreur interne « ligne écartée sans refus de valeur qui l'explique »)
+# (avant #56 : erreur interne « ligne écartée sans refus de valeur qui l'explique ») ; `lu` : les
+# deux colonnes qui portent la cause, en tri radix (#59 ; avant : la première lue)
 env56 <- copie_ns()
 rvd56 <- env56$.refus_valeur_de
 env56$.refus_valeur_de <- function(ctx, table, colonne) {
@@ -2489,7 +2490,7 @@ verifier_egal("#56, point 1 : site 39, id_contrat et college de GS1 inconnus (cl
               list(e56, Filter(function(k) k$table == "affiliations", ctx56$non_executes),
                    length(Filter(function(k) k$table == "affiliations", ctx56$constats))),
               list("aucune erreur", list(list(code = "D04b", table = "affiliations", colonne = "college", cause = hd,
-                                              lu = "garanties_souscrites.id_contrat")), 0L))
+                                              lu = c("garanties_souscrites.college", "garanties_souscrites.id_contrat"))), 0L))
 # point 2 : D01b, copies() sur une copie de l'espace de noms (.regle_vue() rend le verdict de
 # f() pour sinistres, traitement S ; .nd_vue() un masque donné) : SI1 et sa copie de même
 # identifiant (même contenu, saisie après), toutes deux retenues, SI2 non déterminée de contenu
@@ -2838,19 +2839,29 @@ r <- cb(avec(function(b) { be <- b$beneficiaires; be$part <- 0.5
                            b$beneficiaires <- rbind(be, x2, x3); b }), A0)
 verifier_egal("#40, priorité des causes (γ) : somme_parts écarté par BE2 (D03g, rang 6) et BE3 (D02c, rang 3) : cause D02c",
               ne40(r, "somme_parts", "beneficiaires"), "part D02c")
-# départage à rang égal (spécification v1.5, § 3.1 : l'ordre de vue$visibilite_non_determinee
-# départage) : EV7 clôture « regle » de DO1 ; PR2 saisi le 9999-12-31 (D02c) et PR4 sans date de
-# règlement (manquant_obligatoire), deux causes directes de rang 3 : D06 prend la première de la
-# vue, D02c (audit final de #40, mutant « ordre de la vue inversé »)
-r <- cb(avec(function(b) {
+# départage à rang égal (spécification `donnees` v1.6, § 3.1, #59, critère C59-4 ; avant #59,
+# l'ordre de vue$visibilite_non_determinee départageait, test df56f1b) : EV7 clôture « regle » de
+# DO1 ; PR2 saisi le 9999-12-31 (D02c) et PR4 sans date de règlement (manquant_obligatoire), deux
+# causes directes de rang 3 : D06 prend la plus petite dans l'ordre des codes du dictionnaire,
+# manquant_obligatoire (controles.csv) avant D02c (defauts.csv), quel que soit le rang de leurs
+# rangées dans la vue (avant #59 : D02c, première de la vue) ; cas miroir (PR2 sans date de
+# règlement, PR4 saisi le 9999-12-31) : même cause ; les deux éléments sous le même code (PR2 et
+# PR4 saisis le 9999-12-31) : D02c
+r40d <- function(saisie2, reglement2, saisie4, reglement4) cb(avec(function(b) {
   b <- w40$ev7(b)
-  b$prestations$date_saisie[2L] <- D("9999-12-31")
-  p <- b$prestations[2L, ]; p$id_prestation <- "PR4"; p$date_reglement <- D(NA); p$date_saisie <- D("2025-03-02")
+  b$prestations$date_saisie[2L] <- saisie2; b$prestations$date_reglement[2L] <- reglement2
+  p <- b$prestations[2L, ]; p$id_prestation <- "PR4"; p$date_reglement <- reglement4; p$date_saisie <- saisie4
   b$prestations <- rbind(b$prestations, p); b }), A0)
-nd <- r$vue$visibilite_non_determinee
-verifier_egal("#40, départage à rang égal : D06 écarté par PR2 (D02c) et PR4 (manquant_obligatoire), deux causes de rang 3 : cause D02c, première de vue$visibilite_non_determinee",
-              list(paste(nd$table, nd$motif, nd$identifiants), ne40(r, "D06", "evenements")),
-              list(c("prestations D02c PR2", "prestations manquant_obligatoire PR4"), "justificatif D02c"))
+nd_r40d <- function(r) with(r$vue$visibilite_non_determinee, paste(table, motif, identifiants))
+r <- r40d(D("9999-12-31"), D("2025-03-01"), D("2025-03-02"), D(NA))
+r_miroir <- r40d(D("2025-03-01"), D(NA), D("9999-12-31"), D("2025-03-01"))
+r_meme <- r40d(D("9999-12-31"), D("2025-03-01"), D("9999-12-31"), D("2025-03-01"))
+verifier_egal("#59, C59-4 (réécrit de df56f1b) : D06 écarté par PR2 (D02c) et PR4 (manquant_obligatoire), deux causes de rang 3 : cause manquant_obligatoire (ordre du dictionnaire ; avant #59 : D02c, première de la vue) ; miroir (PR2 manquant_obligatoire, PR4 D02c) : manquant_obligatoire ; PR2 et PR4 sous D02c : D02c",
+              list(nd_r40d(r), ne40(r, "D06", "evenements"), nd_r40d(r_miroir), ne40(r_miroir, "D06", "evenements"),
+                   nd_r40d(r_meme), ne40(r_meme, "D06", "evenements")),
+              list(c("prestations D02c PR2", "prestations manquant_obligatoire PR4"), "justificatif manquant_obligatoire",
+                   c("prestations D02c PR4", "prestations manquant_obligatoire PR2"), "justificatif manquant_obligatoire",
+                   "prestations D02c PR2;PR4", "justificatif D02c"))
 # somme_parts, raccourcis exacts et borne de l'énumération (avis d'`actuary`, .MAX_PARTS_ND) :
 # BE1 visible de part `v`, bénéficiaires non déterminés (D03g) de parts `p` sur DO1 ; verdict
 # de BE1 : "detecte", "ecarte" ou "non"
@@ -3009,6 +3020,163 @@ w9 <- list(list(w40$W1, A0), list(w40$W2(D(NA)), A0), list(w40$W2(D("2025-03-01"
            list(w40$W1, A))
 verifier("W9 (#40, critère 6 (c)) : batterie de substitution des règles V (éléments non déterminés forcés dans la vue puis hors de la vue, candidates de famille tour à tour valables) : détection ssi dans tous les états, ligne de controles_non_executes ssi le verdict varie ; cause declaration_absente avec ses déclarations requises (bases W1 à W6, formes, extraction)",
          all(vapply(w9, function(k) batterie_c40(k[[1L]], k[[2L]], if (length(k) > 2L) k[[3L]], if (length(k) > 3L) k[[4L]]), NA)))
+
+section("donnees : départage à rang égal des causes, indépendant de l'ordre d'exécution (#59 ; spécification `donnees` v1.6, § 3.1 et § 2.2, B.5 et (b) ; critères C59-1 à C59-6)")
+
+# ordre déclaré (spécification `donnees` v1.6, § 3.1, « position ») : codes de controles.csv puis
+# de defauts.csv dans l'ordre des fichiers, sous-cas lettrés de D10 absents de defauts.csv après
+# leur parent ; liste écrite à 82b02c8 dans la spécification, relue ici sur le dictionnaire, et
+# dérivée des fichiers : un dictionnaire aux lignes de controles.csv et de defauts.csv inversées
+# donne l'ordre inversé, les sous-cas restant après leur parent
+ordre59 <- c("colonne_absente", "colonne_inconnue", "type_incompatible", "manquant_obligatoire", "hors_domaine", "chaine_vide",
+             "chevauchement", "table_conditionnelle_absente", "refus_induit", "somme_parts", "D01a", "D01b", "D02a", "D02b",
+             "D02c", "D03a", "D03b", "D03c", "D03d", "D03e", "D03f", "D03g", "D03h", "D04a", "D04b", "D05", "D06", "D07", "D08",
+             "D09", "D10", "D10a", "D10b", "D10c", "D10d", "D10e", "D10f", "D10h", "D11", "D12", "D13", "D14")
+d59 <- d
+d59$controles <- d59$controles[rev(seq_len(nrow(d59$controles))), , drop = FALSE]
+d59$defauts <- d59$defauts[rev(seq_len(nrow(d59$defauts))), , drop = FALSE]
+sous59 <- c("D10a", "D10b", "D10c", "D10d", "D10e", "D10f", "D10h")
+inverse59 <- c(rev(ordre59[1:10]), unlist(lapply(rev(setdiff(ordre59[-(1:10)], sous59)),
+                                                 function(x) c(x, if (x == "D10") sous59))))
+verifier_egal("#59 : ordre des codes du dictionnaire (.ordre_codes()) = liste de la spécification v1.6 (42 codes) ; dérivé des fichiers (lignes de controles.csv et de defauts.csv inversées : ordre inversé, D10a à D10h après D10)",
+              list(ns$.ordre_codes(d), ns$.ordre_codes(d59)), list(ordre59, inverse59))
+
+# C59-1 (exact) : .dedoublonner_non_executes() rend un résultat identical() sous toute
+# permutation de ses lignes ; jeu de 5 lignes d'une clé (rangs 3 et 7 ; au rang 3 un défaut de
+# forme, un refus de portée table, deux refus de valeur) : les 120 permutations ; jeu de 12
+# lignes sur trois clés : 200 permutations tirées sous une graine locale explicite
+# (Mersenne-Twister, Inversion, Rejection ; état du générateur rétabli ensuite)
+permutations59 <- function(n) {
+  if (n == 1L) return(list(1L))
+  do.call(c, lapply(permutations59(n - 1L), function(p) lapply(0:(n - 1L), function(i) append(p, n, after = i))))
+}
+ne59 <- function(code, table, colonne, causes) data.frame(code = code, table = table, colonne = colonne, cause = causes,
+                                                          stringsAsFactors = FALSE)
+jeu59a <- ne59("D02c", "assures", NA_character_, c("refus_induit", "D01a", "hors_domaine", "type_incompatible", "D02c"))
+jeu59b <- rbind(ne59("D02c", "assures", NA_character_,
+                     c("declaration_absente", "D02c", "manquant_obligatoire", "D01a", "refus_induit", "D10a")),
+                ne59("D02a", "contrats", "date_fin", c("age_non_defini", "D10h", "D10", "D09")),
+                ne59("D06", "evenements", "justificatif", c("non_lisible", "type_incompatible")))
+tirages59 <- local({
+  ancien <- if (exists(".Random.seed", envir = globalenv(), inherits = FALSE)) get(".Random.seed", envir = globalenv())
+  on.exit(if (is.null(ancien)) rm(".Random.seed", envir = globalenv()) else assign(".Random.seed", ancien, envir = globalenv()))
+  set.seed(59L, kind = "Mersenne-Twister", normal.kind = "Inversion", sample.kind = "Rejection")
+  lapply(1:200, function(k) sample.int(nrow(jeu59b)))
+})
+invariant59 <- function(jeu, perms) {
+  ref <- ns$.dedoublonner_non_executes(jeu, d)
+  list(ref = ref, invariant = all(vapply(perms, function(p) identical(ns$.dedoublonner_non_executes(jeu[p, , drop = FALSE], d), ref), NA)),
+       nombre = length(unique(perms)))
+}
+c59a <- invariant59(jeu59a, permutations59(5L))
+c59b <- invariant59(jeu59b, tirages59)
+verifier_egal("#59, C59-1 : .dedoublonner_non_executes() identical() sous les 120 permutations du jeu de 5 lignes (cause type_incompatible, défaut de forme) et sous 200 permutations tirées (graine 59) du jeu de 12 lignes (D09 avant D10 et D10h ; manquant_obligatoire avant D01a, D02c et D10a ; non_lisible, rang 2) ; une ligne par clé, dans l'ordre du bilan",
+              list(c59a$invariant, c59a$nombre, c59a$ref, c59b$invariant, c59b$nombre, c59b$ref),
+              list(TRUE, 120L, ne59("D02c", "assures", NA_character_, "type_incompatible"), TRUE, 200L,
+                   rbind(ne59("D02a", "contrats", "date_fin", "D09"), ne59("D02c", "assures", NA_character_, "manquant_obligatoire"),
+                         ne59("D06", "evenements", "justificatif", "non_lisible"))))
+
+# C59-2 : règle B exécutée en partie, site 1 (evenements.date_effet, qui lit type_evenement et
+# motif) : EV3 d'effet 2027-03-01 (après l'extraction), type et motif refusés pour leur valeur,
+# à A ; type zzz (hors_domaine) et motif vide (chaine_vide et hors_domaine), puis les refus
+# échangés (type vide : chaine_vide ; motif zzz : hors_domaine) : cause hors_domaine dans les
+# deux cas (avant #59 : le refus de la première colonne lue, type_evenement, soit chaine_vide
+# dans le second cas)
+c59_2 <- function(type, motif) {
+  r <- cb(avec(function(b) { b$evenements$type_evenement[3L] <- type; b$evenements$motif[3L] <- motif
+                             b$evenements$date_effet[3L] <- D("2027-03-01"); b }), A)
+  list(paste(r$refus_tables$colonne, r$refus_tables$motif, r$refus_tables$identifiants),
+       ligne(r$controles_non_executes, "D02c", "evenements", "date_effet")$cause)
+}
+verifier_egal("#59, C59-2 : site 1, EV3 écartée par deux refus de valeur de codes différents sur type_evenement et motif : cause hors_domaine (plus petit code), refus échangés compris (avant #59 : chaine_vide, refus de la première colonne lue)",
+              list(c59_2("zzz", ""), c59_2("", "zzz")),
+              list(list(c("type_evenement hors_domaine EV3", "motif chaine_vide EV3", "motif hors_domaine EV3"), hd),
+                   list(c("type_evenement chaine_vide EV3", "motif hors_domaine EV3"), hd)))
+
+# C59-3 : règle bloquée par deux défauts de forme sur deux colonnes lues (D02b sur
+# evenements.date_saisie, qui lit date_effet, type_evenement et motif), à A0 : colonne_absente
+# sur l'une et type_incompatible sur l'autre, dans les deux affectations : cause colonne_absente.
+# colonne_absente étant de portée table (la table evenements est refusée, la règle P n'induit
+# aucun refus), l'origine du refus induit d'une règle P empêchée se lit sur deux colonnes de
+# type_incompatible (portée colonne) : elle porte les deux, en tri radix (avant #59 : la seule
+# première de `lit`)
+c59_3 <- function(f) {
+  r <- cb(avec(f), A0)
+  x <- r$refus_tables[r$refus_tables$motif == "refus_induit" & r$refus_tables$table == "evenements", ]
+  list(ligne(r$controles_non_executes, "D02b", "evenements", "date_saisie")$cause, x$origine)
+}
+n_ev <- nrow(base_ref$evenements)
+verifier_egal("#59, C59-3 : D02b sur evenements bloquée par colonne_absente et type_incompatible (motif absent et date_effet en texte ; date_effet absente et motif numérique) : cause colonne_absente, sans refus induit (table refusée) ; deux colonnes de type_incompatible (date_effet et motif ; type_evenement et motif) : cause type_incompatible, origine du refus induit = les deux colonnes",
+              list(c59_3(function(b) { b$evenements$motif <- NULL; b$evenements$date_effet <- as.character(b$evenements$date_effet); b }),
+                   c59_3(function(b) { b$evenements$date_effet <- NULL; b$evenements$motif <- seq_len(n_ev); b }),
+                   c59_3(function(b) { b$evenements$date_effet <- as.character(b$evenements$date_effet); b$evenements$motif <- seq_len(n_ev); b }),
+                   c59_3(function(b) { b$evenements$type_evenement <- seq_len(n_ev); b$evenements$motif <- seq_len(n_ev); b })),
+              list(list("colonne_absente", character(0)), list("colonne_absente", character(0)),
+                   list("type_incompatible", "evenements.date_effet;evenements.motif"),
+                   list("type_incompatible", "evenements.motif;evenements.type_evenement")))
+
+# C59-5 : règle P exécutée en partie, D02b fille (evenements.date_saisie face à
+# dossiers.date_ouverture), à A0 : EV4 saisi le 9999-12-31 (D02c, colonne propre) et DO1, son
+# dossier, sans date d'ouverture (manquant_obligatoire, colonne de la parente). Émissions de la
+# clé (D02b, evenements, date_saisie), consignées par une copie de l'espace de noms : la règle
+# propre et la fille de sinistres, D02c ; la fille de dossiers, manquant_obligatoire (plus petit
+# code ; avant #59 : D02c, la table d'abord) ; cause publiée manquant_obligatoire
+env59 <- copie_ns()
+emissions59 <- character(0)
+ane59 <- env59$.ajouter_non_execute
+env59$.ajouter_non_execute <- function(ctx, code, table, colonne, cause, lu = NA_character_) {
+  if (code == "D02b" && table == "evenements") emissions59 <<- c(emissions59, paste(cause, paste(lu, collapse = "+")))
+  ane59(ctx, code, table, colonne, cause, lu)
+}
+r <- env59$controler_base(avec(function(b) { b$evenements$date_saisie[4L] <- D("9999-12-31"); b$dossiers$date_ouverture[1L] <- NA; b }), A0)
+verifier_egal("#59, C59-5 : D02b fille de dossiers, refus de valeur D02c (evenements.date_saisie de EV4) et manquant_obligatoire (dossiers.date_ouverture de DO1) : émission de la fille de dossiers sous manquant_obligatoire (la table n'a plus la préséance) ; cause publiée manquant_obligatoire",
+              list(emissions59, ligne(r$controles_non_executes, "D02b", "evenements", "date_saisie")$cause),
+              list(c("D02c evenements.date_saisie", "D02c evenements.date_saisie", "manquant_obligatoire dossiers.date_ouverture"),
+                   "manquant_obligatoire"))
+
+# C59-6 : règle bloquée, table refusée en portée table (dossiers : DO1 en double, D01a) et
+# colonne lue de cette table de type_incompatible (dossiers.date_ouverture en texte), à A0 : le
+# refus de portée table et la cause propre de la colonne sont en concurrence ; cause
+# type_incompatible (avant #59 : D01a, la table d'abord), pour la règle de la colonne (D02b sur
+# dossiers.date_ouverture) comme pour une fille qui la lit (D02b sur beneficiaires.date_saisie,
+# table refusée par refus induit) ; une règle qui ne lit que des colonnes sans cause propre garde
+# D01a (composante d'enjeu capital_fixe sur dossiers.id_dossier)
+r <- cb(avec(function(b) { b$dossiers <- rbind(b$dossiers, b$dossiers[1L, ])
+                           b$dossiers$date_ouverture <- as.character(b$dossiers$date_ouverture); b }), A0)
+verifier_egal("#59, C59-6 : dossiers refusée D01a et dossiers.date_ouverture de type_incompatible : D02b sur dossiers.date_ouverture et sur beneficiaires.date_saisie bloquées, cause type_incompatible ; capital_fixe sur dossiers.id_dossier, D01a",
+              list(paste(r$refus_tables$table, r$refus_tables$colonne, r$refus_tables$motif)[1:2],
+                   ligne(r$controles_non_executes, "D02b", "dossiers", "date_ouverture")$cause,
+                   ligne(r$controles_non_executes, "D02b", "beneficiaires", "date_saisie")$cause,
+                   ligne(r$controles_non_executes, "capital_fixe", "dossiers", "id_dossier")$cause),
+              list(c("dossiers id_dossier D01a", "dossiers date_ouverture type_incompatible"), "type_incompatible",
+                   "type_incompatible", "D01a"))
+
+# site 39 (.orphelines(), validation d'`actuary` sur #56, question 4) : masque d'appariement pris
+# sur le verdict d'avant la boucle des motifs, index cumulé sur tous les motifs. Copie de
+# l'espace de noms dont .refus_valeur_de() rend inconnues id_contrat d'une ligne de
+# garanties_souscrites et college d'une autre (deux motifs) ; GS1 et GS2 (CT1) de collège C9, AF1
+# (CT1, collège C9) orpheline des lignes connues, possible sous les deux motifs : écartée, cause
+# = le plus petit des deux refus (manquant_obligatoire), quelle que soit la ligne qui porte
+# chacun (avant #59 : index du premier motif seul, cause hors_domaine dans les deux premiers cas) ;
+# aucun constat sur affiliations
+s39_59 <- function(refus) {
+  env <- copie_ns()
+  rvd <- env$.refus_valeur_de
+  env$.refus_valeur_de <- function(ctx, table, colonne) {
+    if (table == "garanties_souscrites" && !is.null(refus[[colonne]])) refus[[colonne]] else rvd(ctx, table, colonne)
+  }
+  ctx <- env$.contexte(avec(function(b) { b$affiliations$college <- "C9"; b$garanties_souscrites$college[1:2] <- "C9"; b }),
+                       d, list(date_extraction = A), A)
+  env$.orphelines(ctx)
+  ne <- Filter(function(k) k$table == "affiliations", ctx$non_executes)
+  list(vapply(ne, function(k) paste(k$code, k$colonne, k$cause), ""), length(Filter(function(k) k$table == "affiliations", ctx$constats)))
+}
+mo <- "manquant_obligatoire"
+verifier_egal("#59, site 39 : AF1 possible sous deux motifs (id_contrat de GS1 inconnu, college de GS2 inconnu, et l'inverse ; codes échangés) : une ligne (D04b, affiliations, college), cause manquant_obligatoire, aucun constat",
+              list(s39_59(list(id_contrat = list(list(code = hd, lignes = 1L)), college = list(list(code = mo, lignes = 2L)))),
+                   s39_59(list(id_contrat = list(list(code = mo, lignes = 2L)), college = list(list(code = hd, lignes = 1L)))),
+                   s39_59(list(id_contrat = list(list(code = mo, lignes = 1L)), college = list(list(code = hd, lignes = 2L))))),
+              rep(list(list("D04b college manquant_obligatoire", 0L)), 3L))
 
 section("donnees : nombre_dossiers et composantes 1 à 4 sur le rattachement à l'arrêté, lecture (ii) (#44, M219 ; spécification v1.5, § 4.4 ; § 4.6, critères E1 à E10)")
 # statut de rattachement d'un dossier à l'arrêté : s(d) = statut(d) ET (OU, sur les lignes de
@@ -3531,18 +3699,20 @@ retenues <- unlist(lapply(seq_len(ncol(paires)), function(k) {
 }))
 verifier_egal("#36 : 21 paires des sept rangs, dans les deux ordres d'émission (42 cas) : une ligne, la cause de plus petit rang",
               retenues, causes_rangs[rep(paires[1L, ], each = 2L)])
-verifier_egal("#36 : deux causes directes (rang 3), la première émise l'emporte, dans les deux ordres ; sous-cas lettré (D10a) direct",
+# deux causes directes : la plus petite dans l'ordre des codes du dictionnaire, quel que soit
+# l'ordre d'émission (spécification `donnees` v1.6, § 3.1, #59 ; avant #59 : la première émise)
+verifier_egal("#36, #59 : deux causes directes (rang 3), la plus petite dans l'ordre du dictionnaire l'emporte, dans les deux ordres (type_incompatible avant manquant_obligatoire, controles.csv avant defauts.csv) ; sous-cas lettré (D10a) direct",
               list(dedoublonner(c("type_incompatible", "manquant_obligatoire"))$cause,
                    dedoublonner(c("manquant_obligatoire", "type_incompatible"))$cause,
                    dedoublonner(c("D10a", "type_incompatible"))$cause,
                    dedoublonner(c("declaration_absente", "D10a"))$cause),
-              list("type_incompatible", "manquant_obligatoire", "D10a", "D10a"))
+              list("type_incompatible", "type_incompatible", "type_incompatible", "D10a"))
 x <- ns$.dedoublonner_non_executes(rbind(ne_de("refus_induit"),
                                          data.frame(code = "D02a", table = "contrats", colonne = "date_fin",
                                                     cause = c("declaration_absente", "refus_induit"), stringsAsFactors = FALSE)), d)
-verifier_egal("#36 : refus_induit seul sur sa clé retenu ; deux clés, une ligne chacune, dans l'ordre de première émission",
+verifier_egal("#36, #59 : refus_induit seul sur sa clé retenu ; deux clés, une ligne chacune, dans l'ordre du bilan (contrats avant assures ; avant #59 : ordre de première émission)",
               list(dedoublonner("refus_induit")$cause, paste(x$code, x$colonne, x$cause), rownames(x)),
-              list("refus_induit", c("D02c NA refus_induit", "D02a date_fin declaration_absente"), c("1", "2")))
+              list("refus_induit", c("D02a date_fin declaration_absente", "D02c NA refus_induit"), c("1", "2")))
 verifier_egal("#36 : une cause ni rangée ni motif de refus (inconnue, visibilite_non_determinee, lettre sur un code lettré D01ab ou D03hz, sous-cas non déclaré D05z) est une erreur interne ; D10a accepté",
               vapply(list(c("refus_induit", "cause_inconnue"), "visibilite_non_determinee", "D01ab", "D03hz", "D05z", "D10a"),
                      function(cz) tryCatch({ dedoublonner(cz); "aucune" }, error = function(e)

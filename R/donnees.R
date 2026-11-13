@@ -985,19 +985,21 @@ lire_declarations <- function(declarations, dico) {
 # de forme rendent une colonne inutilisable ; après la règle B (règles P et V, vue), tout
 # refus R aussi (.refus_regle_b()) : une table refusée n'est plus lue, une colonne refusée
 # non plus (spécification, § 2.2 et § 4.2). `forme_seule` : écarts de forme seulement
-# (identifiants du bilan). `directe` : un refus induit (règle B, clé étrangère visant une
-# table refusée ; règle P empêchée, D12 : un refus de portée table de code `refus_induit`)
-# ne masque pas la cause propre de la colonne (refus ou forme), rendue seule (NA sans elle) ;
-# priorité des causes, M185.
-.cause <- function(ctx, table, colonne, forme_seule = FALSE, directe = FALSE) {
-  if (!forme_seule && !is.null(ctx$refus_pv)) {
-    t <- ctx$refus_pv$tables[[table]]
-    if (!is.null(t) && !(directe && t == "refus_induit")) return(t)
-    c1 <- ctx$refus_pv$colonnes[[table]]
-    if (!is.null(c1) && colonne %in% names(c1)) return(c1[[colonne]])
-  }
+# (identifiants du bilan). Les refus de portée table de la table et la cause propre de la
+# colonne sont en concurrence : la cause rendue est la plus petite dans l'ordre (rang,
+# position) (.cause_retenue() ; spécification `donnees` v1.6, § 3.1, départage à rang égal,
+# #59 ; la table n'a plus la préséance). `.causes()` rend ces causes candidates (`propre` :
+# FALSE pour taire la cause propre de la colonne, .regle()), sans doublon.
+.causes <- function(ctx, table, colonne, forme_seule = FALSE, propre = TRUE) {
   causes <- ctx$inutilisable[[table]]
-  if (is.null(causes) || !(colonne %in% names(causes))) NA_character_ else causes[[colonne]]
+  forme <- if (propre && !is.null(causes) && colonne %in% names(causes)) causes[[colonne]]
+  if (forme_seule || is.null(ctx$refus_pv)) return(forme)
+  t <- ctx$refus_pv$tables[[table]]
+  c1 <- ctx$refus_pv$colonnes[[table]]
+  unique(c(t, if (propre && colonne %in% names(c1)) c1[[colonne]], forme))
+}
+.cause <- function(ctx, table, colonne, forme_seule = FALSE) {
+  .cause_retenue(.causes(ctx, table, colonne, forme_seule), ctx$dico)
 }
 
 # Refus de valeur de `table.colonne` (M199 ; spécification, § 2.2) : refus R de portée
@@ -1066,14 +1068,15 @@ lire_declarations <- function(declarations, dico) {
 # contrôlée) bloque toujours (M169). `partiel` (règle P) : `f()` rend un verdict à trois
 # valeurs, une valeur refusée étant inconnue (logique de Kleene, .avant3()) ; la règle
 # s'exécute sur les lignes au verdict déterminé et écarte celles au verdict inconnu (NA) ; si
-# elle en écarte une, elle garde sa ligne dans controles_non_executes, cause = motif du
-# premier refus de valeur qui touche une ligne écartée, dans l'ordre des colonnes lues puis
-# des constats : refus d'une colonne de la table sur une ligne écartée, à défaut refus d'une
-# colonne de la parente sur une parente d'une ligne écartée (`parente` : colonne de clé de la
-# fille, table et colonne de clé de la parente ; spécification, § 2.2, (b)) (détection
+# elle en écarte une, elle garde sa ligne dans controles_non_executes, cause = le plus petit,
+# dans l'ordre (rang, position) (.cause_retenue()), des motifs de tous les refus de valeur qui
+# touchent une ligne écartée : refus d'une colonne de la table sur une ligne écartée, refus
+# d'une colonne de la parente sur une parente d'une ligne écartée (`parente` : colonne de clé
+# de la fille, table et colonne de clé de la parente ; spécification, § 2.2, (b)) (détection
 # partielle, nombre minorant). Toute autre cause (forme, refus de portée table) bloque la
-# règle ; la cause rendue est alors la première dans l'ordre des colonnes lues, hors colonnes
-# dont le refus de valeur ne bloque pas (`vue` seule ; toute colonne lue en mode `partiel`).
+# règle ; la cause rendue est alors la plus petite des causes des colonnes lues qui bloquent,
+# hors colonnes dont le refus de valeur ne bloque pas (`vue` seule ; toute colonne lue en mode
+# `partiel`) (spécification `donnees` v1.6, § 3.1, départage à rang égal, #59).
 # Règle B à trois valeurs (`partiel` pendant la règle B ; spécification, § 2.2, B.1 à B.5 ;
 # M217, issue #42) : même mécanisme, sur les refus de valeur des strates déjà évaluées ; une
 # règle de portée colonne lit la colonne qu'elle contrôle telle quelle (auto-lecture, P4), qui
@@ -1121,25 +1124,31 @@ lire_declarations <- function(declarations, dico) {
       lit[i] %in% admet && !is.null(ctx$refus_valeur[[t]][[c1]]) &&
         is.na(.cause(ctx, t, c1, forme_seule = TRUE))
     }, NA)
-    for (directe in c(TRUE, FALSE)) {
-      for (i in seq_along(lit)) {
-        if (lit[i] %in% saute || (directe && valeur_seule[i])) next
-        cause <- .cause(ctx, morceaux[[i]][1L], morceaux[[i]][2L], directe = directe)
-        if (!is.na(cause)) {
-          .ajouter_non_execute(ctx, code, table, colonne_ne, cause, lu = lit[i])
-          return(invisible(NULL))
-        }
-      }
-    }
+    # causes candidates de chaque colonne lue qui bloque (.causes() : refus de portée table de
+    # sa table, induit compris, et cause propre de la colonne) ; la cause retenue est la plus
+    # petite dans l'ordre (rang, position) (.cause_retenue()), refus_induit (rang 7) seulement
+    # sans autre cause (spécification `donnees` v1.6, § 3.1, départage à rang égal, #59 ; M185).
+    # `lu` : colonnes lues illisibles par leur forme, toutes (origine du refus induit d'une
+    # règle P empêchée, .regle_prealable()), à défaut les colonnes qui portent la cause retenue
+    candidates <- lapply(seq_along(lit), function(i) {
+      if (lit[i] %in% saute) return(character(0))
+      .causes(ctx, morceaux[[i]][1L], morceaux[[i]][2L], propre = !valeur_seule[i])
+    })
+    cause <- .cause_retenue(unlist(candidates), ctx$dico)
+    forme <- vapply(seq_along(lit), function(i) {
+      !(lit[i] %in% saute) && !is.na(.cause(ctx, morceaux[[i]][1L], morceaux[[i]][2L], forme_seule = TRUE))
+    }, NA)
+    lu <- if (any(forme)) lit[forme] else lit[vapply(candidates, function(z) cause %in% z, NA)]
+    .ajouter_non_execute(ctx, code, table, colonne_ne, cause, lu = sort(lu, method = "radix"))
+    return(invisible(NULL))
   }
   detecte <- f()
   if (partiel && (length(refusees) > 0L || regle_b)) {
     # verdict à trois valeurs (.avant3(), .manque3(), .verdict3()) : seules les lignes au verdict inconnu
     # (NA) sont écartées ; la ligne de controles_non_executes n'existe que s'il y en a une,
-    # cause = motif du premier refus de valeur, dans l'ordre des colonnes lues puis des
-    # constats, qui touche une ligne écartée : refus d'une colonne de la table sur l'une
-    # d'elles, sinon refus d'une colonne de la parente (date de la parente d'une fille, lue
-    # après les colonnes de la table) sur une parente de l'une d'elles. Un verdict inconnu
+    # cause = le plus petit des motifs des refus de valeur qui touchent une ligne écartée :
+    # refus d'une colonne de la table sur l'une d'elles, refus d'une colonne de la parente
+    # (date de la parente d'une fille) sur une parente de l'une d'elles. Un verdict inconnu
     # procède toujours d'une valeur refusée d'une colonne lue (.inconnu()) : son absence est
     # une erreur interne.
     ecartees <- which(is.na(detecte))
@@ -1157,23 +1166,29 @@ lire_declarations <- function(declarations, dico) {
         if (is.null(parente) || u != parente[2L]) return(integer(0))
         which(.valeurs(ctx, u, parente[3L]) %in% stats::na.omit(.valeurs(ctx, table, parente[1L])[ecartees]))
       }
-      propres <- names(refusees)[startsWith(as.character(names(refusees)), paste0(table, "."))]
-      cause <- NULL
-      for (tc in c(propres, setdiff(names(refusees), propres))) {
+      # motifs de tous les refus de valeur qui touchent une ligne écartée, sur toutes les
+      # colonnes lues (`porteuses` : colonne de chacun) ; la cause est le plus petit dans
+      # l'ordre (rang, position) (.cause_retenue() ; spécification `donnees` v1.6, § 2.2, B.5 et
+      # (b), et § 3.1, départage à rang égal, #59 : ni l'ordre des colonnes lues ni celui des
+      # constats, ni la préséance de la table) ; `lu` : colonnes qui portent la cause retenue
+      motifs <- character(0)
+      porteuses <- character(0)
+      for (tc in names(refusees)) {
         m <- strsplit(tc, ".", fixed = TRUE)[[1L]]
         l <- touchees(tc, m[1L])
         for (r in .refus_valeur_de(ctx, m[1L], m[2L])) {
           if (length(intersect(r$lignes, l)) > 0L) {
-            cause <- r$code
-            break
+            motifs <- c(motifs, r$code)
+            porteuses <- c(porteuses, tc)
           }
         }
-        if (!is.null(cause)) break
       }
-      if (is.null(cause)) stop("erreur interne de provie : r\u00e8gle ", if (regle_b) "B" else "P",
-                               " : ligne \u00e9cart\u00e9e sans refus de valeur qui l'explique (", code, ", ", table, ")",
-                               call. = FALSE)
-      .ajouter_non_execute(ctx, code, table, colonne_ne, cause, lu = tc)
+      if (length(motifs) == 0L) stop("erreur interne de provie : r\u00e8gle ", if (regle_b) "B" else "P",
+                                     " : ligne \u00e9cart\u00e9e sans refus de valeur qui l'explique (", code, ", ", table, ")",
+                                     call. = FALSE)
+      cause <- .cause_retenue(motifs, ctx$dico)
+      .ajouter_non_execute(ctx, code, table, colonne_ne, cause,
+                           lu = sort(unique(porteuses[motifs == cause]), method = "radix"))
     }
   }
   lignes <- which(detecte)
@@ -2166,8 +2181,12 @@ lire_declarations <- function(declarations, dico) {
         # ligne cible de valeur inconnue (refus de valeur d'une colonne cible non clé) peut porter
         # la clé locale si ses colonnes connues l'égalent et que la valeur locale est du domaine
         # de chaque colonne inconnue (code opaque : toute chaîne) ; la ligne est alors inconnue
-        # (.existe_kleene(), sur la clé des colonnes connues, par motif de colonnes inconnues)
+        # (.existe_kleene(), sur la clé des colonnes connues, par motif de colonnes inconnues).
+        # Le masque est le verdict d'avant la boucle (`r0`) et l'index se cumule sur tous les
+        # motifs : une ligne possible sous deux motifs garde les lignes cibles de chacun, toutes
+        # lues pour sa cause (spécification `donnees` v1.6, § 2.2, B.5, #59)
         if (!all(connue)) {
+          r0 <- r
           index <- vector("list", length(r))
           lignes <- which(!connue)
           motifs <- vapply(lignes, function(j) paste(which(vapply(inconnues, `[`, NA, j)), collapse = ","), "")
@@ -2181,7 +2200,7 @@ lire_declarations <- function(declarations, dico) {
               domaine <- eclater_champ(col_cible$modalites[col_cible$colonne == cols_cible[m]])
               if (length(domaine) > 0L) cle_l[!(valeurs_locales[[m]] %in% domaine)] <- NA
             }
-            cle_l[!(r %in% TRUE)] <- NA
+            cle_l[!(r0 %in% TRUE)] <- NA
             e <- .existe_kleene(cle_l, cle_de(valeurs_cible, k), vrai = rep(FALSE, length(cible)),
                                 possible = seq_along(cible) %in% l)
             if (any(e$inconnu)) {
@@ -2259,8 +2278,10 @@ lire_declarations <- function(declarations, dico) {
 
 # Refus R de la règle B, retenus pour les règles P et V et la vue (.cause()) : une table
 # refusée (portée table : clé, D01a, D04b R, refus induit...) n'est pas lue, une colonne
-# refusée (portée colonne) non plus ; la cause est le motif du premier refus, dans l'ordre
-# des constats. `refus_valeur` : refus de portée colonne hors écart de forme, avec leurs
+# refusée (portée colonne) non plus ; `tables` (par table) et `colonnes` (par table et
+# colonne) portent les motifs de tous ses refus, sans doublon, parmi lesquels .cause() retient
+# le plus petit dans l'ordre (rang, position) (spécification `donnees` v1.6, § 3.1, départage à
+# rang égal, #59). `refus_valeur` : refus de portée colonne hors écart de forme, avec leurs
 # lignes, par table et colonne (.refus_valeur_de() ; portée ligne pour la vue, M199).
 .refus_regle_b <- function(ctx) {
   tables <- list()
@@ -2271,13 +2292,13 @@ lire_declarations <- function(declarations, dico) {
   for (k in ctx$constats) {
     if (k$traitement != "R") next
     if (.portee_effective(ctx$dico, k$code, k$table, k$colonne) == "table") {
-      if (is.null(tables[[k$table]])) tables[[k$table]] <- k$code
+      tables[[k$table]] <- unique(c(tables[[k$table]], k$code))
       if (k$code == "refus_induit") origines[[k$table]] <- eclater_champ(k$origine)
       else directs[[k$table]] <- rbind(directs[[k$table]], data.frame(code = k$code, colonne = k$colonne,
                                                                        stringsAsFactors = FALSE))
     } else {
-      c1 <- colonnes[[k$table]]
-      if (is.null(c1[[k$colonne]])) c1[[k$colonne]] <- k$code
+      c1 <- if (is.null(colonnes[[k$table]])) list() else colonnes[[k$table]]
+      c1[[k$colonne]] <- unique(c(c1[[k$colonne]], k$code))
       colonnes[[k$table]] <- c1
       # refus de valeur, identifié par ligne (hors écart de forme, .refus_valeur_de() ; même
       # contenu que celui rangé pendant la règle B par .ajouter_constat())
@@ -2317,14 +2338,18 @@ lire_declarations <- function(declarations, dico) {
 # spécification, § 4.2) ; à l'extraction, la vue est la base entière (règle 3) et la colonne
 # n'est pas lue, comme par les règles V (décision du mainteneur du 9 novembre 2026, Q2, #33).
 # `valeur` : la composante lit aussi la colonne comme valeur (.LUS_VALEUR_ENJEU) ; à
-# l'extraction, où la ligne refusée est lue, le refus l'empêche alors (M169).
+# l'extraction, où la ligne refusée est lue, le refus l'empêche alors (M169). Entre plusieurs
+# refus de la colonne (`refus_pv$colonnes`, dans l'ordre des constats), ou plusieurs refus
+# directs de la table, le premier dans l'ordre des constats : l'enjeu est hors du départage de
+# #59 (spécification `donnees` v1.6, § 3.1, critère C59-7 : enjeu inchangé ; décision du
+# mainteneur du 13 novembre 2026), son départage est reporté à #122.
 .cause_enjeu <- function(ctx, table, colonne, ecart, valeur = FALSE) {
   forme <- .cause(ctx, table, colonne, forme_seule = TRUE)
   if (!is.na(forme)) return(forme)
   c1 <- ctx$refus_pv$colonnes[[table]]
   visibilite <- colonne %in% .DATES_VISIBILITE[[table]] && !is.null(.lignes_refusees(ctx, table, colonne)) &&
     !(valeur && .vue_totale(ctx))
-  if (!is.null(c1) && colonne %in% names(c1) && !visibilite) return(c1[[colonne]])
+  if (!is.null(c1) && colonne %in% names(c1) && !visibilite) return(c1[[colonne]][1L])
   propre <- !is.null(ecart) && identical(ecart$action, "refus") && !is.na(ecart$table) &&
     .portee_effective(ctx$dico, ecart$motif, ecart$table, ecart$colonne) == "table"
   d <- ctx$refus_pv$directs[[table]]
@@ -2415,8 +2440,8 @@ parties_ligne <- function() lapply(.PARTIES_LIGNE, function(p) list(table = p$ta
     if (length(ctx$p_empechees) == 0L) break
     empechees <- ctx$p_empechees
     ctx$constats <- constats
-    # la règle P empêchée garde sa cause d'origine dans controles_non_executes (premier
-    # contrôle non exécuté de même clé retenu par .bilan())
+    # la règle P empêchée garde sa cause d'origine dans controles_non_executes (en concurrence
+    # avec les autres émissions de même clé, .dedoublonner_non_executes())
     ctx$non_executes <- c(non_executes, ctx$p_entrees)
     non_executes <- ctx$non_executes
     .refus_p_empechee(ctx, empechees)
@@ -3140,25 +3165,18 @@ parties_ligne <- function() lapply(.PARTIES_LIGNE, function(p) list(table = p$ta
 # Cause d'un élément : le motif du refus pour une ligne ou une partie non déterminée par un
 # refus de valeur ; declaration_absente pour D02b ou D03g ; pour parente_non_determinee, la
 # cause de l'ascendante la plus proche non déterminée par elle-même (récursivement, par les
-# liens de la règle 1). Entre plusieurs éléments, la priorité des causes (cause directe, rang
-# 3, avant declaration_absente, rang 6), puis l'ordre de vue$visibilite_non_determinee. Une
-# ligne écartée sans élément qui l'explique est une erreur interne.
+# liens de la règle 1). Entre plusieurs éléments, la plus petite de leurs causes dans l'ordre
+# (rang, position) (.cause_retenue() : cause directe, rang 3, avant declaration_absente, rang
+# 6 ; à rang égal, ordre des codes du dictionnaire), indépendante de l'ordre de
+# vue$visibilite_non_determinee (spécification `donnees` v1.6, § 3.1, départage à rang égal,
+# #59). Une ligne écartée sans élément qui l'explique est une erreur interne.
 .cause_nd <- function(ctx, index, lignes, code, table) {
-  if (is.null(ctx$cles_nd)) {
-    nd <- .visibilite_non_determinee(ctx)
-    ctx$cles_nd <- paste(nd$table, nd$colonne, nd$motif, nd$origine, sep = "\r")
-  }
   liens <- .liens_visibilite(ctx$dico)
   liens <- liens[liens$table %in% ctx$tables & liens$table_cible %in% ctx$tables, , drop = FALSE]
   statut <- .visibilite_a(ctx, "vue")$statut
-  meilleure <- list(rang = Inf, position = Inf, cause = NA_character_)
+  causes <- character(0)
   retenir <- function(k) {
-    rang <- if (k$motif %in% .MOTIFS_REGLE_P) .RANGS_CAUSES[["declaration_absente"]] else .RANG_CAUSE_DIRECTE
-    position <- match(paste(k$table, k$colonne, k$motif, k$origine, sep = "\r"), ctx$cles_nd)
-    if (rang < meilleure$rang || (rang == meilleure$rang && position < meilleure$position)) {
-      meilleure <<- list(rang = rang, position = position,
-                         cause = if (k$motif %in% .MOTIFS_REGLE_P) "declaration_absente" else k$motif)
-    }
+    causes <<- c(causes, if (k$motif %in% .MOTIFS_REGLE_P) "declaration_absente" else k$motif)
   }
   # inscriptions de `t` (colonne `colonne`) qui portent l'une des lignes `l` : les causes des
   # inscriptions propres sont retenues ; rend les lignes de `l` inscrites par elles-mêmes
@@ -3203,9 +3221,9 @@ parties_ligne <- function() lapply(.PARTIES_LIGNE, function(p) list(table = p$ta
     x <- inscriptions(m[1L], if (length(m) > 1L) m[2L] else NA_character_, l)
     for (r in x$parente) ascendantes(m[1L], r)
   }
-  if (is.na(meilleure$cause)) stop("erreur interne de provie : r\u00e8gle V : ligne \u00e9cart\u00e9e sans \u00e9l\u00e9ment non ",
-                                   "d\u00e9termin\u00e9 qui l'explique (", code, ", ", table, ")", call. = FALSE)
-  meilleure$cause
+  if (length(causes) == 0L) stop("erreur interne de provie : r\u00e8gle V : ligne \u00e9cart\u00e9e sans \u00e9l\u00e9ment non ",
+                                 "d\u00e9termin\u00e9 qui l'explique (", code, ", ", table, ")", call. = FALSE)
+  .cause_retenue(causes, ctx$dico)
 }
 
 # Visibilité non déterminée (M156, D1) : une ligne par (table, colonne, motif, origine) ;
@@ -5298,29 +5316,56 @@ parties_ligne <- function() lapply(.PARTIES_LIGNE, function(p) list(table = p$ta
                    stats::setNames(4:7, c(.CAUSE_AGE_NON_DEFINI, .CAUSE_PARAMETRE_NON_DEFINI,
                                           "declaration_absente", "refus_induit")))
 
-# Une ligne par clé (code, table, colonne) de `non_executes` (colonnes code, table, colonne,
-# cause, dans l'ordre d'émission), à la cause de plus petit rang (.RANGS_CAUSES ; cause
-# directe : motif de refus, code de controles.csv ou de defauts.csv, ou sous-cas lettré
-# déclaré d'un code non lettré de defauts.csv, D10a à D10f et D10h (.TRAITEMENTS_SOUS_CAS_D10, comme
-# .motif_admet()), rang 3) ; à rang égal, la première émise. Le rang est cherché avant le
-# caractère direct (refus_induit est aussi un code de controles.csv). Les autres colonnes
-# sont celles de la première ligne de la clé. Une cause ni rangée ni motif de refus est une
-# erreur interne : elle ne se range pas en silence.
-.dedoublonner_non_executes <- function(non_executes, dico) {
-  cz <- non_executes$cause
-  rang <- unname(.RANGS_CAUSES[cz])
-  directe <- is.na(rang) & cz %in% c(dico$controles$code, dico$defauts$code, names(.TRAITEMENTS_SOUS_CAS_D10))
+# Ordre déclaré des causes à rang égal (spécification `donnees` v1.6, § 3.1, départage à rang
+# égal, #59 ; M335) : codes du dictionnaire, lignes de controles.csv puis lignes de
+# defauts.csv dans l'ordre des fichiers ; un sous-cas lettré absent de defauts.csv
+# (.TRAITEMENTS_SOUS_CAS_D10 : D10a à D10f et D10h) prend place juste après son code parent,
+# dans l'ordre des lettres. Dérivé des fichiers lus par dictionnaire() : aucune liste tenue à
+# la main. Seul endroit où l'ordre est écrit.
+.ordre_codes <- function(dico) {
+  sous <- setdiff(names(.TRAITEMENTS_SOUS_CAS_D10), dico$defauts$code)
+  parent <- sub("[a-z]$", "", sous)
+  c(dico$controles$code,
+    unlist(lapply(dico$defauts$code, function(x) c(x, sort(sous[parent == x], method = "radix"))), use.names = FALSE))
+}
+
+# Clé de départage (rang, position) de chaque cause de `causes` (spécification, § 3.1 ; M185,
+# M194, M195 ; #59) : rang de .RANGS_CAUSES, cherché d'abord (refus_induit est aussi un code
+# de controles.csv), sinon rang 3 pour une cause directe (motif de refus : code de
+# .ordre_codes()) ; position dans .ordre_codes() pour une cause directe, 0 pour les autres
+# rangs, qui n'ont chacun qu'une valeur. Une cause ni rangée ni motif de refus est une erreur
+# interne : elle ne se range pas en silence. `.cause_retenue()` : la plus petite des causes
+# candidates dans cet ordre lexicographique, NA sans cause ; elle ne dépend pas de l'ordre des
+# candidates (minimum sous un ordre total).
+.cle_causes <- function(causes, dico) {
+  rang <- unname(.RANGS_CAUSES[causes])
+  position <- match(causes, .ordre_codes(dico))
+  directe <- is.na(rang) & !is.na(position)
   rang[directe] <- .RANG_CAUSE_DIRECTE
   if (anyNA(rang)) stop("erreur interne de provie : cause de contr\u00f4le non ex\u00e9cut\u00e9 inconnue : ",
-                        paste(unique(cz[is.na(rang)]), collapse = ", "), call. = FALSE)
+                        paste(unique(causes[is.na(rang)]), collapse = ", "), call. = FALSE)
+  position[!directe] <- 0L
+  list(rang = rang, position = position)
+}
+.cause_retenue <- function(causes, dico) {
+  causes <- unique(causes[!is.na(causes)])
+  if (length(causes) == 0L) return(NA_character_)
+  if (length(causes) == 1L) return(causes)
+  k <- .cle_causes(causes, dico)
+  causes[order(k$rang, k$position, method = "radix")[1L]]
+}
+
+# Une ligne par clé (code, table, colonne) de `non_executes` (colonnes code, table, colonne,
+# cause), à la plus petite cause dans l'ordre (rang, position) (.cle_causes() : rang de
+# .RANGS_CAUSES, rang 3 pour une cause directe ; à rang égal, ordre des codes du dictionnaire,
+# .ordre_codes() ; spécification `donnees` v1.6, § 3.1, #59), dans l'ordre du bilan (.trier()).
+# Le résultat ne dépend pas de l'ordre des lignes de `non_executes` (ordre d'émission). Une
+# cause ni rangée ni motif de refus est une erreur interne.
+.dedoublonner_non_executes <- function(non_executes, dico) {
+  k <- .cle_causes(non_executes$cause, dico)
   cle <- paste(non_executes$code, non_executes$table, non_executes$colonne, sep = "\r")
-  cle <- factor(cle, levels = unique(cle))
-  # par clé, la ligne de plus petit rang, la première émise à rang égal (tri stable)
-  o <- order(as.integer(cle), rang, method = "radix")
-  retenue <- o[!duplicated(cle[o])]
-  premiere <- which(!duplicated(cle))
-  non_executes$cause[premiere] <- cz[retenue]
-  non_executes[premiere, , drop = FALSE]
+  o <- order(cle, k$rang, k$position, method = "radix")
+  .trier(non_executes[o[!duplicated(cle[o])], , drop = FALSE], dico)
 }
 .bilan <- function(ctx) {
   dico <- ctx$dico
