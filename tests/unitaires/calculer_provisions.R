@@ -659,6 +659,150 @@ attendu_echec("(4.5) (h) D02a sous H : la date rejetée est tenue pour manquante
               "#90",
               !isTRUE(all.equal(cel_x(calculer_provisions(b_h90, p_h90, tid), P2)$montant, 126906.734629181941, tolerance = 1e-12)))
 
+section("période inversée ou nulle, cas limites et valeur de D03f d'une cotisation de P3 (critère (4.6), § 5.5, erratum v1.0.16, #92)")
+# Base construite (copies : b2_base_construite_deces_01() n'est pas modifiée), plan recommandees
+# à A = 2025-12-31 ; D02a déclaré conserver pour les quatre familles, plus D03f quand le cas le
+# dit ; sans segmentation, puis avec nature_contrat et contrat. Valeurs en dur : § 7.7, critère
+# (4.6) ; « avant » mesuré à 88b47f3 (m25).
+cot_x <- function(id, ...) {   # copie de la base, colonnes de la cotisation `id` modifiées
+  b <- base
+  m <- list(...)
+  for (n in names(m)) b$cotisations[[n]][b$cotisations$id_cotisation == id] <- m[[n]]
+  b
+}
+d02a_c <- excl_x("D02a", "aucune")
+b_46a <- cot_x("COC1", debut_periode = D("2026-03-31"), fin_periode = D("2026-03-30"))
+b_46b <- cot_x("COC1", debut_periode = D("2026-03-31"), fin_periode = D("2026-01-05"))
+b_46d <- cot_x("COC1", debut_periode = D("2026-03-31"), fin_periode = D("2025-06-30"))
+b_46e <- cot_x("COC1", fin_periode = as.Date(NA), date_mouvement = D("2024-11-15"))
+b_46f <- cot_x("COC1", debut_periode = as.Date(NA))
+b_46g <- cot_x("COC1", fin_periode = A1)
+b_46i <- cot_x("COC2", debut_periode = as.Date(NA), date_mouvement = D("2025-03-01"))
+hyp_v <- function(m, v) lapply(ns$REFERENTIELS, function(r) list(motif = m, referentiel = r, poste = "tous", valeur = v))
+arret_46 <- function(r) {
+  q <- r$provisions
+  list(unique(q$motif_arret[q$poste == P3]), unique(q$statut_calcul[q$poste == P3]),
+       unique(q$motif_arret[q$poste == "total"]), id_arret(r))
+}
+arret_attendu <- list("parametre_non_determine", "arrete", "poste_arrete:provision_mathematique_temporaire_deces", "CTC1")
+for (nom_s in names(segs_45)) {
+  sg <- segs_45[[nom_s]]
+  et <- paste0(" (", nom_s, " segmentation)")
+  r_46a <- calculer_provisions(b_46a, plan_45(sg, ex = d02a_c), tid)
+  verifier_egal(paste0("(4.6) (a) COC1 du 2026-03-31 au 2026-03-30 (longueur nulle), D02a conserver : P3 arrêté (parametre_non_determine, CTC1), total arrêté ; P1 337 225,959101369779 et P2 103 936 inchangés", et),
+                c(arret_46(r_46a), egal_mixte(c(cel_x(r_46a, P1)$montant, cel_x(r_46a, P2)$montant), c(337225.959101369779, 103936))),
+                c(arret_attendu, TRUE))
+  r_46b <- calculer_provisions(b_46b, plan_45(sg, ex = d02a_c), tid)
+  verifier_egal(paste0("(4.6) (b) COC1 du 2026-03-31 au 2026-01-05 (inversée), D02a conserver : même arrêt (avant : 4 850,670981993908)", et),
+                arret_46(r_46b), arret_attendu)
+  r_46c <- calculer_provisions(b_46b, plan_45(sg, h = hyp_x("D02a")), tid)
+  verifier_egal(paste0("(4.6) (c) cas (b) sous D02a H (deux référentiels, poste tous) : même arrêt", et),
+                arret_46(r_46c), arret_attendu)
+  r_46d <- calculer_provisions(b_46d, plan_45(sg, ex = d02a_c), tid)
+  verifier(paste0("(4.6) (d) COC1 du 2026-03-31 au 2025-06-30 (inversée, fin au plus A) : P3 3 710,670981993908 exact, aucune unité CTC1", et),
+           egal_mixte(cel_x(r_46d, P3)$montant, 3710.670981993908) && identical(cel_x(r_46d, P3)$statut_resultat, "exact") &&
+             nrow(cel_x(r_46d, P3, "CTC1")) == 0L)
+  r_46e <- calculer_provisions(b_46e, plan_45(sg, ex = d02a_c, h = hyp_x("D03f")), tid)
+  verifier(paste0("(4.6) (e) mi1 : fin_periode de COC1 manquante, mouvement 2024-11-15, D03f H (période échue) : P3 3 710,670981993908 jugement_expert, total 444 872,630083363678", et),
+           egal_mixte(c(cel_x(r_46e, P3)$montant, cel_x(r_46e, "total")$montant), c(3710.670981993908, 444872.630083363678)) &&
+             identical(cel_x(r_46e, P3)$statut_resultat, "jugement_expert"))
+  if (nom_s == "avec") {
+    verifier_egal("(4.6) (e) mi1 : CTC1 unité de montant nul : cellule de P3 du segment CTC1, montant 0, jugement_expert",
+                  as.list(cel_x(r_46e, P3, "CTC1")[c("montant", "statut_resultat")]),
+                  list(montant = 0, statut_resultat = "jugement_expert"))
+  }
+  r_46f <- calculer_provisions(b_46f, plan_45(sg, ex = rbind(d02a_c, excl_x("D03f", "aucune"))), tid)
+  verifier_egal(paste0("(4.6) (f) mi2 : debut_periode de COC1 manquante, fin 2026-06-30 > A, D03f conserver : arrêt parametre_non_determine, CTC1", et),
+                arret_46(r_46f), arret_attendu)
+  r_46g <- calculer_provisions(b_46g, plan_45(sg, ex = d02a_c), tid)
+  verifier(paste0("(4.6) (g) mi2 : fin_periode de COC1 = A (2025-12-31), sans défaut : P3 3 710,670981993908 exact (cotisation échue)", et),
+           egal_mixte(cel_x(r_46g, P3)$montant, 3710.670981993908) && identical(cel_x(r_46g, P3)$statut_resultat, "exact"))
+  verifier_egal(paste0("(4.6) (h) Q1 : cas (e) avec la valeur n_importe : refus plan_invalide", et),
+                motif_de(calculer_provisions(b_46e, plan_45(sg, ex = d02a_c, h = hyp_v("D03f", "n_importe")), tid)),
+                "plan_invalide")
+  r_46i <- calculer_provisions(b_46i, plan_45(sg, ex = d02a_c, h = hyp_x("D03f")), tid)
+  verifier(paste0("(4.6) (i) Q2 (E16-2 (ii)) : debut_periode de COC2 manquante, fin 2025-06-30, mouvement 2025-03-01, D03f H : P3 4 275,986050487058 approximation_numerique (hypothèse non lue)", et),
+           egal_mixte(cel_x(r_46i, P3)$montant, 4275.986050487058) &&
+             identical(cel_x(r_46i, P3)$statut_resultat, "approximation_numerique"))
+  # (k) Q-a : périodicité unique (règle non applicable), valeur invalide sous D03f H : arrêt, non refus
+  verifier_egal(paste0("(4.6) (k) Q-a : COC1 de périodicité unique, fin_periode manquante, D03f H avec la valeur n_importe : arrêt parametre_non_determine, CTC1 (non refus)", et),
+                arret_46(calculer_provisions(b_un, plan_45(sg, ex = d02a_c, h = hyp_v("D03f", "n_importe")), tid)), arret_attendu)
+  # (l) Q-b : deux déclarations D03f (tous, puis P3), le poste P3 l'emportant sur tous
+  r_46l <- calculer_provisions(b_46e, plan_45(sg, ex = d02a_c, h = c(hyp_v("D03f", "n_importe"),
+                                                                     list(list(motif = "D03f", referentiel = "comptes_sociaux", poste = P3, valeur = "regle")))), tid)
+  verifier(paste0("(4.6) (l) Q-b : D03f tous invalide (n_importe), D03f P3 regle (comptes sociaux) : pas de refus, P3 3 710,670981993908 jugement_expert, total 444 872,630083363678", et),
+           egal_mixte(c(cel_x(r_46l, P3)$montant, cel_x(r_46l, "total")$montant), c(3710.670981993908, 444872.630083363678)) &&
+             identical(cel_x(r_46l, P3)$statut_resultat, "jugement_expert"))
+  verifier_egal(paste0("(4.6) (l) Q-b : D03f tous regle, D03f P3 invalide (n_importe, comptes sociaux) : refus plan_invalide", et),
+                motif_de(calculer_provisions(b_46e, plan_45(sg, ex = d02a_c, h = c(hyp_v("D03f", "regle"),
+                                                                                 list(list(motif = "D03f", referentiel = "comptes_sociaux", poste = P3, valeur = "n_importe")))), tid)),
+                "plan_invalide")
+}
+verifier("(4.6) (j) une seule constante des mois par périodicité dans R/ : MOIS_PERIODE_COTISATION, sans point, module donnees (E16-3 (a)) ; .MOIS_PERIODICITE supprimée",
+         local({
+           # toute définition de premier niveau dont la valeur (celle de l'espace de noms) a pour noms
+           # les périodicités de MOIS_PERIODE_COTISATION, quels que soient son nom et l'ordre des noms
+           per <- names(ns$MOIS_PERIODE_COTISATION)
+           defs <- unlist(lapply(list.files(file.path(racine, "R"), pattern = "\\.R$", full.names = TRUE), function(f) {
+             noms <- character()
+             for (e in parse(f, keep.source = FALSE, encoding = "UTF-8")) {
+               if (is.call(e) && (identical(e[[1L]], as.name("<-")) || identical(e[[1L]], as.name("="))) && is.name(e[[2L]])) {
+                 v <- get0(as.character(e[[2L]]), envir = ns, inherits = FALSE)
+                 if ((is.atomic(v) || is.list(v)) && setequal(names(v), per)) noms <- c(noms, as.character(e[[2L]]))
+               }
+             }
+             if (length(noms)) paste0(basename(f), ":", unique(noms)) else NULL
+           }))
+           identical(defs, "donnees.R:MOIS_PERIODE_COTISATION") &&
+             identical(ns$MOIS_PERIODE_COTISATION, c(annuelle = 12L, semestrielle = 6L, trimestrielle = 3L, mensuelle = 1L)) &&
+             !exists(".MOIS_PERIODICITE", envir = ns, inherits = FALSE) && !exists(".MOIS_PERIODE_COTISATION", envir = ns, inherits = FALSE)
+         }))
+
+section("extrapolation de mortalite_tarif sous derniere_valeur : statut et trace (critère (4.8), § 5.8, S3, #91)")
+# Cas T8 du § 7.4 de bout en bout : base de P3 (b2_base_p3()) avec date_terme de CT2 au
+# 2028-01-01, A = 2025-01-01, plan b2_plan() complété de la section donnees du plan
+# recommandees de la base construite ; valeurs mesurées le 12/11/2026 (avant #91 : P3
+# 7 473,9357625788 exact, trois lignes d'indicateurs).
+A_t8 <- D("2025-01-01")
+b_t8 <- b2_base_p3()
+b_t8$contrats$date_terme[1L] <- D("2028-01-01")
+plan_t8 <- function(hors) {
+  p <- b2_plan(tb, A_t8)
+  p$donnees <- b2_plan_reference("recommandees", A_t8, tb)$donnees
+  p$tables$mortalite_tarif$hors_axes <- hors
+  p
+}
+cel_t8 <- function(r) r$provisions[r$provisions$poste == "provision_mathematique_temporaire_deces" &
+                                     r$provisions$segmentation == "ensemble", , drop = FALSE]
+r_t8 <- calculer_provisions(b_t8, plan_t8("derniere_valeur"), tid)
+verifier_egal("(4.8) T8 (b) de bout en bout : P3 7 473,9357625788, jugement_expert (avant : exact) ; indicateurs tarif_vie, A132_1, A132_1, puis la ligne hors_axes_derniere_valeur (valeur_retenue 1, depassement TRUE, valeurs=43)",
+              list(cel_t8(r_t8)$montant, cel_t8(r_t8)$statut_resultat, r_t8$indicateurs$regle,
+                   r_t8$indicateurs$valeur_retenue[4L], r_t8$indicateurs$depassement[4L], r_t8$indicateurs$detail[4L]),
+              list(7473.9357625788, "jugement_expert", c("tarif_vie", "A132_1", "A132_1", "hors_axes_derniere_valeur"), 1, TRUE,
+                   "usage=mortalite_tarif;identifiant=mortalite_fictive_b2;id_contrat=CT2;axe=age;valeurs=43"), tolerance = EPS)
+verifier_egal("(4.8) T8 (a) de bout en bout, hors_axes = refus : P3 arrêté (hors_axes), aucune ligne hors_axes_derniere_valeur ; (c) témoin T1 sous derniere_valeur : 4 786,6205305652 exact, aucune ligne",
+              { r_a <- calculer_provisions(b_t8, plan_t8("refus"), tid)
+                r_c <- calculer_provisions(b2_base_p3(), plan_t8("derniere_valeur"), tid)
+                list(cel_t8(r_a)$statut_calcul, cel_t8(r_a)$motif_arret, sum(r_a$indicateurs$regle == "hors_axes_derniere_valeur"),
+                     cel_t8(r_c)$montant, cel_t8(r_c)$statut_resultat, sum(r_c$indicateurs$regle == "hors_axes_derniere_valeur")) },
+              list("arrete", "hors_axes", 0L, 4786.6205305652, "exact", 0L), tolerance = EPS)
+verifier("(4.8) une seule implémentation : la chaîne hors_axes_derniere_valeur n'apparaît qu'une fois dans le code de R/ (hors commentaires), dans indicateur_hors_axes(), définie une fois, dans R/tables.R, et appelée par provisions_individuelles()",
+         local({
+           fichiers <- list.files(file.path(racine, "R"), pattern = "\\.R$", full.names = TRUE)
+           chaines <- unlist(lapply(fichiers, function(f) {
+             d <- utils::getParseData(parse(f, keep.source = TRUE, encoding = "UTF-8"))
+             s <- d$text[d$token == "STR_CONST"]
+             rep(basename(f), sum(s %in% c("\"hors_axes_derniere_valeur\"", "'hors_axes_derniere_valeur'")))
+           }))
+           defs <- unlist(lapply(fichiers, function(f) {
+             if (any(grepl("^indicateur_hors_axes <- function", readLines(f, warn = FALSE)))) basename(f) else NULL
+           }))
+           dans <- function(f, x) grepl(x, paste(deparse(f), collapse = "\n"), fixed = TRUE)
+           identical(chaines, "tables.R") && identical(defs, "tables.R") &&
+             dans(ns$indicateur_hors_axes, "\"hors_axes_derniere_valeur\"") &&
+             dans(ns$provisions_individuelles, "indicateur_hors_axes(")
+         }))
+
 section("échec attendu #83 (critère (4.4), § 5.3, « Limite connue »)")
 b_ge <- base   # GSC1 : effet postérieur à l'arrêté, invisible à A, ses dossiers aussi (règle 1)
 b_ge$garanties_souscrites$date_effet[1L] <- D("2026-03-01")

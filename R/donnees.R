@@ -307,6 +307,42 @@ valeurs_vue <- function(vue, table, colonne) {
   .valeurs_vue(vue$ctx, table, colonne)
 }
 
+# Clés des lignes placées sous une hypothèse de la vue (spécification de B2, § 5.8, source S2 ;
+# erratum v1.0.17, décision E17-1 du mainteneur, option (i) bornée) : valeur de la base de la
+# colonne `colonne` de la table `table` pour les lignes `lignes` (indices), visibles ou non à
+# l'arrêté, que valeurs_vue() masque pour une ligne non retenue. Borné : toute ligne absente des
+# `lignes` des hypothèses de `vue$hypotheses` de cette table, et toute colonne qui n'est pas une
+# colonne d'identifiant id_* de la clé primaire de la table ou clé étrangère (`reference`) du
+# dictionnaire, de type character (aucune date, aucun montant, aucune autre composante de clé
+# comme affiliations.college ; erratum v1.0.18, constats m1 et m3 de l'audit, décisions du
+# mainteneur), et tout `lignes` qui n'est pas un vecteur numérique d'indices entiers, finis et
+# positifs (un logique, `TRUE` par exemple, ne vaut pas indice), est une erreur interne. Seul
+# rattachement d'une ligne cachée à son unité, pour un statut ; jamais lu
+# pour un montant. Sans point : appelée par `engagement` (hypotheses_vue_unites()) ; non
+# exportée.
+cles_lignes_hypothese <- function(vue, table, lignes, colonne) {
+  if (!inherits(vue, "vue_provie")) stop("cles_lignes_hypothese() : `vue` doit \u00eatre un objet vue_provie", call. = FALSE)
+  dico <- vue$ctx$dico
+  cd <- dico$colonnes[dico$colonnes$table == table, , drop = FALSE]
+  pk <- eclater_champ(dico$tables$cle_primaire[dico$tables$table == table][1L])
+  cles <- c(pk, cd$colonne[!is.na(cd$reference) & nzchar(cd$reference)])
+  cles <- intersect(cles[startsWith(cles, "id_")], cd$colonne[cd$type == "character"])
+  if (!(is.character(colonne) && length(colonne) == 1L && colonne %in% cles)) {
+    stop(paste0("erreur interne de provie : cles_lignes_hypothese() : ", table, ".", paste(colonne, collapse = ","),
+                " n'est pas une colonne d'identifiant du dictionnaire"), call. = FALSE)
+  }
+  if (!(is.numeric(lignes) && all(is.finite(lignes)) && all(lignes >= 1) && all(lignes == trunc(lignes)))) {
+    stop(paste0("erreur interne de provie : cles_lignes_hypothese() : `lignes` de ", table,
+                " n'est pas un vecteur d'indices entiers positifs"), call. = FALSE)
+  }
+  placees <- unlist(lapply(Filter(function(h) identical(h$table, table), vue$hypotheses), `[[`, "lignes"))
+  if (!all(lignes %in% placees)) {
+    stop(paste0("erreur interne de provie : cles_lignes_hypothese() : ligne de ", table,
+                " non plac\u00e9e sous une hypoth\u00e8se de la vue"), call. = FALSE)
+  }
+  .valeurs(vue$ctx, table, colonne)[lignes]
+}
+
 # Tables de la cascade d'une exclusion (dictionnaire, § 1.10) : un sinistre exclu exclut, dans
 # la même famille, ses dossiers, rentes, bénéficiaires, événements, prestations et
 # évaluations ; la cascade suit les clés étrangères simples de ces tables vers les tables de
@@ -494,7 +530,9 @@ garanties_couverture_exclue <- function(vue, famille) {
 
 # Mois de la période d'une cotisation par périodicité (dictionnaire, § 9, D03f ; spécification de
 # B2, § 5.5, erratum v1.0.15) : `unique` et toute autre valeur n'ont pas de période.
-.MOIS_PERIODE_COTISATION <- c(annuelle = 12L, semestrielle = 6L, trimestrielle = 3L, mensuelle = 1L)
+# Seule constante des mois par périodicité (#92 mi3, erratum v1.0.16, décision E16-3 (a)), sans
+# point : lue aussi par `risque_en_cours` (échéances de prime de P3, champ (a)).
+MOIS_PERIODE_COTISATION <- c(annuelle = 12L, semestrielle = 6L, trimestrielle = 3L, mensuelle = 1L)
 
 # Période couverte d'une cotisation sous l'hypothèse D03f (règle du dictionnaire, § 9 : période
 # de la périodicité de la garantie souscrite qui commence au premier jour du mois du
@@ -508,7 +546,7 @@ garanties_couverture_exclue <- function(vue, famille) {
 periode_cotisation_regle <- function(date_mouvement, periodicite) {
   n <- .longueur_commune(length(date_mouvement), length(periodicite), "periode_cotisation_regle")
   d <- rep_len(as.numeric(date_mouvement), n)
-  mois <- unname(.MOIS_PERIODE_COTISATION[rep_len(as.character(periodicite), n)])
+  mois <- unname(MOIS_PERIODE_COTISATION[rep_len(as.character(periodicite), n)])
   ok <- !is.na(d) & !is.na(mois)
   debut <- rep(NA_real_, n)
   fin <- rep(NA_real_, n)

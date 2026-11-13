@@ -2,8 +2,8 @@
 # (spécification de B2, docs/specifications/b2-capital-deces-v1.md, § 7.6, version 1.0.4 ;
 # critère 3.11 ; #66 ; ADR 0004, point 5). Lancé à la main, sur ordre du mainteneur, jamais par
 # la CI ni par les batteries ; `lifecontingencies` n'est pas une dépendance du package (1.6.3
-# exige un R plus récent que 4.3.3 selon l'ADR 0004 : l'exécuter sur un poste muni d'un R
-# récent).
+# exige R >= 4.4.0 ; sous R 4.3.3, la 1.6.0 s'installe depuis l'archive CRAN, version employée
+# pour les valeurs en dur).
 # Usage, depuis la racine du dépôt : Rscript tests/contre_verification/b2_lifecontingencies.R
 # Table fictive du § 3.6 (âges 40 à 43, l_x = 100 000 ; 99 000 ; 97 020 ; 94 109,4), taux 0,02 :
 #   - Axn(x = 41, n = 2) x 100 000, contre T1 (prime unique, arrêté à l'anniversaire 1) ;
@@ -12,12 +12,14 @@
 # `Axn` et `axn` comptent des durées entières : leurs valeurs se comparent aux valeurs à
 # durées entières (A_effet = 5 626,2297306466 ; ä_effet = 2,9031141869 ; T1 = 4 786,6205305652),
 # non aux valeurs du code (A_effet = 5 626,2288966461 ; ä_effet = 2,9031139047), qui en
-# diffèrent d'environ 1,5e-7 en relatif par l'effet du 29 février 2024 sur le découpage
-# exact_exact du § 2.5 (durée de 2024-01-01 à 2025-01-01 : 365/366 + 1/365) ; T1 n'est pas
-# touché. Le script imprime la version de R, celle du package, la date, chaque valeur, son
-# écart à la valeur à durées entières et son écart à la valeur du code ; les valeurs sont
-# ensuite écrites en dur dans les tests avec ces versions et cette date (régénération sur
-# ordre du mainteneur, tableau avant / après).
+# diffèrent en relatif de 1,48e-7 (A_effet) et de 9,7e-8 (ä_effet) par l'effet du 29 février
+# 2024 sur le découpage exact_exact du § 2.5 (durée de 2024-01-01 à 2025-01-01 : 365/366 +
+# 1/365) ; T1 n'est pas touché. Le script imprime la version de R, celle du package, la date, chaque valeur, son
+# écart à la valeur à durées entières et son écart à la valeur du code. Les valeurs imprimées
+# le 12/11/2026 (R 4.3.3, lifecontingencies 1.6.0) sont écrites en dur dans
+# tests/unitaires/risque_en_cours.R, où sont calculés T1 et T3, avec ces versions et cette date
+# (critère 3.11) ; ce script reste hors CI pour les régénérer (sur ordre du mainteneur,
+# tableau avant / après).
 if (!requireNamespace("lifecontingencies", quietly = TRUE)) {
   stop("lifecontingencies n'est pas installé : contre-vérification non exécutée", call. = FALSE)
 }

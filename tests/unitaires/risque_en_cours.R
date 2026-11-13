@@ -4,7 +4,8 @@
 # est défini. Bases, tables fictives et plan minimal : tests/b2_bases.R.
 # Valeurs en dur : cas T1 à T7 du § 7.4 (mesure m7 de la spécification ; T3, T4 et T6 selon
 # l'erratum v1.0.4 : durées exact_exact du § 2.5, 2024 bissextile, la durée de 2024-01-01 à
-# 2025-01-01 valant 365/366 + 1/365), tolérance relative 1e-10 (critère 3.6).
+# 2025-01-01 valant 365/366 + 1/365), tolérance relative 1e-10 (critère 3.6). Valeurs de
+# `lifecontingencies` en dur : critère (3.11), § 7.6 (après T6).
 
 source(file.path(racine, "tests", "b2_bases.R"))
 ns <- asNamespace("provie")
@@ -58,6 +59,40 @@ t6 <- indiv(b2_base_p3("annuelle"), plan_p3(D("2024-01-01"), acquisition = 0.03)
 verifier_egal("T6 : T3 avec acquisition 0,03, arrêté à la date d'effet (prime de l'effet passée) : valeur avant plancher négative, provision 0 (plancher par contrat)",
               list(t6$valeur < 0, t6$montant), list(TRUE, 0))
 verifier_egal("T6 (erratum v1.0.4) : valeur avant plancher -28,6288517481", t6$valeur, -28.6288517481, tolerance = TOL)
+
+# Contre-vérification par `lifecontingencies` (critère 3.11, spécification de B2, § 7.6, #66). Valeurs
+# imprimées par tests/contre_verification/b2_lifecontingencies.R, hors CI, le 12/11/2026 : R version
+# 4.3.3 (2024-02-29), lifecontingencies 1.6.0 (la 1.6.3 exige R >= 4.4.0 : 1.6.0 installée depuis
+# l'archive CRAN, avec Rcpp 1.1.2 et ggplot2 4.0.3), commande
+#   R_LIBS=<bibliothèque> Rscript tests/contre_verification/b2_lifecontingencies.R
+# (%.10f). T1 = Axn(x = 41, n = 2) x 100 000 ; A_effet = Axn(x = 40, n = 3) x 100 000 ; ä_effet =
+# axn(x = 40, n = 3), table fictive du § 3.6, taux 0,02. `Axn` et `axn` comptent des durées entières :
+# elles se comparent aux valeurs à durées entières recalculées ici en R de base ; l'écart du code
+# (durée 2024-01-01 à 2025-01-01 = 365/366 + 1/365, 29 février 2024, § 2.5) est vérifié à part.
+# Régénération sur ordre du mainteneur, avec tableau avant / après.
+lc_t1 <- 4786.6205305652
+lc_a_effet <- 5626.2297306466
+lc_a_effet_vie <- 2.9031141869
+lx_lc <- c(100000, 99000, 97020, 94109.4)
+v_lc <- 1 / 1.02
+dx_lc <- lx_lc[-4L] - lx_lc[-1L]
+ent_t1 <- 100000 * sum(v_lc^(1:2) * dx_lc[2:3]) / lx_lc[2L]
+ent_a_effet <- 100000 * sum(v_lc^(1:3) * dx_lc[1:3]) / lx_lc[1L]
+ent_a_effet_vie <- sum(v_lc^(0:2) * lx_lc[1:3]) / lx_lc[1L]
+# Les trois valeurs sont supérieures à 1 : tolérance relative 1e-10, qui couvre l'arrondi de l'impression
+# (5e-11 en absolu, soit 1,7e-11 en relatif pour ä_effet, la plus petite) ; un appel par valeur.
+verifier_egal("lifecontingencies 1.6.0 (R 4.3.3, 12/11/2026) : T1 = Axn(41, 2) x 100 000 = 4 786,6205305652, égal à la valeur à durées entières recalculée en R de base",
+              lc_t1, ent_t1, tolerance = TOL)
+verifier_egal("lifecontingencies 1.6.0 : A_effet = Axn(40, 3) x 100 000 = 5 626,2297306466, égal à la valeur à durées entières recalculée en R de base",
+              lc_a_effet, ent_a_effet, tolerance = TOL)
+verifier_egal("lifecontingencies 1.6.0 : ä_effet = axn(40, 3), paiement d'avance = 2,9031141869, égal à la valeur à durées entières recalculée en R de base",
+              lc_a_effet_vie, ent_a_effet_vie, tolerance = TOL)
+verifier_egal("T1 du code égal à la valeur de lifecontingencies (4 786,6205305652), aucun effet du 29 février 2024",
+              t1$montant, lc_t1, tolerance = TOL)
+ecart_lc <- c(a_effet = (lc_a_effet - t3$a_effet) / t3$a_effet,
+              a_effet_vie = (lc_a_effet_vie - t3$a_double_effet) / t3$a_double_effet)
+verifier("A_effet et ä_effet du code sous les valeurs de lifecontingencies, d'un écart relatif entre 5e-8 et 3e-7 (mesuré : 1,48e-7 et 9,7e-8), dû au 29 février 2024 (durée 2024 = 365/366 + 1/365, § 2.5 ; § 7.6)",
+         all(ecart_lc > 5e-8 & ecart_lc < 3e-7))
 
 # arrêté entre deux anniversaires (fraction s de l'année d'assurance, répartition uniforme ou
 # force constante ; spécification de B2, § 5.5), calcul indépendant
@@ -132,6 +167,39 @@ verifier_egal("arrêt hors_axes (hors_axes = refus) : assuré de 45 ans à l'eff
                 list(r$cellules$statut_calcul, r$cellules$motif_arret, attr(r$cellules, "identifiant_arret"),
                      risque(b, p_dv)$cellules$statut_calcul) },
               list("arrete", "hors_axes", "CT2", "calcule"))
+# T8 (spécification de B2, § 7.4, erratum v1.0.16 ; #91, source S3 du § 5.8) : T1 avec
+# date_terme 2028-01-01, âges lus 40 à 43, 43 hors des axes de la table (40 à 42). Valeur en
+# dur : formule fermée T1 + 100 000 x 0,98 x 0,97 x 0,03 x 1,02^(-t3), t3 = 364/365 + 2 +
+# 1/366 (durées en fin de journée, exact_exact) ; mesurée le 12/11/2026 (7 473,9357625788 ;
+# avant #91 : même montant, statut exact, aucune ligne).
+b_t8 <- b2_base_p3()
+b_t8$contrats$date_terme[1L] <- D("2028-01-01")
+p_t8 <- plan_p3()
+p_t8$tables$mortalite_tarif$hors_axes <- "derniere_valeur"
+r_t8 <- risque(b_t8, p_t8)
+s3_t8 <- r_t8$indicateurs[r_t8$indicateurs$regle == "hors_axes_derniere_valeur", , drop = FALSE]
+verifier_egal("T8 (a) (#91) : hors_axes = refus : arrêt hors_axes, CT2",
+              { r <- risque(b_t8, plan_p3()); list(r$cellules$statut_calcul, r$cellules$motif_arret, attr(r$cellules, "identifiant_arret")) },
+              list("arrete", "hors_axes", "CT2"))
+verifier_egal("T8 (b) (#91) : derniere_valeur : 7 473,9357625788 (formule fermée, t3 = 2,9999925144), jugement_expert (cellule et contrat CT2 ; avant : exact)",
+              list(r_t8$cellules$montant, r_t8$cellules$montant - (t1$montant + 100000 * 0.98 * 0.97 * 0.03 * 1.02^(-(364 / 365 + 2 + 1 / 366))),
+                   r_t8$cellules$statut_resultat, r_t8$contrats$statut_resultat),
+              list(7473.9357625788, 0, "jugement_expert", "jugement_expert"), tolerance = TOL)
+verifier_egal("T8 (b) (#91) : une ligne hors_axes_derniere_valeur, après les lignes A132_1 : valeur_regle NA, valeur_retenue 1, depassement TRUE, detail usage=mortalite_tarif;identifiant=mortalite_fictive_b2;id_contrat=CT2;axe=age;valeurs=43",
+              list(r_t8$indicateurs$regle, s3_t8$poste, s3_t8$garantie, s3_t8$valeur_regle, s3_t8$valeur_retenue, s3_t8$depassement,
+                   s3_t8$detail),
+              list(c("tarif_vie", "A132_1", "A132_1", "hors_axes_derniere_valeur"), P3, "deces", NA_real_, 1, TRUE,
+                   "usage=mortalite_tarif;identifiant=mortalite_fictive_b2;id_contrat=CT2;axe=age;valeurs=43"))
+verifier_egal("T8 (c) (#91) : témoin T1 (terme 2027-01-01) sous derniere_valeur : 4 786,6205305652, exact, aucune ligne hors_axes_derniere_valeur",
+              { r <- risque(b2_base_p3(), p_t8)
+                list(r$cellules$montant, r$cellules$statut_resultat, sum(r$indicateurs$regle == "hors_axes_derniere_valeur"),
+                     indiv(b2_base_p3(), p_t8)$contrats$extrapole) },
+              list(4786.6205305652, "exact", 0L, FALSE), tolerance = TOL)
+verifier_egal("T8 (#91) : une seule règle de statut : D03h et extrapolation réunies, contrat jugement_expert, mention hypothese_D03h et ligne S3",
+              { r <- risque(local({ b <- b_t8; b$garanties_souscrites$taux_technique_tarif[1L] <- NA; b }), p_t8, declarations = d03h)
+                list(r$cellules$statut_resultat, r$contrats$statut_resultat, r$indicateurs$detail[1L],
+                     sum(r$indicateurs$regle == "hors_axes_derniere_valeur")) },
+              list("jugement_expert", "jugement_expert", "id_contrat=CT2;hypothese_D03h", 1L))
 verifier_egal("population : contrat dont l'assuré a un sinistre deces survenu au plus l'arrêté : hors de P3 ; couverture échue (arrêté au terme) : hors de P3",
               { b <- b2_base_p3()
                 b$sinistres <- b2_tab("sinistres", id_sinistre = "SI9", id_assure = "AS2", nature_sinistre = "deces",
@@ -160,6 +228,16 @@ verifier_egal("témoin rétrospectif calculé seulement à la demande (temoin = 
                      tryCatch({ ns$provisions_individuelles(b2_vue(b2_base_p3(), A1), plan_p3(), tb, NA); "aucune" },
                               error = function(e) grepl("erreur interne", conditionMessage(e)))) },
               list(NA_real_, NA_real_, 2924.6224668679, TRUE), tolerance = TOL)
+
+verifier_egal("témoin rétrospectif : NA pour une prime unique (CTI1 de la base construite à l'arrêté 2025-01-01, avant : -1 010,1010101010), à l'effet comme après ; contrat à primes périodiques (CTI3) : recoupement de Norberg inchangé ; provisions inchangées (#80)",
+              { bc <- b2_base_construite_deces_01()
+                r <- ns$provisions_individuelles(b2_vue(bc, A1), plan_p3(), tb, TRUE)$contrats
+                u <- r[r$id_contrat == "CTI1", ]; pe <- r[r$id_contrat == "CTI3", ]
+                bu <- b2_base_p3(); effet_u <- ns$provisions_individuelles(b2_vue(bu, D("2024-01-01")), plan_p3(D("2024-01-01")), tb, TRUE)$contrats
+                list(u$nature_primes, u$retro_avant_prime, u$retro_apres_prime, effet_u$retro_avant_prime, effet_u$retro_apres_prime,
+                     pe$nature_primes, pe$retro_avant_prime, pe$retro_apres_prime, u$montant, pe$montant) },
+              list("unique", NA_real_, NA_real_, NA_real_, NA_real_,
+                   "periodique", 986.6244822033, 2924.6224668679, 4786.6205305652, 2924.6224668679), tolerance = TOL)
 
 section("risque_en_cours : paramètre de P3 exclu pour risque_en_cours (erratum v1.0.9, critère (3.16), § 5.5), #78")
 
@@ -269,3 +347,177 @@ verifier_egal("(3.18) (i) SI2 arret_travail retenu : 4 786,6205305652 exact ; ex
               list(excl_ligne(avec_si2(b2_base_p3(), "arret_travail")),
                    excl_ligne(avec_si2(b2_base_p3(), "arret_travail"), table = "sinistres", lignes = 1L)),
               list(calcule_p3(v_t1), arret_p3()), tolerance = TOL)
+
+section("risque_en_cours : statut sous une hypothèse de la vue, contrat individuel de P3 (critère (4.7) (f) et (g), § 5.8, S2), #87")
+
+# T1 (CT2 / GS2, assuré AS2) et sinistre deces SI2 de AS2 (survenance 2024-07-01, déclaration
+# 2024-09-01) à date_saisie manquante (D03g H, deux référentiels, poste tous) ; arrêté
+# 2025-01-01 ; segmentation `contrat`. (f) délai 0 (visibilité 2024-09-01 <= A) : contrat sorti
+# de la population par le sinistre, restitué à 0, jugement_expert ; (g) délai 400 (visibilité
+# 2025-10-06 > A) : sinistre invisible, rattaché à AS2 par cles_lignes_hypothese(), contrat
+# dans la population, T1 4 786,6205305652, jugement_expert. Témoin : sinistre saisi
+# (avec_si2()), 0 exact (critère (3.18) (d)). Valeurs : b87/temoins.R.
+tid <- stats::setNames(unname(tb), vapply(tb, function(t) t$identifiant, ""))
+plan_87p3 <- function(delai) {
+  q <- plan_p3()
+  q$donnees$seuils <- list(d02c_age_min = list(assures_sinistre = 16, assures_affiliation = 16, famille = 0),
+                           d02c_age_max = list(assures_sinistre = 75, assures_affiliation = 70, famille = 110),
+                           d03g_delai_jours = list(sinistres = delai))
+  q$donnees$hypotheses <- lapply(ns$REFERENTIELS, function(r) list(motif = "D03g", referentiel = r, poste = "tous",
+                                                                     valeur = "date_effet_plus_delai"))
+  q$perimetre$segmentations <- list(ct = list(regle = "contrat"))
+  q
+}
+b_87p3 <- avec_si2(b2_base_p3())
+b_87p3$sinistres$date_saisie <- as.Date(NA)
+p3_87 <- function(r) {
+  q <- r$provisions[r$provisions$poste == P3, , drop = FALSE]
+  q <- q[order(q$segmentation, q$segment, method = "radix"), , drop = FALSE]
+  list(q$segmentation, q$segment, q$montant, q$statut_resultat)
+}
+verifier_egal("(4.7) (f) sinistre deces de AS2 rendu visible par D03g (délai 0) : cellule du segment CT2 à 0, jugement_expert ; cellule ensemble de P3 0, jugement_expert (avant : CT2 absent, P3 0 exact)",
+              p3_87(calculer_provisions(b_87p3, plan_87p3(0), tid)),
+              list(c("ct", "ensemble"), c("CT2", "ensemble"), c(0, 0), c("jugement_expert", "jugement_expert")))
+verifier_egal("(4.7) (g) même contrat, sinistre rendu invisible à A (délai 400) : contrat dans la population, 4 786,6205305652, jugement_expert (segment CT2 et ensemble)",
+              p3_87(calculer_provisions(b_87p3, plan_87p3(400), tid)),
+              list(c("ct", "ensemble"), c("CT2", "ensemble"), rep(v_t1, 2L), c("jugement_expert", "jugement_expert")),
+              tolerance = TOL)
+verifier_egal("(4.7) (f) témoin : sinistre saisi le 2024-09-02 (sans D03g), même plan : CT2 absent, P3 0 exact",
+              { q <- plan_87p3(0)
+                q$donnees$hypotheses <- list()
+                q$donnees$seuils$d03g_delai_jours <- NULL
+                p3_87(calculer_provisions(avec_si2(b2_base_p3()), q, tid)) },
+              list("ensemble", "ensemble", 0, "exact"))
+verifier_egal("(4.7) (f) R2 : contrat sorti restitué (délai 0), restitution des échéanciers `tous` : deux lignes CT2, capital_unique et frais, flux 0, valeur actuelle 0, datées de A + 1 (2025-01-02), probabilité 1, état actif",
+              { q <- plan_87p3(0)
+                q$restitution$echeanciers <- "tous"
+                e <- calculer_provisions(b_87p3, q, tid)$echeanciers
+                e <- e[e$poste == P3 & e$cle == "CT2", , drop = FALSE]
+                list(e$type_flux, e$flux, e$valeur_actuelle, e$date, e$probabilite, e$etat) },
+              list(c("capital_unique", "frais"), c(0, 0), c(0, 0), D(rep("2025-01-02", 2L)), c(1, 1), c("actif", "actif")))
+# (n) contre-témoin (erratum v1.0.18) : SI2 deces saisi (il sort CT2), seul SI3 arret_travail de
+# AS2 (survenance 2024-03-01) à date_saisie manquante sous D03g (délai 0, visible) : ne décide
+# pas de la sortie, pas d'unité
+b_87n <- avec_si2(b2_base_p3())
+b_87n$sinistres <- rbind(b_87n$sinistres, transform(b_87n$sinistres, id_sinistre = "SI3", nature_sinistre = "arret_travail",
+                                                    date_survenance = D("2024-03-01"), date_declaration = D("2024-04-01"),
+                                                    date_saisie = as.Date(NA)))
+verifier_egal("(4.7) (n) contre-témoin : contrat sorti par un sinistre deces saisi, seul un sinistre arret_travail du même assuré sous D03g : CT2 absent, P3 0 exact (avant : segment CT2 à 0, jugement_expert)",
+              p3_87(calculer_provisions(b_87n, plan_87p3(0), tid)),
+              list("ensemble", "ensemble", 0, "exact"))
+# (q), (r) contre-témoins (erratum v1.0.18, réserve R4) : CT2 sorti par SI2 deces saisi le
+# 2024-09-02 ; (q) seule la partie de fin du contrat sous D03g (date_fin 2025-06-30 > A,
+# date_saisie_fin manquante) ; (r) seul un sinistre SI3 deces de AS2 (déclaration 2024-11-01)
+# sous D03g, rendu invisible (délai 400) : ni l'une ni l'autre ne décide de la sortie
+b_87q <- avec_si2(b2_base_p3())
+b_87q$contrats$date_fin[b_87q$contrats$id_contrat == "CT2"] <- D("2025-06-30")
+b_87q$contrats$motif_fin[b_87q$contrats$id_contrat == "CT2"] <- "resiliation_adherent"
+plan_87ct <- function(delai) {
+  q <- plan_87p3(0)
+  q$donnees$seuils$d03g_delai_jours <- list(contrats = delai)
+  q
+}
+b_87r <- avec_si2(b2_base_p3())
+b_87r$sinistres <- rbind(b_87r$sinistres, transform(b_87r$sinistres, id_sinistre = "SI3", date_survenance = D("2024-10-01"),
+                                                    date_declaration = D("2024-11-01"), date_saisie = as.Date(NA)))
+verifier_egal("(4.7) (q) et (r) contre-témoins : CT2 sorti par un sinistre deces saisi ; (q) date_saisie_fin sous D03g d'une date_fin postérieure à A ; (r) seul un sinistre de l'assuré caché sous D03g (délai 400) : CT2 absent, P3 0 exact dans les deux cas",
+              list(p3_87(calculer_provisions(b_87q, plan_87ct(0), tid)),
+                   p3_87(calculer_provisions(b_87r, plan_87p3(400), tid))),
+              rep(list(list("ensemble", "ensemble", 0, "exact")), 2L))
+# (s) E18-2 : T1 sans sinistre, date_fin de CT2 au 2024-10-31, date_saisie_fin manquante sous
+# D03g ; délai 0 (visibilité 2024-10-31 <= A) : contrat sorti par sa fin de couverture,
+# restitué à 0, jugement_expert, deux lignes de flux 0 ; délai 400 (2025-12-05 > A) : fin
+# inconnue à A, contrat dans la population, T1 4 786,6205305652, jugement_expert
+b_87s <- b2_base_p3()
+b_87s$contrats$date_fin[b_87s$contrats$id_contrat == "CT2"] <- D("2024-10-31")
+b_87s$contrats$motif_fin[b_87s$contrats$id_contrat == "CT2"] <- "resiliation_adherent"
+verifier_egal("(4.7) (s) contrat sorti par sa date_fin rendue visible par D03g (délai 0) : segment CT2 à 0, jugement_expert, deux lignes d'échéancier de flux 0 ; délai 400 : 4 786,6205305652, jugement_expert",
+              { q0 <- plan_87ct(0)
+                q0$restitution$echeanciers <- "tous"
+                r0 <- calculer_provisions(b_87s, q0, tid)
+                e <- r0$echeanciers[r0$echeanciers$poste == P3 & r0$echeanciers$cle == "CT2", , drop = FALSE]
+                list(p3_87(r0), list(e$type_flux, e$flux), p3_87(calculer_provisions(b_87s, plan_87ct(400), tid))) },
+              list(list(c("ct", "ensemble"), c("CT2", "ensemble"), c(0, 0), c("jugement_expert", "jugement_expert")),
+                   list(c("capital_unique", "frais"), c(0, 0)),
+                   list(c("ct", "ensemble"), c("CT2", "ensemble"), rep(v_t1, 2L), c("jugement_expert", "jugement_expert"))),
+              tolerance = TOL)
+# (t) contre-témoins (erratum v1.0.19, réserve R6) : voie de sortie observée. (t1) date_fin de
+# CT2 au 2024-10-31 sous D03g, visible (délai 0), et SI2 deces saisi ; (t2) sans date_fin, SI2
+# deces saisi et SI3 deces (survenance 2024-08-01) sous D03g, visible : la sortie est établie
+# par le sinistre saisi, pas de restitution
+b_87t1 <- avec_si2(b_87s)
+b_87t2 <- avec_si2(b2_base_p3())
+b_87t2$sinistres <- rbind(b_87t2$sinistres, transform(b_87t2$sinistres, id_sinistre = "SI3", date_survenance = D("2024-08-01"),
+                                                      date_declaration = D("2024-10-02"), date_saisie = as.Date(NA)))
+verifier_egal("(4.7) (t) contre-témoins : date_fin au plus A sous D03g visible et sinistre deces saisi ; deux sinistres deces, l'un saisi, l'autre sous D03g visible : CT2 absent, P3 0 exact dans les deux cas (avant : segment CT2 à 0, jugement_expert)",
+              list(p3_87(calculer_provisions(b_87t1, plan_87ct(0), tid)),
+                   p3_87(calculer_provisions(b_87t2, plan_87p3(0), tid))),
+              rep(list(list("ensemble", "ensemble", 0, "exact")), 2L))
+# (v) détection S2 du champ collectif (provisions_collectives()), ligne de contrats sous D03g H
+# sur date_saisie_fin (partie de fin du contrat, non lue par le champ : la ligne ne décide pas de
+# la sortie du contrat). Arrêté 2025-12-31 ; cotisation 1 200 du 2025-07-01 au 2026-06-30.
+# (i) contre-témoin : CT3 vivant (date_fin 2026-06-30 > A, date_saisie_fin manquante), chargement
+# 0,10 : montant de T7 (535,5616438356), statut jugement_expert (attribut `hypothese`), cellule
+# ensemble de P3 (T1 de CT2 + collectif) en jugement_expert ; (iii) témoin date_saisie_fin
+# renseignée (2025-06-01) : aucune hypothèse, approximation_numerique du collectif. (ii) CT5
+# collectif résilié le 2021-12-31, seule cotisation en 2021, date_saisie_fin manquante, délai 0
+# puis 2000, avec puis sans cotisation de CT5 (chargement 0) : CT5 non restitué (ni unité à 0,
+# ni segment), cellule ensemble de P3 en approximation_numerique (avant : segment CT5 à 0,
+# cellule en jugement_expert, montants inchangés).
+plan_87co <- function() {
+  q <- plan_p3(A7, cotisation = 0.10)
+  q$donnees <- plan_87ct(0)$donnees
+  q
+}
+b_87u <- b2_base_p3(cotisation = data.frame(debut = D("2025-07-01"), fin = D("2026-06-30"), montant = 1200))
+b_87u$contrats$date_fin[b_87u$contrats$id_contrat == "CT3"] <- D("2026-06-30")
+b_87u$contrats$motif_fin[b_87u$contrats$id_contrat == "CT3"] <- "resiliation_adherent"
+b_87u$contrats$date_saisie_fin[b_87u$contrats$id_contrat == "CT3"] <- as.Date(NA)
+b_87ut <- b_87u
+b_87ut$contrats$date_saisie_fin[b_87ut$contrats$id_contrat == "CT3"] <- D("2025-06-01")
+pc_87u <- function(b) {
+  q <- plan_87co()
+  cp <- ns$canoniser_plan(q)
+  r <- ns$provisions_collectives(ns$vue_a_date(b, cp$arrete, cp$donnees, cp$conventions), q)
+  list(r$id_contrat, r$montant, attr(r, "hypothese"))
+}
+verifier_egal("(4.7) (v) provisions_collectives(), CT3 vivant sous D03g sur contrats.date_saisie_fin : CT3 535,5616438356, sous hypothèse (CT3) ; témoin date_saisie_fin renseignée : CT3 535,5616438356, aucune hypothèse",
+              lapply(list(b_87u, b_87ut), pc_87u),
+              list(list("CT3", 535.5616438356, "CT3"), list("CT3", 535.5616438356, character(0))),
+              tolerance = TOL)
+p3_87u <- function(b, q = plan_87co()) {
+  q <- calculer_provisions(b, q, tid)$provisions
+  q <- q[q$poste == P3, , drop = FALSE]
+  q <- q[order(q$segmentation, q$segment, method = "radix"), , drop = FALSE]
+  list(q$segmentation, q$segment, q$montant, q$statut_resultat)
+}
+verifier_egal("(4.7) (v) bout en bout, cellule ensemble de P3 (T1 de CT2 2 946,4431354470 + collectif) : CT3 vivant sous D03g : 3 482,0047792826, jugement_expert ; témoin : 3 482,0047792826, approximation_numerique",
+              lapply(list(b_87u, b_87ut), function(b) { r <- p3_87u(b); lapply(r, function(x) x[length(x)]) }),
+              list(list("ensemble", "ensemble", 3482.0047792826, "jugement_expert"),
+                   list("ensemble", "ensemble", 3482.0047792826, "approximation_numerique")),
+              tolerance = TOL)
+b_87v <- b2_base_p3(cotisation = data.frame(debut = D("2025-07-01"), fin = D("2026-06-30"), montant = 1200))
+b_87v$contrats <- rbind(b_87v$contrats, transform(b_87v$contrats[2L, ], id_contrat = "CT5", date_effet = D("2018-01-01"),
+                                                  date_debut_gestion = D("2018-01-01"), date_fin = D("2021-12-31"),
+                                                  motif_fin = "resiliation_adherent", date_saisie_fin = as.Date(NA)))
+b_87v$garanties_souscrites <- rbind(b_87v$garanties_souscrites, transform(b_87v$garanties_souscrites[2L, ],
+                                                                          id_garantie_souscrite = "GS5", id_contrat = "CT5",
+                                                                          date_effet = D("2018-01-01")))
+b_87v1 <- b_87v
+b_87v1$cotisations <- rbind(b_87v$cotisations, transform(b_87v$cotisations[1L, ], id_cotisation = "CO9",
+                                                         id_garantie_souscrite = "GS5", debut_periode = D("2021-01-01"),
+                                                         fin_periode = D("2021-12-31"), date_mouvement = D("2021-01-01"),
+                                                         montant = 900))
+plan_87v <- function(delai) {
+  q <- plan_p3(A7)
+  q$donnees <- plan_87ct(delai)$donnees
+  q$perimetre$segmentations <- list(ct = list(regle = "contrat"))
+  q
+}
+verifier_egal("(4.7) (v) CT5 résilié (2021-12-31) sous D03g sur date_saisie_fin, délai 0 puis 2000, avec puis sans cotisation 2021 : CT5 non restitué (segments CT2, CT3 et ensemble), CT3 595,0684931507, cellule ensemble 3 541,5116285977 en approximation_numerique (avant : segment CT5 à 0, jugement_expert)",
+              list(p3_87u(b_87v1, plan_87v(0)), p3_87u(b_87v1, plan_87v(2000)),
+                   p3_87u(b_87v, plan_87v(0)), p3_87u(b_87v, plan_87v(2000))),
+              rep(list(list(c("ct", "ct", "ensemble"), c("CT2", "CT3", "ensemble"),
+                            c(2946.4431354470, 595.0684931507, 3541.5116285977),
+                            c("exact", "approximation_numerique", "approximation_numerique"))), 4L),
+              tolerance = TOL)
