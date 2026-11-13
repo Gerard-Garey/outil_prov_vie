@@ -2033,7 +2033,25 @@ Chevauchement (versions de \code{garanties\_souscrites} par contrat, garantie et
   des règles de portée \code{table}\fsp; dans une passe, les règles
   s'exécutent dans l'ordre du code. Les refus de valeur d'une colonne sont
   donc complets à la fin de sa strate, avant toute règle qui la lit. Un
-  seul passage, sans point fixe~: le graphe est acyclique. Une ligne au
+  seul passage, sans point fixe~: le graphe est acyclique. Le répartiteur
+  choisit les règles de chaque passe~: chacune n'est exécutée qu'à la
+  passe de sa strate (celle de sa colonne pour une règle de portée
+  \code{colonne}, la passe des règles de portée \code{table} sinon), et
+  une règle écartée par lui n'est ni exécutée ni bloquée. Ce qui ne
+  dépend pas de la passe est calculé une fois par appel (issue~55)~: le
+  registre, les portées effectives et le graphe dérivé une fois, la
+  strate de chaque règle une fois, dans une mémoire locale à l'appel, sans
+  état conservé dans l'espace de noms\fsp; à chaque passe, les contrôles
+  génériques tirés du dictionnaire ne parcourent que les colonnes
+  contrôlées par une règle de la passe, une colonne hors du registre
+  restant parcourue à toutes les passes. Ces raccourcis ne changent aucun
+  résultat~: la batterie unitaire vérifie, avec et sans le saut des
+  colonnes, la même suite de règles retenues et le même bilan, et elle
+  compte, sans horloge, pendant un appel de \code{controler\_base()}, les
+  relevés du registre (un), les calculs de strate (un par entrée du
+  registre) et les calculs de l'ordre des codes (au plus un, paragraphe
+  «~Priorité des causes~»), et que chaque règle retenue l'est à la passe
+  de sa strate. Une ligne au
   verdict vrai est détectée, une ligne au verdict faux ne l'est pas, une
   ligne au verdict inconnu est écartée de la détection, qui reste
   qualifiée d'exacte sur les lignes au verdict déterminé.
@@ -2669,7 +2687,8 @@ partie et la cause~($\gamma$)~: une seule implémentation, la clé (rang,
 position) d'une cause (\code{.cle\_causes()}) et la plus petite d'un
 ensemble (\code{.cause\_retenue()}), la position étant lue dans l'ordre
 des codes dérivé du dictionnaire (\code{.ordre\_codes()}), seul endroit
-où cet ordre est écrit. Les rangs sont lus dans deux constantes internes~:
+où cet ordre est écrit, et calculé au plus une fois par contrôle de la
+base (issue~55). Les rangs sont lus dans deux constantes internes~:
 \code{.RANGS\_CAUSES}, qui donne les rangs des six causes nommées
 ci-dessus, et \code{.RANG\_CAUSE\_DIRECTE}, qui vaut~3. Le rang d'une
 cause est cherché dans \code{.RANGS\_CAUSES} avant de tester si elle est
