@@ -1917,17 +1917,35 @@ règle~P.
   Y quand une règle concernée de portée \code{colonne} contrôle Y et lit
   X. Une règle concernée de portée \code{table} ne crée aucune arête~: son
   refus n'est pas un refus de valeur, et elle est évaluée après toutes les
-  strates. Le graphe est déclaré dans la constante interne
-  \code{.LECTURES\_REGLE\_B}\fsp; la strate d'une colonne est la longueur du
-  plus long chemin qui y mène (strate~0 sans arête entrante), calculée par
-  le tri topologique de Kahn, et un cycle arrêterait le calcul («~erreur
-  interne de provie~»). Le graphe déclaré a quatre strates, de~0 à~3~: le
-  plus long chemin va de \code{sinistres.nature\_sinistre} (ou de
+  strates. Le graphe qu'emploie l'exécution est dérivé des règles
+  elles-mêmes (issue~56, point~4)~: un registre relève, sans rien
+  exécuter, chaque règle de la règle~B (code, table, colonne contrôlée,
+  colonnes lues, traitement), dans l'ordre du code, sur une base squelette
+  qui porte toutes les tables et colonnes du dictionnaire sans aucune
+  ligne~; le registre, et donc le graphe, ne dépend que du dictionnaire et
+  du code. Les colonnes refusables pour leur valeur sont celles que
+  contrôle une règle de refus de portée \code{colonne}\fsp; les arêtes s'en
+  déduisent selon la définition ci-dessus. La strate d'une colonne est la
+  longueur du plus long chemin qui y mène (strate~0 sans arête entrante),
+  calculée par le tri topologique de Kahn, et un cycle arrêterait le
+  calcul («~erreur interne de provie~»). Le graphe de référence de la
+  spécification (§~2.2, B.3) reste écrit dans la constante interne
+  \code{.LECTURES\_REGLE\_B}, que l'exécution ne lit pas. Le graphe a
+  trente-neuf arêtes et quatre strates, de~0 à~3~: le plus long chemin va
+  de \code{sinistres.nature\_sinistre} (ou de
   \code{garanties\_souscrites.code\_garantie}) à
   \code{evenements.type\_evenement}, puis à \code{evenements.motif}, puis à
   \code{evenements.date\_effet}. La batterie unitaire vérifie que la
-  constante est acyclique et qu'elle couvre chaque règle de la règle~B qui
-  lit une colonne non clé refusable pour sa valeur.
+  constante est acyclique, qu'elle couvre chaque règle de la règle~B qui
+  lit une colonne non clé refusable pour sa valeur, et qu'elle égale le
+  graphe dérivé, par portée, strates comprises~; elle vérifie aussi que le
+  registre est fidèle à l'exécution~: sur la base de référence, qui porte
+  toutes les tables et colonnes, les règles exécutées par
+  \code{controler\_base()} sont exactement celles du registre, et sur un
+  jeu simulé dont des tables facultatives sont absentes, elles en sont une
+  partie. Sur un cas de test dont la chaîne monte jusqu'à la strate~3, une
+  constante vidée, dans une copie de l'espace de noms, laisse le bilan
+  inchangé~: l'exécution lit bien le graphe dérivé.
 \item \textbf{Verdict, lecture existentielle.} Le verdict d'une règle sur
   une ligne est inconnu si deux affectations des valeurs inconnues qu'elle
   lit, chacune prise dans le domaine de sa colonne, sans égard aux autres
@@ -1964,12 +1982,36 @@ règle~P.
 \textcolor{financeblue}{\textbf{Forme}} & \textcolor{financeblue}{\textbf{Verdict à trois valeurs}} \\
 Colonne conditionnelle (colonne requise, interdite ou libre selon d'autres colonnes) & Exigence inconnue si deux valeurs du domaine des colonnes lues donnent deux exigences différentes. \code{manquant\_obligatoire} (requise et absente) est faux si la colonne est présente, \code{hors\_domaine} (interdite et présente) est faux si elle est absente\fsp; «~libre~» n'est pas «~inconnu~»~: les deux verdicts y sont faux. \\
 Borne qui dépend d'une autre colonne (date d'effet d'un événement, jour d'échéance, taux technique, signe d'un montant) & Pour D02c sur \code{evenements.date\_effet}~: (date antérieure au 1er~janvier~1901) ou (type non programmable et date postérieure à l'extraction)\fsp; vrai si la date précède 1901, faux si elle est au plus l'extraction, sinon inconnu si le type, ou le motif quand le type est programmable selon le motif, est inconnu. \\
-Jointure ou appartenance («~il existe une ligne jointe telle que\ldots~», par exemple une garantie décès du contrat) & Vrai si une ligne jointe satisfait la condition quelle que soit la valeur de ses inconnues\fsp; faux si aucune ligne jointe ne le peut\fsp; inconnu sinon. \\
+Jointure ou appartenance («~il existe une ligne jointe telle que\ldots~», par exemple une garantie décès du contrat) & Vrai si une ligne jointe satisfait la condition quelle que soit la valeur de ses inconnues\fsp; faux si aucune ligne jointe ne le peut\fsp; inconnu sinon. Une clé manquante ne s'apparie à aucune ligne (point ci-dessous). \\
 Chevauchement (versions de \code{garanties\_souscrites} par contrat, garantie et collège\fsp; paliers d'âge de \code{parametres}) & Vrai si, pour toute affectation des valeurs inconnues, la ligne recouvre une autre ligne de même groupe\fsp; faux si aucune affectation ne la fait recouvrir une autre ligne\fsp; inconnu sinon. \\
 \end{tabular}
 \end{center}
 
 \begin{itemize}[itemsep=2pt]
+\item \textbf{Clé manquante} (spécification, §~2.2, B.4, version~1.6\fsp;
+  décision du mainteneur du 13~novembre~2026, M335\fsp; issue~56\fsp;
+  jugement d'expert). Dans la forme «~jointure ou appartenance~», une clé
+  manquante ne s'apparie à aucune ligne, d'un côté comme de l'autre~: une
+  ligne de clé manquante n'a aucune ligne jointe, et une ligne jointe de
+  clé manquante n'est jointe à aucune ligne. Un seul noyau porte cette
+  forme pour les règles~B (dont la recherche des orphelines à référence
+  composite, \code{affiliations.college}, où une clé dont une partie manque
+  ne s'apparie pas davantage) et~V\fsp; c'est aussi la règle des autres
+  jointures du module. Motif~: une clé manquante n'identifie rien, et
+  apparier deux absences inventerait un lien, ce qui serait une
+  imputation\fsp; la ligne porte déjà un refus de portée table (clé
+  primaire ou étrangère manquante). L'alternative écartée, «~une clé
+  manquante s'apparie à une clé manquante~», était celle de l'entrée
+  «~décès souscrit~» de la règle~B avant l'issue~56~: sur le jeu
+  \code{v1-modeste-03} à l'arrêté du 31~décembre~2025, un contrat
+  individuel privé de sa date de terme et dont l'identifiant manque, comme
+  celui de sa garantie décès, recevait un \code{manquant\_obligatoire} sur
+  \code{contrats.date\_terme}, en appariant les deux absences\fsp; il n'en
+  reçoit plus (mesure exécutée, résultat exact). Seuls changent ainsi des
+  bilans où une clé manque des deux côtés d'une jointure, sur des tables
+  déjà refusées en portée table~; aucune provision ne change. Le
+  chevauchement, qui n'est pas une jointure, garde sa propre convention
+  (point suivant).
 \item \textbf{Calcul du chevauchement.} Les bornes de chaque ligne sont
   prises au pire (début au plus tard, fin au plus tôt, absence d'une borne
   qui retirerait la ligne du contrôle exclue)\fsp; ce pire ne dépend pas de
@@ -1985,7 +2027,7 @@ Chevauchement (versions de \code{garanties\_souscrites} par contrat, garantie et
   verdict vrai (recouvrement d'une ligne de groupe et d'intervalle
   connus)~: c'est la définition ci-dessus, plus large, que le code
   applique.
-\item \textbf{Exécution.} Une passe par strate, de~0 à~3, puis une passe
+\item \textbf{Exécution.} Une passe par strate du graphe dérivé, de~0 à~3, puis une passe
   des règles de portée \code{table}\fsp; dans une passe, les règles
   s'exécutent dans l'ordre du code. Les refus de valeur d'une colonne sont
   donc complets à la fin de sa strate, avant toute règle qui la lit. Un
@@ -2221,7 +2263,7 @@ précision P2 de M222\fsp; version~1.5.4, M226).
 \code{somme\_parts} sur \code{beneficiaires.part} & Parts des autres bénéficiaires du dossier & Voir ci-dessous. \\
 D03a, D03b, D02a, D02c sur \code{famille} & Version valable du membre & Verdict sur chaque candidate\fsp; inconnu s'ils diffèrent. \\
 D02a sur \code{contrats.date\_fin} et \code{affiliations.date\_fin} & Partie de ligne de la fin & Partie connue~: comparaison\fsp; partie non connue à l'arrêté, de façon déterminée~: faux\fsp; partie non déterminée~: inconnu si la date de début dépasse la date de fin, faux sinon. \\
-D01b (cinq tables) & Autres lignes de même contenu & Copie si une ligne visible de même contenu la précède (date de visibilité, puis clé)\fsp; inconnu si aucune ligne visible ne la précède mais qu'une ligne non déterminée de même contenu le peut. \\
+D01b (cinq tables) & Autres lignes de même contenu & Copie si une ligne visible de même contenu la précède (date de visibilité, puis clé)\fsp; inconnu si aucune ligne visible ne la précède mais qu'une ligne non déterminée de même contenu le peut. Une ligne de même identifiant, visible ou non déterminée, ne fait pas une copie~: ce serait un doublon d'identifiant (D01a)\fsp; une ligne que seule une ligne non déterminée de même identifiant peut précéder reste non détectée, sans être écartée (issue~56). \\
 D06 sur \code{evenements.justificatif} & Prestations du dossier & Clôture de motif \code{regle} sans prestation du dossier, ou de motif \code{depot\_cdc} sans prestation en capital~: vrai si aucune telle prestation n'est visible ni non déterminée, faux si une est visible, inconnu sinon\fsp; disjonction avec le cas propre à la ligne (justificatif absent d'une sortie ou d'une fin de service). \\
 D13 sur \code{sinistres.date\_instruction} & Prestations en capital des dossiers décès du sinistre & Vrai si une telle prestation est visible, faux si aucune n'est visible ni non déterminée, inconnu sinon. \\
 D10c sur \code{dossiers} & Autres dossiers du sinistre\fsp; versions décès de la garantie souscrite & Conjonction de «~aucun dossier décès dans la vue~» et de «~décès souscrit à la survenance~», chacun vrai, faux ou inconnu selon les lignes visibles et non déterminées. \\
