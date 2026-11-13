@@ -2568,15 +2568,16 @@ verifier("#56, point 4 : l'exécution lit le graphe dérivé, non la constante :
            identical(env56$controler_base(cas42$B6, A), provie::controler_base(cas42$B6, A)))
 # point 5 : le répartiteur (.regle_domaine()) choisit les règles de chaque passe par
 # `ctx$passe` : une règle qu'il écarte n'est ni exécutée ni bloquée (FALSE, ni constat ni ligne
-# de controles_non_executes) ; hors de ses passes, `ctx$passe` est NULL (règles P et V)
+# de controles_non_executes) ; hors de ses passes, `ctx$passe` est NULL (règles P et V), de
+# même que `ctx$passe_colonne` (colonnes parcourues par les règles génériques, #55)
 ctx56 <- ns$.contexte(base_ref, d, list(date_extraction = A), A)
 ctx56$passe <- function(code, table, colonne, lit, traitement) FALSE
 e56 <- ns$.regle(ctx56, "essai", "dossiers", "date_ouverture", character(0), "R", "exacte", function() stop("exécutée"))
 ctx56b <- ns$.contexte(base_ref, d, list(date_extraction = A), A)
 ns$.regle_domaine(ctx56b)
-verifier_egal("#56, point 5 : règle écartée par le répartiteur : FALSE, non exécutée, ni constat ni ligne de controles_non_executes ; après .regle_domaine(), ctx$passe est NULL",
-              list(e56, length(ctx56$constats), length(ctx56$non_executes), is.null(ctx56b$passe)),
-              list(FALSE, 0L, 0L, TRUE))
+verifier_egal("#56, point 5 : règle écartée par le répartiteur : FALSE, non exécutée, ni constat ni ligne de controles_non_executes ; après .regle_domaine(), ctx$passe et ctx$passe_colonne (#55) sont NULL",
+              list(e56, length(ctx56$constats), length(ctx56$non_executes), is.null(ctx56b$passe), is.null(ctx56b$passe_colonne)),
+              list(FALSE, 0L, 0L, TRUE, TRUE))
 
 section("donnees : visibilité à trois valeurs, évaluée une seule fois pour la vue et les comptes (#43, M216, M222 ; spécification v1.5, § 2.2 (c), § 3.2, § 4.2 ; § 2.5, critères V1 à V14)")
 # bases des critères V1 à V12 (sorties « après » de la v1.5, § 2.5)
@@ -3177,6 +3178,77 @@ verifier_egal("#59, site 39 : AF1 possible sous deux motifs (id_contrat de GS1 i
                    s39_59(list(id_contrat = list(list(code = mo, lignes = 2L)), college = list(list(code = hd, lignes = 1L)))),
                    s39_59(list(id_contrat = list(list(code = mo, lignes = 1L)), college = list(list(code = hd, lignes = 2L))))),
               rep(list(list("D04b college manquant_obligatoire", 0L)), 3L))
+
+section("donnees : règle B par strates, chaque règle exécutée à sa seule passe, calculs hors passe une fois par appel (#55)")
+# trace(), pendant controler_base() : appels de .regles_b (relevé du registre), .strate_regle,
+# .ordre_codes ; pour chaque appel de .regle() retenu par le répartiteur (`ctx$passe`, passes du
+# domaine, hors relevé du registre : arrêté NA), clé (code, table, colonne), passe courante
+# (variable `strate` du répartiteur) ; strate de la règle (.strate_regle() sur le graphe dérivé)
+# calculée après la trace
+strates55 <- ns$.strates_regle_b(ns$.lectures_regle_b(d)$colonne)
+appels55 <- function(b, arrete) {
+  noms <- c(".regles_b", ".strate_regle", ".ordre_codes")
+  .GlobalEnv$.n55 <- stats::setNames(integer(length(noms)), noms)
+  .GlobalEnv$.passes55 <- list()
+  for (n in noms) suppressMessages(trace(n, where = ns, print = FALSE,
+                                         tracer = bquote(.GlobalEnv$.n55[[.(n)]] <- .GlobalEnv$.n55[[.(n)]] + 1L)))
+  suppressMessages(trace(".regle", where = ns, print = FALSE, tracer = quote(
+    if (!is.null(ctx$passe) && !is.na(ctx$arrete) && ctx$passe(code, table, colonne, lit, traitement))
+      .GlobalEnv$.passes55[[length(.GlobalEnv$.passes55) + 1L]] <- list(
+        code = code, table = table, colonne = colonne, passe = environment(ctx$passe)$strate))))
+  on.exit({
+    for (n in c(noms, ".regle")) suppressMessages(untrace(n, where = ns))
+    rm(".n55", ".passes55", envir = .GlobalEnv)
+  })
+  invisible(provie::controler_base(b, arrete))
+  list(n = .GlobalEnv$.n55, passes = .GlobalEnv$.passes55)
+}
+registre55 <- ns$.regles_b(d)
+cles_registre55 <- table(vapply(registre55, function(k) paste(k$code, k$table, k$colonne, sep = "|"), ""))
+a55 <- appels55(base_ref, A)
+cles_passes55 <- table(vapply(a55$passes, function(k) paste(k$code, k$table, k$colonne, sep = "|"), ""))
+verifier_egal("#55 : base de référence, chaque règle retenue par le répartiteur l'est à la passe de sa strate, au plus autant de fois que sa clé figure au registre ; registre relevé une fois, strate calculée une fois par règle du registre (440, non à chaque passe), ordre des codes calculé au plus une fois par appel",
+              list(all(vapply(a55$passes, function(k) identical(k$passe, ns$.strate_regle(d, k$code, k$table, k$colonne, strates55)), NA)),
+                   all(cles_passes55 <= cles_registre55[names(cles_passes55)]),
+                   unname(a55$n[".regles_b"]), unname(a55$n[".strate_regle"]), unname(a55$n[".ordre_codes"]) <= 1L),
+              list(TRUE, TRUE, 1L, length(registre55), TRUE))
+# ordre des codes sur une base où plusieurs causes sont candidates pour une même règle
+# (garanties_souscrites : date_effet de type incompatible, code_garantie absente ; avant #55,
+# .ordre_codes() recalculé à chaque départage : 11 appels, mesuré sur 1f94eae)
+b55 <- avec(function(b) {
+  b$garanties_souscrites$date_effet <- as.character(b$garanties_souscrites$date_effet)
+  b$garanties_souscrites$code_garantie <- NULL
+  b
+})
+a55b <- appels55(b55, A)
+verifier_egal("#55 : plusieurs causes candidates (type_incompatible et colonne_absente sur garanties_souscrites) : ordre des codes calculé au plus une fois par appel",
+              unname(a55b$n[".ordre_codes"]) <= 1L, TRUE)
+# colonnes parcourues par passe (`ctx$passe_colonne`) : le saut des colonnes sans règle de la
+# passe n'écarte aucune règle retenue ; sans lui (copie de l'espace de noms dont
+# .regles_generiques() ignore `ctx$passe_colonne`), même suite (code, table, colonne, passe) des
+# règles retenues par le répartiteur et même bilan (base de référence, v1-modeste-03)
+retenues55 <- function(env, b, arrete) {
+  regle <- env$.regle
+  suite <- character(0)
+  env$.regle <- function(ctx, code, table, colonne, lit, traitement, ...) {
+    if (!is.null(ctx$passe) && !is.na(ctx$arrete) && ctx$passe(code, table, colonne, lit, traitement))
+      suite <<- c(suite, paste(code, table, colonne, environment(ctx$passe)$strate, sep = "|"))
+    regle(ctx, code, table, colonne, lit, traitement, ...)
+  }
+  bilan <- env$controler_base(b, arrete)
+  list(suite = suite, bilan = bilan)
+}
+sans_saut55 <- function() {
+  env <- copie_ns()
+  rg <- env$.regles_generiques
+  env$.regles_generiques <- function(ctx) { ctx$passe_colonne <- NULL; rg(ctx) }
+  env
+}
+j3_55 <- lire_jeu(file.path(racine, "inst", "extdata", "jeux", "v1-modeste-03"))$base
+verifier("#55 : colonnes parcourues par passe : avec ou sans saut des colonnes, même suite des règles retenues par le répartiteur et même bilan (base de référence à A, v1-modeste-03 à 2025-12-31)",
+         identical(retenues55(copie_ns(), base_ref, A), retenues55(sans_saut55(), base_ref, A)) &&
+           identical(retenues55(copie_ns(), j3_55, D("2025-12-31")), retenues55(sans_saut55(), j3_55, D("2025-12-31"))) &&
+           length(retenues55(copie_ns(), base_ref, A)$suite) > 0L)
 
 section("donnees : nombre_dossiers et composantes 1 à 4 sur le rattachement à l'arrêté, lecture (ii) (#44, M219 ; spécification v1.5, § 4.4 ; § 4.6, critères E1 à E10)")
 # statut de rattachement d'un dossier à l'arrêté : s(d) = statut(d) ET (OU, sur les lignes de

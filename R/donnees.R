@@ -956,6 +956,8 @@ lire_declarations <- function(declarations, dico) {
   ctx <- new.env(parent = emptyenv())
   ctx$base <- donnees
   ctx$dico <- dico
+  # ordre des codes (.ordre_codes()), calculé à sa première lecture, une fois par contrôle (#55)
+  delayedAssign("ordre_codes", .ordre_codes(dico), assign.env = ctx)
   ctx$date_extraction <- extraction$date_extraction
   ctx$arrete <- arrete
   ctx$tables <- dico$tables$table[dico$tables$table %in% names(donnees)]
@@ -999,7 +1001,7 @@ lire_declarations <- function(declarations, dico) {
   unique(c(t, if (propre && colonne %in% names(c1)) c1[[colonne]], forme))
 }
 .cause <- function(ctx, table, colonne, forme_seule = FALSE) {
-  .cause_retenue(.causes(ctx, table, colonne, forme_seule), ctx$dico)
+  .cause_retenue(.causes(ctx, table, colonne, forme_seule), ctx$dico, ctx$ordre_codes)
 }
 
 # Refus de valeur de `table.colonne` (M199 ; spécification, § 2.2) : refus R de portée
@@ -1134,7 +1136,7 @@ lire_declarations <- function(declarations, dico) {
       if (lit[i] %in% saute) return(character(0))
       .causes(ctx, morceaux[[i]][1L], morceaux[[i]][2L], propre = !valeur_seule[i])
     })
-    cause <- .cause_retenue(unlist(candidates), ctx$dico)
+    cause <- .cause_retenue(unlist(candidates), ctx$dico, ctx$ordre_codes)
     forme <- vapply(seq_along(lit), function(i) {
       !(lit[i] %in% saute) && !is.na(.cause(ctx, morceaux[[i]][1L], morceaux[[i]][2L], forme_seule = TRUE))
     }, NA)
@@ -1186,7 +1188,7 @@ lire_declarations <- function(declarations, dico) {
       if (length(motifs) == 0L) stop("erreur interne de provie : r\u00e8gle ", if (regle_b) "B" else "P",
                                      " : ligne \u00e9cart\u00e9e sans refus de valeur qui l'explique (", code, ", ", table, ")",
                                      call. = FALSE)
-      cause <- .cause_retenue(motifs, ctx$dico)
+      cause <- .cause_retenue(motifs, ctx$dico, ctx$ordre_codes)
       .ajouter_non_execute(ctx, code, table, colonne_ne, cause,
                            lu = sort(unique(porteuses[motifs == cause]), method = "radix"))
     }
@@ -1312,11 +1314,37 @@ lire_declarations <- function(declarations, dico) {
 # Strate d'une règle du domaine de la règle B, pour les strates `strates` (.strates_regle_b())
 # : celle de sa colonne pour une règle de portée colonne (0 hors du graphe), le puits (plus
 # haute strate plus un) pour une règle de portée table (spécification, § 2.2, « Ordre
-# d'exécution », étape 3).
-.strate_regle <- function(dico, code, table, colonne, strates) {
-  if (.portee_effective(dico, code, table, colonne) == "table") return(max(c(0L, strates)) + 1L)
+# d'exécution », étape 3). `portee` : portée effective de la règle, si elle est déjà calculée
+# (.portees_registre(), #55).
+.strate_regle <- function(dico, code, table, colonne, strates, portee = .portee_effective(dico, code, table, colonne)) {
+  if (portee == "table") return(max(c(0L, strates)) + 1L)
   s <- strates[paste(table, colonne, sep = ".")]
   if (is.na(s)) 0L else unname(s)
+}
+
+# Strate de chaque règle du domaine (.strate_regle()), calculée une fois par clé (code, table,
+# colonne) et par appel de .regle_domaine(), non à chaque passe (#55) : rend une fonction
+# (code, table, colonne) -> strate, lue par le répartiteur. Les clés du registre (.regles_b())
+# sont calculées d'avance avec leur portée effective (`portee`, déjà calculée pour le graphe) ;
+# une clé hors du registre est calculée à sa première lecture. La mémoire est locale à
+# l'appel (environnement de la fonction rendue) : rien n'est conservé dans l'espace de noms.
+.table_strates <- function(dico, registre, portee, strates) {
+  memoire <- new.env(hash = TRUE, parent = emptyenv())
+  cle <- function(code, table, colonne) paste(code, table, colonne, sep = "\r")
+  for (i in seq_along(registre)) {
+    k <- registre[[i]]
+    assign(cle(k$code, k$table, k$colonne), .strate_regle(dico, k$code, k$table, k$colonne, strates, portee[i]),
+           envir = memoire)
+  }
+  function(code, table, colonne) {
+    k <- cle(code, table, colonne)
+    s <- memoire[[k]]
+    if (is.null(s)) {
+      s <- .strate_regle(dico, code, table, colonne, strates)
+      assign(k, s, envir = memoire)
+    }
+    s
+  }
 }
 
 # Registre des règles de la règle B (#56, point 4) : une entrée (code, table, colonne, lit,
@@ -1347,8 +1375,7 @@ lire_declarations <- function(declarations, dico) {
 # une règle R de portée colonne ; pour chaque règle qui en lit une autre que la sienne (règle
 # concernée), par portée (`colonne` : arêtes du graphe ; `table` : puits) et colonne
 # contrôlée, les colonnes refusables lues, dans l'ordre du registre.
-.lectures_regle_b <- function(dico, registre = .regles_b(dico)) {
-  portee <- vapply(registre, function(k) .portee_effective(dico, k$code, k$table, k$colonne), "")
+.lectures_regle_b <- function(dico, registre = .regles_b(dico), portee = .portees_registre(dico, registre)) {
   soi <- vapply(registre, function(k) paste(k$table, k$colonne, sep = "."), "")
   refusables <- unique(soi[portee == "colonne" & vapply(registre, `[[`, "", "traitement") == "R"])
   lus <- lapply(seq_along(registre), function(i) setdiff(intersect(registre[[i]]$lit, refusables), soi[i]))
@@ -1358,6 +1385,11 @@ lire_declarations <- function(declarations, dico) {
     stats::setNames(lapply(s, function(tc) unique(unlist(lus[concernee & portee == p & soi == tc]))), s)
   }
   list(colonne = par_portee("colonne"), table = par_portee("table"))
+}
+# Portée effective (.portee_effective()) de chaque entrée du registre, calculée une fois par
+# appel de .regle_domaine() pour le graphe et les strates (#55).
+.portees_registre <- function(dico, registre) {
+  vapply(registre, function(k) .portee_effective(dico, k$code, k$table, k$colonne), "")
 }
 
 # Ligne de `table_cible` dont la clé `cle_cible` vaut chaque valeur de `valeurs_cle` (NA : aucune).
@@ -1617,13 +1649,30 @@ lire_declarations <- function(declarations, dico) {
 # une passe des règles de portée table (puits) ; dans une passe, l'ordre des règles est celui
 # du code. Le répartiteur choisit les règles de chaque passe (`ctx$passe`, lu par .regle() ;
 # #56, point 5). Les refus de valeur d'une colonne sont complets à la fin de sa strate ; un
-# seul passage, sans point fixe (graphe acyclique).
+# seul passage, sans point fixe (graphe acyclique). Chaque règle n'est exécutée qu'à sa propre
+# passe, et ce qui ne dépend pas de la passe est calculé une fois par appel (#55) : registre,
+# portées et graphe une fois (.regles_b(), .portees_registre(), .lectures_regle_b()), strate de
+# chaque règle une fois par clé (.table_strates()) ; les règles génériques ne parcourent, à
+# chaque passe, que les colonnes contrôlées par une règle de la passe (`ctx$passe_colonne`,
+# lu par .regles_generiques() ; NULL hors des passes).
 .regle_domaine <- function(ctx) {
-  strates <- .strates_regle_b(.lectures_regle_b(ctx$dico)$colonne)
-  on.exit(ctx$passe <- NULL)
+  registre <- .regles_b(ctx$dico)
+  portee <- .portees_registre(ctx$dico, registre)
+  strates <- .strates_regle_b(.lectures_regle_b(ctx$dico, registre, portee)$colonne)
+  strate_de <- .table_strates(ctx$dico, registre, portee, strates)
+  # colonnes contrôlées par au moins une règle du registre, à chaque passe ; une colonne hors du
+  # registre est parcourue à toutes les passes (le répartiteur reste seul juge, `ctx$passe`)
+  soi <- vapply(registre, function(k) paste(k$table, k$colonne, sep = "."), "")
+  strate_k <- vapply(registre, function(k) strate_de(k$code, k$table, k$colonne), 0L)
+  on.exit({ ctx$passe <- NULL; ctx$passe_colonne <- NULL })
   for (strate in 0:(max(c(0L, strates)) + 1L)) {
     ctx$passe <- function(code, table, colonne, lit, traitement) {
-      .strate_regle(ctx$dico, code, table, colonne, strates) == strate
+      strate_de(code, table, colonne) == strate
+    }
+    a_parcourir <- soi[strate_k == strate]
+    ctx$passe_colonne <- function(table, colonne) {
+      tc <- paste(table, colonne, sep = ".")
+      tc %in% a_parcourir || !(tc %in% soi)
     }
     .regles_generiques(ctx)
     .regles_propres(ctx)
@@ -1637,9 +1686,10 @@ lire_declarations <- function(declarations, dico) {
   for (table in setdiff(ctx$tables, "extraction")) {
     colonnes <- .colonnes_dico(ctx, table)
     for (i in seq_len(nrow(colonnes))) {
-      col <- colonnes[i, ]
+      col <- lapply(colonnes, `[[`, i)   # ligne i du dictionnaire (liste : plus rapide qu'une ligne de data.frame, #55)
       colonne <- col$colonne
       if (!(colonne %in% names(ctx$base[[table]]))) next   # absente : F sans effet, O ou C refusée
+      if (!is.null(ctx$passe_colonne) && !ctx$passe_colonne(table, colonne)) next   # aucune règle de la passe (#55)
       x <- .valeurs(ctx, table, colonne)
       tc <- paste(table, colonne, sep = ".")
       if (col$type == "character") {
@@ -3223,7 +3273,7 @@ parties_ligne <- function() lapply(.PARTIES_LIGNE, function(p) list(table = p$ta
   }
   if (length(causes) == 0L) stop("erreur interne de provie : r\u00e8gle V : ligne \u00e9cart\u00e9e sans \u00e9l\u00e9ment non ",
                                  "d\u00e9termin\u00e9 qui l'explique (", code, ", ", table, ")", call. = FALSE)
-  .cause_retenue(causes, ctx$dico)
+  .cause_retenue(causes, ctx$dico, ctx$ordre_codes)
 }
 
 # Visibilité non déterminée (M156, D1) : une ligne par (table, colonne, motif, origine) ;
@@ -5336,10 +5386,11 @@ parties_ligne <- function() lapply(.PARTIES_LIGNE, function(p) list(table = p$ta
 # rangs, qui n'ont chacun qu'une valeur. Une cause ni rangée ni motif de refus est une erreur
 # interne : elle ne se range pas en silence. `.cause_retenue()` : la plus petite des causes
 # candidates dans cet ordre lexicographique, NA sans cause ; elle ne dépend pas de l'ordre des
-# candidates (minimum sous un ordre total).
-.cle_causes <- function(causes, dico) {
+# candidates (minimum sous un ordre total). `ordre` : .ordre_codes(dico), calculé une fois par
+# contrôle (`ctx$ordre_codes`, .contexte()) et transmis par les appelants du contrôle (#55).
+.cle_causes <- function(causes, dico, ordre = .ordre_codes(dico)) {
   rang <- unname(.RANGS_CAUSES[causes])
-  position <- match(causes, .ordre_codes(dico))
+  position <- match(causes, ordre)
   directe <- is.na(rang) & !is.na(position)
   rang[directe] <- .RANG_CAUSE_DIRECTE
   if (anyNA(rang)) stop("erreur interne de provie : cause de contr\u00f4le non ex\u00e9cut\u00e9 inconnue : ",
@@ -5347,11 +5398,11 @@ parties_ligne <- function() lapply(.PARTIES_LIGNE, function(p) list(table = p$ta
   position[!directe] <- 0L
   list(rang = rang, position = position)
 }
-.cause_retenue <- function(causes, dico) {
+.cause_retenue <- function(causes, dico, ordre = .ordre_codes(dico)) {
   causes <- unique(causes[!is.na(causes)])
   if (length(causes) == 0L) return(NA_character_)
   if (length(causes) == 1L) return(causes)
-  k <- .cle_causes(causes, dico)
+  k <- .cle_causes(causes, dico, ordre)
   causes[order(k$rang, k$position, method = "radix")[1L]]
 }
 
@@ -5361,8 +5412,8 @@ parties_ligne <- function() lapply(.PARTIES_LIGNE, function(p) list(table = p$ta
 # .ordre_codes() ; spécification `donnees` v1.6, § 3.1, #59), dans l'ordre du bilan (.trier()).
 # Le résultat ne dépend pas de l'ordre des lignes de `non_executes` (ordre d'émission). Une
 # cause ni rangée ni motif de refus est une erreur interne.
-.dedoublonner_non_executes <- function(non_executes, dico) {
-  k <- .cle_causes(non_executes$cause, dico)
+.dedoublonner_non_executes <- function(non_executes, dico, ordre = .ordre_codes(dico)) {
+  k <- .cle_causes(non_executes$cause, dico, ordre)
   cle <- paste(non_executes$code, non_executes$table, non_executes$colonne, sep = "\r")
   o <- order(cle, k$rang, k$position, method = "radix")
   .trier(non_executes[o[!duplicated(cle[o])], , drop = FALSE], dico)
@@ -5399,7 +5450,7 @@ parties_ligne <- function() lapply(.PARTIES_LIGNE, function(p) list(table = p$ta
   # (M185, M194, M195 ; .dedoublonner_non_executes()) ; une règle empêchée reste toujours
   # ici, même si une autre règle de même clé a détecté : la clé présente aussi dans controles
   # est une détection partielle, dont le nombre est un minorant (ADR 0010, huitième série, (e))
-  non_executes <- .dedoublonner_non_executes(non_executes, dico)
+  non_executes <- .dedoublonner_non_executes(non_executes, dico, ctx$ordre_codes)
 
   controles <- controles[ordre, , drop = FALSE]
   traitement <- traitement[ordre]
