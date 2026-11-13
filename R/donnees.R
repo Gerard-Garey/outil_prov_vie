@@ -3844,13 +3844,20 @@ parties_ligne <- function() lapply(.PARTIES_LIGNE, function(p) list(table = p$ta
     cle_nd <- cle_de(versions_nd)
     effet_nd <- as.numeric(v("date_effet"))[versions_nd]
     fin_nd <- as.numeric(v("date_fin"))[versions_nd]
-    for (i in which(lignes & !is.na(survenance))) {
-      j <- which(cle_nd == cle[i] & !is.na(effet_nd) & effet_nd <= survenance[i] & (is.na(fin_nd) | fin_nd >= survenance[i]))
-      if (length(j) > 0L) {
-        trouvees_nd[[i]] <- versions_nd[j]
-        if (!valeurs[i]) index[[i]] <- versions_nd[j]
-      }
-    }
+    # paires (élément, version non déterminée) de même clé (.paires() : coût proportionnel au
+    # nombre de paires), puis test des dates sur les seules paires
+    el <- which(lignes & !is.na(survenance))
+    p <- .paires(cle[el], cle_nd)
+    e <- el[p$i]
+    s <- survenance[e]
+    garde <- !is.na(effet_nd[p$j]) & effet_nd[p$j] <= s & (is.na(fin_nd[p$j]) | fin_nd[p$j] >= s)
+    e <- e[garde]
+    j <- versions_nd[p$j[garde]]
+    par_element <- split(j, factor(e, levels = unique(e)))
+    i <- as.integer(names(par_element))
+    trouvees_nd[i] <- par_element
+    sans_valeur <- !valeurs[i]
+    index[i[sans_valeur]] <- par_element[sans_valeur]
   }
   list(tc = "garanties_souscrites", valeurs = valeurs, inconnu = lengths(index) > 0L, index = index, domaine = c(TRUE, FALSE),
        versions = trouvees, versions_nd = trouvees_nd)

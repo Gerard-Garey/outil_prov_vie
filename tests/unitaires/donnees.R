@@ -4713,3 +4713,102 @@ verifier_egal("(3.8) postes_a_arreter(), règle (iii) (#33, critère 1) : P1 et 
               list(pa33$postes$motif_arret, pa33$refus_tables$postes_arretes[pa33$refus_tables$table == "dossiers"]),
               list(c("manquant_obligatoire", NA, "manquant_obligatoire"),
                    "deces/capitaux_non_reclames;deces/sinistres_declares_non_regles"))
+
+# .garantie_en_vigueur3() : appariement des versions non déterminées par clé (P7 de la revue
+# finale de Bdr-b1, #34). Oracle : ancienne forme, une boucle sur les éléments avec un which()
+# sur toutes les versions non déterminées (coût éléments x versions non déterminées) ; la sortie
+# doit lui être identique, sur un banc aléatoire (graine fixée : clés multiples, versions non
+# déterminées multiples par clé, dates manquantes, éléments hors `lignes`, éléments déjà vrais).
+gev3_ancien <- function(ctx, code, cle, survenance, lignes = rep(TRUE, length(cle)), college = TRUE) {
+  v <- function(c1) ns$.valeurs(ctx, "garanties_souscrites", c1)
+  cle_de <- function(k) if (college) paste(v("id_contrat")[k], v("college")[k], sep = "\r") else as.character(v("id_contrat")[k])
+  versions <- which(ns$.valeurs_vue(ctx, "garanties_souscrites", "code_garantie") %in% code)
+  cle_v <- cle_de(versions)
+  effet <- as.numeric(v("date_effet"))[versions]
+  fin <- as.numeric(v("date_fin"))[versions]
+  par_cle <- split(seq_along(cle_v), factor(cle_v, levels = unique(cle_v)))
+  trouvees <- lapply(seq_along(cle), function(i) {
+    j <- if (is.na(cle[i])) NULL else par_cle[[cle[i]]]
+    if (is.na(survenance[i]) || length(j) == 0L) return(integer(0))
+    versions[j[!is.na(effet[j]) & effet[j] <= survenance[i] & (is.na(fin[j]) | fin[j] >= survenance[i])]]
+  })
+  valeurs <- lengths(trouvees) > 0L
+  nd <- ns$.nd_vue(ctx, "garanties_souscrites")
+  index <- vector("list", length(cle))
+  trouvees_nd <- vector("list", length(cle))
+  if (any(nd)) {
+    versions_nd <- which(nd & v("code_garantie") %in% code)
+    cle_nd <- cle_de(versions_nd)
+    effet_nd <- as.numeric(v("date_effet"))[versions_nd]
+    fin_nd <- as.numeric(v("date_fin"))[versions_nd]
+    for (i in which(lignes & !is.na(survenance))) {
+      j <- which(cle_nd == cle[i] & !is.na(effet_nd) & effet_nd <= survenance[i] & (is.na(fin_nd) | fin_nd >= survenance[i]))
+      if (length(j) > 0L) {
+        trouvees_nd[[i]] <- versions_nd[j]
+        if (!valeurs[i]) index[[i]] <- versions_nd[j]
+      }
+    }
+  }
+  list(tc = "garanties_souscrites", valeurs = valeurs, inconnu = lengths(index) > 0L, index = index, domaine = c(TRUE, FALSE),
+       versions = trouvees, versions_nd = trouvees_nd)
+}
+# contexte minimal : vue à un arrêté antérieur à l'extraction (visibilité déposée, `statut` NA :
+# version non déterminée), `n_v` versions de garanties_souscrites, `n_c` contrats, 3 collèges
+gev3_ctx <- function(n_v, n_c, n_e) {
+  gs <- data.frame(id_contrat = sprintf("K%03d", sample.int(n_c, n_v, TRUE)),
+                   college = sample(c("C1", "C2", "C3", NA), n_v, TRUE),
+                   code_garantie = sample(c("deces", "invalidite"), n_v, TRUE, c(0.7, 0.3)),
+                   date_effet = as.Date("2020-01-01") + sample(c(0:2000, NA), n_v, TRUE),
+                   date_fin = as.Date("2020-01-01") + sample(c(0:3000, NA, NA), n_v, TRUE), stringsAsFactors = FALSE)
+  ctx <- new.env()
+  ctx$base <- list(garanties_souscrites = gs)
+  ctx$retenu <- list(garanties_souscrites = sample(c(TRUE, FALSE), n_v, TRUE, c(0.6, 0.4)))
+  ctx$date_extraction <- D("2026-12-31"); ctx$arrete <- D("2025-12-31")
+  ctx$visibilite_vue <- list(statut = list(garanties_souscrites = ifelse(ctx$retenu$garanties_souscrites, TRUE,
+                                                                          sample(c(NA, FALSE), n_v, TRUE, c(0.7, 0.3)))))
+  ctx
+}
+set.seed(34)
+ecarts_gev3 <- vapply(seq_len(200L), function(k) {
+  n_c <- sample(c(1L, 3L, 12L), 1L)
+  ctx <- gev3_ctx(sample(1:60, 1L), n_c, 0L)
+  n_e <- sample(1:40, 1L)
+  college <- sample(c(TRUE, FALSE), 1L)
+  gs <- ctx$base$garanties_souscrites
+  cle <- if (college) paste(sprintf("K%03d", sample.int(n_c + 1L, n_e, TRUE)), sample(c("C1", "C2", "C3", NA), n_e, TRUE), sep = "\r")
+         else sprintf("K%03d", sample.int(n_c + 1L, n_e, TRUE))
+  cle[sample.int(n_e, 1L)] <- NA
+  surv <- as.numeric(as.Date("2020-01-01") + sample(c(-200:3200, NA), n_e, TRUE))
+  lignes <- sample(c(TRUE, FALSE), n_e, TRUE, c(0.8, 0.2))
+  code <- sample(list("deces", "invalidite", c("deces", "invalidite")), 1L)[[1L]]
+  !identical(ns$.garantie_en_vigueur3(ctx, code, cle, surv, lignes, college), gev3_ancien(ctx, code, cle, surv, lignes, college))
+}, TRUE)
+verifier("garantie_en_vigueur3 : sortie identique à l'ancienne forme (boucle par élément) sur 200 tirages (clés multiples, versions non déterminées multiples par clé, dates manquantes, éléments hors lignes)",
+         !any(ecarts_gev3))
+verifier("garantie_en_vigueur3 : le banc contient des versions non déterminées appariées (au moins un élément inconnu et un élément vrai portant des versions_nd)",
+         {
+           set.seed(35)
+           ctx <- gev3_ctx(60L, 3L, 0L)
+           cle <- paste(sprintf("K%03d", sample.int(3L, 40L, TRUE)), sample(c("C1", "C2", "C3"), 40L, TRUE), sep = "\r")
+           r <- ns$.garantie_en_vigueur3(ctx, "deces", cle, as.numeric(as.Date("2020-01-01")) + sample(0:3000, 40L, TRUE))
+           any(r$inconnu) && any(r$valeurs & lengths(r$versions_nd) > 0L)
+         })
+# travail de .garantie_en_vigueur3 : travail_de() de tests/harnais.R ; ops = which et opérations
+# vectorielles que l'ancienne forme applique à toutes les versions non déterminées pour chaque
+# élément (`[` exclu : l'extraction d'un élément `x[i]` est faite en temps constant) ; `.paires`
+# (sous) est la fonction d'appariement de la nouvelle forme
+OPS_GEV3 <- c("which", "==", "<=", ">=", "&", "|", "!", "is.na", "match", "unique", "order", "rep", "c")
+travail_gev3 <- function(f, n, sous = character(0)) {
+  set.seed(36)
+  ctx <- gev3_ctx(n, n, 0L)
+  ctx$retenu$garanties_souscrites[] <- FALSE; ctx$visibilite_vue$statut$garanties_souscrites[] <- NA
+  ctx$base$garanties_souscrites$code_garantie <- "deces"
+  cle <- paste(sprintf("K%03d", sample.int(n, n, TRUE)), sample(c("C1", "C2", "C3"), n, TRUE), sep = "\r")
+  travail_de(f, ctx, "deces", cle, as.numeric(as.Date("2020-01-01")) + sample(0:3000, n, TRUE), ops = OPS_GEV3, sous = sous)
+}
+travail_gev3_nouveau <- vapply(c(500L, 2000L), function(n) travail_gev3(ns$.garantie_en_vigueur3, n, sous = ".paires"), 0)
+travail_gev3_ancien <- vapply(c(500L, 2000L), function(n) travail_gev3(gev3_ancien, n), 0)
+verifier("performance : travail de .garantie_en_vigueur3 de 500 à 2 000 éléments et versions non déterminées multiplié par moins de 6 (linéaire : 4 ; boucle par élément : 16 ; P7, #34)",
+         travail_gev3_nouveau[2L] / travail_gev3_nouveau[1L] < 6)
+verifier("performance : la mesure détecte l'ancienne forme (travail de la boucle par élément multiplié par plus de 10 sur les mêmes tailles)",
+         travail_gev3_ancien[2L] / travail_gev3_ancien[1L] > 10)
