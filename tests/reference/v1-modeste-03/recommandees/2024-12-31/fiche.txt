@@ -58,6 +58,9 @@ plan/postes/deces/sinistres_declares_non_regles/parametres/structure_familiale/t
 plan/postes/deces/sinistres_declares_non_regles/parametres/structure_familiale/nombre_enfants	double	0
 plan/postes/deces/sinistres_declares_non_regles/parametres/age_limite_enfant_majoration	integer	26
 plan/postes/deces/sinistres_declares_non_regles/parametres/liens_conjoint_majoration	character	concubin	conjoint	partenaire_pacs
+plan/donnees/exclusions/1/motif	character	D12
+plan/donnees/exclusions/1/famille	character	engagement
+plan/donnees/exclusions/1/action	character	conserver
 plan/donnees/seuils/d02c_age_max/assures_affiliation	integer	70
 plan/donnees/seuils/d02c_age_max/assures_sinistre	integer	75
 plan/donnees/seuils/d02c_age_max/famille	integer	110
@@ -72,6 +75,7 @@ plan/donnees/seuils/d03g_delai_jours/famille	integer	3
 plan/donnees/seuils/d03g_delai_jours/prestations	integer	0
 plan/donnees/seuils/d03g_delai_jours/rentes	integer	2
 plan/donnees/seuils/d03g_delai_jours/sinistres	integer	5
+plan/donnees/seuils/d07b_mois	integer	6
 plan/restitution/echeanciers	character	aucun
 plan/restitution/triangles	character	aucun
 plan/liens	liste
@@ -97,11 +101,11 @@ parametres_retenus/hypotheses_defaut/referentiel	character
 parametres_retenus/hypotheses_defaut/poste	character
 parametres_retenus/hypotheses_defaut/valeur	character
 parametres_retenus/hypotheses_defaut/nombre	integer
-parametres_retenus/exclusions/motif	character
-parametres_retenus/exclusions/famille	character
-parametres_retenus/exclusions/action	character
-parametres_retenus/exclusions/nombre_lignes	integer
-parametres_retenus/exclusions/nombre_dossiers	integer
+parametres_retenus/exclusions/motif	character	D12
+parametres_retenus/exclusions/famille	character	engagement
+parametres_retenus/exclusions/action	character	conserver
+parametres_retenus/exclusions/nombre_lignes	integer	1
+parametres_retenus/exclusions/nombre_dossiers	integer	1
 parametres_retenus/plafonds/regle	character
 parametres_retenus/plafonds/garantie	character
 parametres_retenus/plafonds/poste	character
@@ -127,11 +131,11 @@ empreintes/donnees/cotisations	character	8b6504db0a9ff78dd22d6e5801512bc3
 empreintes/fichiers	null
 empreintes/tables/mortalite_fictive_v1_03	character	4eb68f9af5835cad25255f14232f5df0
 empreintes/tables/tme_fictive_v1_03	character	a5b4c1cf5cf86afc6ac166504fe808d7
-empreintes/resultat	character	2e24c389ba979dc753b02427e4c3e3dc
-empreintes/code	character	667d17c334357ba12a15d30d94de3599
+empreintes/resultat	character	b5d92ed48bbb5db353227d44115c2336
+empreintes/code	character	1877715c3b41ed2ccd5d0389e260b364
 empreintes/representation	character	provie-resultat-1
 versions/r	character	4.3.3
-versions/provie	character	0.5.0
+versions/provie	character	0.7.0
 versions/fiche	integer	1
 versions/dictionnaire	character	1.5
 plateforme/r	character	R version 4.3.3 (2024-02-29)
