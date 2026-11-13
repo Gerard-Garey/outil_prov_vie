@@ -121,28 +121,71 @@ jobs:
           persist-credentials: false
       # actions/cache est une action de GitHub, donc admise par la limitation des actions
       # du dépôt ; une action tierce de cache apt ne l'est pas. Clé fixe : pour renouveler
-      # le cache, changer le suffixe.
+      # le cache, changer le suffixe (v2 : ensemble de paquets sans Java, issue #95).
       - name: Cache des paquets apt
         uses: actions/cache@5a3ec84eff668545956fd18022155c47e93e2684 # v4.2.3
         with:
           path: ${{ env.ARCHIVES_APT }}
-          key: apt-latex-ubuntu-24.04-v1
+          key: apt-latex-ubuntu-24.04-v2
+      # CLAUDE.md, « Architecture » : aucune dépendance à Java, directe ou indirecte, y
+      # compris dans la chaîne de documentation (issue #95). L'image du runner contient déjà
+      # des JDK : le contrôle ne porte donc pas sur la machine, mais sur les paquets que ce
+      # job installe (différence des paquets installés avant et après, étape suivante).
+      - name: Paquets installés avant le job
+        run: dpkg-query -W -f='${db:Status-Abbrev} ${Package}\n' | awk '$1=="ii"{print $2}' | LC_ALL=C sort > "$RUNNER_TEMP/paquets-avant.txt"
       # r-base-core : le contrôle du préambule est exécuté ici (ADR 0010, point 27), il
       # n'emploie que R de base et ne dépend pas de la version 4.3.3.
+      # --no-install-recommends : les paquets recommandés entraînent default-jre. Les
+      # \usepackage de docs/latex/ viennent de texlive-latex-base, texlive-latex-recommended,
+      # texlive-fonts-recommended et tex-gyre, sauf framed.sty, que seul texlive-latex-extra
+      # fournit ; or celui-ci dépend de libpdfbox-java et de libcommons-logging-java. On
+      # n'installe donc pas ce paquet : on télécharge son .deb et on n'en extrait que
+      # framed.sty, placé dans l'arbre TEXMFLOCAL (/usr/local/share/texmf).
       - name: TeX Live et R
         run: |
           set -euo pipefail
           mkdir -p "$ARCHIVES_APT/partial"
           apt_options=(-o "Dir::Cache::archives=$ARCHIVES_APT" -o APT::Sandbox::User=root)
           sudo apt-get update
-          sudo apt-get install -y "${apt_options[@]}" \
-            texlive-latex-base texlive-latex-extra texlive-fonts-recommended \
+          sudo apt-get install -y --no-install-recommends "${apt_options[@]}" \
+            texlive-latex-base texlive-latex-recommended texlive-fonts-recommended \
             texlive-lang-french tex-gyre
           sudo apt-get install -y --no-install-recommends "${apt_options[@]}" r-base-core
           # apt crée partial/ et lock en root : sans cela, actions/cache (utilisateur du
           # runner) ne peut ni archiver ni restaurer le répertoire.
           sudo rm -rf "$ARCHIVES_APT/partial" "$ARCHIVES_APT/lock"
           sudo chown -R "$(id -u):$(id -g)" "$ARCHIVES_APT"
+          # framed.sty seul, extrait du .deb de texlive-latex-extra (non installé).
+          framed="$RUNNER_TEMP/framed"
+          mkdir -p "$framed"
+          (cd "$framed" && apt-get download texlive-latex-extra)
+          dpkg-deb --fsys-tarfile "$framed"/texlive-latex-extra_*.deb \
+            | tar -x -C "$framed" ./usr/share/texlive/texmf-dist/tex/latex/framed/framed.sty
+          sudo install -D -m 644 \
+            "$framed/usr/share/texlive/texmf-dist/tex/latex/framed/framed.sty" \
+            /usr/local/share/texmf/tex/latex/framed/framed.sty
+          sudo mktexlsr /usr/local/share/texmf
+          kpsewhich framed.sty
+      - name: Aucun paquet Java installé par le job
+        run: |
+          set -euo pipefail
+          dpkg-query -W -f='${db:Status-Abbrev} ${Package}\n' | awk '$1=="ii"{print $2}' | LC_ALL=C sort > "$RUNNER_TEMP/paquets-apres.txt"
+          LC_ALL=C comm -13 "$RUNNER_TEMP/paquets-avant.txt" "$RUNNER_TEMP/paquets-apres.txt" \
+            > "$RUNNER_TEMP/paquets-installes.txt"
+          echo "$(wc -l < "$RUNNER_TEMP/paquets-installes.txt") paquets installés par le job."
+          # Paquets à l'état « ii » seulement (un « rc » n'est pas installé). Motifs, par noms
+          # de paquets Debian et Ubuntu : *-java, *-java-* (libreoffice-java-common), java-*
+          # (java-common), *-jni, default-jre*, default-jdk*, OpenJDK et OpenJFX (« ^openj[df] » :
+          # écrit ainsi, car tests/controles/absence_java.R refuse le nom du JDK en toutes
+          # lettres, et pour ne pas attraper openjade), temurin-*, zulu*, jarwrapper, gcj-*.
+          # Limite : un contrôle par nom ; un paquet Java d'un autre nom (JDK d'un tiers,
+          # bibliothèque dont le nom ne dit rien de Java) passe au travers.
+          if grep -nE -e '-java$' -e '-java-' -e '^java-' -e '-jni$' -e '^default-j(re|dk)' \
+               -e '^openj[df]' -e '^temurin-' -e '^zulu' -e '^jarwrapper' -e '^gcj-' \
+               "$RUNNER_TEMP/paquets-installes.txt"; then
+            echo "::error::paquet Java installé par le job (CLAUDE.md, « Architecture » ; issue #95)"
+            exit 1
+          fi
       - name: Compilation (pdfLaTeX, trois passes)
         run: |
           set -euo pipefail
