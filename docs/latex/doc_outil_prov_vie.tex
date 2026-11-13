@@ -2636,6 +2636,7 @@ Les constantes du module sont citées d'après le code (\code{R/donnees.R})~:
 \code{RUBRIQUES\_DECLARATIONS} & \code{exclusions}, \code{hypotheses}, \code{seuils}, \code{evaluations\_gestion}~: rubriques admises de \code{declarations}. \\
 \code{SEUIL\_DELAI\_D03G} & \code{"d03g\_delai\_jours"}~: entrée de \code{seuils} qui porte le délai du défaut D03g, en jours, par table, commun aux deux référentiels\fsp; lue aussi par le module \code{plan} (entrées admises de \code{seuils}). \\
 \code{SEUILS\_AGE\_D02C} & \code{d02c\_age\_min}, \code{d02c\_age\_max}~: entrées de \code{seuils} qui portent les bornes basse et haute de l'âge du défaut D02c, en années entières, par emploi\fsp; lues aussi par le module \code{plan} (entrées admises de \code{seuils}). \\
+\code{SEUIL\_MOIS\_D07B} & \code{"d07b\_mois"}~: entrée de \code{seuils} qui porte le nombre de mois du défaut D07~(b), entier au moins égal à 1, commun aux deux référentiels\fsp; lue aussi par le module \code{plan} (entrées admises de \code{seuils}). \\
 \code{ENTREES\_CONVENTIONS} & \code{age}, \code{instant\_date}, \code{repartition\_annee}, \code{fractionnement}, \code{decompte\_jours}, \code{limite\_age}~: entrées admises de \code{conventions}\fsp; seules \code{age} et \code{limite\_age} sont contrôlées et lues par \code{controler\_base()}, \code{valider\_plan()} contrôlant les valeurs de toutes (section~\ref{sec:plan-schema}). \\
 \code{REGLES\_LIMITE\_AGE} & \code{atteinte}, \code{depassement}~: règle de limite d'âge du défaut D07~(c). \\
 \code{CONVENTIONS\_LIMITE\_AGE} & \code{revolu}, \code{millesime}~: conventions d'âge admises pour le défaut D07~(c). \\
@@ -2644,7 +2645,7 @@ Les constantes du module sont citées d'après le code (\code{R/donnees.R})~:
 \code{COMPOSANTES\_ENJEU} & Tableau des composantes de l'enjeu (composante, unité, définition), dix lignes. \\
 \code{CAUSE\_NON\_IMPLEMENTE} & \code{"non\_implemente"}~: cause d'un contrôle reporté. \\
 \code{CAUSE\_NON\_LISIBLE} & \code{"non\_lisible"}~: cause d'un sous-cas illisible dans la base. \\
-\code{CONTROLES\_NON\_IMPLEMENTES} & Tableau des contrôles reportés (code, table, colonne), quatorze lignes. \\
+\code{CONTROLES\_NON\_IMPLEMENTES} & Tableau des contrôles reportés (code, table, colonne), onze lignes. \\
 \end{tabular}
 \end{center}
 
