@@ -1996,10 +1996,19 @@ Chevauchement (versions de \code{garanties\_souscrites} par contrat, garantie et
   manquante ne s'apparie à aucune ligne, d'un côté comme de l'autre~: une
   ligne de clé manquante n'a aucune ligne jointe, et une ligne jointe de
   clé manquante n'est jointe à aucune ligne. Un seul noyau porte cette
-  forme pour les règles~B (dont la recherche des orphelines à référence
-  composite, \code{affiliations.college}, où une clé dont une partie manque
-  ne s'apparie pas davantage) et~V\fsp; c'est aussi la règle des autres
-  jointures du module. Motif~: une clé manquante n'identifie rien, et
+  forme pour l'entrée «~décès souscrit~» de la règle~B, pour la recherche
+  des orphelines à référence composite, \code{affiliations.college} (où
+  une clé dont une partie manque ne s'apparie pas davantage), et pour les
+  règles~V\fsp; la jointure par identifiant du module
+  (\code{.index\_jointure()}) suit la même règle. Écart connu du code à la
+  spécification, renvoyé à l'issue~130 (décision du mainteneur du
+  13~novembre~2026)~: deux règles~B \code{hors\_domaine}, sur
+  \code{designations.id\_affiliation} et sur
+  \code{ayants\_droit\_sante.id\_affiliation}, testent l'existence de
+  l'affiliation par \code{\%in\%}, qui apparie une clé manquante à une clé
+  manquante~; l'effet se borne à une ligne \code{hors\_domaine} de trop
+  sur une table déjà refusée en portée table, sans provision ni verdict
+  touché. Motif~: une clé manquante n'identifie rien, et
   apparier deux absences inventerait un lien, ce qui serait une
   imputation\fsp; la ligne porte déjà un refus de portée table (clé
   primaire ou étrangère manquante). L'alternative écartée, «~une clé
