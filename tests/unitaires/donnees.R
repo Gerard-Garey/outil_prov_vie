@@ -2103,20 +2103,13 @@ verifier_egal("B8 (i) : graphe de la règle B acyclique (tri topologique complet
 cycle <- tryCatch({ ns$.strates_regle_b(list(a = "b", b = "c", c = "a")); "aucune erreur" }, error = function(e) conditionMessage(e))
 verifier("B8 (i) : un cycle est une erreur interne de provie (aucun point fixe)",
          startsWith(cycle, "erreur interne de provie : graphe de la ") && grepl("gle B cyclique (b, c, a)", cycle, fixed = TRUE))
-# B8 (ii) : couverture de la constante, recoupée avec les appels de .regle() de la règle B sur
-# la base de référence (toutes tables et colonnes), sur le modèle du recensement (B.2) : pour
-# chaque appel exécuté (une fois, dans la passe de sa strate), les colonnes non clés refusables
-# pour leur valeur de `lit` (colonnes contrôlées par une règle R de portée colonne), hors la
-# colonne contrôlée, sont exactement celles de la constante, par portée et colonne contrôlée
-.GlobalEnv$.appels_b <- list()
-suppressMessages(trace(".regle", where = ns, print = FALSE, tracer = quote(
-  if (is.null(ctx$refus_pv) && (is.null(ctx$strate) || .strate_regle(ctx$dico, code, table, colonne) == ctx$strate))
-    .GlobalEnv$.appels_b[[length(.GlobalEnv$.appels_b) + 1L]] <- list(code = code, table = table, colonne = colonne,
-                                                                      lit = lit, traitement = traitement))))
-invisible(controler_base(base_ref, A))
-suppressMessages(untrace(".regle", where = ns))
-appels_b <- .GlobalEnv$.appels_b
-rm(".appels_b", envir = .GlobalEnv)
+# B8 (ii) : couverture de la constante, recoupée avec les appels de .regle() de la règle B du
+# registre (.regles_b() : base squelette, toutes tables et colonnes du dictionnaire ; #56,
+# point 4), sur le modèle du recensement (B.2) : pour chaque appel enregistré, les colonnes non
+# clés refusables pour leur valeur de `lit` (colonnes contrôlées par une règle R de portée
+# colonne), hors la colonne contrôlée, sont exactement celles de la constante, par portée et
+# colonne contrôlée
+appels_b <- ns$.regles_b(d)
 portee_b <- vapply(appels_b, function(k) ns$.portee_effective(d, k$code, k$table, k$colonne), "")
 soi_b <- vapply(appels_b, function(k) paste(k$table, k$colonne, sep = "."), "")
 refusables <- unique(soi_b[portee_b == "colonne" & vapply(appels_b, `[[`, "", "traitement") == "R"])
@@ -2128,11 +2121,35 @@ recensees <- function(p) {
   stats::setNames(x, s)[sort(s, method = "radix")]
 }
 constante <- function(p) lapply(lec[[p]], sort, method = "radix")[sort(names(lec[[p]]), method = "radix")]
-verifier_egal("B8 (ii) : couverture : colonnes refusables lues par chaque règle concernée = constante .LECTURES_REGLE_B (portée colonne et portée table) ; 440 appels de .regle() en règle B, 108 colonnes refusables, 83 règles concernées (58 de portée colonne, 25 de portée table), toutes R (B.2)",
+verifier_egal("B8 (ii) : couverture : colonnes refusables lues par chaque règle concernée = constante .LECTURES_REGLE_B (portée colonne et portée table) ; 440 appels de .regle() enregistrés en règle B, 108 colonnes refusables, 83 règles concernées (58 de portée colonne, 25 de portée table), toutes R (B.2)",
               list(recensees("colonne"), recensees("table"), length(appels_b), length(refusables), sum(concernee),
                    sum(concernee & portee_b == "colonne"), sum(concernee & portee_b == "table"),
                    unique(vapply(appels_b[concernee], `[[`, "", "traitement"))),
               list(constante("colonne"), constante("table"), 440L, 108L, 83L, 58L, 25L, "R"))
+# B8 (ii), recoupement du registre avec les appels réellement exécutés (#56, reprise, m2) :
+# trace de .regle() pendant controler_base(), hors relevé du registre (contexte squelette, arrêté
+# NA) ; un appel est exécuté s'il est en règle B et retenu par `ctx$passe` (passes du domaine)
+# ou hors passe (clés). Sur la base de référence (toutes tables et colonnes), l'ensemble des
+# clés (code, table, colonne, lit, traitement) exécutées est égal au registre, en multiensemble
+# (440 appels, 435 clés distinctes : cinq règles génériques et propres de même clé) ; sur v1-modeste-03 à 2025-12-31 (cinq tables facultatives absentes), il y est inclus.
+cle_appel <- function(k) paste(k$code, k$table, k$colonne, paste(k$lit, collapse = ","), k$traitement, sep = "|")
+executes_b <- function(b, arrete) {
+  .GlobalEnv$.appels_b <- list()
+  suppressMessages(trace(".regle", where = ns, print = FALSE, tracer = quote(
+    if (is.null(ctx$refus_pv) && !is.na(ctx$arrete) && (is.null(ctx$passe) || ctx$passe(code, table, colonne, lit, traitement)))
+      .GlobalEnv$.appels_b[[length(.GlobalEnv$.appels_b) + 1L]] <- list(code = code, table = table, colonne = colonne,
+                                                                        lit = lit, traitement = traitement))))
+  on.exit({ suppressMessages(untrace(".regle", where = ns)); rm(".appels_b", envir = .GlobalEnv) })
+  invisible(provie::controler_base(b, arrete))
+  vapply(.GlobalEnv$.appels_b, cle_appel, "")
+}
+registre_b <- vapply(appels_b, cle_appel, "")
+exec_ref <- executes_b(base_ref, A)
+exec_j3 <- executes_b(lire_jeu(file.path(racine, "inst", "extdata", "jeux", "v1-modeste-03"))$base, D("2025-12-31"))
+verifier_egal("B8 (ii), registre et exécution (#56, m2) : base de référence, clés exécutées = registre (440 appels, 435 clés distinctes) ; v1-modeste-03 à 2025-12-31 : 366 clés exécutées, toutes dans le registre",
+              list(sort(exec_ref, method = "radix"), length(registre_b), length(unique(registre_b)), length(exec_j3),
+                   all(exec_j3 %in% registre_b)),
+              list(sort(registre_b, method = "radix"), 440L, 435L, 366L, TRUE))
 cles_b <- unique(paste(vapply(appels_b[concernee], `[[`, "", "code"), soi_b[concernee], sep = "|"))
 lignes_b <- function(r) {
   x <- r$controles_non_executes
@@ -2356,7 +2373,7 @@ corpus <- list(
        "garanties_souscrites", "date_fin", 5L, dates(NA, "1901-01-01", "2009-12-31", "2014-12-31", "2015-01-01", "9999-12-30")),
   list(avec(function(b) { b$parametres$age_max[4L] <- 130L; b }), "parametres", "age_max", 4L, c(NA, 0L, 17L, 18L, 25L, 120L)),
   # site 4 : seule garantie (GS4) d'un contrat individuel (CT2) de code refusé ; puis clés NA
-  # (une clé NA s'apparie à une clé NA, .existe3())
+  # (une clé manquante ne s'apparie à aucune ligne, .existe_kleene() ; #56, point 6)
   list(avec(function(b) { b$garanties_souscrites$code_garantie[4L] <- "zzz"; b$contrats$date_terme[2L] <- D(NA); b }),
        "garanties_souscrites", "code_garantie", 4L),
   list(site4_na, "garanties_souscrites", "code_garantie", 4L),
@@ -2377,8 +2394,10 @@ chev <- Filter(function(j) j$cle == "chevauchement|garanties_souscrites|NA", bat
 verifier_egal("B3 : chevauchement de garanties_souscrites : GS1, GS2, GS3 écartées (GS2 peut appartenir au groupe de GS1 ou de GS3), GS4 non détectée",
               chev, c(NA, NA, NA, FALSE))
 r <- tryCatch(cb(site4_na), error = function(e) conditionMessage(e))
-verifier_egal("site 4, clés NA (contrats.id_contrat de CT2 et garanties_souscrites.id_contrat de GS4, code de GS4 refusé) : pas d'erreur interne ; date_terme de CT2 écartée, cause hors_domaine",
-              if (is.character(r)) r else ligne(r$controles_non_executes, "hors_domaine", "contrats", "date_terme")$cause, hd)
+verifier_egal("site 4, clés NA (contrats.id_contrat de CT2 et garanties_souscrites.id_contrat de GS4, code de GS4 refusé) : pas d'erreur interne ; la clé manquante de GS4 ne s'apparie pas à celle de CT2 (#56, v1.6) : CT2 sans garantie décès jointe, date_terme interdite et présente, hors_domaine détecté (avant #56 : écartée, cause hors_domaine)",
+              if (is.character(r)) r else list(refus(r, hd, "contrats", "date_terme")$identifiants,
+                                               nrow(ligne(r$controles_non_executes, hd, "contrats", "date_terme"))),
+              list("\\N", 0L))
 r <- cb(six_codes)
 verifier_egal("chevauchement, lecture exacte (pour toute affectation, il existe une ligne qui recouvre) : GS3 de code refusé, recouverte quel que soit son code par une version ouverte de CT1 et du même collège : détectée (refus de portée table) ; les autres versions de CT1 écartées",
               list(refus(r, "chevauchement", "garanties_souscrites")$identifiants,
@@ -2396,6 +2415,167 @@ verifier_egal(".chevauchements3() : A et B connues [2000, 2010], ligne de code i
                                                   c(2000, 2005), c(2000, 2005), c(2010, 2006), c(2010, 2006), rep(FALSE, 2),
                                                   c(FALSE, TRUE)))),
               list(c(NA, NA, TRUE), c(NA, NA)))
+
+section("donnees : robustesse des règles B et V à trois valeurs (#56 ; spécification v1.6, § 2.2, B.4, « Clé manquante »)")
+# point 6 : noyau unique du motif existentiel de Kleene (.existe_kleene()), lu par .existe3()
+# (règle B), .existe_vue3() (règle V) et le site 39 (.orphelines()) : une clé manquante ne
+# s'apparie à aucune ligne, d'un côté comme de l'autre ; valeurs « a » (ligne vraie), « b » et
+# « c » (lignes possibles), NA (lignes vraie et possible de clé NA), « d » (ligne ni l'un ni l'autre)
+k56 <- ns$.existe_kleene(c("a", "b", NA, "c", "d", "b"), c("a", NA, "b", "c", NA, "d", "b"),
+                         vrai = c(TRUE, TRUE, FALSE, FALSE, FALSE, FALSE, FALSE),
+                         possible = c(FALSE, FALSE, TRUE, TRUE, TRUE, FALSE, TRUE))
+verifier_egal("#56, point 6 : .existe_kleene() : « a » vrai ; « b » inconnu (lignes possibles 3 et 7) ; NA faux et connu (une clé manquante ne s'apparie ni à la ligne vraie ni à la ligne possible de clé NA) ; « c » inconnu (ligne 4) ; « d » faux",
+              k56, list(valeurs = c(TRUE, FALSE, FALSE, FALSE, FALSE, FALSE), inconnu = c(FALSE, TRUE, FALSE, TRUE, FALSE, TRUE),
+                        index = list(NULL, c(3L, 7L), NULL, 4L, NULL, c(3L, 7L))))
+# point 6, règle B (.existe3(), site 4 ; cas atteignable de na56.R, spécification v1.6, § 2.2,
+# B.4) : v1-modeste-03 à 2025-12-31, premier contrat individuel à date_terme (CI001) privé de
+# date_terme, sa garantie décès (GI001) ; avant #56, avec les deux clés manquantes, l'entrée
+# « décès souscrit » appariait NA à NA : manquant_obligatoire sur contrats.date_terme
+b56 <- lire_jeu(file.path(racine, "inst", "extdata", "jeux", "v1-modeste-03"))$base
+i56 <- which(grepl("^individuel", b56$contrats$nature_contrat) & !is.na(b56$contrats$date_terme))[1L]
+j56 <- which(b56$garanties_souscrites$id_contrat == b56$contrats$id_contrat[i56] &
+               b56$garanties_souscrites$code_garantie == "deces")[1L]
+id56 <- b56$contrats$id_contrat[i56]
+b56$contrats$date_terme[i56] <- D(NA)
+refus56 <- function(b) {
+  x <- controler_base(b, D("2025-12-31"))$refus_tables
+  x <- x[x$table %in% c("contrats", "garanties_souscrites"), ]
+  paste(x$table, x$colonne, x$motif, x$portee, x$nombre)
+}
+temoin56 <- refus56(b56)
+b56$contrats$id_contrat[i56] <- NA
+b56$garanties_souscrites$id_contrat[j56] <- NA
+deux56 <- refus56(b56)
+b56$garanties_souscrites$id_contrat[j56] <- id56
+un56 <- refus56(b56)
+verifier_egal("#56, point 6, règle B (cas de na56.R, CI001 sans date_terme, garantie décès GI001) : témoin, manquant_obligatoire sur contrats.date_terme ; clés manquantes des deux côtés : plus de manquant_obligatoire sur date_terme (avant #56 : présent, NA apparié à NA) ; clé du contrat seule manquante : absent, comme avant",
+              list(id56, b56$garanties_souscrites$id_garantie_souscrite[j56], temoin56, deux56, un56),
+              list("CI001", "GI001", "contrats date_terme manquant_obligatoire colonne 1",
+                   c("contrats id_contrat manquant_obligatoire table 1", "garanties_souscrites NA refus_induit table 218",
+                     "garanties_souscrites id_contrat manquant_obligatoire table 1"),
+                   c("contrats id_contrat manquant_obligatoire table 1", "garanties_souscrites NA refus_induit table 218",
+                     "garanties_souscrites id_contrat D04b table 1")))
+# point 6, règle V (.existe_vue3(), inchangée) : clé NA de part et d'autre, lignes retenues et
+# non déterminées données par une copie de l'espace de noms (.nd_vue())
+env56 <- copie_ns()
+env56$.nd_vue <- function(ctx, table) c(FALSE, FALSE, TRUE, TRUE)
+ctx56 <- new.env()
+ctx56$retenu <- list(prestations = c(TRUE, TRUE, FALSE, FALSE))
+v56 <- env56$.existe_vue3(ctx56, "prestations", c("DO1", NA, "DO2", "DO3"), c("DO1", NA, "DO2", NA), rep(TRUE, 4L))
+verifier_egal("#56, point 6, règle V : .existe_vue3() : DO1 vrai (retenue) ; NA faux (ni la retenue ni la non déterminée de clé NA ne s'apparient) ; DO2 inconnu (non déterminée, ligne 3) ; DO3 faux",
+              v56[c("tc", "valeurs", "inconnu", "index")],
+              list(tc = "prestations", valeurs = c(TRUE, FALSE, FALSE, FALSE), inconnu = c(FALSE, FALSE, TRUE, FALSE),
+                   index = list(NULL, NULL, 3L, NULL)))
+# point 6, site 39 (.orphelines(), référence composite de affiliations.college) : une clé
+# composite dont une partie manque ne s'apparie à aucune ligne : AF1 de contrat « NA » (chaîne)
+# face à GS1 de id_contrat manquant, même collège ; avant #56, le collage des clés rendait
+# « NA » égal à la valeur manquante (AF1 non orpheline)
+r <- cb(avec(function(b) { b$affiliations$id_contrat <- "NA"; b$garanties_souscrites$id_contrat[1L] <- NA; b }))
+verifier_egal("#56, point 6, site 39 : AF1 (id_contrat « NA », collège ensemble) face à GS1 (id_contrat manquant, collège ensemble) : D04b sur affiliations.college (la clé manquante de GS1 ne s'apparie pas)",
+              refus(r, "D04b", "affiliations", "college")$identifiants, "AF1")
+# point 1 : site 39, toutes les colonnes cibles d'une ligne cible inconnues (`k` vide) : copie de
+# l'espace de noms dont .refus_valeur_de() refuse id_contrat et college de GS1 ; AF1 de collège
+# C9 (orpheline des lignes connues) peut porter la clé de GS1 : écartée, cause hors_domaine
+# (avant #56 : erreur interne « ligne écartée sans refus de valeur qui l'explique »)
+env56 <- copie_ns()
+rvd56 <- env56$.refus_valeur_de
+env56$.refus_valeur_de <- function(ctx, table, colonne) {
+  if (table == "garanties_souscrites" && colonne %in% c("id_contrat", "college")) list(list(code = hd, lignes = 1L))
+  else rvd56(ctx, table, colonne)
+}
+ctx56 <- env56$.contexte(avec(function(b) { b$affiliations$college <- "C9"; b }), d, list(date_extraction = A), A)
+e56 <- tryCatch({ env56$.orphelines(ctx56); "aucune erreur" }, error = function(e) conditionMessage(e))
+verifier_egal("#56, point 1 : site 39, id_contrat et college de GS1 inconnus (clé des colonnes connues vide) : pas d'erreur interne ; AF1 (collège C9) écartée : ligne (D04b, affiliations, college), cause hors_domaine, aucun constat sur affiliations",
+              list(e56, Filter(function(k) k$table == "affiliations", ctx56$non_executes),
+                   length(Filter(function(k) k$table == "affiliations", ctx56$constats))),
+              list("aucune erreur", list(list(code = "D04b", table = "affiliations", colonne = "college", cause = hd,
+                                              lu = "garanties_souscrites.id_contrat")), 0L))
+# point 2 : D01b, copies() sur une copie de l'espace de noms (.regle_vue() rend le verdict de
+# f() pour sinistres, traitement S ; .nd_vue() un masque donné) : SI1 et sa copie de même
+# identifiant (même contenu, saisie après), toutes deux retenues, SI2 non déterminée de contenu
+# différent ; témoin : en plus, SI3 non déterminée de même contenu, saisie avant
+copies56 <- function(b, retenu, nd) {
+  env <- copie_ns()
+  verdicts <- list()
+  env$.regle_vue <- function(ctx, code, table, colonne, lit, traitement, detection, f, ...) {
+    if (table == "sinistres" && traitement == "S") verdicts[[length(verdicts) + 1L]] <<- f()
+    invisible(NULL)
+  }
+  env$.nd_vue <- function(ctx, table) if (table == "sinistres") nd else rep(FALSE, NROW(ctx$base[[table]]))
+  ctx <- env$.contexte(b, d, list(date_extraction = A), A)
+  ctx$retenu <- lapply(b, function(t) rep(TRUE, NROW(t)))
+  ctx$retenu$sinistres <- retenu
+  env$.regle_v_doublons(ctx)
+  verdicts[[1L]]
+}
+copie_si1 <- function(b, id, saisie) { x <- b$sinistres[1L, ]; x$id_sinistre <- id; x$date_saisie <- D(saisie); x }
+r1 <- copies56(avec(function(b) { b$sinistres <- rbind(b$sinistres, copie_si1(b, "SI1", "2025-01-25")); b }),
+               c(TRUE, FALSE, TRUE), c(FALSE, TRUE, FALSE))
+r2 <- copies56(avec(function(b) {
+  b$sinistres <- rbind(b$sinistres, copie_si1(b, "SI1", "2025-01-25"), copie_si1(b, "SI3", "2025-01-01")); b
+}), c(TRUE, FALSE, TRUE, FALSE), c(FALSE, TRUE, FALSE, TRUE))
+verifier_egal("#56, point 2 : D01b, copie retenue de même identifiant que la ligne retenue qui la précède, sans ligne non déterminée de même contenu : non détectée, sans index (avant #56 : NA d'index vide) ; témoin : SI3 non déterminée de même contenu, saisie avant : SI1 et sa copie écartées, index SI3 (ligne 4)",
+              list(as.vector(r1), attr(r1, "index"), as.vector(r2), attr(r2, "index")),
+              list(c(FALSE, FALSE, FALSE), NULL, c(NA, FALSE, NA, FALSE), list(sinistres = list(4L, NULL, 4L, NULL))))
+# point 3 : .verdict_vue() sur famille, copie de l'espace de noms dont .visibilite_a() rend trois
+# versions (1 : candidate visible de ME1 ; 2 : candidate non déterminée de ME1 ; 3 : autre
+# membre) ; f() rend des verdicts différents pour 1 et 2 et un index sous la clé « famille »
+env56 <- copie_ns()
+env56$.visibilite_a <- function(ctx, mode) list(candidate = c(TRUE, TRUE, FALSE), statut = list(famille = c(TRUE, NA, TRUE)),
+                                               membre = c("ME1", "ME1", "ME2"))
+ctx56 <- env56$.contexte(avec(function(b) { b$famille <- b$famille[c(1L, 1L, 1L), ]; b }), d, list(date_extraction = A), A0)
+ctx56$retenu <- list(famille = c(FALSE, FALSE, TRUE))
+r <- env56$.verdict_vue(ctx56, "famille", function() {
+  structure(c(TRUE, FALSE, FALSE), index = list(famille = list(3L, NULL, NULL), evenements = list(5L, 6L, NULL)))
+})
+verifier_egal("#56, point 3 : .verdict_vue(), index de f() sous la clé « famille » : réuni à la candidate de verdict différent (2), non écrasé (avant #56 : 3 seul) ; autres clés réunies sur les candidates ; population : la version visible et l'autre membre",
+              list(as.vector(r), attr(r, "index"), attr(r, "population")),
+              list(c(NA, FALSE, FALSE), list(famille = list(c(2L, 3L), NULL, NULL), evenements = list(c(5L, 6L), NULL, NULL)),
+                   c(TRUE, FALSE, TRUE)))
+# reprise, m1 : .verdict_vue(), élément d'index NULL pour la version visible et sa candidate
+# (sous « famille », puis sous une autre clé) : l'élément est gardé, les lignes suivantes ne
+# glissent pas (avant la reprise : liste raccourcie, l'index de la ligne 4 passait en ligne 3)
+ctx_m1 <- function() {
+  ctx <- env56$.contexte(avec(function(b) { b$famille <- b$famille[c(1L, 1L, 1L, 1L), ]; b }), d, list(date_extraction = A), A0)
+  ctx$retenu <- list(famille = c(FALSE, FALSE, TRUE, TRUE))
+  ctx
+}
+env56$.visibilite_a <- function(ctx, mode) list(candidate = c(TRUE, TRUE, FALSE, FALSE),
+                                               statut = list(famille = c(TRUE, NA, TRUE, TRUE)), membre = c("ME1", "ME1", "ME2", "ME3"))
+m1a <- env56$.verdict_vue(ctx_m1(), "famille", function() structure(c(TRUE, FALSE, FALSE, NA), index = list(famille = list(NULL, NULL, NULL, 4L))))
+m1b <- env56$.verdict_vue(ctx_m1(), "famille", function() structure(c(TRUE, FALSE, FALSE, NA), index = list(evenements = list(NULL, NULL, NULL, 9L))))
+verifier_egal("#56, reprise m1 : .verdict_vue(), index NULL pour la version visible et sa candidate : listes de longueur 4, l'index de la ligne 4 reste en ligne 4 (famille : 2 pour la ligne 1, 4 pour la ligne 4 ; evenements : 9 pour la ligne 4)",
+              list(attr(m1a, "index"), attr(m1b, "index")),
+              list(list(famille = list(2L, NULL, NULL, 4L)),
+                   list(evenements = list(NULL, NULL, NULL, 9L), famille = list(2L, NULL, NULL, NULL))))
+# point 4 : graphe des lectures dérivé des règles enregistrées (.lectures_regle_b(), registre
+# .regles_b()) = constante .LECTURES_REGLE_B, strates comprises ; l'exécution lit le graphe
+# dérivé : une copie de l'espace de noms dont la constante est vidée rend le même bilan (cas B6 :
+# chaîne jusqu'à la strate 3)
+lec56 <- ns$.lectures_regle_b(d)
+st56 <- ns$.strates_regle_b(lec56$colonne)
+trie56 <- function(x) lapply(x, sort, method = "radix")[sort(names(x), method = "radix")]
+verifier_egal("#56, point 4 : graphe dérivé = .LECTURES_REGLE_B (portées colonne et table) ; strates dérivées = .STRATES_REGLE_B ; puits dérivé = .STRATE_PUITS (4)",
+              list(trie56(lec56$colonne), trie56(lec56$table), st56[sort(names(st56), method = "radix")], max(st56) + 1L),
+              list(trie56(lec$colonne), trie56(lec$table), st[sort(names(st), method = "radix")], ns$.STRATE_PUITS))
+env56 <- copie_ns()
+env56$.LECTURES_REGLE_B <- list(colonne = list(), table = list())
+env56$.STRATES_REGLE_B <- integer(0)
+env56$.STRATE_PUITS <- 1L
+verifier("#56, point 4 : l'exécution lit le graphe dérivé, non la constante : constante vidée, même bilan (B6, à A0 et à A)",
+         identical(env56$controler_base(cas42$B6, A0), provie::controler_base(cas42$B6, A0)) &&
+           identical(env56$controler_base(cas42$B6, A), provie::controler_base(cas42$B6, A)))
+# point 5 : le répartiteur (.regle_domaine()) choisit les règles de chaque passe par
+# `ctx$passe` : une règle qu'il écarte n'est ni exécutée ni bloquée (FALSE, ni constat ni ligne
+# de controles_non_executes) ; hors de ses passes, `ctx$passe` est NULL (règles P et V)
+ctx56 <- ns$.contexte(base_ref, d, list(date_extraction = A), A)
+ctx56$passe <- function(code, table, colonne, lit, traitement) FALSE
+e56 <- ns$.regle(ctx56, "essai", "dossiers", "date_ouverture", character(0), "R", "exacte", function() stop("exécutée"))
+ctx56b <- ns$.contexte(base_ref, d, list(date_extraction = A), A)
+ns$.regle_domaine(ctx56b)
+verifier_egal("#56, point 5 : règle écartée par le répartiteur : FALSE, non exécutée, ni constat ni ligne de controles_non_executes ; après .regle_domaine(), ctx$passe est NULL",
+              list(e56, length(ctx56$constats), length(ctx56$non_executes), is.null(ctx56b$passe)),
+              list(FALSE, 0L, 0L, TRUE))
 
 section("donnees : visibilité à trois valeurs, évaluée une seule fois pour la vue et les comptes (#43, M216, M222 ; spécification v1.5, § 2.2 (c), § 3.2, § 4.2 ; § 2.5, critères V1 à V14)")
 # bases des critères V1 à V12 (sorties « après » de la v1.5, § 2.5)

@@ -1079,11 +1079,13 @@ lire_declarations <- function(declarations, dico) {
 # règle de portée colonne lit la colonne qu'elle contrôle telle quelle (auto-lecture, P4), qui
 # n'est ni une colonne à valeur inconnue ni une cause. `f()` peut porter l'attribut `index`
 # (.verdict3()) : par colonne lue « table.colonne », lignes de sa table jointes à chaque ligne
-# de la règle, lues pour la cause d'une ligne écartée. Pendant la règle B, une règle du domaine
-# ne s'exécute que dans la passe de sa strate (`ctx$strate`, .strate_regle(), .regle_domaine()).
+# de la règle, lues pour la cause d'une ligne écartée. Pendant la règle B, le répartiteur
+# (.regle_domaine(), .regles_b()) choisit les règles à exécuter par `ctx$passe` (fonction de
+# code, table, colonne, lit, traitement ; NULL hors de ses passes) : une règle qu'il écarte
+# n'est ni exécutée ni bloquée et rend FALSE (#56, point 5).
 .regle <- function(ctx, code, table, colonne, lit, traitement, detection, f, colonne_ne = colonne,
                    partiel = FALSE, vue = character(0), parente = NULL) {
-  if (!is.null(ctx$strate) && .strate_regle(ctx$dico, code, table, colonne) != ctx$strate) return(invisible(NULL))
+  if (!is.null(ctx$passe) && !ctx$passe(code, table, colonne, lit, traitement)) return(invisible(FALSE))
   if (is.null(ctx$base[[table]])) return(invisible(integer(0)))
   valeur <- unique(c(if (!is.na(colonne)) paste(table, colonne, sep = "."), lit))
   lit <- unique(c(valeur, vue))
@@ -1210,8 +1212,9 @@ lire_declarations <- function(declarations, dico) {
 # colonne contrôlée (auto-lecture, P4). `colonne` : règles de portée colonne, arêtes du graphe
 # de dépendance (colonne lue -> colonne contrôlée) ; `table` : règles de portée table, puits,
 # évaluées après toutes les strates (les clés et les chevauchements, sites 39 à 41, à l'étape
-# des clés). Constante interne, sans point fixe : son acyclicité et sa couverture des appels
-# de .regle() de la règle B sont testées (critère B8).
+# des clés). Graphe de référence de la spécification (§ 2.2, B.3) : l'exécution lit le graphe
+# dérivé des règles enregistrées (.lectures_regle_b(), #56, point 4) ; l'acyclicité de la
+# constante et son égalité au graphe dérivé, strates comprises, sont testées (critère B8).
 .LECTURES_REGLE_B <- list(
   colonne = list(
     contrats.date_terme = c("contrats.nature_contrat", "garanties_souscrites.code_garantie"),
@@ -1291,13 +1294,55 @@ lire_declarations <- function(declarations, dico) {
 .STRATES_REGLE_B <- .strates_regle_b(.LECTURES_REGLE_B$colonne)
 .STRATE_PUITS <- max(.STRATES_REGLE_B) + 1L
 
-# Strate d'une règle du domaine de la règle B : celle de sa colonne pour une règle de portée
-# colonne (0 hors du graphe), le puits pour une règle de portée table (spécification, § 2.2,
-# « Ordre d'exécution », étape 3).
-.strate_regle <- function(dico, code, table, colonne) {
-  if (.portee_effective(dico, code, table, colonne) == "table") return(.STRATE_PUITS)
-  s <- .STRATES_REGLE_B[paste(table, colonne, sep = ".")]
+# Strate d'une règle du domaine de la règle B, pour les strates `strates` (.strates_regle_b())
+# : celle de sa colonne pour une règle de portée colonne (0 hors du graphe), le puits (plus
+# haute strate plus un) pour une règle de portée table (spécification, § 2.2, « Ordre
+# d'exécution », étape 3).
+.strate_regle <- function(dico, code, table, colonne, strates) {
+  if (.portee_effective(dico, code, table, colonne) == "table") return(max(c(0L, strates)) + 1L)
+  s <- strates[paste(table, colonne, sep = ".")]
   if (is.na(s)) 0L else unname(s)
+}
+
+# Registre des règles de la règle B (#56, point 4) : une entrée (code, table, colonne, lit,
+# traitement) par appel de .regle() du domaine (.regles_generiques(), .regles_propres()) puis
+# des clés (.regle_cles()), dans l'ordre du code, relevée sans rien exécuter (`ctx$passe`
+# rend FALSE) sur une base squelette (toutes les tables et colonnes du dictionnaire, sans
+# ligne) : le registre ne dépend que du dictionnaire et du code.
+.regles_b <- function(dico) {
+  base <- lapply(stats::setNames(dico$tables$table, dico$tables$table), function(t) {
+    colonnes <- dico$colonnes$colonne[dico$colonnes$table == t]
+    data.frame(stats::setNames(rep(list(logical(0)), length(colonnes)), colonnes), check.names = FALSE)
+  })
+  ctx <- .contexte(base, dico, list(date_extraction = as.Date(NA)), as.Date(NA))
+  registre <- list()
+  ctx$passe <- function(code, table, colonne, lit, traitement) {
+    registre[[length(registre) + 1L]] <<- list(code = code, table = table, colonne = colonne, lit = lit,
+                                               traitement = traitement)
+    FALSE
+  }
+  .regles_generiques(ctx)
+  .regles_propres(ctx)
+  .regle_cles(ctx)
+  registre
+}
+
+# Graphe des lectures de la règle B dérivé du registre (.regles_b() ; #56, point 4), de même
+# forme que .LECTURES_REGLE_B : colonnes refusables pour leur valeur = colonnes contrôlées par
+# une règle R de portée colonne ; pour chaque règle qui en lit une autre que la sienne (règle
+# concernée), par portée (`colonne` : arêtes du graphe ; `table` : puits) et colonne
+# contrôlée, les colonnes refusables lues, dans l'ordre du registre.
+.lectures_regle_b <- function(dico, registre = .regles_b(dico)) {
+  portee <- vapply(registre, function(k) .portee_effective(dico, k$code, k$table, k$colonne), "")
+  soi <- vapply(registre, function(k) paste(k$table, k$colonne, sep = "."), "")
+  refusables <- unique(soi[portee == "colonne" & vapply(registre, `[[`, "", "traitement") == "R"])
+  lus <- lapply(seq_along(registre), function(i) setdiff(intersect(registre[[i]]$lit, refusables), soi[i]))
+  concernee <- lengths(lus) > 0L
+  par_portee <- function(p) {
+    s <- unique(soi[concernee & portee == p])
+    stats::setNames(lapply(s, function(tc) unique(unlist(lus[concernee & portee == p & soi == tc]))), s)
+  }
+  list(colonne = par_portee("colonne"), table = par_portee("table"))
 }
 
 # Ligne de `table_cible` dont la clé `cle_cible` vaut chaque valeur de `valeurs_cle` (NA : aucune).
@@ -1352,32 +1397,43 @@ lire_declarations <- function(declarations, dico) {
 .connue3 <- function(tc, valeurs) list(tc = tc, valeurs = valeurs, inconnu = rep(FALSE, length(valeurs)), index = NULL,
                                        domaine = NULL)
 
+# Motif existentiel de Kleene (forme « jointure ou appartenance », spécification, § 2.2, B.4),
+# noyau unique des règles B (.existe3(), site 39 de .orphelines()) et V (.existe_vue3()) :
+# pour chaque valeur de `valeurs_cle`, « il existe une ligne de clé `cle` égale qui satisfait »
+# vaut vrai si une ligne `vrai` (connue, qui satisfait) a cette clé ; inconnu sinon si une
+# ligne `possible` (inconnue, qui peut satisfaire) l'a ; faux sinon. Une clé manquante ne
+# s'apparie à aucune ligne, d'un côté comme de l'autre (spécification `donnees` v1.6, § 2.2,
+# B.4, « Clé manquante », #56). `index` : pour une valeur inconnue, les lignes `possible` de
+# même clé, dans l'ordre des lignes (cause d'une ligne écartée) ; NULL ailleurs.
+.existe_kleene <- function(valeurs_cle, cle, vrai, possible) {
+  existe <- !is.na(match(valeurs_cle, cle[vrai], incomparables = NA))
+  lignes_p <- which(possible & !is.na(cle))
+  j <- match(valeurs_cle, cle[lignes_p], incomparables = NA)
+  inconnu <- !existe & !is.na(j)
+  index <- vector("list", length(valeurs_cle))
+  if (any(inconnu)) {
+    # lignes `possible` regroupées par clé (repère : première ligne de la clé), travail linéaire
+    groupes <- split(lignes_p, match(cle[lignes_p], cle[lignes_p]))
+    index[inconnu] <- unname(groupes[as.character(j[inconnu])])
+  }
+  list(valeurs = existe, inconnu = inconnu, index = index)
+}
+
 # Entrée « il existe une ligne de la table de `tc`, de clé `cle` égale à `valeurs_cle`, dont
 # la valeur satisfait `p` » (site 4, garantie décès du contrat ; forme « jointure ou
-# appartenance », spécification, § 2.2, B.4) : vraie si une ligne jointe connue satisfait ;
+# appartenance », spécification, § 2.2, B.4) : vraie si une ligne jointe connue satisfait, ou
+# une ligne jointe de valeur inconnue que tout le domaine de la colonne fait satisfaire ;
 # inconnue si aucune ne satisfait parmi les connues et qu'une ligne jointe de valeur inconnue
-# le peut (domaine de la colonne) ; fausse sinon. `index` : lignes jointes de valeur inconnue.
-# Appariement par %in% (une clé NA s'apparie à une clé NA, comme avant #42), le même pour la
-# jointure et pour `index`.
+# le peut (domaine de la colonne) ; fausse sinon (.existe_kleene() : une clé manquante ne
+# s'apparie à aucune ligne). `index` : lignes jointes de valeur inconnue.
 .existe3 <- function(ctx, tc, cle, valeurs_cle, p) {
   m <- strsplit(tc, ".", fixed = TRUE)[[1L]]
   k <- .valeurs(ctx, m[1L], cle)
   x <- .valeurs(ctx, m[1L], m[2L])
   u <- .inconnu(ctx, m[1L], m[2L])
-  existe <- valeurs_cle %in% k[!u & p(x) %in% TRUE]
-  inconnu <- rep(FALSE, length(existe))
-  index <- vector("list", length(existe))
-  if (any(u)) {
-    sat <- p(.domaine3(ctx, m[1L], m[2L])) %in% TRUE
-    jointe <- valeurs_cle %in% k[u]
-    if (all(sat)) existe <- existe | jointe
-    else if (any(sat)) inconnu <- !existe & jointe
-    if (any(inconnu)) {
-      lignes_u <- which(u)
-      index[inconnu] <- lapply(valeurs_cle[inconnu], function(v) lignes_u[k[lignes_u] %in% v])
-    }
-  }
-  list(tc = tc, valeurs = existe, inconnu = inconnu, index = index, domaine = c(TRUE, FALSE))
+  sat <- if (any(u)) p(.domaine3(ctx, m[1L], m[2L])) %in% TRUE else FALSE
+  e <- .existe_kleene(valeurs_cle, k, vrai = (!u & p(x) %in% TRUE) | (u & all(sat)), possible = u & any(sat) & !all(sat))
+  c(list(tc = tc), e, list(domaine = c(TRUE, FALSE)))
 }
 
 # Verdict à trois valeurs d'une règle de la règle B (spécification, § 2.2, B.4, lecture
@@ -1542,17 +1598,21 @@ lire_declarations <- function(declarations, dico) {
 # manquant obligatoire, réel non fini) puis règles propres aux colonnes (conditions des
 # colonnes C, bornes écrites dans le domaine, signes de D09). Règle B à trois valeurs
 # (spécification, § 2.2, B.5 et « Ordre d'exécution », étape 3 ; M217) : une passe par strate
-# (0 à la plus haute de .STRATES_REGLE_B), puis une passe des règles de portée table (puits) ;
-# dans une passe, l'ordre des règles est celui du code (.regle() n'exécute que les règles de
-# la strate courante). Les refus de valeur d'une colonne sont complets à la fin de sa strate ;
-# un seul passage, sans point fixe (graphe acyclique).
+# du graphe dérivé des règles enregistrées (.lectures_regle_b()), de 0 à la plus haute, puis
+# une passe des règles de portée table (puits) ; dans une passe, l'ordre des règles est celui
+# du code. Le répartiteur choisit les règles de chaque passe (`ctx$passe`, lu par .regle() ;
+# #56, point 5). Les refus de valeur d'une colonne sont complets à la fin de sa strate ; un
+# seul passage, sans point fixe (graphe acyclique).
 .regle_domaine <- function(ctx) {
-  for (strate in 0:.STRATE_PUITS) {
-    ctx$strate <- strate
+  strates <- .strates_regle_b(.lectures_regle_b(ctx$dico)$colonne)
+  on.exit(ctx$passe <- NULL)
+  for (strate in 0:(max(c(0L, strates)) + 1L)) {
+    ctx$passe <- function(code, table, colonne, lit, traitement) {
+      .strate_regle(ctx$dico, code, table, colonne, strates) == strate
+    }
     .regles_generiques(ctx)
     .regles_propres(ctx)
   }
-  ctx$strate <- NULL
   invisible(NULL)
 }
 
@@ -1665,7 +1725,7 @@ lire_declarations <- function(declarations, dico) {
 # Règles propres aux colonnes, transcrites des domaines du § 3 du dictionnaire. Les ordres
 # de dates (D02a), les saisies (D02b, D03g) et les manquants qui ont un défaut au § 9 sont
 # des défauts de la vue (règle V) ou de la règle P, hors de ces règles. Une règle qui lit une
-# colonne non clé refusable pour sa valeur autre que la sienne (règle concernée, .LECTURES_REGLE_B)
+# colonne non clé refusable pour sa valeur autre que la sienne (règle concernée, .lectures_regle_b())
 # rend un verdict à trois valeurs (.verdict3(), entrées .entree3() ; `partiel`) : `e3()`
 # lit une colonne dans le mécanisme, `soi()` la colonne contrôlée par une règle de portée
 # colonne, telle quelle (auto-lecture, P4).
@@ -2087,16 +2147,26 @@ lire_declarations <- function(declarations, dico) {
         valeurs_cible <- lapply(cols_cible, function(c1) .valeurs(ctx, table_cible, c1))
         inconnues <- lapply(cols_cible, function(c1) .inconnu(ctx, table_cible, c1))
         connue <- !Reduce(`|`, inconnues)
-        local <- do.call(paste, c(valeurs_locales, sep = "\r"))
-        cible <- do.call(paste, c(valeurs_cible, sep = "\r"))[connue]
+        # clé composite des colonnes `k` (toutes par défaut), manquante si l'une l'est (une clé
+        # manquante ne s'apparie à aucune ligne, .existe_kleene()) ; sans colonne (`k` vide, toutes
+        # les colonnes cibles inconnues), la même pour toutes les lignes
+        cle_de <- function(valeurs, k = seq_along(valeurs)) {
+          x <- do.call(paste, c(list(rep("", length(valeurs[[1L]]))), valeurs[k], sep = "\r"))
+          if (length(k) > 0L) x[Reduce(`|`, lapply(valeurs[k], is.na))] <- NA
+          x
+        }
+        local <- cle_de(valeurs_locales)
+        cible <- cle_de(valeurs_cible)
         # une chaîne vide est chaine_vide, non une orpheline (une anomalie, un code : m1)
         vide <- Reduce(`|`, lapply(valeurs_locales, function(x) !is.na(x) & is.character(x) & x == ""))
         manquant <- Reduce(`|`, lapply(valeurs_locales, is.na))
-        r <- !vide & (if (manquant_orphelin) manquant | !(local %in% cible) else !manquant & !(local %in% cible))
+        existe <- .existe_kleene(local, cible, vrai = connue, possible = rep(FALSE, length(cible)))$valeurs
+        r <- !vide & (if (manquant_orphelin) manquant | !existe else !manquant & !existe)
         # règle B à trois valeurs (site 39, référence composite de affiliations.college) : une
         # ligne cible de valeur inconnue (refus de valeur d'une colonne cible non clé) peut porter
         # la clé locale si ses colonnes connues l'égalent et que la valeur locale est du domaine
         # de chaque colonne inconnue (code opaque : toute chaîne) ; la ligne est alors inconnue
+        # (.existe_kleene(), sur la clé des colonnes connues, par motif de colonnes inconnues)
         if (!all(connue)) {
           index <- vector("list", length(r))
           lignes <- which(!connue)
@@ -2105,17 +2175,18 @@ lire_declarations <- function(declarations, dico) {
             l <- lignes[motifs == motif]
             s <- as.integer(strsplit(motif, ",", fixed = TRUE)[[1L]])
             k <- setdiff(seq_along(cols_cible), s)
-            cle_l <- do.call(paste, c(list(""), valeurs_locales[k], sep = "\r"))
-            cle_c <- do.call(paste, c(list(""), lapply(valeurs_cible[k], `[`, l), sep = "\r"))
-            peut <- r %in% TRUE & cle_l %in% cle_c
+            cle_l <- cle_de(valeurs_locales, k)
             for (m in s) {
               col_cible <- .colonnes_dico(ctx, table_cible)
               domaine <- eclater_champ(col_cible$modalites[col_cible$colonne == cols_cible[m]])
-              if (length(domaine) > 0L) peut <- peut & valeurs_locales[[m]] %in% domaine
+              if (length(domaine) > 0L) cle_l[!(valeurs_locales[[m]] %in% domaine)] <- NA
             }
-            if (any(peut)) {
-              r[peut] <- NA
-              index[peut] <- Map(c, index[peut], split(l, cle_c)[cle_l[peut]])
+            cle_l[!(r %in% TRUE)] <- NA
+            e <- .existe_kleene(cle_l, cle_de(valeurs_cible, k), vrai = rep(FALSE, length(cible)),
+                                possible = seq_along(cible) %in% l)
+            if (any(e$inconnu)) {
+              r[e$inconnu] <- NA
+              index[e$inconnu] <- Map(c, index[e$inconnu], e$index[e$inconnu])
             }
           }
           attr(r, "index") <- stats::setNames(rep(list(index), length(cols_cible)), paste(table_cible, cols_cible, sep = "."))
@@ -3026,8 +3097,12 @@ parties_ligne <- function() lapply(.PARTIES_LIGNE, function(p) list(table = p$ta
     differe <- autres[!(r0[autres] %in% r0[i])]
     r[i] <- if (all(v %in% TRUE)) TRUE else if (all(v %in% FALSE)) FALSE else NA
     if (is.na(r[i])) {
-      index$famille[[i]] <- if (is.na(r0[i])) autres else differe
-      for (tc in names(index0)) index[[tc]][[i]] <- unique(unlist(index0[[tc]][c(i, autres)]))
+      # éléments rendus par `f()` sous la clé « famille » : réunis aux candidates, non écrasés
+      # (#56, point 3) ; affectation par `[i] <- list()`, qui garde l'élément même NULL (`[[i]]
+      # <- NULL` le supprimerait et décalerait les lignes suivantes)
+      for (tc in names(index0)) index[[tc]][i] <- list(unique(unlist(index0[[tc]][c(i, autres)])))
+      index$famille[i] <- list(unique(c(if (is.na(r0[i])) autres else differe,
+                                        if ("famille" %in% names(index0)) index$famille[[i]])))
     }
   }
   population[visible] <- TRUE
@@ -3050,19 +3125,13 @@ parties_ligne <- function() lapply(.PARTIES_LIGNE, function(p) list(table = p$ta
 # `cle` égale à `valeurs_cle`, qui satisfait `p` (vecteur logique sur les lignes de `table`,
 # valeurs brutes) » (forme « absence » des règles V, spécification v1.5, § 2.2 (d)) : vraie si
 # une ligne retenue satisfait ; inconnue si aucune ne satisfait parmi les retenues et qu'une
-# ligne non déterminée (.nd_vue()) satisfait ; fausse sinon. Une clé NA ne s'apparie pas.
-# `index` : lignes non déterminées qui rendent l'entrée inconnue (cause, .cause_nd()).
+# ligne non déterminée (.nd_vue()) satisfait ; fausse sinon (.existe_kleene() : une clé
+# manquante ne s'apparie à aucune ligne). `index` : lignes non déterminées qui rendent l'entrée
+# inconnue (cause, .cause_nd()).
 .existe_vue3 <- function(ctx, table, valeurs_cle, cle, p) {
-  p <- p %in% TRUE & !is.na(cle)
-  existe <- valeurs_cle %in% cle[ctx$retenu[[table]] & p]
-  nd <- which(.nd_vue(ctx, table) & p)
-  inconnu <- !existe & valeurs_cle %in% cle[nd]
-  index <- vector("list", length(existe))
-  if (any(inconnu)) {
-    g <- split(nd, as.character(cle[nd]))
-    index[inconnu] <- unname(g[as.character(valeurs_cle[inconnu])])
-  }
-  list(tc = table, valeurs = existe, inconnu = inconnu, index = index, domaine = c(TRUE, FALSE))
+  p <- p %in% TRUE
+  e <- .existe_kleene(valeurs_cle, cle, vrai = ctx$retenu[[table]] & p, possible = .nd_vue(ctx, table) & p)
+  c(list(tc = table), e, list(domaine = c(TRUE, FALSE)))
 }
 
 # Cause (γ) d'une règle V qui écarte les lignes `lignes` (spécification v1.5, § 3.1 ; M218) :
@@ -3391,7 +3460,10 @@ parties_ligne <- function() lapply(.PARTIES_LIGNE, function(p) list(table = p$ta
       o <- o[retenu[o]]
       contenu <- as.data.frame(lapply(colonnes, function(c1) .valeurs(ctx, table, c1)[o]), stringsAsFactors = FALSE)
       # une ligne de même clé que la précédente est un doublon d'identifiant (D01a), non une
-      # copie sous un nouvel identifiant
+      # copie sous un nouvel identifiant ; deux clés manquantes y sont égales (duplicated()),
+      # alors que `precedes` ci-dessous, entrée existentielle, suit la règle de la clé manquante
+      # (spécification `donnees` v1.6, § 2.2, B.4) : écart inatteignable, une clé primaire
+      # manquante ou en double refusant la table en portée table, sans règle V (#56)
       meme_cle <- duplicated(data.frame(contenu, .cle = .valeurs(ctx, table, cle)[o], stringsAsFactors = FALSE))
       copie <- rep(FALSE, length(retenu))
       copie[o[duplicated(contenu) & !meme_cle]] <- TRUE
@@ -3415,12 +3487,23 @@ parties_ligne <- function() lapply(.PARTIES_LIGNE, function(p) list(table = p$ta
       l <- which(retenu & !copie & possible)
       if (length(l) == 0L) return(copie)
       # lignes non déterminées de chaque groupe de contenu, dans l'ordre o2 (un passage) ; une
-      # ligne écartée ne lit que celles de son groupe qui la précèdent (travail linéaire)
+      # ligne écartée ne lit que celles de son groupe qui la précèdent (travail linéaire), hors
+      # celles de même clé (un doublon d'identifiant, D01a, non une copie, comme `meme_cle`) ;
+      # une ligne que seule précède une ligne retenue de même clé n'en a aucune : elle reste
+      # non détectée (#56, point 2)
       rang <- match(seq_along(retenu), o2)
       pos_nd <- which(nd[o2])
       nd_groupe <- split(pos_nd, groupe[pos_nd])
+      cles <- .valeurs(ctx, table, cle)
+      precedes <- Map(function(q, r, i) {
+        p <- o2[q[q < r]]
+        p[is.na(cles[p]) | is.na(cles[i]) | cles[p] != cles[i]]
+      }, nd_groupe[match(groupe[rang[l]], as.integer(names(nd_groupe)))], rang[l], l)
+      garde <- lengths(precedes) > 0L
+      if (!any(garde)) return(copie)
+      l <- l[garde]
       index <- vector("list", length(retenu))
-      index[l] <- Map(function(q, r) o2[q[q < r]], nd_groupe[match(groupe[rang[l]], as.integer(names(nd_groupe)))], rang[l])
+      index[l] <- precedes[garde]
       copie[l] <- NA
       attr(copie, "index") <- stats::setNames(list(index), table)
       copie
