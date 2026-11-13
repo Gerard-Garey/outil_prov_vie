@@ -104,6 +104,14 @@ par_identifiant <- function(tables) {
 # sans lui (declaration_manquante) ; les autres plans sont inchangés.
 SEUIL_D07B_REFERENCE <- 6L
 COUPLES_D07B <- c("J2", "J4", "V1", "V2")
+# Exclusion de D12 pour engagement des plans de référence (spécification `donnees` v1.6, § 8.12 ;
+# M337, visa de principe du mainteneur du 13 novembre 2026) : action `conserver` (la ligne est
+# gardée, l'enjeu restitué), déclarée dans le seul plan du couple dont le bilan détecte D12 à
+# l'arrêté (V2 : SI0181 de v1-modeste-03, suite visible commençant par une sortie au 2024-12-31),
+# dont le calcul est refusé sans elle (declaration_manquante), ajoutée aux exclusions du plan ;
+# les autres plans sont inchangés.
+EXCLUSION_D12_REFERENCE <- list(list(motif = "D12", famille = "engagement", action = "conserver"))
+COUPLES_D12 <- "V2"
 
 # Entrées du couple i : list(base, plan, tables) ; plan des jeux : plan_reference_jeu()
 # (tests/b2_bases.R, spécification de B2, § 7.9.6), seul plan `recommandees` des jeux.
@@ -122,6 +130,7 @@ entrees_couple <- function(i) {
     plan <- plan_reference_jeu(jeu, arrete, tables)
   }
   if (COUPLES_REFERENCE$couple[i] %in% COUPLES_D07B) plan$donnees$seuils$d07b_mois <- SEUIL_D07B_REFERENCE
+  if (COUPLES_REFERENCE$couple[i] %in% COUPLES_D12) plan$donnees$exclusions <- c(plan$donnees$exclusions, EXCLUSION_D12_REFERENCE)
   list(base = base, plan = plan, tables = par_identifiant(tables))
 }
 

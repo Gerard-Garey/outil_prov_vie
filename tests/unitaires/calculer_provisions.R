@@ -114,9 +114,13 @@ verifier_egal("J3 (v1-modeste-02) : P1 et P2 arrêtés (D09), P3 calculé (0), t
 verifier_egal("J3 : la ligne de refus_tables du bilan porte postes_arretes (M239)",
               j3$r$donnees$refus_tables$postes_arretes, "deces/capitaux_non_reclames;deces/sinistres_declares_non_regles")
 # Arrêt né d'une famille : P1 sur un capital à reconstituer sans affiliation (affiliation_non_determinee).
+# Sans affiliation, la survenance n'est couverte par aucun contrat : D11 (S + X, spécification
+# `donnees` v1.6, § 8.7) demande l'exclusion par famille, déclarée `conserver` (la ligne reste lue).
 sans_af <- b2_base_capital(capital = NA)
 sans_af$affiliations <- sans_af$affiliations[0, ]
-r_af <- calculer_provisions(sans_af, p_c1, tid)
+p_af <- p_c1
+p_af$donnees$exclusions <- lapply(ns$FAMILLES_CALCUL, function(f) list(motif = "D11", famille = f, action = "conserver"))
+r_af <- calculer_provisions(sans_af, p_af, tid)
 pa <- r_af$provisions
 pr_af <- r_af$fiche$parametres_retenus$postes
 verifier_egal("arrêt né d'une famille : cellule P1 arrêtée (affiliation_non_determinee), total arrêté, aucune cellule de segment ; premier dossier en cause (DO1) dans fiche$parametres_retenus$postes$parametres",
