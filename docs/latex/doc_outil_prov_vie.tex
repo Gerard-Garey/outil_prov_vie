@@ -936,6 +936,9 @@ exportée.
 \code{calculer\_age()} & \code{date\_naissance}, \code{date}, \code{convention} & Rend l'âge entier, en années, à une date, selon une convention de la liste fermée \code{CONVENTIONS\_AGE} (\code{revolu}, \code{millesime}, \code{plus\_proche}, \code{naissance\_31\_decembre})\fsp; né un 29~février, l'anniversaire d'une année non bissextile est le 1er~mars\fsp; \code{NA} si la date précède la naissance\fsp; refuse par \code{plan\_invalide} une convention hors de la liste. Seule fonction d'âge du package. \\
 \code{date\_atteinte\_age()} & \code{date\_naissance}, \code{age}, \code{convention} & Fonction inverse de \code{calculer\_age()}~: première date, au plus tôt la naissance, à laquelle l'âge selon la convention vaut \code{age}. \\
 \code{ajouter\_mois()} & \code{d}, \code{k} & Rend la date \code{k} mois après \code{d}, en nombre de jours, au même quantième\fsp; un quantième absent du mois visé donne le premier jour du mois suivant. Non exportée, lue par \code{engagement} et \code{risque\_en\_cours}. \\
+\code{longueur\_commune()} & \code{n1}, \code{n2}, \code{fonction} & Rend la longueur commune de deux entrées de même longueur, ou celle de l'autre si l'une est de longueur~1\fsp; erreur R ordinaire, nommant \code{fonction}, si les longueurs diffèrent sans que l'une vaille~1. Non exportée, lue par \code{donnees}. \\
+\code{decomposer\_date()} & \code{jours} & Rend l'année, le mois et le quantième (entiers) de dates données en nombre de jours depuis le 1970-01-01. Non exportée, lue par \code{donnees}. \\
+\code{composer\_date()} & \code{annee}, \code{mois}, \code{jour} & Fonction inverse de \code{decomposer\_date()}~: rend le nombre de jours depuis le 1970-01-01 de la date année-mois-jour\fsp; un quantième absent du mois est lu premier jour du mois suivant. Non exportée, lue par \code{donnees}. \\
 \end{longtable}
 }
 
@@ -3972,6 +3975,7 @@ peut appeler que \code{tables}, \code{garanties}, \code{dictionnaire},
 \code{lire\_fiche()} & \code{octets} & Relit des octets écrits par \code{ecrire\_fiche()}, sans évaluation, et rend un objet \code{fiche\_calcul}\fsp; refus \code{liste\_invalide} si la liste lue n'a pas la forme d'une fiche. \\
 \code{format.fiche\_calcul()} & \code{x}, \code{...} & Décrit une fiche en lignes de texte, par des décomptes seuls~: versions, arrêté, graine, lignes des paramètres retenus, nombre d'empreintes, plateforme. \\
 \code{print.fiche\_calcul()} & \code{x}, \code{...} & Imprime \code{format(x)} et rend la fiche, invisible. \\
+\code{controler\_rejeu()} & \code{fiche}, \code{donnees}, \code{tables = list()} & Contrôle les entrées du rejeu, dans l'ordre~: version de la fiche, versions de R et de \code{provie} (signalées), empreintes des données reçues, empreintes des tables\fsp; rend les signalements de version, ou refuse (\code{liste\_invalide} si l'objet reçu n'est pas une fiche, \code{version\_discordante}, \code{empreinte\_discordante}, \code{table\_absente}). Non exportée, lue par \code{rejouer\_fiche()}. \\
 \end{tabular}
 \end{center}
 
