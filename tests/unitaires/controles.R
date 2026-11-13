@@ -252,7 +252,7 @@ r <- cas_graphe(c("calcul_e <- function(x) {", "  a <- function() simuler_base",
 verifier("N6c : portée sœur (a lit, b affecte), la lecture de a est comptée, engagement.R:2",
          .echoue_en(r, "R/engagement.R", 2L, ARETE))
 
-# Identifiants à point employés hors de leur fichier (#74, M405 ; exceptions renvoyées à #102).
+# Identifiants à point employés hors de leur fichier (#74, M405 ; quatre exceptions renvoyées à #102, retirées).
 # lecture -> dictionnaire est une arête permise : seule la règle du point est en cause.
 section("contrôles : graphe_modules.R, identifiants à point (#74, M405)")
 r <- .essai("graphe_modules", list("R/dictionnaire.R" = ".aux_d <- function(x) x",
@@ -266,26 +266,60 @@ verifier("#74 : symbole (constante) à point d'un autre module, non déclaré, l
 r <- .essai("graphe_modules", list("R/dictionnaire.R" = c(".aux_d <- function(x) x", "dico_f <- function(x) .aux_d(x)"),
                                    "R/lecture.R" = "lire_e <- function(x) dico_f(x)"))
 verifier("#74, cas licite : identifiant à point employé dans son propre fichier, appelé hors module sans point", .passe(r))
-# Exceptions déclarées (EXCEPTIONS_POINT, renvoi #102) : tenues, elles passent ; absentes, elles échouent.
+# Exceptions déclarées (EXCEPTIONS_POINT, vide depuis #102). Les quatre auxiliaires que la liste
+# déclarait, rendus à un module voisin sous leur ancien nom, sont de nouveau refusés ; le
+# mécanisme des exceptions s'éprouve sur une copie du script dont la liste est remplie.
+OUTILS_POINT <- c(".longueur_commune <- function(n) n", ".composantes_date <- function(j) j", ".jour_de <- function(j) j", AVEC_GRAINE)
 r <- .essai("graphe_modules", list(
-  "R/outils.R" = c(".longueur_commune <- function(n) n", ".composantes_date <- function(j) j", ".jour_de <- function(j) j", AVEC_GRAINE),
+  "R/outils.R" = OUTILS_POINT,
   "R/donnees.R" = c("donnees_f <- function(x) {", "  .longueur_commune(x)", "  .composantes_date(x)", "  .jour_de(x)", "}")))
-verifier("#74, cas licite : emplois déclarés en exception (#102), le contrôle passe", .passe(r))
-r <- .essai("graphe_modules", list(
-  "R/outils.R" = c(".longueur_commune <- function(n) n", ".composantes_date <- function(j) j", ".jour_de <- function(j) j", AVEC_GRAINE),
-  "R/donnees.R" = c("donnees_f <- function(x) {", "  .longueur_commune(x)", "  .jour_de(x)", "}")))
+verifier("#102 : les anciennes exceptions ne sont plus déclarées, donnees.R:2, 3 et 4 refusés", {
+  .echoue_en(r, "R/donnees.R", 2L, ".longueur_commune") && .echoue_en(r, "R/donnees.R", 3L, ".composantes_date") &&
+    .echoue_en(r, "R/donnees.R", 4L, ".jour_de")
+})
+# Copie du script de contrôle dont EXCEPTIONS_POINT est remplie (insertion avant la
+# déclaration suivante) ; lancée sur la copie temporaire de `fichiers`.
+.essai_exceptions <- function(fichiers, declaration) {
+  lignes <- readLines(.script_controle("graphe_modules"), warn = FALSE)
+  k <- grep("^EXCEPTIONS_INTROSPECTION <- data.frame\\(", lignes)
+  if (length(k) != 1L) return(list(statut = NA_integer_, sortie = "marque d'insertion introuvable"))
+  script <- tempfile("graphe_exceptions-", fileext = ".R")
+  on.exit(unlink(script), add = TRUE)
+  writeLines(append(lignes, declaration, after = k - 1L), script)
+  copie <- tempfile("temoin-")
+  dir.create(copie)
+  on.exit(unlink(copie, recursive = TRUE), add = TRUE)
+  for (chemin in names(fichiers)) .deposer(file.path(copie, chemin), fichiers[[chemin]])
+  sortie <- suppressWarnings(system2(file.path(R.home("bin"), "Rscript"), c(shQuote(script), shQuote(copie)),
+                                     stdout = TRUE, stderr = TRUE))
+  statut <- attr(sortie, "status")
+  list(statut = if (is.null(statut)) 0L else statut, sortie = sortie)
+}
+DECLARATION_FICTIVE <- paste0("EXCEPTIONS_POINT <- data.frame(appelant = rep(\"donnees\", 3L), ",
+                              "identifiant = c(\".longueur_commune\", \".composantes_date\", \".jour_de\"), ",
+                              "defini_dans = rep(\"outils\", 3L), renvoi = \"#fictif\", stringsAsFactors = FALSE)")
+r <- .essai_exceptions(list(
+  "R/outils.R" = OUTILS_POINT,
+  "R/donnees.R" = c("donnees_f <- function(x) {", "  .longueur_commune(x)", "  .composantes_date(x)", "  .jour_de(x)", "}")),
+  DECLARATION_FICTIVE)
+verifier("#74, cas licite : emplois déclarés en exception, le contrôle passe (3 déclarées, 3 constatées)",
+         .passe(r) && any(grepl("3 exception(s) declaree(s), 3 constatee(s)", r$sortie, fixed = TRUE)))
+r <- .essai_exceptions(list(
+  "R/outils.R" = OUTILS_POINT,
+  "R/donnees.R" = c("donnees_f <- function(x) {", "  .longueur_commune(x)", "  .jour_de(x)", "}")),
+  DECLARATION_FICTIVE)
 verifier("#74 : exception déclarée qui ne se produit plus (.composantes_date), donnees.R sans ligne", {
   .echoue_en(r, "R/donnees.R", NA_integer_, ".composantes_date") &&
     !any(grepl("[ECHEC] R/donnees.R:", r$sortie, fixed = TRUE))
 })
-r <- .essai("graphe_modules", list(
-  "R/outils.R" = c(".longueur_commune <- function(n) n", ".composantes_date <- function(j) j", ".jour_de <- function(j) j", AVEC_GRAINE),
+r <- .essai_exceptions(list(
+  "R/outils.R" = OUTILS_POINT,
   "R/donnees.R" = c("donnees_f <- function(x) {", "  .longueur_commune(x)", "  .composantes_date(x)", "  .jour_de(x)", "  .autre(x)", "}"),
-  "R/dictionnaire.R" = ".autre <- function(x) x"))
+  "R/dictionnaire.R" = ".autre <- function(x) x"),
+  DECLARATION_FICTIVE)
 verifier("#74 : un emploi non déclaré à côté d'exceptions tenues, donnees.R:5", .echoue_en(r, "R/donnees.R", 5L, ".autre"))
-r <- .essai("graphe_modules", list("R/outils.R" = c(".longueur_commune <- function(n) n", AVEC_GRAINE),
-                                   "R/donnees.R" = "donnees_f <- function(x) x"))
-verifier("#74 : exception déclarée dont l'identifiant n'est plus employé (donnees.R n'appelle rien), donnees.R sans ligne",
+r <- .essai_exceptions(list("R/outils.R" = OUTILS_POINT, "R/donnees.R" = "donnees_f <- function(x) x"), DECLARATION_FICTIVE)
+verifier("#74 : exceptions déclarées dont les identifiants ne sont plus employés (donnees.R n'appelle rien), donnees.R sans ligne",
          .echoue_en(r, "R/donnees.R", NA_integer_, ".longueur_commune"))
 verifier("#74 : le dépôt réel passe (aucun emploi hors de son fichier hors des exceptions déclarées)", {
   sortie <- suppressWarnings(system2(file.path(R.home("bin"), "Rscript"),
@@ -393,13 +427,14 @@ verifier("m1, cas licites : nom d'argument, champ, cible d'affectation, chaînes
 r <- cas_chaine("lire_e <- function(x) vapply(x, \"dico_f\", 1)")
 verifier("m1, limite documentée : un nom de fonction sans point passé en chaîne n'est pas compté (noms de colonnes), le contrôle passe",
          .passe(r))
-r <- .essai("graphe_modules", list("R/outils.R" = c(".longueur_commune <- function(n) n", ".composantes_date <- function(j) j", ".jour_de <- function(j) j", AVEC_GRAINE),
-                                   "R/donnees.R" = c("donnees_f <- function(x) {", "  .longueur_commune(x)", "  .composantes_date(x)", "  .jour_de(x)", "}")))
-verifier("m2 : exceptions déclarées 4, constatées 3 (racine fictive sans plan.R)",
-         .passe(r) && any(grepl("4 exception(s) declaree(s), 3 constatee(s)", r$sortie, fixed = TRUE)))
+r <- .essai_exceptions(list("R/outils.R" = OUTILS_POINT,
+                            "R/donnees.R" = c("donnees_f <- function(x) {", "  .longueur_commune(x)", "  .composantes_date(x)", "  .jour_de(x)", "}")),
+                       DECLARATION_FICTIVE)
+verifier("m2 : exceptions déclarées 3, constatées 3 (racine fictive sans plan.R)",
+         .passe(r) && any(grepl("3 exception(s) declaree(s), 3 constatee(s)", r$sortie, fixed = TRUE)))
 r <- .essai("graphe_modules", list("R/dictionnaire.R" = "dico_f <- function(x) x"))
-verifier("m2 : exceptions déclarées 4, constatées 0 (et non « hors des 0 exception(s) déclarée(s) »)",
-         .passe(r) && any(grepl("4 exception(s) declaree(s), 0 constatee(s)", r$sortie, fixed = TRUE)) &&
+verifier("m2 : exceptions déclarées 0, constatées 0 (et non « hors des 0 exception(s) déclarée(s) »)",
+         .passe(r) && any(grepl("0 exception(s) declaree(s), 0 constatee(s)", r$sortie, fixed = TRUE)) &&
            !any(grepl("hors des 0 exception", r$sortie, fixed = TRUE)))
 
 # --- frontiere_calcul_affichage.R (N4, M236) ----------------------------------------------------

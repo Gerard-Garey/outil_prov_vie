@@ -544,15 +544,15 @@ MOIS_PERIODE_COTISATION <- c(annuelle = 12L, semestrielle = 6L, trimestrielle = 
 # implémentation de la règle : lue par `risque_en_cours` (P3, prorata_cotisation), et par
 # toute lecture future de cotisations (PPNA). Sans point ; non exportée.
 periode_cotisation_regle <- function(date_mouvement, periodicite) {
-  n <- .longueur_commune(length(date_mouvement), length(periodicite), "periode_cotisation_regle")
+  n <- longueur_commune(length(date_mouvement), length(periodicite), "periode_cotisation_regle")
   d <- rep_len(as.numeric(date_mouvement), n)
   mois <- unname(MOIS_PERIODE_COTISATION[rep_len(as.character(periodicite), n)])
   ok <- !is.na(d) & !is.na(mois)
   debut <- rep(NA_real_, n)
   fin <- rep(NA_real_, n)
   if (any(ok)) {
-    c0 <- .composantes_date(d[ok])
-    debut[ok] <- .jour_de(c0$annee, c0$mois, 1L)
+    c0 <- decomposer_date(d[ok])
+    debut[ok] <- composer_date(c0$annee, c0$mois, 1L)
     fin[ok] <- ajouter_mois(debut[ok], mois[ok]) - 1
   }
   list(debut = structure(debut, class = "Date"), fin = structure(fin, class = "Date"))

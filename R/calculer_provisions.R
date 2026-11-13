@@ -138,7 +138,7 @@ calculer_provisions <- function(donnees, plan, tables = list(), provenance = NUL
 # par identifiant) et la provenance de la fiche. Rend list(resultat : objet resultat_provie,
 # signalements : data.frame (grandeur, fiche, courant) des versions différentes).
 rejouer_fiche <- function(donnees, fiche, tables = list()) {
-  controle <- .controler_rejeu(fiche, donnees, tables)
+  controle <- controler_rejeu(fiche, donnees, tables)
   resultat <- calculer_provisions(donnees, fiche$plan, tables, fiche$empreintes$fichiers)
   list(resultat = resultat, signalements = controle$signalements)
 }

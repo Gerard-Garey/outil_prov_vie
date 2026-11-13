@@ -794,8 +794,9 @@ print.fiche_calcul <- function(x, ...) {
 # (signalées, sans refus) ; empreintes des données reçues (refus empreinte_discordante, à la
 # première table discordante dans l'ordre du dictionnaire, table manquante ou en trop
 # comprise) ; empreintes des tables (refus table_absente, empreinte_discordante). Rend
-# list(signalements = data.frame(grandeur, fiche, courant)).
-.controler_rejeu <- function(fiche, donnees, tables = list()) {
+# list(signalements = data.frame(grandeur, fiche, courant)). Sans point : lue par
+# `calculer_provisions` (rejouer_fiche()) ; non exportée.
+controler_rejeu <- function(fiche, donnees, tables = list()) {
   if (!inherits(fiche, "fiche_calcul") || !identical(names(fiche), CHAMPS_FICHE)) {
     refuser("rejeu : objet fiche_calcul attendu", "liste_invalide", module = "plan")
   }
