@@ -1725,7 +1725,7 @@ antérieur à l'extraction, un défaut de forme sur une colonne que lit une
 règle~P empêche cette règle, et un défaut de forme sur une colonne de
 visibilité d'une ligne entière, qu'une règle~P la lise ou non, empêche la
 vue de sa table (spécification, version~1.5.2, M224)\fsp; l'un et l'autre
-produisent un refus induit de portée table, d'origine «~table.colonne~»,
+produisent un refus induit de portée table, d'origine «~table.colonne~» (toutes les colonnes en cause, en ordre radix, séparées par «~;~»),
 propagé aux filles par les clés étrangères~: la table sort de la vue,
 aucune de ses lignes n'est inscrite comme non déterminée, et la vue est
 provisoire. Rien de tel à l'arrêté égal à l'extraction. Une date de partie de ligne qu'aucune règle~P ne lit
@@ -1772,11 +1772,12 @@ suivant~:
   verdict faux ne l'est pas, une ligne au verdict inconnu est écartée de
   la détection. La règle n'a une ligne dans
   \code{controles\_non\_executes} (détection partielle, nombre minorant)
-  que si elle a écarté au moins une ligne\fsp; sa cause est le motif du
-  premier refus de valeur qui touche une ligne écartée, dans l'ordre des
-  colonnes lues~: d'abord un refus d'une colonne de la table sur une ligne
-  écartée, à défaut le refus d'une colonne de la parente (sa date) sur la
-  parente d'une ligne écartée. Une ligne écartée qu'aucun refus de valeur
+  que si elle a écarté au moins une ligne\fsp; sa cause est, parmi les
+  motifs de tous les refus de valeur qui touchent une ligne écartée (refus
+  d'une colonne de la table sur une ligne écartée, ou d'une colonne de la
+  parente, sa date, sur la parente d'une ligne écartée), le plus petit dans
+  l'ordre du départage à rang égal (paragraphe «~Priorité des
+  causes~»)\fsp; la table n'a pas de préséance sur la parente. Une ligne écartée qu'aucun refus de valeur
   n'explique arrête le calcul («~erreur interne de provie~»).
 \item \textbf{À un arrêté antérieur à l'extraction}, la visibilité d'une
   ligne, ou d'une partie de ligne, se calcule dans la même logique
@@ -1854,7 +1855,8 @@ règle~V qui ne lit la colonne que pour la vue, a pour cause un refus de
 portée table, choisi selon la priorité des causes (ci-dessous)~: ce peut
 être le refus de portée table d'une autre table qu'elle lit, comme sa
 parente\fsp; pour une règle~P empêchée par un défaut de forme,
-l'origine du refus induit est la colonne de forme. Une colonne refusée
+l'origine du refus induit porte toutes les colonnes lues dont le défaut de
+forme empêche la règle, et non la seule première lue (issue~59). Une colonne refusée
 pour sa valeur n'est alors ni la cause ni l'origine, et aucune ligne de
 la table n'est inscrite sous un refus de valeur. Une règle qui lit la
 colonne refusée comme valeur garde la cause directe (M169, M185).
@@ -2039,10 +2041,12 @@ Chevauchement (versions de \code{garanties\_souscrites} par contrat, garantie et
   écarte au moins une ligne y a une ligne (détection partielle, nombre
   minorant), que la clé figure aussi dans \code{controles} ou non~: une
   règle qui n'a rien détecté parmi les lignes au verdict déterminé ne rend
-  pas un zéro rassurant. Sa cause est le motif du premier refus de valeur
-  qui touche une ligne écartée, dans l'ordre des colonnes lues puis des
-  constats~: refus sur la ligne écartée elle-même, ou, pour une colonne
-  d'une autre table, sur la ligne jointe. C'est une cause directe (rang~3,
+  pas un zéro rassurant. Sa cause est, parmi les motifs de tous les refus
+  de valeur qui touchent une ligne écartée, sur toutes les colonnes lues
+  (refus sur la ligne écartée elle-même, ou, pour une colonne d'une autre
+  table, sur la ligne jointe), le plus petit dans l'ordre du départage à
+  rang égal (paragraphe «~Priorité des causes~»)~: ni l'ordre des colonnes
+  lues ni celui des constats n'y entrent. C'est une cause directe (rang~3,
   paragraphe «~Priorité des causes~»). Une ligne écartée qu'aucun refus
   n'explique arrête le calcul («~erreur interne de provie~»). Comme les
   constats de la règle~B, ces lignes ne dépendent pas de l'arrêté.
@@ -2306,8 +2310,9 @@ D07 sur \code{dossiers} & Clôtures et seconds décès, enfants de l'assuré & �
   \end{itemize}
   Entre plusieurs éléments, la priorité des causes s'applique (une cause
   directe, rang~3, passe avant \code{declaration\_absente}, rang~6),
-  puis, à rang égal, l'ordre de leurs lignes dans le recensement des
-  lignes de visibilité non déterminée. Aucune cause nouvelle n'est
+  puis, à rang égal, l'ordre des codes du dictionnaire (paragraphe
+  «~Priorité des causes~»), indépendamment de l'ordre des lignes du
+  recensement des lignes de visibilité non déterminée. Aucune cause nouvelle n'est
   créée, et la cause propre à l'élément \code{enjeu}
   (\code{visibilite\_non\_determinee}) n'est jamais retenue ici. Une ligne écartée
   qu'aucun élément n'explique arrête le calcul («~erreur interne de
@@ -2570,7 +2575,8 @@ partielle, dont le nombre est un minorant.
 \textbf{Priorité des causes.} Quand plusieurs causes visent une même clé
 (code, table, colonne), parce que plusieurs règles, emplois ou colonnes
 lues l'empêchent, \code{controles\_non\_executes} n'en garde qu'une ligne,
-qui porte la cause de plus petit rang (décisions du mainteneur du
+qui porte la plus petite cause dans l'ordre lexicographique (rang,
+position) décrit ci-dessous (décisions du mainteneur du
 8~novembre~2026, M185, et du 9~novembre~2026, M194 et M195)~:
 
 \begin{enumerate}[itemsep=2pt]
@@ -2583,13 +2589,7 @@ qui porte la cause de plus petit rang (décisions du mainteneur du
 \item \code{refus\_induit}.
 \end{enumerate}
 
-À rang égal (deux causes directes distinctes), la première
-émise l'emporte, c'est-à-dire la première dans l'ordre d'exécution
-(paragraphe «~Ordre d'exécution~»), et, dans une règle, dans l'ordre des
-colonnes lues. Dans la règle~B, cet ordre est celui des strates, puis des
-règles de portée table, puis des clés~; l'évaluation par strates
-(paragraphe «~Règle~B à trois valeurs~») a donc déplacé ce départage, que
-fixait auparavant l'ordre du code seul. Un refus induit n'est donc retenu que si la clé n'a
+Un refus induit n'est donc retenu que si la clé n'a
 aucune autre cause, et la priorité de la cause directe sur tout refus
 induit, règle~B comprise (M185), est conservée. Cette priorité départage
 des causes qui empêchent chacune la règle~: un refus de valeur sur une
@@ -2608,8 +2608,68 @@ le refus d'origine d'un refus induit dans \code{refus\_tables}, alors
 qu'une cause directe, un âge non défini ou un paramètre non défini
 masqués seraient perdus.
 
+\textbf{Départage à rang égal} (spécification, §~3.1, version~1.6\fsp;
+décision du mainteneur du 13~novembre~2026, M335\fsp; issue~59). Seul le
+rang~3 admet plusieurs causes~: chacun des six autres rangs n'en a qu'une.
+À rang égal, la cause retenue est la première dans l'ordre des codes du
+dictionnaire~: les lignes de \code{controles.csv} dans l'ordre du
+fichier, puis celles de \code{defauts.csv} dans l'ordre du fichier, un
+sous-cas lettré absent de \code{defauts.csv} (D10a à D10f et D10h) prenant
+place juste après son code parent, dans l'ordre des lettres. Cet ordre
+se dérive des deux fichiers, sans liste tenue à la main~; il commence par
+les trois défauts de forme (\code{colonne\_absente},
+\code{colonne\_inconnue}, \code{type\_incompatible}), puis
+\code{manquant\_obligatoire}, \code{hors\_domaine},
+\code{chaine\_vide}, et place les codes D01a à D14 après les codes
+de \code{controles.csv}. Le minimum se prend sur l'ensemble des causes
+candidates de toutes les émissions de la clé~:
+\begin{itemize}[itemsep=2pt]
+\item règle bloquée~: pour chaque colonne lue qui bloque, le refus de
+  portée table de sa table et la cause propre de la colonne (défaut de
+  forme ou refus~R), chacun s'il existe, en concurrence sous le même
+  ordre (la table n'a plus la préséance)~; un \code{refus\_induit} n'est
+  retenu que si aucune autre cause ne l'est (rang~7)\fsp;
+\item règle~B ou règle~P exécutée en partie~: les motifs de tous les
+  refus de valeur qui touchent une ligne écartée\fsp;
+\item règle~V, cause~($\gamma$)~: la cause de chaque élément non
+  déterminé qui peut changer le verdict d'une ligne écartée.
+\end{itemize}
+La cause retenue est ainsi le minimum d'un ensemble sous un ordre
+total~: elle ne dépend ni de l'ordre d'exécution (règles, emplois,
+strates), ni de l'ordre des colonnes lues, ni de l'ordre des lignes de la
+vue (résultat exact). Par exemple, \code{manquant\_obligatoire} l'emporte
+sur D02c, et \code{type\_incompatible} sur D01a. Motif (jugement
+d'expert)~: l'ordre est déclaré dans un fichier versionné du dictionnaire,
+qui fait foi pour la base\fsp; il place en tête les défauts de forme, dont
+la correction est le préalable à toute lecture de valeur\fsp; aucune
+information n'est perdue, toute cause de rang~3 étant un refus inscrit
+dans \code{refus\_tables}, où se retrouvent les causes non retenues.
+Alternatives écartées~: la première cause émise, qui faisait dépendre le
+bilan de l'agencement du code (règle antérieure à l'issue~59)\fsp;
+publier toutes les causes de rang égal dans une même cellule, ce qui
+changerait le vocabulaire de la colonne \code{cause}\fsp; départager par
+la colonne lue, que \code{controles\_non\_executes} ne publie pas\fsp;
+l'ordre alphabétique des codes, déclaré mais arbitraire.
+
+\textbf{Exception~: l'enjeu} (décision du mainteneur du 13~novembre~2026,
+erratum~1.6.1 de la spécification, issue~122). La cause d'une composante
+de l'enjeu empêchée reste hors de ce départage~: \code{enjeu\$cause}, et
+la ligne de la composante dans \code{controles\_non\_executes}, gardent
+le défaut de forme, à défaut le premier refus de la colonne dans l'ordre
+des constats, et la table et la colonne de leur clé restent celles de la
+première colonne lue empêchée. Seul le dédoublonnement entre émissions
+de même clé suit l'ordre (rang, position). D'ici l'issue~122, une même
+colonne peut donc publier deux causes~: celle d'une règle (la plus
+petite) et celle d'une composante de l'enjeu (la première dans l'ordre
+des constats)~; les deux refus figurent dans \code{refus\_tables}.
+
 Dans le code, la fonction interne \code{.dedoublonner\_non\_executes()}
-applique cet ordre, lu dans deux constantes internes~:
+applique cet ordre, comme la cause d'une règle bloquée ou exécutée en
+partie et la cause~($\gamma$)~: une seule implémentation, la clé (rang,
+position) d'une cause (\code{.cle\_causes()}) et la plus petite d'un
+ensemble (\code{.cause\_retenue()}), la position étant lue dans l'ordre
+des codes dérivé du dictionnaire (\code{.ordre\_codes()}), seul endroit
+où cet ordre est écrit. Les rangs sont lus dans deux constantes internes~:
 \code{.RANGS\_CAUSES}, qui donne les rangs des six causes nommées
 ci-dessus, et \code{.RANG\_CAUSE\_DIRECTE}, qui vaut~3. Le rang d'une
 cause est cherché dans \code{.RANGS\_CAUSES} avant de tester si elle est
@@ -2622,7 +2682,10 @@ silence, et toute cause nouvelle doit recevoir un rang dans
 rang~: elle n'est jamais une cause de \code{controles\_non\_executes}, et
 la fonction s'arrête si on la lui présente. La batterie unitaire vérifie
 l'ordre sur chaque paire de rangs, dans les deux ordres d'émission, le
-départage à rang égal, l'arrêt sur une cause inconnue (dont une lettre
+départage à rang égal par l'ordre du dictionnaire, l'invariance du
+dédoublonnement par permutation de ses lignes (toutes les permutations
+d'un jeu de cinq lignes d'une clé, deux cents permutations tirées sous
+graine locale d'un jeu de douze lignes sur trois clés), l'arrêt sur une cause inconnue (dont une lettre
 ajoutée à un code déjà lettré, comme D01ab, et un sous-cas non déclaré,
 comme D05z), et, sur l'ensemble des appels qu'elle fait, que toute cause
 émise est rangée ou directe, que les cinq causes non directes autres que
