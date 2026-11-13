@@ -8,19 +8,17 @@
 #
 #  - Sessions cloud seulement (CLAUDE_CODE_REMOTE=true) : le poste du
 #    mainteneur a sa propre distribution LaTeX.
-#  - N'installe que si pdflatex manque : le hook tourne a chaque demarrage,
+#  - N'installe que si pdflatex ou framed.sty manque : le hook tourne a chaque demarrage,
 #    reprise, /clear et compaction, et la session attend sa fin.
 #  - Paquets : la liste du job « Documents LaTeX » de .github/workflows/ci.yml
-#    (etape « TeX Live et R »), a tenir alignee avec lui. Difference voulue :
-#    le hook installe avec --no-install-recommends, la CI avec les paquets
-#    recommandes. Motif : ils entrainent default-jre (recommande par
-#    texlive-latex-extra), or CLAUDE.md interdit toute dependance a Java,
-#    interdiction que le mainteneur etend a la chaine de documentation
-#    (decision du 12/11/2026). Ce choix ne suffit pas : texlive-latex-extra
-#    depend encore de libpdfbox-java et libcommons-logging-java. Le retrait
-#    de Java de la chaine LaTeX (hook et CI) est l'objet de l'issue #95.
-#    Les deux documents de docs/latex/ se compilent sans les recommandes
-#    (mesure de l'audit du correctif #26).
+#    (etape « TeX Live et R »), a tenir alignee avec lui, installes avec
+#    --no-install-recommends. Motif : CLAUDE.md interdit toute dependance a
+#    Java, interdiction que le mainteneur etend a la chaine de documentation
+#    (decision du 12/11/2026, issue #95). texlive-latex-extra n'est donc pas
+#    installe : il depend de libpdfbox-java et libcommons-logging-java et
+#    recommande default-jre. Il ne fournit aux documents de docs/latex/ que
+#    framed.sty : on telecharge son .deb (apt-get download) et on n'en extrait
+#    que ce fichier, place dans TEXMFLOCAL (/usr/local/share/texmf).
 #  - Le hook n'echoue jamais : sans reseau, la session demarre sans LaTeX et
 #    un message le signale.
 ###############################################################################
@@ -29,9 +27,12 @@ if [ "${CLAUDE_CODE_REMOTE:-}" != "true" ]; then
   exit 0
 fi
 
-PAQUETS="texlive-latex-base texlive-latex-extra texlive-fonts-recommended texlive-lang-french tex-gyre"
+PAQUETS="texlive-latex-base texlive-latex-recommended texlive-fonts-recommended texlive-lang-french tex-gyre"
 
-if command -v pdflatex >/dev/null 2>&1; then
+# Rien a faire si pdflatex et framed.sty sont deja la ; si une installation
+# precedente a laisse pdflatex sans framed.sty, le hook reprend.
+if command -v pdflatex >/dev/null 2>&1 && command -v kpsewhich >/dev/null 2>&1 \
+   && [ -n "$(kpsewhich framed.sty 2>/dev/null)" ]; then
   exit 0
 fi
 
@@ -40,7 +41,7 @@ if [ "$(id -u)" -eq 0 ]; then
 elif command -v sudo >/dev/null 2>&1; then
   sudo_si_besoin="sudo"
 else
-  echo "ATTENTION : pdflatex absent et installation impossible (ni root ni sudo)." >&2
+  echo "ATTENTION : pdflatex ou framed.sty absent et installation impossible (ni root ni sudo)." >&2
   exit 0
 fi
 
@@ -65,6 +66,28 @@ if ! $sudo_si_besoin env DEBIAN_FRONTEND=noninteractive apt-get \
        -o DPkg::Lock::Timeout=600 install -y -qq \
        --no-install-recommends $PAQUETS >/dev/null 2>&1; then
   echo "ATTENTION : installation de TeX Live echouee ; pdflatex est absent de cette session." >&2
+  exit 0
+fi
+
+# framed.sty seul, extrait du .deb de texlive-latex-extra (non installe : voir
+# l'en-tete). Retourne non nul au premier echec ; l'appelant le signale et sort
+# avec le code 0.
+installer_framed() {
+  local tmp f statut
+  tmp="$(mktemp -d)" || return 1
+  f=usr/share/texlive/texmf-dist/tex/latex/framed/framed.sty
+  # Le .deb se telecharge dans tmp (apt-get download ecrit dans le repertoire courant).
+  (cd "$tmp" && apt-get -o APT::Sandbox::User=root download texlive-latex-extra) >/dev/null 2>&1 \
+    && dpkg-deb --fsys-tarfile "$tmp"/texlive-latex-extra_*.deb | tar -x -C "$tmp" "./$f" \
+    && $sudo_si_besoin install -D -m 644 "$tmp/$f" /usr/local/share/texmf/tex/latex/framed/framed.sty \
+    && $sudo_si_besoin mktexlsr /usr/local/share/texmf >/dev/null 2>&1
+  statut=$?
+  rm -rf "$tmp"
+  return $statut
+}
+
+if ! installer_framed || [ -z "$(kpsewhich framed.sty 2>/dev/null)" ]; then
+  echo "ATTENTION : framed.sty n'a pas pu etre installe ; les documents de docs/latex/ ne se compileront pas." >&2
   exit 0
 fi
 
