@@ -57,6 +57,37 @@
 # « fonctions dans R/ mais aucun tableau »). Les constantes dont le nom commence par un
 # point (.NOM, internes) ne sont pas recensées, comme les fonctions à point : elles ne sont
 # pas exigées au tableau ; citées dans un tableau, elles sont un écart.
+#
+# Décomptes du texte courant (issue #104, décision M356 ; docs/latex/CONVENTIONS.md, § 3,
+# « Décomptes du texte courant »). Une ligne de commentaire LaTeX
+#     % concordance-decomptes : <portée> <grandeur>=<N> [<grandeur>=<N> ...]
+# précède le paragraphe qui porte le décompte ; la portée est l'un des modules de MODULES ou
+# `package` ; les grandeurs, chacune une fois au plus, sont :
+#   - fonctions  : fonctions de premier niveau de R/<module>.R, hors noms à point (0 si le
+#                  fichier est absent) ;
+#   - exportees  : noms des export() du NAMESPACE qui sont de ces fonctions ; pour `package`,
+#                  tous les export() du NAMESPACE (seule grandeur admise pour `package`) ;
+#   - constantes : constantes en majuscules de premier niveau de R/<module>.R (même
+#                  recensement que la complétude des tableaux de constantes).
+# Chaque valeur déclarée est comparée au code. Le paragraphe qui suit le marqueur (lignes
+# jusqu'à la première ligne blanche, lignes de commentaire exclues, jointes par une espace)
+# est lu : tout nombre en toutes lettres de « deux » à « vingt », ou « zéro », placé devant
+# « fonction(s) », « exportée(s) » ou « constante(s) » est comparé à la grandeur déclarée
+# correspondante (`package` : « fonction(s) » se compare à exportees) ; « un » et « une »
+# ne sont pas lus, ni un nombre devant une grandeur que le marqueur ne déclare pas. Sont des
+# écarts : marqueur mal formé, portée ou grandeur inconnue, grandeur déclarée deux fois,
+# `package` avec une autre grandeur qu'exportees, valeur déclarée différente du code, nombre
+# en lettres différent de la valeur déclarée, marqueur sans paragraphe, portée (les quinze
+# modules et `package`) sans aucun marqueur. Une ligne [OK] par marqueur concordant.
+# Lecture du paragraphe : les commentaires de fin de ligne (« % ... » non précédé de « \ »)
+# en sont retirés, et la ligne qui porte un « % » se joint à la suivante sans espace, comme
+# en LaTeX (« dix-huit% » puis « fonctions » ne fait pas un décompte) ; le séparateur entre
+# le nombre et la grandeur est une espace, une fin de ligne ou « ~ » (espace insécable) ;
+# seule la première lettre du nombre peut être une majuscule (« ZÉRO » n'est pas lu, ce qui
+# rend le bilan identique en locale C et en UTF-8) ; un nombre précédé d'un mot de nombre
+# (« cent deux fonctions », « soixante et onze fonctions ») n'est pas lu. Limite connue : un
+# nombre dans une commande (« \emph{dix-huit} fonctions ») n'est pas lu. Un marqueur dont la
+# valeur dépasse six chiffres, ou écrit « %% concordance-decomptes », est mal formé.
 
 options(warn = 2)
 args <- commandArgs(TRUE)
@@ -340,6 +371,103 @@ comparer_ligne <- function(v, c2, c3) {
   list(verifs = verifs, lecture = lecture, inconnues = inconnues)
 }
 
+# --- Décomptes du texte courant (issue #104) ------------------------------------------------
+
+PORTEES_DECOMPTES <- c(MODULES, "package")
+GRANDEURS_DECOMPTES <- c("fonctions", "exportees", "constantes")
+# « zéro » s'écrit avec un accent ; « un » et « une » sont exclus de la table (articles
+# avant tout).
+# Les noms sont marqués UTF-8, comme les mots lus dans le document, pour que la recherche
+# aboutisse quelle que soit la locale (« zéro » est introuvable sinon en locale C).
+NOMBRES_DECOMPTES <- c(NOMBRES[!(names(NOMBRES) %in% c("un", "une"))], "zéro" = 0L)
+Encoding(names(NOMBRES_DECOMPTES)) <- "UTF-8"
+MARQUEUR_DECOMPTES <- "^\\s*%\\s*concordance-decomptes\\s*:\\s*(\\S+)((\\s+[a-z]+=[0-9]{1,6})+)\\s*$"
+# Comme MOTIF_DECOMPTE ; (*UCP) pour que [[:alpha:]] lise « zéro » en entier (sans lui, PCRE
+# ne voit que l'ASCII et lit « ro »), sur un texte lu comme UTF-8.
+MOTIF_DECOMPTE_TEXTE <- paste0("(*UCP)(?<![[:alpha:]-])([[:alpha:]]+(?:-[[:alpha:]]+)*)[\\s~]+",
+                               "(fonctions?|export\\S{1,2}es?|constantes?)(?![[:alpha:]])")
+
+# Seule la première lettre d'un nombre peut être une majuscule (« Deux », « Zéro ») : on ne
+# met en minuscule que cette lettre, si elle est ASCII, et rien d'autre. tolower() de tout le
+# mot dépendrait de la locale (« ZÉRO » devient « zéro » en UTF-8, pas en locale C).
+minuscule_initiale <- function(mot) {
+  if (grepl("^[A-Z]", mot)) paste0(tolower(substr(mot, 1L, 1L)), substring(mot, 2L)) else mot
+}
+
+# Marqueurs de décomptes du document : liste de list(ligne, portee, valide, decl, paragraphe)
+# (decl : entiers nommés par grandeur) et anomalies de lecture (marqueur mal formé, portée ou
+# grandeur inconnue, grandeur répétée, `package` avec une autre grandeur qu'exportees, sans
+# paragraphe).
+lire_decomptes <- function(chemin) {
+  lignes <- readLines(chemin, encoding = "UTF-8", warn = FALSE)
+  marqueurs <- list()
+  anomalies <- character(0)
+  for (i in grep("^\\s*%+\\s*concordance-decomptes", lignes)) {
+    m <- regmatches(lignes[i], regexec(MARQUEUR_DECOMPTES, lignes[i]))[[1L]]
+    if (length(m) != 4L) {
+      anomalies <- c(anomalies, sprintf("ligne %d : marqueur mal formé (attendu : %% concordance-decomptes : <portée> <grandeur>=<N> ...)", i))
+      next
+    }
+    portee <- m[2L]
+    jetons <- strsplit(trimws(m[3L]), "\\s+")[[1L]]
+    grandeurs <- sub("=.*$", "", jetons)
+    valeurs <- as.integer(sub("^.*=", "", jetons))
+    ok <- TRUE
+    if (!(portee %in% PORTEES_DECOMPTES)) {
+      anomalies <- c(anomalies, sprintf("ligne %d : portée inconnue : %s", i, portee))
+      ok <- FALSE
+    }
+    for (g in setdiff(unique(grandeurs), GRANDEURS_DECOMPTES)) {
+      anomalies <- c(anomalies, sprintf("ligne %d : grandeur inconnue : %s", i, g))
+      ok <- FALSE
+    }
+    for (g in unique(grandeurs[duplicated(grandeurs)])) {
+      anomalies <- c(anomalies, sprintf("ligne %d : grandeur déclarée deux fois : %s", i, g))
+      ok <- FALSE
+    }
+    if (identical(portee, "package") && any(grandeurs != "exportees")) {
+      anomalies <- c(anomalies, sprintf("ligne %d : la portée package n'admet que exportees", i))
+      ok <- FALSE
+    }
+    # Paragraphe : jusqu'à la première ligne blanche, lignes de commentaire exclues.
+    j <- i + 1L
+    paragraphe <- character(0)
+    apres_commentaire <- FALSE  # la ligne précédente finit par un commentaire : jonction sans espace
+    while (j <= length(lignes) && nzchar(trimws(lignes[j]))) {
+      if (!grepl("^\\s*%", lignes[j])) {
+        # Commentaire de fin de ligne retiré ; comme en LaTeX, la fin de ligne commentée
+        # n'est pas une espace et les blancs qui débutent la ligne suivante sont ignorés.
+        texte <- sub("(?<!\\\\)%.*$", "", lignes[j], perl = TRUE)
+        if (apres_commentaire) texte <- sub("^\\s+", "", texte)
+        paragraphe <- c(paragraphe, if (length(paragraphe) && !apres_commentaire) paste0(" ", texte) else texte)
+        apres_commentaire <- texte != lignes[j]
+      }
+      j <- j + 1L
+    }
+    if (length(paragraphe) == 0L) {
+      anomalies <- c(anomalies, sprintf("ligne %d : marqueur sans paragraphe qui le suive", i))
+      ok <- FALSE
+    }
+    # Une portée valide compte pour la complétude même si le marqueur a une autre anomalie
+    # (déjà signalée) ; le marqueur n'est comparé au code que s'il est bien formé.
+    marqueurs[[length(marqueurs) + 1L]] <- list(
+      ligne = i, portee = portee, valide = ok,
+      decl = if (ok) stats::setNames(valeurs, grandeurs) else integer(0),
+      paragraphe = paste(paragraphe, collapse = ""))
+  }
+  list(marqueurs = marqueurs, anomalies = anomalies)
+}
+
+# Valeurs du code pour une portée : entiers nommés (package : exportees seulement).
+decomptes_du_code <- function(racine, portee, exports) {
+  if (identical(portee, "package")) return(c(exportees = length(exports)))
+  chemin <- file.path(racine, "R", paste0(portee, ".R"))
+  fonctions <- if (file.exists(chemin)) fonctions_du_fichier(chemin) else character(0)
+  constantes <- if (file.exists(chemin)) constantes_majuscules_du_fichier(chemin) else character(0)
+  c(fonctions = length(fonctions), exportees = sum(exports %in% fonctions),
+    constantes = length(constantes))
+}
+
 section("concordance documentation <-> code")
 document <- file.path(racine, "docs", "latex", "doc_outil_prov_vie.tex")
 if (!file.exists(document)) {
@@ -447,6 +575,56 @@ if (!file.exists(document)) {
       ecart(paste("module", module), paste("constantes dans R/ mais aucun tableau de constantes dans le document :",
                                            paste(sans_tableau, collapse = ", ")))
     }
+  }
+
+  # Décomptes du texte courant (issue #104).
+  dc <- lire_decomptes(document)
+  for (a in dc$anomalies) ecart("décomptes du texte courant", a)
+  for (mq in dc$marqueurs) {
+    if (!mq$valide) next
+    etiquette <- sprintf("décomptes (ligne %d) %s", mq$ligne, mq$portee)
+    code <- decomptes_du_code(racine, mq$portee, exports)
+    echecs <- 0L
+    for (g in names(mq$decl)) {
+      if (mq$decl[[g]] != code[[g]]) {
+        echecs <- echecs + 1L
+        ecart(etiquette, sprintf("%s : marqueur %d, code %d", g, mq$decl[[g]], code[[g]]))
+      }
+    }
+    lus <- 0L
+    pos <- gregexpr(MOTIF_DECOMPTE_TEXTE, mq$paragraphe, perl = TRUE)[[1L]]
+    for (k in seq_along(pos)[pos > 0L]) {
+      trouve <- substr(mq$paragraphe, pos[k], pos[k] + attr(pos, "match.length")[k] - 1L)
+      mots <- strsplit(trouve, "[[:space:]~]+")[[1L]]
+      mot <- minuscule_initiale(mots[1L])
+      # Mot qui précède le nombre : un nombre précédé d'un mot de nombre (« cent deux »,
+      # « soixante et onze ») est un nombre composé, non lu.
+      avant <- strsplit(sub("[[:space:]~]+$", "", substr(mq$paragraphe, 1L, pos[k] - 1L)), "[[:space:]~]+")[[1L]]
+      precedent <- if (length(avant)) minuscule_initiale(avant[length(avant)]) else ""
+      # Octets sans marque d'encodage pour l'affichage (comme dans lire_constantes) : sans
+      # cela, « exportées » s'imprime « export<U+00E9>es » hors d'une locale UTF-8.
+      Encoding(trouve) <- "unknown"
+      if (!(mot %in% names(NOMBRES_DECOMPTES))) next
+      if (all(strsplit(precedent, "-", fixed = TRUE)[[1L]] %in% MOTS_NOMBRES) && nzchar(precedent)) next
+      g <- if (startsWith(mots[2L], "fonction")) {
+        if (identical(mq$portee, "package")) "exportees" else "fonctions"
+      } else if (startsWith(mots[2L], "export")) "exportees" else "constantes"
+      if (!(g %in% names(mq$decl))) next
+      lus <- lus + 1L
+      n <- unname(NOMBRES_DECOMPTES[mot])
+      if (n != mq$decl[[g]]) {
+        echecs <- echecs + 1L
+        ecart(etiquette, sprintf("texte « %s » = %d, marqueur %s=%d", trouve, n, g, mq$decl[[g]]))
+      }
+    }
+    if (echecs == 0L) {
+      accord(sprintf("%s : %s concordant(s) avec le code, %d nombre(s) en lettres lu(s)", etiquette,
+                     paste0(names(mq$decl), "=", mq$decl, collapse = " "), lus))
+    }
+  }
+  presentes <- vapply(dc$marqueurs, function(mq) mq$portee, "")
+  for (portee in setdiff(PORTEES_DECOMPTES, presentes)) {
+    ecart(paste("portée", portee), "aucun marqueur % concordance-decomptes dans le document")
   }
 }
 
