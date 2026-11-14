@@ -411,6 +411,48 @@ r <- .essai("graphe_modules", list("R/outils.R" = c("avec_graine <- function(gra
 verifier("M412 : exception périmée (avec_graine n'appelle plus globalenv), outils.R sans numéro de ligne",
          .echoue_en(r, "R/outils.R", NA_integer_, "exception declaree") && !any(grepl("[ECHEC] R/outils.R:", r$sortie, fixed = TRUE)))
 
+# #109 : do.call sur un nom de fonction interdite, et références sans appel aux noms de
+# APPELS_DYNAMIQUES (jusque-là seul l'appel était vu).
+section("contrôles : graphe_modules.R, do.call et références sans appel (#109)")
+r <- cas_graphe(c("calcul_e <- function(x) {", "  a <- do.call(parent.frame, list())", "  b <- do.call(get, list(\"x\"))",
+                  "  c <- do.call(what = sys.call, args = list())", "  x", "}"))
+verifier("#109 : do.call(parent.frame, list()), engagement.R:2 (règle do.call)",
+         .echoue_en(r, "R/engagement.R", 2L, "do.call()"))
+verifier("#109 : do.call(get, list(\"x\")), engagement.R:3 (règle do.call)", .echoue_en(r, "R/engagement.R", 3L, "do.call()"))
+verifier("#109 : do.call(what = sys.call, ...), engagement.R:4 (règle do.call)", .echoue_en(r, "R/engagement.R", 4L, "do.call()"))
+verifier("#109 : do.call(parent.frame, ...) est aussi une référence sans appel, engagement.R:2",
+         .echoue_en(r, "R/engagement.R", 2L, "parent.frame sans appel"))
+r <- cas_graphe(c("calcul_e <- function(x) {", "  g <- parent.frame", "  g()", "}"))
+verifier("#109 : g <- parent.frame ; g(), référence sans appel, engagement.R:2",
+         .echoue_en(r, "R/engagement.R", 2L, "parent.frame sans appel"))
+r <- cas_graphe("calcul_e <- function(x) lapply(1, sys.call)")
+verifier("#109 : lapply(1, sys.call), engagement.R:1", .echoue_en(r, "R/engagement.R", 1L, "sys.call sans appel"))
+r <- cas_graphe(c("calcul_e <- function(x) {", "  f <- base::get", "  g <- lapply(x, eval)", "  h <- Map(globalenv, x)", "  x", "}"))
+verifier("#109 : base::get (symbole après ::), engagement.R:2", .echoue_en(r, "R/engagement.R", 2L, "get sans appel"))
+verifier("#109 : lapply(x, eval), engagement.R:3", .echoue_en(r, "R/engagement.R", 3L, "eval sans appel"))
+verifier("#109 : Map(globalenv, x), engagement.R:4", .echoue_en(r, "R/engagement.R", 4L, "globalenv sans appel"))
+r <- cas_graphe(c("calcul_e <- function(x) {", "  a <- do.call(rbind, list(x, x))", "  b <- do.call(function(u) u, list(x))",
+                  "  c <- do.call(what = cbind, args = list(x))", "  a", "}"))
+verifier("#109, cas licite : do.call sur un nom de fonction de base nu hors liste interdite, ou une fonction littérale", .passe(r))
+r <- cas_graphe(c("calcul_e <- function(x, get) {", "  y <- x$get", "  z <- list(get = 1, eval = 2)", "  x$eval <- 3",
+                  "  parse <- 1", "  y", "}"))
+verifier("#109, cas licite : champ, nom d'argument, argument formel, cible seule d'une affectation (get, eval, parse)", .passe(r))
+r <- .essai("graphe_modules", list("R/rapport.R" = c("empreinte_code <- function() {", "  f <- topenv", "  f()", "}")))
+verifier("#109 : topenv référencé sans appel dans empreinte_code, exception déclarée (appels et références) : le contrôle passe",
+         .passe(r) && any(grepl("M409, M412 : 2 declaree(s), 1 constatee(s)", r$sortie, fixed = TRUE)))
+r <- cas_graphe("calcul_e <- function(get) get")
+verifier("#109, limite documentée (côté sûr) : argument formel homonyme lu (function(get) get), signalé comme référence, engagement.R:1",
+         .echoue_en(r, "R/engagement.R", 1L, "get sans appel"))
+r <- .essai("graphe_modules", list("R/rapport.R" = c("empreinte_code <- function() {", "  1", "}")))
+verifier("#109 : exception périmée, le message dit « ni appele ni reference » (rapport.R sans numéro de ligne)",
+         .echoue_en(r, "R/rapport.R", NA_integer_, "n'est plus ni appele ni reference"))
+r <- .essai("graphe_modules", list("R/rapport.R" = c("empreinte_code <- function() {", "  topenv()", "}", "autre_f <- function() lapply(1, topenv)")))
+verifier("#109 : topenv référencé sans appel dans une autre fonction de rapport.R échoue, rapport.R:4",
+         .echoue_en(r, "R/rapport.R", 4L, "topenv sans appel") && !any(startsWith(r$sortie, "[ECHEC] R/rapport.R:2 ")))
+r <- .essai("graphe_modules", list("R/rapport.R" = c("empreinte_code <- function() {", "  lapply(1, parent.frame)", "}")))
+verifier("#109 : l'exception de topenv ne couvre pas parent.frame référencé dans empreinte_code, rapport.R:2",
+         .echoue_en(r, "R/rapport.R", 2L, "parent.frame sans appel"))
+
 # m1 : un nom d'auxiliaire à point passé en chaîne (match.fun) est un emploi (issue #74, audit).
 section("contrôles : graphe_modules.R, noms passés en chaîne (#74, m1)")
 cas_chaine <- function(lecture) .essai("graphe_modules", list("R/dictionnaire.R" = c(".aux <- function(x) x", "dico_f <- function(x) x"),
