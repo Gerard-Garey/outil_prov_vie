@@ -603,6 +603,35 @@ r <- cb(avec(function(b) { b$garanties_souscrites <- rbind(b$garanties_souscrite
 verifier("versions successives sans recouvrement : aucun chevauchement", nrow(refus(r, "chevauchement", NULL)) == 0L)
 r <- cb(avec(function(b) { b$parametres$age_min[5L] <- 17L; b }))
 verifier("paliers d'un même paramètre qui se chevauchent : chevauchement de parametres", refus(r, "chevauchement", "parametres")$nombre == 2L)
+# #121 (spécification v1.7, § 2.2, B.4, clé manquante, forme « chevauchement ») : une ligne dont
+# une composante de clé du groupe manque est hors du contrôle ; l'absence de catégorie reste une
+# valeur du groupe ; une absence ne se confond jamais avec un « NA » littéral
+verifier_egal("#121 : paliers sans catégorie d'un même (garantie, paramètre) qui se recouvrent : chevauchement (l'absence de catégorie est une valeur du groupe)",
+              list(all(is.na(base_ref$parametres$categorie_invalidite[4:5])), refus(r, "chevauchement", "parametres")$identifiants),
+              list(TRUE, "GS3|taux_rente|\\N|0;GS3|taux_rente|\\N|17"))
+gsx <- function(id) avec(function(b) { g <- b$garanties_souscrites; x <- g[1L, ]; x$id_garantie_souscrite <- "GSX"
+                                         g <- rbind(g, x); g$id_contrat[c(1L, 5L)] <- id; b$garanties_souscrites <- g; b })
+verifier_egal("#121, site 40 : GS1 et sa copie GSX, toutes deux sans id_contrat, de même code et collège, aux dates qui se recouvrent : aucun chevauchement (manquant_obligatoire seul)",
+              list(nrow(refus(cb(gsx(NA)), "chevauchement", NULL)), refus(cb(gsx(NA)), "manquant_obligatoire", "garanties_souscrites", "id_contrat")$identifiants),
+              list(0L, "GS1;GSX"))
+verifier_egal("#121, site 40, témoin : GS1 sans id_contrat et GSX d'id_contrat littéral « NA » : pas du même groupe, aucun chevauchement",
+              nrow(refus(cb(gsx(c(NA, "NA"))), "chevauchement", NULL)), 0L)
+verifier_egal("#121, site 40, témoin : GS1 et GSX d'id_contrat renseigné et égal : chevauchement GS1;GSX (inchangé)",
+              refus(cb(gsx("CT1")), "chevauchement", "garanties_souscrites")$identifiants, "GS1;GSX")
+r <- cb(avec(function(b) { p <- b$parametres; x <- p[1L, ]; x$categorie_invalidite <- "NA"; b$parametres <- rbind(p, x); b }))
+verifier_egal("#121, site 41, témoin : deux lignes (GS1, taux_capital), l'une sans catégorie, l'autre de catégorie littérale « NA » (hors_domaine) : deux groupes, aucun chevauchement",
+              list(nrow(refus(r, "chevauchement", NULL)), refus(r, "hors_domaine", "parametres", "categorie_invalidite")$nombre),
+              list(0L, 1L))
+r <- cb(avec(function(b) { b$parametres$id_garantie_souscrite[c(2L, 8L)] <- NA; b }))
+verifier_egal("#121, site 41 : deux lignes age_fin_garantie sans id_garantie_souscrite : hors du contrôle, aucun chevauchement",
+              nrow(refus(r, "chevauchement", NULL)), 0L)
+r <- cb(avec(function(b) { b$parametres$id_garantie_souscrite[2L] <- NA; b$parametres$id_garantie_souscrite[8L] <- "NA"; b }))
+verifier_egal("#121, site 41, témoin : age_fin_garantie sans id_garantie_souscrite et d'id_garantie_souscrite littéral « NA » : pas du même groupe, aucun chevauchement",
+              nrow(refus(r, "chevauchement", NULL)), 0L)
+verifier_egal("#121 : .code_groupe() : une absence n'égale que l'absence, jamais « NA » ; composante de clé manquante : code NA",
+              list(ns$.code_groupe(list(c("a", NA, "NA", NA, "a"))),
+                   ns$.code_groupe(list(c("g", "g", NA, "g"), c(NA, "NA", NA, NA)), cles = 1L)),
+              list(c(1L, 2L, 3L, 2L, 1L), c(1L, 2L, NA, 1L)))
 # #35 : .chevauchements, comparée à une énumération des paires sur des intervalles tirés
 # (groupes, bornes manquantes, fin infinie, intervalles renversés, bornes égales : intervalle
 # fermé) ; puis complexité, mesurée sans horloge (une durée dépend de la charge de la
@@ -2418,17 +2447,22 @@ verifier_egal("chevauchement, lecture exacte (pour toute affectation, il existe 
                    ligne(r$controles_non_executes, "chevauchement", "garanties_souscrites", NA)$cause),
               list("GS3", hd))
 # .chevauchements3() : ligne inconnue face à deux lignes connues qui couvrent tout le domaine
-# (vraie) ; clé NA groupée comme par .chevauchements() (paste)
+# (vraie) ; clé NA : ligne hors du contrôle (#121 ; avant : groupée comme par .chevauchements())
 g3 <- function(v, u, dom) list(list(valeurs = v, inconnu = u, domaine = dom),
                                list(valeurs = rep("ensemble", length(v)), inconnu = rep(FALSE, length(v)), domaine = NULL))
-verifier_egal(".chevauchements3() : A et B connues [2000, 2010], ligne de code inconnu (domaine A, B) [2005, 2006] : NA NA TRUE ; deux lignes de clé NA (connue deces, inconnue de domaine deces, incapacite) : NA NA, comme sous une clé renseignée",
+verifier_egal(".chevauchements3() : A et B connues [2000, 2010], ligne de code inconnu (domaine A, B) [2005, 2006] : NA NA TRUE ; deux lignes de clé NA (connue deces, inconnue de domaine deces, incapacite) : hors du contrôle, FALSE FALSE (#121 ; avant : NA NA)",
               list(as.vector(ns$.chevauchements3(rep("CT1", 3), g3(c("A", "B", "zzz"), c(FALSE, FALSE, TRUE), c("A", "B")),
                                                   c(2000, 2000, 2005), c(2000, 2000, 2005), c(2010, 2010, 2006), c(2010, 2010, 2006),
                                                   rep(FALSE, 3), c(FALSE, FALSE, TRUE))),
                    as.vector(ns$.chevauchements3(c(NA, NA), g3(c("deces", "zzz"), c(FALSE, TRUE), c("deces", "incapacite")),
                                                   c(2000, 2005), c(2000, 2005), c(2010, 2006), c(2010, 2006), rep(FALSE, 2),
                                                   c(FALSE, TRUE)))),
-              list(c(NA, NA, TRUE), c(NA, NA)))
+              list(c(NA, NA, TRUE), c(FALSE, FALSE)))
+verifier_egal(".chevauchements3() (#121) : domaine à modalité en double (A, B, A) : A et B connues [2000, 2010], ligne de code inconnu [2005, 2006] recouverte pour toute valeur : NA NA TRUE, comme sous le domaine (A, B)",
+              as.vector(ns$.chevauchements3(rep(1L, 3), g3(c("A", "B", "zzz"), c(FALSE, FALSE, TRUE), c("A", "B", "A")),
+                                             c(2000, 2000, 2005), c(2000, 2000, 2005), c(2010, 2010, 2006), c(2010, 2010, 2006),
+                                             rep(FALSE, 3), c(FALSE, FALSE, TRUE))),
+              c(NA, NA, TRUE))
 
 section("donnees : robustesse des règles B et V à trois valeurs (#56 ; spécification v1.6, § 2.2, B.4, « Clé manquante »)")
 # point 6 : noyau unique du motif existentiel de Kleene (.existe_kleene()), lu par .existe3()

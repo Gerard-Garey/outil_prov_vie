@@ -1533,15 +1533,17 @@ lire_declarations <- function(declarations, dico) {
 }
 
 # Chevauchement à trois valeurs (sites 40 et 41 ; spécification, § 2.2, B.4, forme
-# « chevauchement », lecture existentielle) : `cle` partie connue du groupe (colonnes de clé,
-# groupées comme par .chevauchements() : une clé NA forme un groupe) ; `groupe` colonnes de
+# « chevauchement », lecture existentielle) : `cle` partie connue du groupe, codes entiers des
+# colonnes de clé (.code_groupe()) ; une clé NA (composante de clé manquante) met la ligne hors
+# du contrôle : ni détectée, ni écartée, elle ne recouvre aucune ligne (#121) ; `groupe` colonnes de
 # groupe lues (valeurs, inconnu, domaine : NULL pour un code opaque, qui peut valoir toute
 # chaîne) ; bornes en nombre, plus petite et plus grande valeur possibles (égales pour une
 # borne connue ; NA : borne absente, ligne hors du contrôle) ; `absente_possible` : une borne
 # inconnue peut être absente (ligne alors hors du contrôle) ; `inconnue` : ligne qui lit une
 # valeur inconnue. Une ligne i est recouverte de façon forcée par une ligne j si, pour toute
 # valeur des inconnues de i, j est de même groupe et valide et la recouvre : groupe connu et
-# égal (ou domaine réduit à la valeur de l'autre), bornes prises au pire (début au plus tard,
+# égal (ou domaine réduit à la valeur de l'autre ; une absence n'égale que l'absence, jamais
+# une chaîne, .egal_valeur()), bornes prises au pire (début au plus tard,
 # fin au plus tôt, absence possible exclue), ce pire étant commun à toutes les lignes. Vrai :
 # - ligne connue : recouvre une ligne connue (.chevauchements()) ou une ligne qui la recouvre
 #   de façon forcée ;
@@ -1554,10 +1556,10 @@ lire_declarations <- function(declarations, dico) {
 # aux lignes de même `cle`. Attribut `index` : lignes inconnues qui rendent chaque ligne inconnue.
 .chevauchements3 <- function(cle, groupe, d_min, d_max, f_min, f_max, absente_possible, inconnue) {
   n <- length(cle)
-  cle <- paste(cle)
+  hors <- is.na(cle)
   connue <- !inconnue
-  groupe_connu <- do.call(paste, c(list(cle), lapply(groupe, `[[`, "valeurs"), sep = "\r"))
-  vrai <- .chevauchements(ifelse(connue, groupe_connu, NA), d_min, f_min)
+  groupe_connu <- .code_groupe(c(list(cle), lapply(groupe, `[[`, "valeurs")))
+  vrai <- .chevauchements(ifelse(connue & !hors, groupe_connu, NA), d_min, f_min)
   possible <- rep(FALSE, n)
   force <- rep(FALSE, n)
   index <- vector("list", n)
@@ -1567,25 +1569,22 @@ lire_declarations <- function(declarations, dico) {
   # de domaine réduit à une valeur)
   bornes_force <- function(i, j) valide_force[i] & valide_force[j] & (d_max[i] <= f_min[j]) %in% TRUE &
     (d_max[j] <= f_min[i]) %in% TRUE
-  valeur_forcee <- function(gc, i) {
-    unique_dom <- !is.null(gc$domaine) && length(gc$domaine) == 1L
-    ifelse(!gc$inconnu[i], paste(gc$valeurs[i]), if (unique_dom) paste(gc$domaine) else NA_character_)
-  }
+  forcee <- function(gc, i) !gc$inconnu[i] | (!is.null(gc$domaine) && length(gc$domaine) == 1L)
+  valeur_forcee <- function(gc, i) if (is.null(gc$domaine) || length(gc$domaine) != 1L) gc$valeurs[i] else
+    ifelse(gc$inconnu[i], gc$domaine, gc$valeurs[i])
   par_cle <- split(seq_len(n), cle)
-  for (j in which(inconnue)) {
-    i <- setdiff(par_cle[[cle[j]]], j)
+  for (j in which(inconnue & !hors)) {
+    i <- setdiff(par_cle[[as.character(cle[j])]], j)
     if (length(i) == 0L) next
     meme_possible <- rep(TRUE, length(i))
     meme_force <- rep(TRUE, length(i))
     for (gc in groupe) {
       ui <- gc$inconnu[i]
       uj <- gc$inconnu[j]
-      egal <- !ui & !uj & paste(gc$valeurs[i]) == paste(gc$valeurs[j])
+      egal <- !ui & !uj & .egal_valeur(gc$valeurs[i], gc$valeurs[j])
       dans <- function(x) is.null(gc$domaine) | x %in% gc$domaine
       meme_possible <- meme_possible & (egal | (uj & (ui | dans(gc$valeurs[i]))) | (ui & !uj & dans(gc$valeurs[j])))
-      vi <- valeur_forcee(gc, i)
-      vj <- valeur_forcee(gc, j)
-      meme_force <- meme_force & !is.na(vi) & !is.na(vj) & vi == vj
+      meme_force <- meme_force & forcee(gc, i) & forcee(gc, j) & .egal_valeur(valeur_forcee(gc, i), valeur_forcee(gc, j))
     }
     p <- meme_possible & valide_possible[i] & valide_possible[j] & (d_min[i] <= f_max[j]) %in% TRUE &
       (d_min[j] <= f_max[i]) %in% TRUE
@@ -1605,14 +1604,20 @@ lire_declarations <- function(declarations, dico) {
         !any(vapply(groupe[inconnues_j], function(gc) is.null(gc$domaine), NA))) {
       candidats <- i[bornes_force(i, j)]
       fixes <- rep(TRUE, length(candidats))
-      for (gc in groupe[-inconnues_j]) fixes <- fixes & !gc$inconnu[candidats] & paste(gc$valeurs[candidats]) == paste(gc$valeurs[j])
+      for (gc in groupe[-inconnues_j]) fixes <- fixes & !gc$inconnu[candidats] & .egal_valeur(gc$valeurs[candidats], gc$valeurs[j])
       for (gc in groupe[inconnues_j]) fixes <- fixes & !gc$inconnu[candidats]
       candidats <- candidats[fixes]
       if (length(candidats) > 0L) {
-        cle_c <- do.call(paste, c(lapply(groupe[inconnues_j], function(gc) paste(gc$valeurs[candidats])), sep = "\r"))
-        grille <- do.call(paste, c(expand.grid(lapply(groupe[inconnues_j], function(gc) paste(gc$domaine)),
-                                               stringsAsFactors = FALSE), sep = "\r"))
-        if (all(grille %in% cle_c)) force[j] <- TRUE
+        # rang de chaque candidat dans la grille des domaines dédoublonnés (par match(),
+        # l'absence n'égalant que l'absence) ; forcé si chaque point de la grille est atteint
+        rang <- 0
+        taille <- 1
+        for (gc in groupe[inconnues_j]) {
+          dom <- unique(gc$domaine)
+          rang <- rang + (match(gc$valeurs[candidats], dom) - 1) * taille
+          taille <- taille * length(dom)
+        }
+        if (all((seq_len(taille) - 1) %in% rang)) force[j] <- TRUE
       }
     }
   }
@@ -1620,6 +1625,27 @@ lire_declarations <- function(declarations, dico) {
   r[!r & possible] <- NA
   attr(r, "index") <- lapply(index, unique)
   r
+}
+
+# Égalité de deux valeurs d'une colonne de groupe : une absence n'égale que l'absence, jamais
+# une chaîne (« NA » littéral compris) ; vecteurs recyclés (#121).
+.egal_valeur <- function(a, b) (is.na(a) & is.na(b)) | (!is.na(a) & !is.na(b) & a == b) %in% TRUE
+
+# Code entier du groupe formé par les composantes (vecteurs de même longueur) : deux lignes ont
+# le même code si et seulement si chaque composante est égale, une absence n'égalant que
+# l'absence (match() sur les valeurs distinctes, sans paste() : un « NA » littéral ne se confond
+# pas avec l'absence) ; `cles` : indices des composantes dont l'absence met la ligne hors du
+# groupe (code NA ; spécification, § 2.2, B.4, clé manquante, forme « chevauchement », #121).
+.code_groupe <- function(composantes, cles = integer(0)) {
+  n <- length(composantes[[1L]])
+  code <- rep(1, n)
+  for (x in composantes) {
+    k <- match(x, unique(x))
+    z <- (code - 1) * max(c(k, 1L)) + k
+    code <- match(z, unique(z))
+  }
+  for (c1 in cles) code[is.na(composantes[[c1]])] <- NA_integer_
+  code
 }
 
 # --- Règle B : forme -----------------------------------------------------------------
@@ -2174,7 +2200,7 @@ lire_declarations <- function(declarations, dico) {
     groupe <- list(list(valeurs = v("code_garantie"), inconnu = u("code_garantie"),
                         domaine = .domaine3(ctx, "garanties_souscrites", "code_garantie")),
                    list(valeurs = v("college"), inconnu = u("college"), domaine = NULL))
-    r <- .chevauchements3(v("id_contrat"), groupe,
+    r <- .chevauchements3(.code_groupe(list(v("id_contrat")), cles = 1L), groupe,
                           d_min = ifelse(u("date_effet"), plage_debut[1L], debut),
                           d_max = ifelse(u("date_effet"), plage_debut[2L], debut),
                           f_min = ifelse(u("date_fin"), plage_fin[1L], fin), f_max = ifelse(u("date_fin"), Inf, fin),
@@ -2194,7 +2220,10 @@ lire_declarations <- function(declarations, dico) {
     inconnu <- .inconnu(ctx, "parametres", "age_max") & !sans_palier
     debut <- ifelse(sans_palier, 0, as.numeric(v("age_min")))
     fin <- ifelse(sans_palier, 120, as.numeric(v("age_max")))
-    r <- .chevauchements3(paste(v("id_garantie_souscrite"), v("parametre"), v("categorie_invalidite"), sep = "\r"),
+    # clé du groupe : garantie et paramètre (une absence met la ligne hors du contrôle) ;
+    # l'absence de catégorie est une valeur du groupe (#121)
+    r <- .chevauchements3(.code_groupe(list(v("id_garantie_souscrite"), v("parametre"), v("categorie_invalidite")),
+                                       cles = 1:2),
                           list(), d_min = debut, d_max = debut, f_min = ifelse(inconnu, 0, fin),
                           f_max = ifelse(inconnu, 120, fin), absente_possible = inconnu, inconnue = inconnu)
     attr(r, "index") <- list(parametres.age_max = attr(r, "index"))
