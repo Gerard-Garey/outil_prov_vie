@@ -132,7 +132,7 @@ jobs:
       # des JDK : le contrôle ne porte donc pas sur la machine, mais sur les paquets que ce
       # job installe (différence des paquets installés avant et après, étape suivante).
       - name: Paquets installés avant le job
-        run: dpkg-query -W -f='${db:Status-Abbrev} ${Package}\n' | awk '$1=="ii"{print $2}' | LC_ALL=C sort > "$RUNNER_TEMP/paquets-avant.txt"
+        run: bash tests/controles/paquets_java.sh --lister > "$RUNNER_TEMP/paquets-avant.txt"
       # r-base-core : le contrôle du préambule est exécuté ici (ADR 0010, point 27), il
       # n'emploie que R de base et ne dépend pas de la version 4.3.3.
       # --no-install-recommends : les paquets recommandés entraînent default-jre. Les
@@ -169,23 +169,12 @@ jobs:
       - name: Aucun paquet Java installé par le job
         run: |
           set -euo pipefail
-          dpkg-query -W -f='${db:Status-Abbrev} ${Package}\n' | awk '$1=="ii"{print $2}' | LC_ALL=C sort > "$RUNNER_TEMP/paquets-apres.txt"
-          LC_ALL=C comm -13 "$RUNNER_TEMP/paquets-avant.txt" "$RUNNER_TEMP/paquets-apres.txt" \
-            > "$RUNNER_TEMP/paquets-installes.txt"
-          echo "$(wc -l < "$RUNNER_TEMP/paquets-installes.txt") paquets installés par le job."
-          # Paquets à l'état « ii » seulement (un « rc » n'est pas installé). Motifs, par noms
-          # de paquets Debian et Ubuntu : *-java, *-java-* (libreoffice-java-common), java-*
-          # (java-common), *-jni, default-jre*, default-jdk*, OpenJDK et OpenJFX (« ^openj[df] » :
-          # écrit ainsi, car tests/controles/absence_java.R refuse le nom du JDK en toutes
-          # lettres, et pour ne pas attraper openjade), temurin-*, zulu*, jarwrapper, gcj-*.
-          # Limite : un contrôle par nom ; un paquet Java d'un autre nom (JDK d'un tiers,
-          # bibliothèque dont le nom ne dit rien de Java) passe au travers.
-          if grep -nE -e '-java$' -e '-java-' -e '^java-' -e '-jni$' -e '^default-j(re|dk)' \
-               -e '^openj[df]' -e '^temurin-' -e '^zulu' -e '^jarwrapper' -e '^gcj-' \
-               "$RUNNER_TEMP/paquets-installes.txt"; then
-            echo "::error::paquet Java installé par le job (CLAUDE.md, « Architecture » ; issue #95)"
-            exit 1
-          fi
+          bash tests/controles/paquets_java.sh --lister > "$RUNNER_TEMP/paquets-apres.txt"
+          # Contrôle partagé avec le hook des sessions cloud (issue #120) : le script est
+          # tests/controles/paquets_java.sh, ses motifs sont dans
+          # tests/controles/paquets_java_motifs.sh, sa limite (un contrôle par nom de paquet)
+          # dans son en-tête et ses témoins dans tests/unitaires/controles.R.
+          bash tests/controles/paquets_java.sh "$RUNNER_TEMP/paquets-avant.txt" "$RUNNER_TEMP/paquets-apres.txt"
       - name: Compilation (pdfLaTeX, trois passes)
         run: |
           set -euo pipefail
