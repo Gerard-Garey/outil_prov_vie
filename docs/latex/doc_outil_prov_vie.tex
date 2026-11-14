@@ -819,6 +819,7 @@ indéfini, il lève un
 \textbf{refus d'appel}, qui interrompt l'appel sans rendre d'objet et porte
 un motif d'une liste fermée (section~\ref{sec:outils}).
 
+% concordance-decomptes : package exportees=19
 Dans l'état du code, le package exporte dix-neuf fonctions, avec les
 méthodes \code{format()} et \code{print()} des classes \code{jeu\_simule},
 \code{table\_provie}, \code{plan\_calcul}, \code{fiche\_calcul} et
@@ -905,6 +906,7 @@ colonne «~Peut appeler~» (section~\ref{sec:controles}).
 \label{sec:outils}
 % =============================================================================
 
+% concordance-decomptes : outils exportees=0
 Le module \code{outils} (\code{R/outils.R}) rend des services sans contenu
 métier aux autres modules~: refus classés, graine locale, empreinte,
 écriture canonique des valeurs, sérialisation d'une liste nommée en texte,
@@ -942,6 +944,7 @@ exportée.
 \end{longtable}
 }
 
+% concordance-decomptes : outils constantes=7
 Le module porte aussi sept constantes (section~\ref{sec:outils-constantes}).
 Les deux fonctions d'âge sont décrites à la section~\ref{sec:age}.
 
@@ -1290,6 +1293,7 @@ unitaire\fsp; c'est un constat sur les cas testés, non une démonstration.
 \label{sec:dictionnaire}
 % =============================================================================
 
+% concordance-decomptes : dictionnaire fonctions=6 exportees=2
 Le module \code{dictionnaire} lit et valide le dictionnaire lisible par
 machine, transcription du dictionnaire de la base, et donne accès, par table
 et par colonne, aux types, domaines, obligations, modes de saisie et défauts
@@ -1427,6 +1431,7 @@ Les constantes du module sont citées d'après le code
 \label{sec:lecture}
 % =============================================================================
 
+% concordance-decomptes : lecture fonctions=5 exportees=5
 Le module \code{lecture} est la couche mince de lecture et d'écriture des
 fichiers~: base en CSV, jeux versionnés, tables importées. Les types sont
 imposés par le dictionnaire de la base\fsp; une valeur n'est jamais
@@ -1610,6 +1615,7 @@ identique à \code{j} est un constat des batteries, non une démonstration.
 \label{sec:donnees}
 % =============================================================================
 
+% concordance-decomptes : donnees exportees=1
 Le module \code{donnees} contrôle la base~: détection des défauts de données
 et contrôles de structure, traitements déclarés (refus, exclusion,
 hypothèse par défaut, signalement), vue à une date, états des sinistres et
@@ -3092,6 +3098,7 @@ refusées par \code{valider\_plan()} et reportées après la branche B2
 \label{sec:tables}
 % =============================================================================
 
+% concordance-decomptes : tables exportees=1
 Le module \code{tables} traite les tables en entrée~: formats admis,
 conversion vers une représentation commune, catalogue des tables
 embarquées, courbes des taux sans risque de l'EIOPA, série de taux des
@@ -3298,6 +3305,7 @@ Les constantes du module sont citées d'après le code (\code{R/tables.R})~:
 \label{sec:garanties}
 % =============================================================================
 
+% concordance-decomptes : garanties exportees=1
 Le module \code{garanties} lit et valide le catalogue des configurations de
 garanties~: états, transitions, flux, postes, usages de tables, liens entre
 garanties. Une configuration est une donnée, jamais une fonction. Le module
@@ -3443,6 +3451,7 @@ cause (dossier ou contrat) dans les paramètres retenus du poste~:
 \label{sec:engagement}
 % =============================================================================
 
+% concordance-decomptes : engagement exportees=0
 Le module \code{engagement} porte la famille de calcul «~engagement~»~:
 échéanciers des flux futurs d'un engagement connu, dossier par dossier, et
 leur valeur actuelle probable sous le modèle multi-états. Il ne peut
@@ -3909,6 +3918,7 @@ lues ou non par un poste (\code{hypotheses\_defaut} du bilan).
 \label{sec:triangle}
 % =============================================================================
 
+% concordance-decomptes : triangle fonctions=0
 Le module \code{triangle} porte la famille de calcul «~triangle~»~:
 reconstitution des triangles à partir de la base sinistres, estimateurs,
 diagnostics. Il ne peut appeler que \code{garanties}, \code{donnees} et
@@ -3933,6 +3943,7 @@ diagnostics. Il ne peut appeler que \code{garanties}, \code{donnees} et
 \label{sec:risque-en-cours}
 % =============================================================================
 
+% concordance-decomptes : risque_en_cours exportees=0
 Le module \code{risque\_en\_cours} porte la famille de calcul «~risque en
 cours~»~: limites du contrat et provision pour risques croissants (PRC).
 Par décision du mainteneur (M118), il entre dès la première version, avec
@@ -4235,6 +4246,7 @@ n'en est modifié.
 \label{sec:regles-comptables}
 % =============================================================================
 
+% concordance-decomptes : regles_comptables fonctions=0
 Le module \code{regles\_comptables} porte la catégorie «~règle
 comptable~»~: postes calculés par application d'une règle déclarée du plan
 (dotation, reprise, prorata temporis, ratio, seuil) à des grandeurs
@@ -4263,6 +4275,7 @@ peut appeler que \code{garanties}, \code{tables}, \code{donnees} et
 \label{sec:projection}
 % =============================================================================
 
+% concordance-decomptes : projection fonctions=0
 Le module \code{projection} portera, dans la deuxième version, la famille
 de calcul «~projection~»~: projection actif-passif sous scénarios
 économiques. Il ne peut appeler que \code{engagement}, \code{tables},
@@ -4288,6 +4301,7 @@ de fonction.
 \label{sec:plan}
 % =============================================================================
 
+% concordance-decomptes : plan exportees=6
 Le module \code{plan} valide et met sous forme canonique le plan de calcul,
 établit la fiche de calcul et sérialise l'un et l'autre en texte. Il ne
 peut appeler que \code{tables}, \code{garanties}, \code{dictionnaire},
@@ -4480,6 +4494,7 @@ Les constantes du module sont citées d'après le code (\code{R/plan.R})~:
 \label{sec:rapport}
 % =============================================================================
 
+% concordance-decomptes : rapport exportees=0
 Le module \code{rapport} établit la représentation canonique du résultat et
 ses empreintes, les quantités restituées, le tableau de passage, la
 comparaison de deux résultats et le rapport figé. Il peut appeler tous les
@@ -4563,6 +4578,7 @@ Les constantes du module sont citées d'après le code (\code{R/rapport.R})~:
 \label{sec:simulation}
 % =============================================================================
 
+% concordance-decomptes : simulation exportees=1
 Le module \code{simulation} est le simulateur~: il tire une base brute
 fictive sous une loi vraie et une graine, puis y injecte les défauts de
 données paramétrés. Il rend un objet en mémoire et n'écrit aucun fichier~:
@@ -4860,6 +4876,7 @@ Les constantes du module sont citées d'après le code
 \label{sec:calculer-provisions}
 % =============================================================================
 
+% concordance-decomptes : calculer_provisions exportees=2
 Le module \code{calculer\_provisions} est l'orchestration~: il porte le
 point d'entrée unique (section~\ref{sec:package}), la table des étapes, la
 combinaison des postes à deux familles de calcul et le rejeu d'une fiche de
