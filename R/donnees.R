@@ -2076,7 +2076,8 @@ lire_declarations <- function(declarations, dico) {
            "dossiers.id_dossier", "dossiers.id_sinistre"), "R", "exacte", function() {
     sinistres_payes <- unique(.joindre(ctx, "dossiers", "id_dossier", "id_sinistre", v("prestations", "id_dossier")))
     .verdict3(list(motif = soi("evenements.motif"), type = e3("evenements.type_evenement"),
-                   paye = .connue3("evenements.id_sinistre", v("evenements", "id_sinistre") %in% sinistres_payes)),
+                   paye = .connue3("evenements.id_sinistre",
+                                   !is.na(match(v("evenements", "id_sinistre"), sinistres_payes, incomparables = NA)))),
               function(x) {
       d05 <- x$type %in% c("sortie", "cloture_dossier") & !x$paye
       is.na(x$motif) & requiert(x$type, "motif") %in% TRUE & !d05
@@ -2108,14 +2109,15 @@ lire_declarations <- function(declarations, dico) {
          c("affiliations.id_affiliation", "affiliations.designation"), "R", "exacte", function() {
     ids <- v("designations", "id_affiliation")
     i <- .index_jointure(ctx, "affiliations", "id_affiliation", ids)
-    .verdict3(list(trouve = .connue3("designations.id_affiliation", ids %in% v("affiliations", "id_affiliation")),
+    .verdict3(list(trouve = .connue3("designations.id_affiliation", !is.na(i)),
                    designation = e3("affiliations.designation", index = i)),
               function(x) x$trouve & !(x$designation %in% "nominative"))
   }, partiel = TRUE)
   .regle(ctx, "hors_domaine", "ayants_droit_sante", "id_affiliation",
          c("affiliations.id_affiliation", "affiliations.sante_organisme"), "R", "exacte", function() {
-    s <- .joindre(ctx, "affiliations", "id_affiliation", "sante_organisme", v("ayants_droit_sante", "id_affiliation"))
-    v("ayants_droit_sante", "id_affiliation") %in% v("affiliations", "id_affiliation") & !(s %in% TRUE)
+    # une clé manquante ne s'apparie à aucune ligne (index NA ; spécification v1.6, § 2.2, B.4, #130)
+    i <- .index_jointure(ctx, "affiliations", "id_affiliation", v("ayants_droit_sante", "id_affiliation"))
+    !is.na(i) & !(v("affiliations", "sante_organisme")[i] %in% TRUE)
   })
   invisible(NULL)
 }
@@ -3612,12 +3614,13 @@ parties_ligne <- function() lapply(.PARTIES_LIGNE, function(p) list(table = p$ta
   # D05 : sortie ou clôture au motif manquant, sans prestation sur aucun dossier du
   # sinistre ; D05 sur la vue, sauf les lignes déjà refusées par manquant_obligatoire en
   # règle B (motif manquant avec une prestation du sinistre dans la base entière) : la vue
-  # étant incluse dans la base, l'absence de prestation se lit sur la base entière
+  # étant incluse dans la base, l'absence de prestation se lit sur la base entière ; « payé »
+  # a une seule définition, celle de la règle B (clé du sinistre connue et appariée)
   .regle_vue(ctx, "D05", "evenements", "motif",
              c("evenements.type_evenement", "evenements.id_sinistre", "prestations.id_dossier", "dossiers.id_dossier",
                "dossiers.id_sinistre"), "H;S", "exacte", function() {
     payes <- unique(.joindre(ctx, "dossiers", "id_dossier", "id_sinistre", .valeurs(ctx, "prestations", "id_dossier")))
-    type() %in% c("sortie", "cloture_dossier") & is.na(motif()) & !(vv("evenements", "id_sinistre") %in% payes)
+    type() %in% c("sortie", "cloture_dossier") & is.na(motif()) & is.na(match(vv("evenements", "id_sinistre"), payes, incomparables = NA))
   })
   # D06 : clôture sans justificatif ; clôture `regle` sans prestation du dossier, ou
   # `depot_cdc` sans prestation `capital` (prestations visibles à l'arrêté)

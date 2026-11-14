@@ -2487,6 +2487,68 @@ verifier_egal("#56, point 6, règle V : .existe_vue3() : DO1 vrai (retenue) ; NA
 r <- cb(avec(function(b) { b$affiliations$id_contrat <- "NA"; b$garanties_souscrites$id_contrat[1L] <- NA; b }))
 verifier_egal("#56, point 6, site 39 : AF1 (id_contrat « NA », collège ensemble) face à GS1 (id_contrat manquant, collège ensemble) : D04b sur affiliations.college (la clé manquante de GS1 ne s'apparie pas)",
               refus(r, "D04b", "affiliations", "college")$identifiants, "AF1")
+# #130 : règles B hors_domaine de designations.id_affiliation et de
+# ayants_droit_sante.id_affiliation (la désignation exige une affiliation de désignation
+# nominative, l'ayant droit une affiliation à la santé de l'organisme) : une clé manquante ne
+# s'apparie à aucune ligne, y compris quand elle manque des deux côtés (avant #130 : `%in%`
+# appariait NA à NA, ligne « hors_domaine » de trop sur une table déjà refusée)
+motifs130 <- function(b, t) {
+  x <- cb(b)$refus_tables
+  x <- x[x$table %in% c("affiliations", t), , drop = FALSE]
+  paste(x$table, x$colonne, x$motif, x$portee, x$nombre)
+}
+cles130 <- function(t, cote) avec(function(b) {
+  if (cote %in% c("table", "deux")) b[[t]]$id_affiliation <- NA_character_
+  if (cote %in% c("affiliations", "deux")) b$affiliations$id_affiliation <- NA_character_
+  b })
+for (t in c("designations", "ayants_droit_sante")) {
+  verifier_egal(paste0("#130, règle B hors_domaine de ", t, ".id_affiliation : clé de la table seule manquante, clé de affiliations seule manquante, clés des deux côtés manquantes : aucun hors_domaine (avant #130, deux côtés : présent, NA apparié à NA)"),
+                list(motifs130(cles130(t, "table"), t), motifs130(cles130(t, "affiliations"), t), motifs130(cles130(t, "deux"), t)),
+                list(paste(t, "id_affiliation manquant_obligatoire table 1"),
+                     c("affiliations id_affiliation manquant_obligatoire table 1", paste(t, "NA refus_induit table 1")),
+                     c("affiliations id_affiliation manquant_obligatoire table 1", paste(t, "NA refus_induit table 1"),
+                       paste(t, "id_affiliation manquant_obligatoire table 1"))))
+}
+# #130, règle B manquant_obligatoire de evenements.motif (« payé » : le sinistre de
+# l'événement porte une prestation, D05) : sinistres_payes porte NA dès qu'une prestation n'est
+# rattachée à aucun sinistre (id_dossier orphelin ou manquant, dossier sans id_sinistre) ; avant
+# #130, l'id_sinistre manquant de EV3 (sortie, motif manquant) s'y appariait (`%in%`) : EV3
+# était tenu pour payé et la colonne motif refusée en plus
+ev130 <- function(f, sinistre = NA_character_) avec(function(b) {
+  b$evenements$motif[3L] <- NA_character_
+  b$evenements$id_sinistre[3L] <- sinistre
+  f(b) })
+evt130 <- function(b) {
+  x <- cb(b)$refus_tables
+  x <- x[x$table == "evenements", , drop = FALSE]
+  paste(x$table, x$colonne, x$motif, x$portee, x$nombre)
+}
+verifier_egal("#130, evenements.motif : EV3 (sortie) sans motif ni id_sinistre, prestation PR1 d'id_dossier orphelin (DOX), manquant, ou dossier DO3 sans id_sinistre : aucun refus de la colonne motif (seul id_sinistre, table ; DO3 : refus induit en plus) ; avant #130 : manquant_obligatoire sur motif, EV3 tenu pour payé (NA apparié à NA)",
+              list(evt130(ev130(function(b) { b$prestations$id_dossier[1L] <- "DOX"; b })),
+                   evt130(ev130(function(b) { b$prestations$id_dossier[1L] <- NA_character_; b })),
+                   evt130(ev130(function(b) { b$dossiers$id_sinistre[3L] <- NA_character_; b }))),
+              list("evenements id_sinistre manquant_obligatoire table 1",
+                   "evenements id_sinistre manquant_obligatoire table 1",
+                   c("evenements NA refus_induit table 6", "evenements id_sinistre manquant_obligatoire table 1")))
+rb130 <- ev130(function(b) { b$prestations$id_dossier[1L] <- "DOX"; b }, sinistre = "SIX")
+verifier_egal("#130, evenements.motif, témoins : prestation orpheline mais id_sinistre de EV3 présent (SIX, sans prestation) : aucun refus sur evenements, D05 détecté sur EV3 (inchangé) ; sans prestation altérée, id_sinistre manquant seul : seul id_sinistre refusé",
+              list(evt130(rb130), ligne(cb(rb130)$controles, "D05", "evenements")$identifiants,
+                   evt130(ev130(function(b) b))),
+              list(character(0), "EV3", "evenements id_sinistre manquant_obligatoire table 1"))
+# témoins : la règle détecte toujours l'affiliation trouvée hors du domaine (désignation non
+# nominative ; affiliation hors santé de l'organisme) et laisse l'orpheline à D04b
+verifier_egal("#130, témoins : désignation d'une affiliation sans désignation nominative, ayant droit d'une affiliation hors santé de l'organisme : hors_domaine sur id_affiliation ; affiliation conforme : aucun ; référence inconnue (AFX) : D04b seul, pas de hors_domaine",
+              list(refus(cb(avec(function(b) { b$affiliations$designation <- "aucune"; b$affiliations$date_designation <- D(NA); b })),
+                         "hors_domaine", "designations", "id_affiliation")$identifiants,
+                   refus(cb(avec(function(b) { b$affiliations$sante_organisme <- FALSE; b$affiliations$structure_cotisation_sante <- NA_character_; b })),
+                         "hors_domaine", "ayants_droit_sante", "id_affiliation")$identifiants,
+                   nrow(refus(cb(base_ref), "hors_domaine", "designations", "id_affiliation")) +
+                     nrow(refus(cb(base_ref), "hors_domaine", "ayants_droit_sante", "id_affiliation")),
+                   nrow(refus(cb(avec(function(b) { b$designations$id_affiliation <- "AFX"; b$ayants_droit_sante$id_affiliation <- "AFX"; b })),
+                              "hors_domaine", "designations", "id_affiliation")) +
+                     nrow(refus(cb(avec(function(b) { b$designations$id_affiliation <- "AFX"; b$ayants_droit_sante$id_affiliation <- "AFX"; b })),
+                                "hors_domaine", "ayants_droit_sante", "id_affiliation"))),
+              list("DS1", "AY1", 0L, 0L))
 # point 1 : site 39, toutes les colonnes cibles d'une ligne cible inconnues (`k` vide) : copie de
 # l'espace de noms dont .refus_valeur_de() refuse id_contrat et college de GS1 ; AF1 de collège
 # C9 (orpheline des lignes connues) peut porter la clé de GS1 : écartée, cause hors_domaine
