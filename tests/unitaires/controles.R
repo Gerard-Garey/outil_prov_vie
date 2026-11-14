@@ -767,3 +767,93 @@ verifier("recensement : le seuil des petites valeurs est borné à 1, min(1, tol
          .passe(r) && any(grepl("^\\[INFO\\] PETITES VALEURS .* : 1 appels$", r$sortie)) &&
            any(grepl("temoin.R:3 tolerance 1e-06, plus petit |r| non nul = 0.5 (seuil 1)", r$sortie, fixed = TRUE)) &&
            !any(grepl("temoin.R:[124] tolerance [^ ]*, plus petit", r$sortie)))
+
+# #111 : zéros attendus à tolérance > 0 (consigne de tests/harnais.R : un zéro se compare à part).
+r <- cas_recensement(c("TOL <- 1e-10",
+                       "verifier_egal(\"a\", x, 0, tolerance = TOL)",
+                       "verifier_egal(\"b\", x, c(1, 0), tolerance = 1e-8)",
+                       "verifier_egal(\"c\", x, list(f(y), 0), tolerance = 1e-8)",
+                       "verifier_egal(\"d\", x, 0, tolerance = 0)",
+                       "verifier_egal(\"e\", x, 0L, tolerance = 1e-8)",
+                       "verifier_egal(\"f\", x, list(f(y), character(0), z[0]), tolerance = 1e-8)",
+                       "verifier_egal(\"g\", x, c(1, 2), tolerance = 1e-8)",
+                       "# zero_compense : ecart de passage, termes de l'ordre de 7 474",
+                       "verifier_egal(\"h\", x - y, 0, tolerance = 1e-8)",
+                       "# zero_compense : marque non contigue a l'appel",
+                       "z <- 1",
+                       "verifier_egal(\"i\", x - y, 0, tolerance = 1e-8)"))
+zeros <- grep("^\\[INFO\\] ZEROS ATTENDUS A TOLERANCE > 0 ", r$sortie)
+comp <- grep("^\\[INFO\\] ZERO DE COMPENSATION DECLARE \\(", r$sortie)
+verifier("recensement : un zéro attendu à tolérance > 0 est listé sous ZEROS ATTENDUS A TOLERANCE > 0 : quatre appels (a : scalaire 0, b : feuille nulle évaluée, c : 0 littéral d'une expression non évaluable, i : marque non contiguë), sans [ECHEC] (informatif)",
+         .passe(r) && length(zeros) == 1L && grepl(" : 4 appels$", r$sortie[zeros]))
+verifier("recensement : ZEROS ATTENDUS : temoin.R:2, :3, :4 et :13 (tolérance lue, symbole ou littérale)",
+         length(zeros) == 1L && length(comp) == 1L &&
+           identical(r$sortie[(zeros + 1L):(comp - 1L)],
+                     c("[INFO]   tests/unitaires/temoin.R:2 tolerance 1e-10", "[INFO]   tests/unitaires/temoin.R:3 tolerance 1e-08",
+                       "[INFO]   tests/unitaires/temoin.R:4 tolerance 1e-08", "[INFO]   tests/unitaires/temoin.R:13 tolerance 1e-08")))
+verifier("recensement : hors de la rubrique : tolérance 0 (d), zéro entier 0L (e), 0 de character(0) et d'indice z[0] (f), aucun zéro (g)",
+         length(zeros) == 1L && length(comp) == 1L &&
+           !any(grepl("temoin.R:[5678] ", r$sortie[(zeros + 1L):(comp - 1L)])))
+verifier("recensement : un zéro de compensation marqué `# zero_compense` sur la ligne qui précède l'appel est compté à part (temoin.R:10), hors de la rubrique",
+         length(comp) == 1L && grepl(" : 1 appels$", r$sortie[comp]) &&
+           identical(r$sortie[comp + 1L], "[INFO]   tests/unitaires/temoin.R:10 tolerance 1e-08"))
+
+# #111, reprise : zéros littéraux d'une expression non évaluable (arguments de longueur ou d'indice exclus),
+# tolérance non résolue, arguments non appariables, appels marqués à plusieurs zéros, marques orphelines.
+r <- cas_recensement(c("verifier_egal(\"a\", x, list(f(y), rep(0, 2L)), tolerance = 1e-8)",
+                       "verifier_egal(\"b\", x, list(f(y), numeric(2L)), tolerance = 1e-8)",
+                       "verifier_egal(\"c\", x, list(f(y), c(1, 2)[2L]), tolerance = 1e-8)",
+                       "verifier_egal(\"d\", x, list(f(y), round(1.5, 0)), tolerance = 1e-8)",
+                       "verifier_egal(\"e\", x, list(f(y), rep(1, 0)), tolerance = 1e-8)",
+                       "verifier_egal(\"f\", x, list(f(y), double(1L)), tolerance = 1e-8)",
+                       "verifier_egal(\"g\", x, list(f(y), numeric(0)), tolerance = 1e-8)",
+                       "verifier_egal(\"h\", x, list(f(y), character(0)), tolerance = 1e-8)",
+                       "verifier_egal(\"i\", x, list(f(y), x[0], x[[0]]), tolerance = 1e-8)",
+                       "verifier_egal(\"j\", x, list(f(y), 0), tolerance = TOLINCONNUE)",
+                       "verifier_egal(\"k\", x, list(f(y), 0), tolerance = 1e-8, extra = 1)",
+                       "verifier_egal(\"l\", x, list(f(y), 0), 1e-8, 2)",
+                       "f2 <- function(...) verifier_egal(\"m\", ..., tolerance = 1e-8)",
+                       "verifier_egal(\"n\", x, attendu = list(f(y), 0), tolerance = 1e-8, extra = 1)"))
+zeros <- grep("^\\[INFO\\] ZEROS ATTENDUS A TOLERANCE > 0 ", r$sortie)
+comp <- grep("^\\[INFO\\] ZERO DE COMPENSATION DECLARE \\(", r$sortie)
+verifier("recensement : zéros littéraux d'un appel non évaluable : rep(0, 2L), numeric(2L) et double(1L) comptent (temoin.R:1, :2, :6)",
+         .passe(r) && length(zeros) == 1L && length(comp) == 1L &&
+           all(c("[INFO]   tests/unitaires/temoin.R:1 tolerance 1e-08", "[INFO]   tests/unitaires/temoin.R:2 tolerance 1e-08",
+                 "[INFO]   tests/unitaires/temoin.R:6 tolerance 1e-08") %in% r$sortie[(zeros + 1L):(comp - 1L)]))
+verifier("recensement : ne comptent pas : indice de `[` et `[[` (c, i), digits de round (d), times de rep (e), numeric(0) (g), character(0) (h)",
+         length(zeros) == 1L && length(comp) == 1L &&
+           !any(grepl("temoin.R:[345789] ", r$sortie[(zeros + 1L):(comp - 1L)])))
+verifier("recensement : tolérance non résolue (j), arguments non appariables lus par position (k : argument en trop ; l : cinq arguments) ou sous le nom attendu (n) : listés ; `...` sans attendu (m) : non",
+         length(zeros) == 1L && length(comp) == 1L &&
+           all(c("[INFO]   tests/unitaires/temoin.R:10 tolerance non resolue", "[INFO]   tests/unitaires/temoin.R:11 tolerance 1e-08",
+                 "[INFO]   tests/unitaires/temoin.R:12 tolerance non resolue", "[INFO]   tests/unitaires/temoin.R:14 tolerance 1e-08") %in%
+                 r$sortie[(zeros + 1L):(comp - 1L)]) &&
+           !any(grepl("temoin.R:13 ", r$sortie[(zeros + 1L):(comp - 1L)])) && grepl(" : 7 appels$", r$sortie[zeros]))
+r <- cas_recensement(c("# zero_compense : deux zeros dans l'appel",
+                       "verifier_egal(\"a\", x - y, list(f(y), 0, 0), tolerance = 1e-8)",
+                       "# zero_compense : un zero",
+                       "verifier_egal(\"b\", x - y, 0, tolerance = 1e-8)",
+                       "# zero_compense : appel sans zero",
+                       "verifier_egal(\"c\", x, 1, tolerance = 1e-8)",
+                       "# zero_compense : pas d'appel",
+                       "x <- 1",
+                       "# zero_compense : appel a tolerance nulle",
+                       "verifier_egal(\"d\", x, 0)",
+                       "# zero_compense : fin de fichier"))
+multi <- grep("^\\[INFO\\] ZERO DE COMPENSATION DECLARE A PLUSIEURS ZEROS ", r$sortie)
+orph <- grep("^\\[INFO\\] MARQUES zero_compense ORPHELINES ", r$sortie)
+verifier("recensement : deux appels marqués à zéro (temoin.R:2 et :4, rubrique « déclaré »), dont un à plusieurs zéros listé à part (temoin.R:2, 2 zéros)",
+         .passe(r) && any(grepl("^\\[INFO\\] ZERO DE COMPENSATION DECLARE \\(.* : 2 appels$", r$sortie)) && length(multi) == 1L &&
+           grepl(" : 1 appels$", r$sortie[multi]) && identical(r$sortie[multi + 1L], "[INFO]   tests/unitaires/temoin.R:2 tolerance 1e-08, 2 zeros"))
+verifier("recensement : marques orphelines : appel sans zéro (temoin.R:5), pas d'appel (:7), appel à tolérance nulle (:9), fin de fichier (:11) ; les marques des lignes 1 et 3 ne le sont pas",
+         length(orph) == 1L && grepl(" : 4 marques$", r$sortie[orph]) &&
+           identical(r$sortie[(orph + 1L):(orph + 4L)],
+                     c("[INFO]   tests/unitaires/temoin.R:5 appel sans zero reel a tolerance > 0 (ou a tolerance 0)",
+                       "[INFO]   tests/unitaires/temoin.R:7 aucun appel de verifier_egal() a la ligne suivante",
+                       "[INFO]   tests/unitaires/temoin.R:9 appel sans zero reel a tolerance > 0 (ou a tolerance 0)",
+                       "[INFO]   tests/unitaires/temoin.R:11 aucun appel de verifier_egal() a la ligne suivante")))
+r <- cas_recensement(c("# zero_compense : sans aucun appel a tolerance > 0 dans le fichier", "x <- 1"))
+verifier("recensement : une marque orpheline est listée même sans appel à tolérance > 0 dans le dépôt (temoin.R:1), statut 0",
+         .passe(r) && any(grepl("aucun appel a tolerance > 0", r$sortie, fixed = TRUE)) &&
+           any(grepl(" : 1 marques$", r$sortie)) &&
+           any(grepl("temoin.R:1 aucun appel de verifier_egal() a la ligne suivante", r$sortie, fixed = TRUE)))

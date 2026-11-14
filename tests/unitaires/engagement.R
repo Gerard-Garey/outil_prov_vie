@@ -192,9 +192,10 @@ p_sans_ev$postes$deces$capitaux_non_reclames$parametres$critere <- "sans_eveneme
 p_sans_ev$postes$deces$capitaux_non_reclames$parametres$mois_sans_evenement <- 12L
 p_sans_ev_court <- p_sans_ev
 p_sans_ev_court$postes$deces$capitaux_non_reclames$parametres$mois_sans_evenement <- 18L
-verifier_egal("critère sans_evenement : aucun événement ni ouverture depuis 12 mois (dernier événement le 2024-09-15) : P2 ; 18 mois (seuil 2024-06-30) : P1",
-              list(eng(b2_base_capital(), p_sans_ev, P2)$cellules$montant, eng(b2_base_capital(), p_sans_ev_court, P2)$cellules$montant),
-              list(103936, 0), tolerance = TOL)
+verifier_egal("critère sans_evenement : aucun événement ni ouverture depuis 12 mois (dernier événement le 2024-09-15) : P2",
+              eng(b2_base_capital(), p_sans_ev, P2)$cellules$montant, 103936, tolerance = TOL)
+verifier_egal("critère sans_evenement : 18 mois (seuil 2024-06-30) : P1, P2 vide, montant 0 exact",
+              eng(b2_base_capital(), p_sans_ev_court, P2)$cellules$montant, 0)
 verifier_egal("solde nul (capital entièrement payé le 2024-10-01) : aucun dossier, provision nulle",
               { r2 <- eng(b2_base_capital(paiements = data.frame(date = D("2025-12-31"), montant = 103936)), p)
                 list(nrow(r2$dossiers), r2$cellules$montant) },
@@ -324,13 +325,15 @@ verifier_egal("majoration enfant : enfant de 26 ans exactement à la survenance 
                 b2 <- b2_base_capital(capital = NA); b2$famille$date_deces[1L] <- D("2024-07-01")
                 c(eng(b, p)$echeanciers$flux[1L], eng(b2, p)$echeanciers$flux[1L]) / 1.03936 },
               c(60000 + 15000 + 7500, 60000 + 7500), tolerance = TOL)
-verifier_egal("critère sans_evenement : événement daté du seuil (A - 12 mois = 2024-12-31) : non récent (date d'effet postérieure au seuil exigée), P2 ; dossier ouvert après le seuil (18 mois : 2024-06-30) sans événement : l'ouverture compte comme événement, hors de P2",
-              { b <- b2_base_capital()
-                b$evenements <- rbind(b$evenements, b2_tab("evenements", id_evenement = "EV2", id_sinistre = "SI1", id_dossier = "DO1",
-                                                           type_evenement = "demande_mise_a_jour", date_effet = D("2024-12-31"),
-                                                           date_saisie = D("2024-12-31")))
-                c(eng(b, p_sans_ev, P2)$cellules$montant, eng(b2_base_capital(capital = NA), p_sans_ev_court, P2)$cellules$montant) },
-              c(103936, 0), tolerance = TOL)
+verifier_egal("critère sans_evenement : événement daté du seuil (A - 12 mois = 2024-12-31) : non récent (date d'effet postérieure au seuil exigée), P2",
+              (m_seuil <- { b <- b2_base_capital()
+                            b$evenements <- rbind(b$evenements, b2_tab("evenements", id_evenement = "EV2", id_sinistre = "SI1", id_dossier = "DO1",
+                                                                       type_evenement = "demande_mise_a_jour", date_effet = D("2024-12-31"),
+                                                                       date_saisie = D("2024-12-31")))
+                            c(eng(b, p_sans_ev, P2)$cellules$montant,
+                              eng(b2_base_capital(capital = NA), p_sans_ev_court, P2)$cellules$montant) })[1L], 103936, tolerance = TOL)
+verifier_egal("critère sans_evenement : dossier ouvert après le seuil (18 mois : 2024-06-30) sans événement : l'ouverture compte comme événement, hors de P2 (P2 vide, montant 0 exact)",
+              m_seuil[2L], 0)
 verifier_egal("facteur d'issue : dossier ouvert de sinistre iad, probabilite_reconnaissance_iad 0,5 : probabilité 0,5, jugement_expert",
               { b <- b2_base_capital(capital = NA); b$sinistres$nature_sinistre <- "iad"; b$garanties_souscrites$option_iad <- TRUE
                 r <- eng(b, modifier(p, c("postes", "deces", P1, "parametres", "probabilite_reconnaissance_iad"), 0.5))
@@ -801,13 +804,15 @@ b_87e <- function(qualite = "conjoint_survivant") {
                                              date_saisie = as.Date(NA), motif = "regle"))
   b
 }
-verifier_egal("(4.7) (e) dossier clos par une clôture rendue visible par D03g (délai 0) : DO1 restitué à 0, jugement_expert, D03g, compté dans nombre_dossiers de P1 (partition du § 5.4) ; P2 sans dossier ; contre-témoin, délai 400 : DO1 capital_du, 1 930,5205479452054 (140 928 / 73), jugement_expert, D03g",
-              { r0 <- calculer_provisions(b_87e(), plan_87(list(evenements = 0)), tid)
-                r4 <- calculer_provisions(b_87e(), plan_87(list(evenements = 400)), tid)
-                list(dos_87(r0), cel_87(r0), cel_87(r0, P2), etat_87(b_87e(), plan_87(list(evenements = 0))),
-                     dos_87(r4), cel_87(r4), etat_87(b_87e(), plan_87(list(evenements = 400)))) },
-              list(list("DO1", "deces", 0, "jugement_expert", "D03g"), list(0, 1L, "jugement_expert"), list(0, 0L, "exact"), "clos",
-                   list("DO1", "deces", 140928 / 73, "jugement_expert", "D03g"), list(140928 / 73, 1L, "jugement_expert"),
+verifier_egal("(4.7) (e) dossier clos par une clôture rendue visible par D03g (délai 0) : DO1 restitué à 0 exact, jugement_expert, D03g, compté dans nombre_dossiers de P1 (partition du § 5.4) ; P2 sans dossier",
+              (o_87e <- { r0 <- calculer_provisions(b_87e(), plan_87(list(evenements = 0)), tid)
+                          r4 <- calculer_provisions(b_87e(), plan_87(list(evenements = 400)), tid)
+                          list(dos_87(r0), cel_87(r0), cel_87(r0, P2), etat_87(b_87e(), plan_87(list(evenements = 0))),
+                               dos_87(r4), cel_87(r4), etat_87(b_87e(), plan_87(list(evenements = 400)))) })[1:4],
+              list(list("DO1", "deces", 0, "jugement_expert", "D03g"), list(0, 1L, "jugement_expert"), list(0, 0L, "exact"), "clos"))
+verifier_egal("(4.7) (e) contre-témoin, délai 400 : DO1 capital_du, 1 930,5205479452054 (140 928 / 73), jugement_expert, D03g",
+              o_87e[5:7],
+              list(list("DO1", "deces", 140928 / 73, "jugement_expert", "D03g"), list(140928 / 73, 1L, "jugement_expert"),
                    "capital_du"), tolerance = TOL)
 verifier_egal("(4.7) (e) partition : même dossier clos, bénéficiaire non identifié (critère de P2) : restitué à 0 dans P2, jugement_expert, D03g, compté dans nombre_dossiers de P2 ; P1 sans dossier",
               { r <- calculer_provisions(b_87e("non_identifie"), plan_87(list(evenements = 0)), tid)
@@ -837,13 +842,13 @@ verifier_egal("(4.7) (h) ligne d'evenements sous D03g H exclue pour engagement p
 # référentiel ; témoin, délai 0 : DO1 103 936, jugement_expert, D03g
 b_87i <- b2_base_capital()
 b_87i$sinistres$date_saisie <- as.Date(NA)
-verifier_egal("(4.7) (i) sinistre rendu invisible par D03g (délai 500) : aucune ligne de dossiers, P1 0 sur 0 dossier exact, hypotheses_defaut du bilan : D03g, 1 ligne par référentiel ; témoin délai 0 : DO1 103 936 jugement_expert D03g",
-              { r <- calculer_provisions(b_87i, plan_87(list(sinistres = 500)), tid)
-                h <- r$donnees$hypotheses_defaut
-                list(nrow(r$dossiers), cel_87(r), h$motif, h$referentiel, h$nombre,
-                     dos_87(calculer_provisions(b_87i, plan_87(list(sinistres = 0)), tid))) },
-              list(0L, list(0, 0L, "exact"), c("D03g", "D03g"), c("comptes_sociaux", "solvabilite_2"), c(1L, 1L),
-                   list("DO1", "deces", 103936, "jugement_expert", "D03g")), tolerance = TOL)
+verifier_egal("(4.7) (i) sinistre rendu invisible par D03g (délai 500) : aucune ligne de dossiers, P1 0 sur 0 dossier exact, hypotheses_defaut du bilan : D03g, 1 ligne par référentiel",
+              (o_87i <- { r <- calculer_provisions(b_87i, plan_87(list(sinistres = 500)), tid)
+                          h <- r$donnees$hypotheses_defaut
+                          list(nrow(r$dossiers), cel_87(r), h$motif, h$referentiel, h$nombre,
+                               dos_87(calculer_provisions(b_87i, plan_87(list(sinistres = 0)), tid))) })[1:5], list(0L, list(0, 0L, "exact"), c("D03g", "D03g"), c("comptes_sociaux", "solvabilite_2"), c(1L, 1L)))
+verifier_egal("(4.7) (i) témoin délai 0 : DO1 103 936 jugement_expert D03g",
+              o_87i[[6L]], list("DO1", "deces", 103936, "jugement_expert", "D03g"), tolerance = TOL)
 # (j) arrêté égal à l'extraction (2026-03-31), taux 2026 de 0,02 (couverture de l'année) :
 # D03g est un signalement, aucune hypothèse placée ; 103 936 x (1 + 0,02 x 90 / 365)
 verifier_egal("(4.7) (j) arrêté égal à l'extraction, même base et même plan que (a) : aucune hypothèse dans vue$hypotheses, DO1 exact, vide, 104 448,5610958904 (= 103 936 x (1 + 0,02 x 90 / 365))",
@@ -926,15 +931,16 @@ b_87o$evenements <- rbind(b_87o$evenements, b2_tab("evenements", id_evenement = 
                                                    id_dossier = "DO1", type_evenement = c("cloture_dossier", "reouverture_dossier"),
                                                    date_effet = D(c("2025-03-01", "2025-06-01")),
                                                    date_saisie = c(D("2025-03-05"), NA), motif = c("regle", NA)))
-verifier_egal("(4.7) (o) réouverture placée sous D03g et rendue invisible (délai 400) : dossier clos restitué à 0, jugement_expert, D03g, deux lignes d'échéancier de flux 0 ; délai 0 (réouverture visible) : capital_du, 1 930,5205479452054 (140 928 / 73), jugement_expert, D03g",
-              { q4 <- tous_87(plan_87(list(evenements = 400)))
-                r4 <- calculer_provisions(b_87o, q4, tid)
-                q0 <- plan_87(list(evenements = 0))
-                r0 <- calculer_provisions(b_87o, q0, tid)
-                list(etat_87(b_87o, q4), dos_87(r4), cel_87(r4), ech_87(r4), etat_87(b_87o, q0), dos_87(r0)) },
+verifier_egal("(4.7) (o) réouverture placée sous D03g et rendue invisible (délai 400) : dossier clos restitué à 0 exact, jugement_expert, D03g, deux lignes d'échéancier de flux 0",
+              (o_87o <- { q4 <- tous_87(plan_87(list(evenements = 400)))
+                          r4 <- calculer_provisions(b_87o, q4, tid)
+                          q0 <- plan_87(list(evenements = 0))
+                          r0 <- calculer_provisions(b_87o, q0, tid)
+                          list(etat_87(b_87o, q4), dos_87(r4), cel_87(r4), ech_87(r4), etat_87(b_87o, q0), dos_87(r0)) })[1:4],
               list("clos", list("DO1", "deces", 0, "jugement_expert", "D03g"), list(0, 1L, "jugement_expert"),
-                   list(c("capital_unique", "frais"), c(0, 0), c(0, 0), D(rep("2026-01-01", 2L)), c(1, 1), c("deces", "deces")),
-                   "capital_du", list("DO1", "deces", 140928 / 73, "jugement_expert", "D03g")), tolerance = TOL)
+                   list(c("capital_unique", "frais"), c(0, 0), c(0, 0), D(rep("2026-01-01", 2L)), c(1, 1), c("deces", "deces"))))
+verifier_egal("(4.7) (o) délai 0 (réouverture visible) : capital_du, 1 930,5205479452054 (140 928 / 73), jugement_expert, D03g",
+              o_87o[5:6], list("capital_du", list("DO1", "deces", 140928 / 73, "jugement_expert", "D03g")), tolerance = TOL)
 # m1 de l'audit (décision du mainteneur : restreindre) : l'accesseur n'admet que des colonnes
 # d'identifiant ; famille (clé primaire id_membre;date_saisie), ligne ME1 placée sous D03g
 b_87f <- b2_base_capital()
