@@ -24,13 +24,21 @@
 #  2 (usage, fichier illisible, liste vide, fichier de motifs absent).
 #
 #  Motifs : tests/controles/paquets_java_motifs.sh (noms de paquets Debian et Ubuntu),
-#  lu par ce script. Le present fichier ne cite aucun nom Java : il est balaye par
-#  absence_java.R ; seul le fichier de motifs en est une exclusion declaree.
+#  charge par ce script avec `source`, donc EXECUTE (voir « Limites connues »). Le present
+#  fichier ne cite aucun nom Java : il est balaye par absence_java.R ; seul le fichier de motifs
+#  en est une exclusion declaree.
 #
 #  Limite qui demeure : le controle se fait PAR NOM DE PAQUET. Un paquet Java d'un autre
 #  nom (JDK d'un tiers, bibliotheque dont le nom ne dit rien de Java) passe au travers,
 #  de meme que ce qui s'installe hors de dpkg (tlmgr, pip, R, archive decompressee) et ce
 #  qui est deja present dans AVANT.
+#
+#  Limites connues (reserve d'audit non corrigee, suivie par la question Q-33 de la feuille de
+#  route ; N3, mesuree) : le fichier de motifs est charge par `source`, il est execute et non
+#  seulement lu. Une commande placee dans paquets_java_motifs.sh s'execute au lancement de ce
+#  script ; elle echappe a absence_java.R, dont ce fichier est la seule exclusion declaree, et
+#  a ce script, qui ne compare que des noms de paquets. Seule la revue du fichier de motifs
+#  (n'y mettre que des motifs) en tient lieu.
 #
 #  Bash et utilitaires POSIX (dpkg-query et awk pour --lister seulement).
 ###############################################################################

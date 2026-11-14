@@ -88,6 +88,13 @@
 # (« cent deux fonctions », « soixante et onze fonctions ») n'est pas lu. Limite connue : un
 # nombre dans une commande (« \emph{dix-huit} fonctions ») n'est pas lu. Un marqueur dont la
 # valeur dépasse six chiffres, ou écrit « %% concordance-decomptes », est mal formé.
+# Limites connues (réserves d'audit non corrigées, suivies par la question Q-32 / Q-33 de la
+# feuille de route ; chacune mesurée sur une racine fictive) :
+#   - N1 : un nombre précédé de « et » n'est pas lu (« les modules et deux fonctions » : aucun
+#     nombre lu, statut 0 pour fonctions=1, alors que « les deux fonctions » échoue) ;
+#   - N2 : « \\% » (saut de ligne LaTeX suivi d'un commentaire) est pris pour un « % » échappé,
+#     si bien que le texte qui suit le « % » est lu : faux positif, du côté sûr (« Une fonction
+#     \\% deux fonctions. » échoue pour fonctions=1).
 
 options(warn = 2)
 args <- commandArgs(TRUE)
@@ -437,10 +444,13 @@ lire_decomptes <- function(chemin) {
       if (!grepl("^\\s*%", lignes[j])) {
         # Commentaire de fin de ligne retiré ; comme en LaTeX, la fin de ligne commentée
         # n'est pas une espace et les blancs qui débutent la ligne suivante sont ignorés.
+        # Seul un vrai `%` de fin de ligne (non échappé) déclenche la jonction sans espace : une ligne
+        # sans commentaire dont les blancs de tête ont été retirés n'est pas une ligne commentée.
         texte <- sub("(?<!\\\\)%.*$", "", lignes[j], perl = TRUE)
+        commentee <- texte != lignes[j]
         if (apres_commentaire) texte <- sub("^\\s+", "", texte)
         paragraphe <- c(paragraphe, if (length(paragraphe) && !apres_commentaire) paste0(" ", texte) else texte)
-        apres_commentaire <- texte != lignes[j]
+        apres_commentaire <- commentee
       }
       j <- j + 1L
     }

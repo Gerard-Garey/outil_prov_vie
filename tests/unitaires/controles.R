@@ -197,6 +197,11 @@ if (nzchar(Sys.which("git"))) {
   r <- .essai_git(list(DESCRIPTION = DESC), list("tests/u_java.R" = paste0("library(", RJ, ")")))
   verifier("C5 : seul un fichier non suivi interdit : le controle passe (preuve de la voie git)", .passe(r))
 }
+# Aucun fichier R analysé (tests/ sans fichier R) : rbind d'une liste vide vaudrait NULL (revue finale de Bo2, C-1).
+r <- .essai("recensement_tolerances", list("tests/vide.txt" = "aucun fichier R"))
+verifier("recensement : une racine sans fichier R donne le statut 0, sans [ECHEC] ni ligne [INFO] vide, et la rubrique « 0 marques »",
+         .passe(r) && any(grepl("fichiers analyses : 0 ", r$sortie, fixed = TRUE)) &&
+           any(grepl("ORPHELINES .* : 0 marques$", r$sortie)) && !any(r$sortie == "[INFO] "))
 
 # --- graphe_modules.R (N3, N6, M236) --------------------------------------------------------
 AMONT <- list("R/simulation.R" = "simuler_base <- function(x) x", "R/lecture.R" = "lire_base <- function(d) d")
@@ -452,6 +457,17 @@ verifier("#109 : topenv référencé sans appel dans une autre fonction de rappo
 r <- .essai("graphe_modules", list("R/rapport.R" = c("empreinte_code <- function() {", "  lapply(1, parent.frame)", "}")))
 verifier("#109 : l'exception de topenv ne couvre pas parent.frame référencé dans empreinte_code, rapport.R:2",
          .echoue_en(r, "R/rapport.R", 2L, "parent.frame sans appel"))
+
+# Revue finale de Bo2 : l'exception déclarée pour un nom couvre aussi la forme do.call de ce nom.
+r <- .essai("graphe_modules", list("R/outils.R" = "avec_graine <- function(graine, expr) do.call(globalenv, list())"))
+verifier("exception globalenv déclarée : do.call(globalenv, list()) dans avec_graine() de outils.R passe (statut 0, exception constatée)",
+         .passe(r) && any(grepl("M409, M412 : 2 declaree(s), 1 constatee(s)", r$sortie, fixed = TRUE)))
+r <- .essai("graphe_modules", list("R/outils.R" = c(AVEC_GRAINE, "autre_f <- function() do.call(globalenv, list())")))
+verifier("le même do.call(globalenv, ...) hors de l'exception (autre fonction de outils.R) échoue encore, outils.R:2 (règle do.call)",
+         .echoue_en(r, "R/outils.R", 2L, "do.call()"))
+r <- .essai("graphe_modules", list("R/outils.R" = "avec_graine <- function(graine, expr) { globalenv(); do.call(get, list()) }"))
+verifier("l'exception de globalenv ne couvre pas do.call(get, ...), même dans avec_graine(), outils.R:1",
+         .echoue_en(r, "R/outils.R", 1L, "do.call()"))
 
 # m1 : un nom d'auxiliaire à point passé en chaîne (match.fun) est un emploi (issue #74, audit).
 section("contrôles : graphe_modules.R, noms passés en chaîne (#74, m1)")

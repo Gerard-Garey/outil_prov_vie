@@ -389,6 +389,17 @@ r <- lancer_concordance(c(tableau("outils", "f\\_un"), decomptes_auto(
   "f_un <- function() 1\n", "export(f_un)\n", setdiff(c(MODULES_DOC, "package"), "outils")),
   "", "% concordance-decomptes : outils fonctions=1", "Ses deux fonctions", "", "x"), decomptes = NULL)
 verifier("nombre dans le paragraphe, faux : échec", r$statut == 1L)
+# Jonction après un commentaire : seul un vrai « % » de fin de ligne supprime l'espace (revue finale de Bo2).
+r <- lancer_concordance(c(tableau("outils", "f\\_un"), decomptes_auto(
+  "f_un <- function() 1\n", "export(f_un)\n", setdiff(c(MODULES_DOC, "package"), "outils")),
+  "", "% concordance-decomptes : outils fonctions=1", "texte%", "  ici deux", "fonctions."), decomptes = NULL)
+verifier("ligne sans commentaire à blancs de tête retirés, après une ligne commentée : jointe avec une espace, « deux fonctions » lu (2 pour fonctions=1), échec",
+         r$statut == 1L && grepl("texte « deux fonctions » = 2, marqueur fonctions=1", r$sortie, fixed = TRUE))
+r <- lancer_concordance(c(tableau("outils", "f\\_un"), decomptes_auto(
+  "f_un <- function() 1\n", "export(f_un)\n", setdiff(c(MODULES_DOC, "package"), "outils")),
+  "", "% concordance-decomptes : outils fonctions=1", "Les dix-huit%", "  fonctions."), decomptes = NULL)
+verifier("jonction sans espace après un vrai « % » conservée : « dix-huit% / fonctions » ne fait pas un décompte, statut 0, aucun nombre lu",
+         r$statut == 0L && grepl("outils : fonctions=1 concordant(s) avec le code, 0 nombre(s) en lettres lu(s)", r$sortie, fixed = TRUE))
 
 # Marqueur mal formé, portée ou grandeur inconnue, répétée.
 r <- decompte("outils", "fonctions=un", "Texte sans décompte.", sauf = character(0))

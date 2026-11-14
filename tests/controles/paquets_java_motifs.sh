@@ -1,6 +1,7 @@
-# Motifs de noms de paquets Java, lus (source) par tests/controles/paquets_java.sh : ne pas
-# l'executer seul. Un motif par element du tableau MOTIFS : ERE bash, appliquee au nom
-# complet du paquet (suffixe :arch retire). Noms de paquets Debian et Ubuntu :
+# Motifs de noms de paquets Java, charges par `source` (donc executes) par
+# tests/controles/paquets_java.sh : ne pas l'executer seul. Un motif par element du tableau
+# MOTIFS : ERE bash, appliquee au nom complet du paquet (suffixe :arch retire). Noms de
+# paquets Debian et Ubuntu :
 #   *-java, *-java-* (libreoffice-java-common), java-* (java-common), *-jni, default-jre*,
 #   default-jdk*, OpenJDK (^openjd) et OpenJFX (^openjf), temurin-*, zulu*, jarwrapper*, gcj-*.
 # « openjade » n'est pas attrape (^openjd et ^openjf, et non ^openj).

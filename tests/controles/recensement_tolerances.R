@@ -47,6 +47,18 @@
 # verifier_egal() : ils sont listes a part, memes criteres.
 # Sortie informative : lignes [INFO] ; [ECHEC] seulement si un fichier n'est pas analysable ou si
 # le recensement des appels n'est pas coherent (statut 1). Aucune ligne [ECHEC] pour un signalement.
+# Limites connues (reserves d'audit non corrigees, suivies par la question Q-32 / Q-33 de la
+# feuille de route ; chacune mesuree sur une racine fictive) :
+#   - r1 : un commentaire `# zero_compense` en fin de ligne (`x <- 1  # zero_compense : m`) est
+#     pris pour une marque : l'appel de la ligne suivante est range sous ZERO DE COMPENSATION
+#     DECLARE ;
+#   - r2 : rep(0, k), avec k non evaluable, ne compte qu'un zero (c(0, 0) en compte deux) : un
+#     appel marque qui porte rep(0, k) n'est pas liste sous A PLUSIEURS ZEROS ;
+#   - r3 : pour un appel dont les arguments ne s'apparient pas (argument en trop, `...`),
+#     `attendu` est lu par position, comme 3e argument sans nom : si des arguments nommes
+#     (`nom =`, `obtenu =`) sont en tete, il manque, et ses zeros ne sont pas comptes ;
+#   - le motif d'une marque n'est pas controle : `# zero_compense` sans motif compte comme une
+#     marque.
 # Usage, depuis la racine du depot : Rscript tests/controles/recensement_tolerances.R
 # Un argument facultatif designe une autre racine. Code ASCII, R de base seulement.
 
@@ -340,12 +352,14 @@ if (is.null(res)) {
   }
 }
 # Marques `# zero_compense` orphelines : la ligne suivante n'est pas un appel de verifier_egal() qui porte un zero.
-marques <- do.call(rbind, marques)
+# (data.frame vide type en tete : sans fichier analyse, rbind(list()) vaudrait NULL)
+vide <- data.frame(fichier = character(0), ligne = integer(0), stringsAsFactors = FALSE)
+marques <- do.call(rbind, c(list(vide), marques))
 portent <- if (is.null(res)) character(0) else {
   k <- res[res$appel == "verifier_egal" & res$zeros, ]
   paste(k$fichier, k$ligne)
 }
-appels_egal <- do.call(rbind, appels_egal)
+appels_egal <- do.call(rbind, c(list(vide), appels_egal))
 orphelines <- marques[!(paste(marques$fichier, marques$ligne + 1L) %in% portent), ]
 info(sprintf("MARQUES zero_compense ORPHELINES (la ligne suivante n'est pas un appel de verifier_egal() qui porte un zero) : %d marques",
              nrow(orphelines)))
