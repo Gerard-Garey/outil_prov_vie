@@ -5365,6 +5365,14 @@ une date stockée en réel). Le message d'échec de \code{verifier\_egal()}
 donne le nombre d'écarts et les cinq premiers, avec leur emplacement, la
 valeur attendue, la valeur obtenue et l'écart\fsp; un attribut y est décrit
 par ses dix premiers éléments, suivis de leur nombre s'il en a davantage.
+À tolérance nulle, le statut reste décidé par \code{identical()} seul, et
+le message est celui de \code{comparer\_objets()} à tolérance nulle~: il
+donne l'écart et le type (un résidu d'arrondi de
+$5{,}55 \cdot 10^{-17}$ contre un zéro attendu, un entier contre un réel,
+écart de structure)\fsp; si le comparateur ne relève aucun écart alors que
+\code{identical()} est faux (une \code{pairlist} contre une liste), le
+message le dit, «~objets non identiques (identical() faux), sans écart
+valeur par valeur~», au lieu d'afficher un succès (issue~110).
 
 \textbf{Petites valeurs attendues.} Pour $|r| \le 1$, la tolérance mixte
 est absolue~: à $\varepsilon = 10^{-10}$, elle admet, pour une valeur
@@ -5380,13 +5388,21 @@ grandeur, ou se compare par le rapport de la valeur obtenue à la valeur
 attendue, rapproché de~1, car la tolérance $10^{-10} \times \min |r|$
 rendrait quasi exacte la comparaison des grandes valeurs (pour
 $r = (10^{-8}, 1000)$, un écart d'une unité du dernier chiffre sur~1000
-échoue)\fsp; une valeur attendue nulle se compare à part, à tolérance
-nulle, car à tolérance positive le harnais admet pour elle l'écart absolu
-$\varepsilon$. Cette règle est un jugement d'expert (avis d'\code{actuary} sur l'issue~79), écrite en
-commentaire du harnais\fsp; aucun script ne la contrôle. Le recensement des
-tolérances (section~\ref{sec:controles}) signale, à titre d'information,
-les valeurs attendues qui mêlent des ordres de grandeur différents et
-celles qui comptent de petites valeurs.
+échoue)\fsp; une valeur attendue nulle se compare à part, car à tolérance
+positive le harnais admet pour elle l'écart absolu $\varepsilon$ et ne la
+compare pas exactement~: à tolérance nulle si le zéro est exact par
+construction\fsp; sinon, quand le zéro est obtenu par compensation (écart
+de passage, total moins la somme de ses parties), à une tolérance absolue
+déclarée, rapportée à l'ordre de grandeur des termes qui se compensent,
+car une différence de termes non nuls porte un résidu d'arrondi
+($0{,}1 + 0{,}2 - 0{,}3$ vaut $5{,}55 \cdot 10^{-17}$ en double précision)
+et échouerait à tolérance nulle sans qu'aucune formule soit fausse
+(issue~110, consigne visée par le mainteneur le 14~novembre~2026, M358).
+Cette règle est un jugement d'expert (avis d'\code{actuary} sur les
+issues~79 et~110), écrite en commentaire du harnais\fsp; aucun script ne
+la contrôle. Le recensement des tolérances (section~\ref{sec:controles})
+signale, à titre d'information, les valeurs attendues qui mêlent des
+ordres de grandeur différents et celles qui comptent de petites valeurs.
 
 % =============================================================================
 \section{Concordance entre la documentation et le code}
