@@ -7,7 +7,8 @@
 #      fichier) que les modules de la colonne "Peut appeler" du tableau, ecrit en dur
 #      ci-dessous ; une autre arete est un [ECHEC] ;
 #   3. aucun appel dynamique : do.call() sauf sur un nom de fonction de base nu ou une
-#      fonction litterale (ex. do.call(rbind, liste)), match.fun, get, get0, mget, eval,
+#      fonction litterale (ex. do.call(rbind, liste)) ; un nom de la liste ci-dessous n'est
+#      pas admis comme nom nu de do.call (#109), match.fun, get, get0, mget, eval,
 #      evalq, eval.parent, parse, str2lang, str2expression, source, sys.source,
 #      getFromNamespace, getExportedValue, asNamespace, getNamespace, loadNamespace,
 #      requireNamespace, attachNamespace, as.environment (acces a un espace de noms ou a un
@@ -23,7 +24,16 @@
 #      ADR 0007, point 9) et globalenv() dans la fonction avec_graine() du module outils
 #      (graine locale et retablissement de .Random.seed, ADR 0010, point 21) ; chacune
 #      porte sur ce module et cette fonction, non sur tout le fichier, et elle est perimee
-#      (ECHEC, a retirer) si l'emploi disparait, le fichier du module etant present ;
+#      (ECHEC, a retirer) si l'emploi disparait, le fichier du module etant present.
+#      Ces noms sont interdits aussi sans appel (#109) : toute reference (symbole hors
+#      position d'appel, ex. `g <- parent.frame`, `lapply(1, sys.call)`, `do.call(get, l)`,
+#      `base::get`) est un [ECHEC] au meme titre que l'appel, sauf champ (`x$get`), nom
+#      d'argument (`list(get = 1)`) et cible seule d'une affectation (`get <- 1`) ; une
+#      exception declaree couvre les appels et les references de son nom dans sa fonction,
+#      et la forme do.call(<nom>, ...) (nom nu, `what =` compris) ;
+#      limite documentee (cote sur) : un nom local ou un argument formel homonyme, lu
+#      (`function(get) get`, `for (get in x) get`), est signale comme une reference : le
+#      renommer ;
 #   4. un nom de premier niveau n'est defini que dans un seul fichier (par <-, =, ->, ->>) ;
 #   5. temoins negatifs integres : simulation appele par un module du moteur, triangle
 #      vers engagement, lecture appele par un module du moteur, rapport vers
@@ -43,10 +53,9 @@
 # module n'est pas comptee comme arete de la regle 2 (sur R/, des noms de colonnes comme
 # "probabilite" ou "empreinte" valent des noms de fonctions : fausses aretes) ;
 # `vapply(x, "calculer_x", 1)` vers un module non permis passe donc.
-# Limite documentee (appels dynamiques, regle 3) : seul l'appel est vu ; une reference sans
-# appel a une fonction interdite (`g <- parent.frame; g()`, `lapply(1, sys.call)`,
-# `do.call(parent.frame, list())` : do.call accepte tout nom de fonction de base nu) passe,
-# comme pour eval et get.
+# Limite documentee (appels dynamiques, regle 3) : un nom interdit ecrit en chaine
+# (`lapply(1, "sys.call")`, `do.call("get", l)` hors position d'appel) n'est pas une
+# reference vue par le symbole ; `do.call` avec une chaine est deja refuse (nom nu requis).
 # Les noms utilises comme champ (`x$nom`) ne sont pas des appels ; un appel ecrit entre
 # accents graves ou entre guillemets (`f`(x), "f"(x)) vaut l'appel de f. Portee (M236,
 # decision du mainteneur du 10 novembre 2026) : ne compte pas comme reference la seule cible
@@ -55,6 +64,16 @@
 # affectation locale, portee soeur) est comptee. Limite documentee (cote sur) : un nom local
 # homonyme d'une definition d'un autre module (variable locale lue, fonction locale appelee,
 # argument formel repris) produit une fausse arete, a lever en renommant le nom local.
+# Limites connues (reserves d'audit non corrigees, suivies par la question Q-32 / Q-33 de la
+# feuille de route ; chacune mesuree sur une racine fictive) :
+#   - m3 : dynGet et .GlobalEnv ne sont pas dans APPELS_DYNAMIQUES et passent
+#     (`dynGet("a")`, `.GlobalEnv` : statut 0) ; la forme affectation `environment(f) <- e` est
+#     attrapee (environment est dans la liste), mais la forme appel `environment<-`(f, e),
+#     avec ou sans `base::`, ne l'est pas (statut 0) ;
+#   - une variable locale qui porte le nom d'une exception declaree est couverte par elle :
+#     `avec_graine <- function(graine, expr, f) { globalenv <- f; do.call(globalenv, list()) }`
+#     passe (statut 0), comme `{ globalenv <- f; globalenv() }` (vrai de l'appel direct, et
+#     desormais de la forme do.call).
 # Usage, depuis la racine du depot : Rscript tests/controles/graphe_modules.R
 # Un argument facultatif designe une autre racine (copie du depot, pour les temoins).
 # Sortie : lignes [OK] / [ECHEC] fichier:ligne ; statut 1 au moindre [ECHEC].
@@ -135,13 +154,14 @@ APPELS_DYNAMIQUES <- c("match.fun", "get", "get0", "mget", "eval", "evalq", "eva
 # data.frame des symboles (appels, noms, packages) avec ligne, token, texte (sans accents
 # graves ni guillemets), def (definition de premier niveau qui les contient), prec / suiv
 # (jeton voisin), local (cible d'une affectation), statique (do.call : premier argument
-# acceptable) ; assign_haut = lignes des appels a assign() au premier niveau.
+# acceptable), cible (do.call : nom nu du premier argument, NA sinon) ; assign_haut = lignes
+# des appels a assign() au premier niveau.
 analyser <- function(chemin) {
   exprs <- parse(file = chemin, keep.source = TRUE, encoding = "UTF-8")
   vide <- list(defs = character(0), assign_haut = integer(0), jetons = data.frame(
     ligne = integer(0), token = character(0), texte = character(0), def = character(0),
     prec = character(0), suiv = character(0), local = logical(0), statique = logical(0),
-    stringsAsFactors = FALSE))
+    cible = character(0), stringsAsFactors = FALSE))
   pd <- getParseData(exprs)
   if (is.null(pd)) return(vide)
   pd <- pd[pd$token != "COMMENT", ]
@@ -232,7 +252,7 @@ analyser <- function(chemin) {
     ligne = pd$line1[idx], token = token_eff[interessants], texte = texte_eff[interessants],
     def = nom_def[idx], prec = precedent[interessants], suiv = suivant[interessants],
     local = token_eff[interessants] %in% c("SYMBOL", "STR_CONST") & vapply(idx, est_cible, logical(1)),
-    statique = NA, stringsAsFactors = FALSE)
+    statique = NA, cible = NA_character_, stringsAsFactors = FALSE)
   # do.call : premier argument (what) = nom nu d'une fonction de base, ou fonction litterale.
   for (r in which(jetons$token == "SYMBOL_FUNCTION_CALL" & jetons$texte == "do.call")) {
     i <- idx[r]
@@ -242,15 +262,20 @@ analyser <- function(chemin) {
     premier <- args[1L]
     if (!is.na(premier) && pd$token[premier] == "SYMBOL_SUB" && pd$text[premier] == "what") premier <- args[3L]
     statique <- FALSE
+    cible <- NA_character_
     if (!is.na(premier) && pd$token[premier] == "expr") {
       k <- lignes_de(pd$id[premier])
       if (length(k) == 1L && pd$token[k] == "SYMBOL") {
-        statique <- exists(gsub("`", "", pd$text[k]), envir = baseenv(), mode = "function", inherits = FALSE)
+        nom_nu <- gsub("`", "", pd$text[k])
+        cible <- nom_nu
+        statique <- !(nom_nu %in% APPELS_DYNAMIQUES) &&
+          exists(nom_nu, envir = baseenv(), mode = "function", inherits = FALSE)
       } else if (length(k) >= 1L && pd$token[k[1L]] == "FUNCTION") {
         statique <- TRUE
       }
     }
     jetons$statique[r] <- statique
+    jetons$cible[r] <- cible
   }
   list(defs = unique(defs), jetons = jetons, assign_haut = assign_haut)
 }
@@ -319,19 +344,27 @@ for (m in names(analyses)) {
     if (j$token[r] == "SYMBOL_PACKAGE" && texte == "provie") {
       echec("provie:: et provie::: sont interdits dans R/ (ADR 0010, point 26)", chemin, j$ligne[r])
     }
-    if (j$token[r] == "SYMBOL_FUNCTION_CALL" && !champ) {
-      if (texte %in% APPELS_DYNAMIQUES) {
-        declaree <- EXCEPTIONS_INTROSPECTION$module == m & EXCEPTIONS_INTROSPECTION$appel == texte &
-          EXCEPTIONS_INTROSPECTION$fonction %in% j$def[r]
-        if (any(declaree)) {
-          introspections_vues <- c(introspections_vues, which(declaree))
-        } else {
-          echec(sprintf("appel dynamique interdit : %s()", texte), chemin, j$ligne[r])
-        }
-      } else if (texte == "do.call" && !isTRUE(j$statique[r])) {
-        echec("appel dynamique interdit : do.call() autrement que sur un nom de fonction de base nu ou une fonction litterale",
-              chemin, j$ligne[r])
+    # Appel ou reference (#109 : symbole hors position d'appel, cible seule d'une affectation
+    # exclue, M236) a un nom de APPELS_DYNAMIQUES ; l'exception declaree couvre les deux.
+    appel_dyn <- j$token[r] == "SYMBOL_FUNCTION_CALL" && !champ
+    reference_dyn <- j$token[r] == "SYMBOL" && !champ && !j$local[r]
+    if ((appel_dyn || reference_dyn) && texte %in% APPELS_DYNAMIQUES) {
+      declaree <- EXCEPTIONS_INTROSPECTION$module == m & EXCEPTIONS_INTROSPECTION$appel == texte &
+        EXCEPTIONS_INTROSPECTION$fonction %in% j$def[r]
+      if (any(declaree)) {
+        introspections_vues <- c(introspections_vues, which(declaree))
+      } else if (appel_dyn) {
+        echec(sprintf("appel dynamique interdit : %s()", texte), chemin, j$ligne[r])
+      } else {
+        echec(sprintf("reference dynamique interdite : %s sans appel (#109)", texte), chemin, j$ligne[r])
       }
+    } else if (appel_dyn && texte == "do.call" && !isTRUE(j$statique[r]) &&
+               !(!is.na(j$cible[r]) && any(EXCEPTIONS_INTROSPECTION$module == m &
+                                            EXCEPTIONS_INTROSPECTION$appel == j$cible[r] &
+                                            EXCEPTIONS_INTROSPECTION$fonction %in% j$def[r]))) {
+      # (une exception declaree pour le nom nu de do.call, dans sa fonction, couvre aussi la forme do.call)
+      echec("appel dynamique interdit : do.call() autrement que sur un nom de fonction de base nu (hors fonctions interdites) ou une fonction litterale",
+            chemin, j$ligne[r])
     }
     # m1 : un nom d'auxiliaire a point passe en texte (vapply(x, ".aux", 1) : match.fun) est un
     # emploi, comme l'appel ; pas pour les autres noms (sur R/, des chaines comme "probabilite"
@@ -360,7 +393,7 @@ for (m in names(analyses)) {
 for (k in seq_len(nrow(EXCEPTIONS_INTROSPECTION))) {
   e <- EXCEPTIONS_INTROSPECTION[k, ]
   if (e$module %in% names(analyses) && !(k %in% introspections_vues)) {
-    echec(sprintf("exception declaree (%s) qui ne se produit plus : `%s()` n'est plus appele dans `%s` (module `%s`) ; la retirer de EXCEPTIONS_INTROSPECTION",
+    echec(sprintf("exception declaree (%s) qui ne se produit plus : `%s()` n'est plus ni appele ni reference dans `%s` (module `%s`) ; la retirer de EXCEPTIONS_INTROSPECTION",
                   e$motif, e$appel, e$fonction, e$module), file.path(dossier_r, paste0(e$module, ".R")))
   }
 }

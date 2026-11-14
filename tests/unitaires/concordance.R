@@ -2,8 +2,43 @@
 # --racine=) : le script tourne dans un processus Rscript distinct, on lit statut et sortie.
 # `racine` est défini par la batterie.
 
+# Décomptes du texte courant (issue #104) : le contrôle exige un marqueur par portée (les
+# quinze modules et `package`). Par défaut (decomptes = "auto"), lancer_concordance() ajoute
+# à la fin du document fictif un marqueur concordant pour chaque portée, comptes tirés du
+# code et du NAMESPACE fictifs, suivi d'un paragraphe sans décompte ; les lignes du document
+# fourni gardent leur numéro. decomptes = NULL n'ajoute rien ; un vecteur de lignes remplace
+# les marqueurs ajoutés.
+MODULES_DOC <- c("outils", "dictionnaire", "lecture", "donnees", "tables", "garanties",
+                 "engagement", "triangle", "risque_en_cours", "regles_comptables", "projection",
+                 "plan", "rapport", "simulation", "calculer_provisions")
+bloc_decomptes <- function(portee, grandeurs, texte = "Texte sans décompte.") {
+  c("", paste("% concordance-decomptes :", portee, paste(grandeurs, collapse = " ")), texte)
+}
+# Blocs concordants pour les portées de `portees` (par défaut toutes), d'après le code
+# fictif d'outils et les export() du NAMESPACE fictif ; les autres modules n'ont pas de fichier.
+decomptes_auto <- function(r_outils, namespace, portees = c(MODULES_DOC, "package")) {
+  fonctions <- character(0)
+  for (e in tryCatch(parse(text = r_outils, keep.source = FALSE), error = function(e) expression())) {
+    if (is.call(e) && as.character(e[[1L]])[1L] %in% c("<-", "=") && is.name(e[[2L]]) &&
+        is.call(e[[3L]]) && identical(e[[3L]][[1L]], as.name("function"))) {
+      fonctions <- c(fonctions, as.character(e[[2L]]))
+    }
+  }
+  fonctions <- fonctions[!startsWith(fonctions, ".")]
+  exports <- character(0)
+  for (e in parse(text = namespace, keep.source = FALSE)) {
+    if (is.call(e) && identical(e[[1L]], as.name("export"))) exports <- c(exports, vapply(as.list(e)[-1L], as.character, ""))
+  }
+  unlist(lapply(portees, function(p) {
+    if (p == "package") return(bloc_decomptes(p, paste0("exportees=", length(exports))))
+    if (p == "outils") return(bloc_decomptes(p, c(paste0("fonctions=", length(fonctions)),
+                                                  paste0("exportees=", sum(exports %in% fonctions)))))
+    bloc_decomptes(p, "fonctions=0")
+  }))
+}
+
 lancer_concordance <- function(contenu_doc, r_outils = "f_un <- function() 1\n.aux <- function() 2\n.K <- 3\nk_min <- 4\n",
-                               namespace = "export(f_un)\n", strict = TRUE) {
+                               namespace = "export(f_un)\n", strict = TRUE, decomptes = "auto", locale = NULL) {
   faux <- tempfile("racine-")
   on.exit(unlink(faux, recursive = TRUE), add = TRUE)
   dir.create(file.path(faux, "R"), recursive = TRUE)
@@ -11,13 +46,14 @@ lancer_concordance <- function(contenu_doc, r_outils = "f_un <- function() 1\n.a
   writeLines(r_outils, file.path(faux, "R", "outils.R"))
   writeLines(namespace, file.path(faux, "NAMESPACE"))
   if (!is.null(contenu_doc)) {
-    writeLines(contenu_doc, file.path(faux, "docs", "latex", "doc_outil_prov_vie.tex"))
+    if (identical(decomptes, "auto")) decomptes <- decomptes_auto(r_outils, namespace)
+    writeLines(c(contenu_doc, decomptes), file.path(faux, "docs", "latex", "doc_outil_prov_vie.tex"))
   }
   sortie <- suppressWarnings(system2(
     file.path(R.home("bin"), "Rscript"),
     c(shQuote(file.path(racine, "tests", "concordance_doc_moteur.R")),
       if (strict) "--strict", paste0("--racine=", shQuote(faux))),
-    stdout = TRUE, stderr = TRUE))
+    stdout = TRUE, stderr = TRUE, env = if (!is.null(locale)) paste0("LC_ALL=", locale)))
   statut <- attr(sortie, "status")
   list(statut = if (is.null(statut)) 0L else statut, sortie = paste(sortie, collapse = "\n"))
 }
@@ -250,3 +286,231 @@ verifier("même écart sans --strict : [AVERT], statut 0", r$statut == 0L &&
            grepl("[AVERT] module outils -- constantes dans R/ mais aucun tableau", r$sortie, fixed = TRUE))
 r <- lancer_concordance(tableau("outils", "f\\_un"), r_outils = "f_un <- function() 1\n.INTERNE <- 3L\n")
 verifier("module sans constante en majuscules et sans tableau : statut 0", r$statut == 0L)
+
+# Décomptes du texte courant (issue #104, décision M356) : le document fictif a pour code
+# d'outils f_un (une fonction, exportée) et .aux (à point, non recensée), aucune constante ;
+# les autres modules n'ont pas de fichier (fonctions=0).
+section("concordance : décomptes du texte courant")
+doc_decomptes <- function(portee, grandeurs, texte, sauf = portee) {
+  c(tableau("outils", "f\\_un"), decomptes_auto(
+    "f_un <- function() 1\n.aux <- function() 2\n", "export(f_un)\n",
+    setdiff(c(MODULES_DOC, "package"), sauf)), bloc_decomptes(portee, grandeurs, texte))
+}
+decompte <- function(portee, grandeurs, texte, sauf = portee, ...) {
+  lancer_concordance(doc_decomptes(portee, grandeurs, texte, sauf), decomptes = NULL, ...)
+}
+
+r <- lancer_concordance(tableau("outils", "f\\_un"))
+verifier("marqueurs concordants pour les seize portées : statut 0, une ligne [OK] par marqueur",
+         r$statut == 0L && lengths(regmatches(r$sortie, gregexpr("[OK] décomptes (ligne", r$sortie, fixed = TRUE))) == 16L)
+r <- decompte("outils", c("fonctions=1", "exportees=1"), "Ses fonctions sont exportées.")
+verifier("marqueur et prose sans nombre en lettres : statut 0, ligne [OK] du marqueur",
+         r$statut == 0L && grepl("[OK] décomptes (ligne", r$sortie, fixed = TRUE) &&
+           grepl("outils : fonctions=1 exportees=1 concordant(s) avec le code, 0 nombre(s) en lettres lu(s)", r$sortie, fixed = TRUE))
+
+# Marqueur faussé d'une unité.
+r <- decompte("outils", "fonctions=2", "Texte sans décompte.")
+verifier("marqueur faussé d'une unité : échec --strict, grandeur, marqueur et code cités", r$statut == 1L &&
+           grepl("outils -- fonctions : marqueur 2, code 1", r$sortie, fixed = TRUE))
+r <- decompte("outils", "exportees=0", "Texte sans décompte.")
+verifier("exportees faussé : échec", r$statut == 1L && grepl("exportees : marqueur 0, code 1", r$sortie, fixed = TRUE))
+r <- decompte("outils", "constantes=1", "Texte sans décompte.")
+verifier("constantes faussé : échec", r$statut == 1L && grepl("constantes : marqueur 1, code 0", r$sortie, fixed = TRUE))
+r <- decompte("outils", "fonctions=2", "Texte sans décompte.", strict = FALSE)
+verifier("même écart sans --strict : [AVERT], statut 0", r$statut == 0L &&
+           grepl("[AVERT] décomptes (ligne", r$sortie, fixed = TRUE))
+r <- decompte("package", "exportees=2", "Texte sans décompte.")
+verifier("package : exportees faussé : échec", r$statut == 1L &&
+           grepl("package -- exportees : marqueur 2, code 1", r$sortie, fixed = TRUE))
+r <- decompte("garanties", "fonctions=1", "Texte sans décompte.")
+verifier("module sans fichier R : fonctions=1 faussé (code 0) : échec", r$statut == 1L &&
+           grepl("garanties -- fonctions : marqueur 1, code 0", r$sortie, fixed = TRUE))
+
+# Prose faussée d'une unité.
+r <- decompte("outils", "fonctions=1", "Ses deux fonctions sont exportées.")
+verifier("prose fausse (deux fonctions, marqueur 1) : échec, texte cité", r$statut == 1L &&
+           grepl("texte « deux fonctions » = 2, marqueur fonctions=1", r$sortie, fixed = TRUE))
+r <- decompte("outils", "exportees=1", "Les deux exportées sont listées.")
+verifier("prose fausse sur exportées : échec", r$statut == 1L &&
+           grepl("texte « deux exportées » = 2, marqueur exportees=1", r$sortie, fixed = TRUE))
+r <- decompte("outils", "constantes=0", "Le module a Zéro constantes ; il a aussi une constante.")
+verifier("« Zéro constantes » (majuscule, accent) lu et concordant, « une constante » non lu : statut 0, un nombre lu",
+         r$statut == 0L && grepl("constantes=0 concordant(s) avec le code, 1 nombre(s) en lettres lu(s)", r$sortie, fixed = TRUE))
+r <- decompte("outils", "constantes=1", "Le module a zéro constantes.")
+verifier("« zéro constantes » avec marqueur à 1 : échec", r$statut == 1L &&
+           grepl("= 0, marqueur constantes=1", r$sortie, fixed = TRUE))
+r <- decompte("outils", "fonctions=1", "Ses dix-neuf fonctions.")
+verifier("nombre composé de la table (dix-neuf) : lu, écart", r$statut == 1L &&
+           grepl("texte « dix-neuf fonctions » = 19, marqueur fonctions=1", r$sortie, fixed = TRUE))
+r <- decompte("outils", "fonctions=1", "Ses vingt-deux fonctions.")
+verifier("nombre composé au-delà de vingt : non lu, statut 0", r$statut == 0L &&
+           grepl("fonctions=1 concordant(s) avec le code, 0 nombre(s) en lettres lu(s)", r$sortie, fixed = TRUE))
+r <- decompte("package", "exportees=1", "Le package exporte deux fonctions.")
+verifier("package : « deux fonctions » se compare à exportees : écart", r$statut == 1L &&
+           grepl("package -- texte « deux fonctions » = 2, marqueur exportees=1", r$sortie, fixed = TRUE))
+r <- decompte("package", "exportees=1", "Le package exporte une fonction ; son unique fonction.")
+verifier("package : « une fonction » non lu, statut 0, marqueur concordant", r$statut == 0L &&
+           grepl("package : exportees=1 concordant(s) avec le code, 0 nombre(s) en lettres lu(s)", r$sortie, fixed = TRUE))
+r <- decompte("outils", "fonctions=1", "Une configuration est une donnée, jamais une fonction.")
+verifier("« une fonction » non lu (article) : statut 0, aucun nombre lu", r$statut == 0L &&
+           grepl("fonctions=1 concordant(s) avec le code, 0 nombre(s) en lettres lu(s)", r$sortie, fixed = TRUE))
+r <- decompte("outils", "fonctions=1", "Il y a un fonction.\nUn constante.")
+verifier("« un fonction » non lu non plus : statut 0, marqueur concordant", r$statut == 0L &&
+           grepl("outils : fonctions=1 concordant(s) avec le code, 0 nombre(s) en lettres lu(s)", r$sortie, fixed = TRUE))
+r <- decompte("outils", "fonctions=1", "Ses deux\nfonctions sont exportées.")
+verifier("nombre en lettres en fin de ligne du source, grandeur au début de la suivante : lu, écart", r$statut == 1L &&
+           grepl("texte « deux fonctions » = 2, marqueur fonctions=1", r$sortie, fixed = TRUE))
+
+# Grandeur non déclarée : ignorée.
+r <- decompte("outils", "fonctions=1", "Les deux constantes et les trois exportées ne sont pas déclarées.")
+verifier("nombre devant une grandeur non déclarée : ignoré, statut 0, aucun nombre lu", r$statut == 0L &&
+           grepl("fonctions=1 concordant(s) avec le code, 0 nombre(s) en lettres lu(s)", r$sortie, fixed = TRUE))
+r <- decompte("outils", "fonctions=1", "Les sept fonctionnalités et les huit constantes d'ordre.")
+verifier("suite de lettres qui prolonge « fonction » : non lue ; grandeur non déclarée : ignorée ; statut 0", r$statut == 0L &&
+           grepl("0 nombre(s) en lettres lu(s)", r$sortie, fixed = TRUE))
+r <- decompte("outils", "fonctions=1", "Les quelques fonctions ; les fonctionnalités ; des constantes.")
+verifier("mot hors de la table des nombres : ignoré, statut 0, marqueur concordant", r$statut == 0L &&
+           grepl("outils : fonctions=1 concordant(s) avec le code, 0 nombre(s) en lettres lu(s)", r$sortie, fixed = TRUE))
+
+# Paragraphe : jusqu'à la première ligne blanche, lignes de commentaire exclues.
+r <- lancer_concordance(c(tableau("outils", "f\\_un"), decomptes_auto(
+  "f_un <- function() 1\n", "export(f_un)\n", setdiff(c(MODULES_DOC, "package"), "outils")),
+  "", "% concordance-decomptes : outils fonctions=1", "Une fonction.", "", "Trois fonctions, hors du paragraphe."),
+  decomptes = NULL)
+verifier("le paragraphe s'arrête à la première ligne blanche : le nombre qui suit n'est pas lu", r$statut == 0L &&
+           grepl("outils : fonctions=1 concordant(s) avec le code, 0 nombre(s) en lettres lu(s)", r$sortie, fixed = TRUE))
+r <- lancer_concordance(c(tableau("outils", "f\\_un"), decomptes_auto(
+  "f_un <- function() 1\n", "export(f_un)\n", setdiff(c(MODULES_DOC, "package"), "outils")),
+  "", "% concordance-decomptes : outils fonctions=1", "% trois fonctions en commentaire", "Une fonction", "  % cinq fonctions",
+  "est exportée."), decomptes = NULL)
+verifier("lignes de commentaire du paragraphe exclues, lignes jointes : statut 0, aucun nombre lu", r$statut == 0L &&
+           grepl("outils : fonctions=1 concordant(s) avec le code, 0 nombre(s) en lettres lu(s)", r$sortie, fixed = TRUE))
+r <- lancer_concordance(c(tableau("outils", "f\\_un"), decomptes_auto(
+  "f_un <- function() 1\n", "export(f_un)\n", setdiff(c(MODULES_DOC, "package"), "outils")),
+  "", "% concordance-decomptes : outils fonctions=1", "Ses deux fonctions", "", "x"), decomptes = NULL)
+verifier("nombre dans le paragraphe, faux : échec", r$statut == 1L)
+# Jonction après un commentaire : seul un vrai « % » de fin de ligne supprime l'espace (revue finale de Bo2).
+r <- lancer_concordance(c(tableau("outils", "f\\_un"), decomptes_auto(
+  "f_un <- function() 1\n", "export(f_un)\n", setdiff(c(MODULES_DOC, "package"), "outils")),
+  "", "% concordance-decomptes : outils fonctions=1", "texte%", "  ici deux", "fonctions."), decomptes = NULL)
+verifier("ligne sans commentaire à blancs de tête retirés, après une ligne commentée : jointe avec une espace, « deux fonctions » lu (2 pour fonctions=1), échec",
+         r$statut == 1L && grepl("texte « deux fonctions » = 2, marqueur fonctions=1", r$sortie, fixed = TRUE))
+r <- lancer_concordance(c(tableau("outils", "f\\_un"), decomptes_auto(
+  "f_un <- function() 1\n", "export(f_un)\n", setdiff(c(MODULES_DOC, "package"), "outils")),
+  "", "% concordance-decomptes : outils fonctions=1", "Les dix-huit%", "  fonctions."), decomptes = NULL)
+verifier("jonction sans espace après un vrai « % » conservée : « dix-huit% / fonctions » ne fait pas un décompte, statut 0, aucun nombre lu",
+         r$statut == 0L && grepl("outils : fonctions=1 concordant(s) avec le code, 0 nombre(s) en lettres lu(s)", r$sortie, fixed = TRUE))
+
+# Marqueur mal formé, portée ou grandeur inconnue, répétée.
+r <- decompte("outils", "fonctions=un", "Texte sans décompte.", sauf = character(0))
+verifier("marqueur mal formé (valeur non numérique) : échec, ligne citée", r$statut == 1L &&
+           grepl("marqueur mal formé", r$sortie, fixed = TRUE))
+r <- decompte("inconnu", "fonctions=1", "Texte sans décompte.", sauf = character(0))
+verifier("portée inconnue : échec, portée citée", r$statut == 1L &&
+           grepl("portée inconnue : inconnu", r$sortie, fixed = TRUE))
+r <- decompte("outils", "fonctionnalites=1", "Texte sans décompte.", sauf = character(0))
+verifier("grandeur inconnue : échec", r$statut == 1L && grepl("grandeur inconnue : fonctionnalites", r$sortie, fixed = TRUE))
+r <- decompte("package", "fonctions=1", "Texte sans décompte.", sauf = character(0))
+verifier("package fonctions=... : refusé", r$statut == 1L &&
+           grepl("la portée package n'admet que exportees", r$sortie, fixed = TRUE))
+r <- decompte("package", c("exportees=1", "constantes=0"), "Texte sans décompte.", sauf = character(0))
+verifier("package exportees=... constantes=... : refusé", r$statut == 1L &&
+           grepl("la portée package n'admet que exportees", r$sortie, fixed = TRUE))
+r <- decompte("outils", c("fonctions=1", "fonctions=1"), "Texte sans décompte.", sauf = character(0))
+verifier("grandeur déclarée deux fois : échec, grandeur citée", r$statut == 1L &&
+           grepl("grandeur déclarée deux fois : fonctions", r$sortie, fixed = TRUE))
+r <- decompte("outils", "fonctions=1", "Texte sans décompte.", sauf = character(0))
+verifier("marqueur supplémentaire concordant (--strict) : statut 0, une ligne [OK] par marqueur (seize + un)", r$statut == 0L &&
+           lengths(regmatches(r$sortie, gregexpr("[OK] décomptes (ligne", r$sortie, fixed = TRUE))) == 17L)
+
+# Complétude : une portée sans marqueur est un écart.
+r <- lancer_concordance(c(tableau("outils", "f\\_un"), decomptes_auto(
+  "f_un <- function() 1\n", "export(f_un)\n", setdiff(c(MODULES_DOC, "package"), "dictionnaire"))), decomptes = NULL)
+verifier("module sans marqueur : échec --strict, portée citée", r$statut == 1L &&
+           grepl("portée dictionnaire -- aucun marqueur", r$sortie, fixed = TRUE) &&
+           !grepl("portée outils -- aucun marqueur", r$sortie, fixed = TRUE))
+r <- lancer_concordance(c(tableau("outils", "f\\_un"), decomptes_auto(
+  "f_un <- function() 1\n", "export(f_un)\n", setdiff(c(MODULES_DOC, "package"), "package"))), decomptes = NULL)
+verifier("portée package sans marqueur : échec", r$statut == 1L && grepl("portée package -- aucun marqueur", r$sortie, fixed = TRUE))
+r <- lancer_concordance(tableau("outils", "f\\_un"), decomptes = NULL)
+verifier("document sans aucun marqueur : seize portées sans marqueur", r$statut == 1L &&
+           lengths(regmatches(r$sortie, gregexpr("aucun marqueur", r$sortie, fixed = TRUE))) == 16L)
+r <- lancer_concordance(c(tableau("outils", "f\\_un"), decomptes_auto(
+  "f_un <- function() 1\n", "export(f_un)\n", setdiff(c(MODULES_DOC, "package"), "dictionnaire"))), decomptes = NULL, strict = FALSE)
+verifier("même écart sans --strict : [AVERT], statut 0", r$statut == 0L && grepl("[AVERT] portée dictionnaire", r$sortie, fixed = TRUE))
+
+# Marqueur sans paragraphe.
+r <- lancer_concordance(c(tableau("outils", "f\\_un"), decomptes_auto(
+  "f_un <- function() 1\n", "export(f_un)\n", setdiff(c(MODULES_DOC, "package"), "outils")),
+  "", "% concordance-decomptes : outils fonctions=1", "", "Texte après la ligne blanche : deux fonctions."), decomptes = NULL)
+verifier("marqueur suivi d'une ligne blanche : sans paragraphe, échec", r$statut == 1L &&
+           grepl("marqueur sans paragraphe qui le suive", r$sortie, fixed = TRUE))
+r <- lancer_concordance(c(tableau("outils", "f\\_un"), decomptes_auto(
+  "f_un <- function() 1\n", "export(f_un)\n", setdiff(c(MODULES_DOC, "package"), "outils")),
+  "", "% concordance-decomptes : outils fonctions=1"), decomptes = NULL)
+verifier("marqueur en fin de document : sans paragraphe, échec", r$statut == 1L &&
+           grepl("marqueur sans paragraphe qui le suive", r$sortie, fixed = TRUE))
+r <- lancer_concordance(c(tableau("outils", "f\\_un"), decomptes_auto(
+  "f_un <- function() 1\n", "export(f_un)\n", setdiff(c(MODULES_DOC, "package"), "outils")),
+  "", "% concordance-decomptes : outils fonctions=1", "% seulement un commentaire", ""), decomptes = NULL)
+verifier("marqueur suivi de commentaires seulement : sans paragraphe, échec", r$statut == 1L &&
+           grepl("marqueur sans paragraphe qui le suive", r$sortie, fixed = TRUE))
+
+# Reprise de l'audit léger de #104 (C1 à C5).
+# C1 : valeur de plus de six chiffres = marqueur mal formé (pas d'avertissement converti en arrêt).
+r <- decompte("outils", "exportees=99999999999", "Texte sans décompte.", sauf = character(0))
+verifier("valeur déclarée de plus de six chiffres : marqueur mal formé, le script va jusqu'au bilan", r$statut == 1L &&
+           grepl("marqueur mal formé", r$sortie, fixed = TRUE) && grepl("Bilan :", r$sortie, fixed = TRUE))
+r <- decompte("outils", "fonctions=000001", "Texte sans décompte.")
+verifier("valeur de six chiffres (000001) : lue, concordante", r$statut == 0L)
+# C2 : bilan identique en locale C et en UTF-8 ; seule la première lettre peut être majuscule.
+sans_nombre <- "Le module a ZÉRO constantes, DEUX fonctions et ZEROS constantes."
+r_c <- decompte("outils", c("fonctions=1", "constantes=1"), sans_nombre, locale = "C")
+r_u <- decompte("outils", c("fonctions=1", "constantes=1"), sans_nombre, locale = "C.UTF-8")
+verifier("nombre tout en capitales (ZÉRO, DEUX) : non lu, identique en locale C et C.UTF-8", r_c$statut == 1L &&
+           identical(r_c$sortie, r_u$sortie) && grepl("constantes : marqueur 1, code 0", r_c$sortie, fixed = TRUE) &&
+           !grepl("texte «", r_c$sortie, fixed = TRUE))
+vrai <- "Le module a Zéro constantes et Deux fonctions d'âge."
+r_c <- decompte("outils", c("fonctions=2", "constantes=0"), vrai, locale = "C")
+r_u <- decompte("outils", c("fonctions=2", "constantes=0"), vrai, locale = "C.UTF-8")
+verifier("« Zéro constantes » lu en majuscule initiale, identique en C et C.UTF-8, « Deux fonctions » lu et faux (marqueur 2, code 1)",
+         identical(r_c$sortie, r_u$sortie) && grepl("fonctions : marqueur 2, code 1", r_c$sortie, fixed = TRUE) &&
+           !grepl("texte «", r_c$sortie, fixed = TRUE))
+r_c <- decompte("outils", "constantes=1", "Le module a zéro constantes ; exportées.", locale = "C")
+r_u <- decompte("outils", "constantes=1", "Le module a zéro constantes ; exportées.", locale = "C.UTF-8")
+verifier("écart sur « zéro constantes » affiché sans « <U+ » en locale C, identique en C.UTF-8", r_c$statut == 1L &&
+           identical(r_c$sortie, r_u$sortie) && grepl("texte « zéro constantes » = 0", r_c$sortie, fixed = TRUE))
+# C3 : ~ est une espace insécable ; une commande autour du nombre reste une limite non lue.
+r <- decompte("outils", "fonctions=1", "Ses dix-huit~fonctions.")
+verifier("dix-huit~fonctions : lu, écart", r$statut == 1L &&
+           grepl("texte « dix-huit~fonctions » = 18, marqueur fonctions=1", r$sortie, fixed = TRUE))
+r <- decompte("outils", "fonctions=1", "Ses \\emph{dix-huit} fonctions.")
+verifier("\\emph{dix-huit} fonctions : limite connue, non lu, statut 0", r$statut == 0L &&
+           grepl("fonctions=1 concordant(s) avec le code, 0 nombre(s) en lettres lu(s)", r$sortie, fixed = TRUE))
+# C4 : commentaires de fin de ligne ; marqueur à plusieurs « % ».
+r <- decompte("outils", "fonctions=1", "Une fonction % trois fonctions en commentaire\nest exportée.")
+verifier("commentaire de fin de ligne : non lu, statut 0, aucun nombre lu", r$statut == 0L &&
+           grepl("fonctions=1 concordant(s) avec le code, 0 nombre(s) en lettres lu(s)", r$sortie, fixed = TRUE))
+r <- decompte("outils", "fonctions=1", "Ses dix-huit%\nfonctions sont exportées.")
+verifier("dix-huit% puis fonctions à la ligne : pas d'espace en LaTeX, non lu, statut 0", r$statut == 0L &&
+           grepl("fonctions=1 concordant(s) avec le code, 0 nombre(s) en lettres lu(s)", r$sortie, fixed = TRUE))
+r <- decompte("outils", "fonctions=1", "Ses dix-huit%\n   fonctions sont exportées.")
+verifier("dix-huit% puis blancs puis fonctions : blancs de début de ligne ignorés, non lu", r$statut == 0L &&
+           grepl("0 nombre(s) en lettres lu(s)", r$sortie, fixed = TRUE))
+r <- decompte("outils", "fonctions=1", "Ses dix-huit\nfonctions sont 100\\% exportées.")
+verifier("fin de ligne sans commentaire : espace, lu ; \\% n'est pas un commentaire", r$statut == 1L &&
+           grepl("texte « dix-huit fonctions » = 18, marqueur fonctions=1", r$sortie, fixed = TRUE))
+r2 <- lancer_concordance(c(tableau("outils", "f\\_un"), decomptes_auto(
+  "f_un <- function() 1\n", "export(f_un)\n", setdiff(c(MODULES_DOC, "package"), "outils")),
+  "", "%% concordance-decomptes : outils fonctions=1", "Texte sans décompte."), decomptes = NULL)
+verifier("marqueur %% concordance-decomptes : mal formé, échec", r2$statut == 1L && grepl("marqueur mal formé", r2$sortie, fixed = TRUE))
+# C5 : un nombre précédé d'un mot de nombre est un composé, non lu.
+r <- decompte("outils", "fonctions=1", "Ses cent deux fonctions ; soixante et onze fonctions ; trente deux fonctions.")
+verifier("cent deux, soixante et onze, trente deux fonctions : composés non lus, statut 0", r$statut == 0L &&
+           grepl("fonctions=1 concordant(s) avec le code, 0 nombre(s) en lettres lu(s)", r$sortie, fixed = TRUE))
+r <- decompte("outils", "fonctions=1", "Sur les six, deux fonctions sont exportées.")
+verifier("nombre précédé d'un nombre mais séparé par une virgule : lu, écart", r$statut == 1L &&
+           grepl("texte « deux fonctions » = 2, marqueur fonctions=1", r$sortie, fixed = TRUE))
+r <- decompte("outils", "fonctions=1", "Deux de ses six fonctions.")
+verifier("« Deux de ses six fonctions » : six précédé de « ses », lu, écart", r$statut == 1L &&
+           grepl("texte « six fonctions » = 6, marqueur fonctions=1", r$sortie, fixed = TRUE))

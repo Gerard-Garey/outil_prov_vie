@@ -60,8 +60,8 @@ verifier <- function(nom, condition) {
   invisible(isTRUE(r$valeur) && is.null(r$erreur))
 }
 
-# tolerance = 0 : identical() ; sinon comparaison valeur par valeur au comparateur de
-# l'ADR 0011, point 7 (comparer_objets, #79) : réels finis à la tolérance mixte
+# tolerance = 0 : identical(), l'échec citant l'écart et le type (comparer_objets à tolérance nulle) ;
+# sinon comparaison valeur par valeur au comparateur de l'ADR 0011, point 7 (comparer_objets, #79) : réels finis à la tolérance mixte
 # |x - r| <= tolerance x max(1, |r|), toute différence de structure (type, longueur, NA contre
 # NaN, infini contre fini, noms et autres attributs) en échec. Le message liste les premiers écarts.
 # Pour |r| <= 1, la tolérance est absolue (|x - r| <= tolerance) : elle ne garantit un écart relatif
@@ -69,9 +69,12 @@ verifier <- function(nom, condition) {
 # 1,5e-7 (6,7e-4 à 1e-10). Consignes à l'appelant, le harnais ne les applique pas : pour garder un écart
 # relatif de 1e-10 sur une valeur attendue scalaire ou homogène sous le seuil, passer
 # tolerance = 1e-10 * |r| (le plus petit |r| non nul si elle a plusieurs valeurs) ; une valeur attendue
-# nulle se compare à part, à tolérance nulle (avec tolerance > 0, un zéro attendu admet l'écart absolu
-# tolerance x max(1, 0), il n'est pas comparé exactement) ; pour une valeur attendue qui mêle des ordres
-# de grandeur (petites et grandes valeurs), tolerance = 1e-10 * min|r| rendrait la comparaison des
+# nulle se compare à part, à tolérance nulle si le zéro est exact par construction ; sinon (zéro obtenu
+# par compensation : écart de passage, total moins la somme de ses parties), à tolérance absolue déclarée,
+# rapportée à l'ordre de grandeur des termes qui se compensent (0.1 + 0.2 - 0.3 vaut 5,55e-17 et échoue à
+# tolérance nulle) (avec tolerance > 0, un zéro attendu admet l'écart absolu tolerance x max(1, 0), il
+# n'est pas comparé exactement ; consigne de l'issue #110, visée par le mainteneur, M358) ; pour une
+# valeur attendue qui mêle des ordres de grandeur (petites et grandes valeurs), tolerance = 1e-10 * min|r| rendrait la comparaison des
 # grandes quasi exacte (r = c(1e-8, 1000) : un ulp sur 1000 échoue) : scinder l'appel par ordre de
 # grandeur, ou comparer obtenu / r à 1 (avis d'actuary sur #79, jugement
 # d'expert). La tolérance est un réel fini positif ou nul (NA, NaN, Inf et négatif sont refusés).
@@ -81,7 +84,14 @@ verifier_egal <- function(nom, obtenu, attendu, tolerance = 0) {
       stop("tolerance : un réel fini positif ou nul est requis")
     }
     if (tolerance == 0) {
-      if (identical(obtenu, attendu)) TRUE else paste(all.equal(obtenu, attendu), collapse = " ; ")
+      if (identical(obtenu, attendu)) {
+        TRUE
+      } else {
+        # écart et type par le comparateur à tolérance nulle ; pas d'écart relevé (par exemple
+        # pairlist(a = 1) contre list(a = 1)) : le dire, plutôt que d'afficher un succès
+        e <- comparer_objets(obtenu, attendu, 0)
+        if (nrow(e) == 0L) "objets non identiques (identical() faux), sans écart valeur par valeur" else .harnais_ecarts(e)
+      }
     } else {
       e <- comparer_objets(obtenu, attendu, tolerance)
       if (nrow(e) == 0L) TRUE else .harnais_ecarts(e)

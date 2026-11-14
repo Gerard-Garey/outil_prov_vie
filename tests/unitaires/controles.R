@@ -197,6 +197,11 @@ if (nzchar(Sys.which("git"))) {
   r <- .essai_git(list(DESCRIPTION = DESC), list("tests/u_java.R" = paste0("library(", RJ, ")")))
   verifier("C5 : seul un fichier non suivi interdit : le controle passe (preuve de la voie git)", .passe(r))
 }
+# Aucun fichier R analysé (tests/ sans fichier R) : rbind d'une liste vide vaudrait NULL (revue finale de Bo2, C-1).
+r <- .essai("recensement_tolerances", list("tests/vide.txt" = "aucun fichier R"))
+verifier("recensement : une racine sans fichier R donne le statut 0, sans [ECHEC] ni ligne [INFO] vide, et la rubrique « 0 marques »",
+         .passe(r) && any(grepl("fichiers analyses : 0 ", r$sortie, fixed = TRUE)) &&
+           any(grepl("ORPHELINES .* : 0 marques$", r$sortie)) && !any(r$sortie == "[INFO] "))
 
 # --- graphe_modules.R (N3, N6, M236) --------------------------------------------------------
 AMONT <- list("R/simulation.R" = "simuler_base <- function(x) x", "R/lecture.R" = "lire_base <- function(d) d")
@@ -410,6 +415,59 @@ verifier("M412 : topenv() dans avec_graine échoue (chaque exception a son appel
 r <- .essai("graphe_modules", list("R/outils.R" = c("avec_graine <- function(graine, expr) {", "  graine", "}")))
 verifier("M412 : exception périmée (avec_graine n'appelle plus globalenv), outils.R sans numéro de ligne",
          .echoue_en(r, "R/outils.R", NA_integer_, "exception declaree") && !any(grepl("[ECHEC] R/outils.R:", r$sortie, fixed = TRUE)))
+
+# #109 : do.call sur un nom de fonction interdite, et références sans appel aux noms de
+# APPELS_DYNAMIQUES (jusque-là seul l'appel était vu).
+section("contrôles : graphe_modules.R, do.call et références sans appel (#109)")
+r <- cas_graphe(c("calcul_e <- function(x) {", "  a <- do.call(parent.frame, list())", "  b <- do.call(get, list(\"x\"))",
+                  "  c <- do.call(what = sys.call, args = list())", "  x", "}"))
+verifier("#109 : do.call(parent.frame, list()), engagement.R:2 (règle do.call)",
+         .echoue_en(r, "R/engagement.R", 2L, "do.call()"))
+verifier("#109 : do.call(get, list(\"x\")), engagement.R:3 (règle do.call)", .echoue_en(r, "R/engagement.R", 3L, "do.call()"))
+verifier("#109 : do.call(what = sys.call, ...), engagement.R:4 (règle do.call)", .echoue_en(r, "R/engagement.R", 4L, "do.call()"))
+verifier("#109 : do.call(parent.frame, ...) est aussi une référence sans appel, engagement.R:2",
+         .echoue_en(r, "R/engagement.R", 2L, "parent.frame sans appel"))
+r <- cas_graphe(c("calcul_e <- function(x) {", "  g <- parent.frame", "  g()", "}"))
+verifier("#109 : g <- parent.frame ; g(), référence sans appel, engagement.R:2",
+         .echoue_en(r, "R/engagement.R", 2L, "parent.frame sans appel"))
+r <- cas_graphe("calcul_e <- function(x) lapply(1, sys.call)")
+verifier("#109 : lapply(1, sys.call), engagement.R:1", .echoue_en(r, "R/engagement.R", 1L, "sys.call sans appel"))
+r <- cas_graphe(c("calcul_e <- function(x) {", "  f <- base::get", "  g <- lapply(x, eval)", "  h <- Map(globalenv, x)", "  x", "}"))
+verifier("#109 : base::get (symbole après ::), engagement.R:2", .echoue_en(r, "R/engagement.R", 2L, "get sans appel"))
+verifier("#109 : lapply(x, eval), engagement.R:3", .echoue_en(r, "R/engagement.R", 3L, "eval sans appel"))
+verifier("#109 : Map(globalenv, x), engagement.R:4", .echoue_en(r, "R/engagement.R", 4L, "globalenv sans appel"))
+r <- cas_graphe(c("calcul_e <- function(x) {", "  a <- do.call(rbind, list(x, x))", "  b <- do.call(function(u) u, list(x))",
+                  "  c <- do.call(what = cbind, args = list(x))", "  a", "}"))
+verifier("#109, cas licite : do.call sur un nom de fonction de base nu hors liste interdite, ou une fonction littérale", .passe(r))
+r <- cas_graphe(c("calcul_e <- function(x, get) {", "  y <- x$get", "  z <- list(get = 1, eval = 2)", "  x$eval <- 3",
+                  "  parse <- 1", "  y", "}"))
+verifier("#109, cas licite : champ, nom d'argument, argument formel, cible seule d'une affectation (get, eval, parse)", .passe(r))
+r <- .essai("graphe_modules", list("R/rapport.R" = c("empreinte_code <- function() {", "  f <- topenv", "  f()", "}")))
+verifier("#109 : topenv référencé sans appel dans empreinte_code, exception déclarée (appels et références) : le contrôle passe",
+         .passe(r) && any(grepl("M409, M412 : 2 declaree(s), 1 constatee(s)", r$sortie, fixed = TRUE)))
+r <- cas_graphe("calcul_e <- function(get) get")
+verifier("#109, limite documentée (côté sûr) : argument formel homonyme lu (function(get) get), signalé comme référence, engagement.R:1",
+         .echoue_en(r, "R/engagement.R", 1L, "get sans appel"))
+r <- .essai("graphe_modules", list("R/rapport.R" = c("empreinte_code <- function() {", "  1", "}")))
+verifier("#109 : exception périmée, le message dit « ni appele ni reference » (rapport.R sans numéro de ligne)",
+         .echoue_en(r, "R/rapport.R", NA_integer_, "n'est plus ni appele ni reference"))
+r <- .essai("graphe_modules", list("R/rapport.R" = c("empreinte_code <- function() {", "  topenv()", "}", "autre_f <- function() lapply(1, topenv)")))
+verifier("#109 : topenv référencé sans appel dans une autre fonction de rapport.R échoue, rapport.R:4",
+         .echoue_en(r, "R/rapport.R", 4L, "topenv sans appel") && !any(startsWith(r$sortie, "[ECHEC] R/rapport.R:2 ")))
+r <- .essai("graphe_modules", list("R/rapport.R" = c("empreinte_code <- function() {", "  lapply(1, parent.frame)", "}")))
+verifier("#109 : l'exception de topenv ne couvre pas parent.frame référencé dans empreinte_code, rapport.R:2",
+         .echoue_en(r, "R/rapport.R", 2L, "parent.frame sans appel"))
+
+# Revue finale de Bo2 : l'exception déclarée pour un nom couvre aussi la forme do.call de ce nom.
+r <- .essai("graphe_modules", list("R/outils.R" = "avec_graine <- function(graine, expr) do.call(globalenv, list())"))
+verifier("exception globalenv déclarée : do.call(globalenv, list()) dans avec_graine() de outils.R passe (statut 0, exception constatée)",
+         .passe(r) && any(grepl("M409, M412 : 2 declaree(s), 1 constatee(s)", r$sortie, fixed = TRUE)))
+r <- .essai("graphe_modules", list("R/outils.R" = c(AVEC_GRAINE, "autre_f <- function() do.call(globalenv, list())")))
+verifier("le même do.call(globalenv, ...) hors de l'exception (autre fonction de outils.R) échoue encore, outils.R:2 (règle do.call)",
+         .echoue_en(r, "R/outils.R", 2L, "do.call()"))
+r <- .essai("graphe_modules", list("R/outils.R" = "avec_graine <- function(graine, expr) { globalenv(); do.call(get, list()) }"))
+verifier("l'exception de globalenv ne couvre pas do.call(get, ...), même dans avec_graine(), outils.R:1",
+         .echoue_en(r, "R/outils.R", 1L, "do.call()"))
 
 # m1 : un nom d'auxiliaire à point passé en chaîne (match.fun) est un emploi (issue #74, audit).
 section("contrôles : graphe_modules.R, noms passés en chaîne (#74, m1)")
@@ -767,3 +825,229 @@ verifier("recensement : le seuil des petites valeurs est borné à 1, min(1, tol
          .passe(r) && any(grepl("^\\[INFO\\] PETITES VALEURS .* : 1 appels$", r$sortie)) &&
            any(grepl("temoin.R:3 tolerance 1e-06, plus petit |r| non nul = 0.5 (seuil 1)", r$sortie, fixed = TRUE)) &&
            !any(grepl("temoin.R:[124] tolerance [^ ]*, plus petit", r$sortie)))
+
+# #111 : zéros attendus à tolérance > 0 (consigne de tests/harnais.R : un zéro se compare à part).
+r <- cas_recensement(c("TOL <- 1e-10",
+                       "verifier_egal(\"a\", x, 0, tolerance = TOL)",
+                       "verifier_egal(\"b\", x, c(1, 0), tolerance = 1e-8)",
+                       "verifier_egal(\"c\", x, list(f(y), 0), tolerance = 1e-8)",
+                       "verifier_egal(\"d\", x, 0, tolerance = 0)",
+                       "verifier_egal(\"e\", x, 0L, tolerance = 1e-8)",
+                       "verifier_egal(\"f\", x, list(f(y), character(0), z[0]), tolerance = 1e-8)",
+                       "verifier_egal(\"g\", x, c(1, 2), tolerance = 1e-8)",
+                       "# zero_compense : ecart de passage, termes de l'ordre de 7 474",
+                       "verifier_egal(\"h\", x - y, 0, tolerance = 1e-8)",
+                       "# zero_compense : marque non contigue a l'appel",
+                       "z <- 1",
+                       "verifier_egal(\"i\", x - y, 0, tolerance = 1e-8)"))
+zeros <- grep("^\\[INFO\\] ZEROS ATTENDUS A TOLERANCE > 0 ", r$sortie)
+comp <- grep("^\\[INFO\\] ZERO DE COMPENSATION DECLARE \\(", r$sortie)
+verifier("recensement : un zéro attendu à tolérance > 0 est listé sous ZEROS ATTENDUS A TOLERANCE > 0 : quatre appels (a : scalaire 0, b : feuille nulle évaluée, c : 0 littéral d'une expression non évaluable, i : marque non contiguë), sans [ECHEC] (informatif)",
+         .passe(r) && length(zeros) == 1L && grepl(" : 4 appels$", r$sortie[zeros]))
+verifier("recensement : ZEROS ATTENDUS : temoin.R:2, :3, :4 et :13 (tolérance lue, symbole ou littérale)",
+         length(zeros) == 1L && length(comp) == 1L &&
+           identical(r$sortie[(zeros + 1L):(comp - 1L)],
+                     c("[INFO]   tests/unitaires/temoin.R:2 tolerance 1e-10", "[INFO]   tests/unitaires/temoin.R:3 tolerance 1e-08",
+                       "[INFO]   tests/unitaires/temoin.R:4 tolerance 1e-08", "[INFO]   tests/unitaires/temoin.R:13 tolerance 1e-08")))
+verifier("recensement : hors de la rubrique : tolérance 0 (d), zéro entier 0L (e), 0 de character(0) et d'indice z[0] (f), aucun zéro (g)",
+         length(zeros) == 1L && length(comp) == 1L &&
+           !any(grepl("temoin.R:[5678] ", r$sortie[(zeros + 1L):(comp - 1L)])))
+verifier("recensement : un zéro de compensation marqué `# zero_compense` sur la ligne qui précède l'appel est compté à part (temoin.R:10), hors de la rubrique",
+         length(comp) == 1L && grepl(" : 1 appels$", r$sortie[comp]) &&
+           identical(r$sortie[comp + 1L], "[INFO]   tests/unitaires/temoin.R:10 tolerance 1e-08"))
+
+# #111, reprise : zéros littéraux d'une expression non évaluable (arguments de longueur ou d'indice exclus),
+# tolérance non résolue, arguments non appariables, appels marqués à plusieurs zéros, marques orphelines.
+r <- cas_recensement(c("verifier_egal(\"a\", x, list(f(y), rep(0, 2L)), tolerance = 1e-8)",
+                       "verifier_egal(\"b\", x, list(f(y), numeric(2L)), tolerance = 1e-8)",
+                       "verifier_egal(\"c\", x, list(f(y), c(1, 2)[2L]), tolerance = 1e-8)",
+                       "verifier_egal(\"d\", x, list(f(y), round(1.5, 0)), tolerance = 1e-8)",
+                       "verifier_egal(\"e\", x, list(f(y), rep(1, 0)), tolerance = 1e-8)",
+                       "verifier_egal(\"f\", x, list(f(y), double(1L)), tolerance = 1e-8)",
+                       "verifier_egal(\"g\", x, list(f(y), numeric(0)), tolerance = 1e-8)",
+                       "verifier_egal(\"h\", x, list(f(y), character(0)), tolerance = 1e-8)",
+                       "verifier_egal(\"i\", x, list(f(y), x[0], x[[0]]), tolerance = 1e-8)",
+                       "verifier_egal(\"j\", x, list(f(y), 0), tolerance = TOLINCONNUE)",
+                       "verifier_egal(\"k\", x, list(f(y), 0), tolerance = 1e-8, extra = 1)",
+                       "verifier_egal(\"l\", x, list(f(y), 0), 1e-8, 2)",
+                       "f2 <- function(...) verifier_egal(\"m\", ..., tolerance = 1e-8)",
+                       "verifier_egal(\"n\", x, attendu = list(f(y), 0), tolerance = 1e-8, extra = 1)"))
+zeros <- grep("^\\[INFO\\] ZEROS ATTENDUS A TOLERANCE > 0 ", r$sortie)
+comp <- grep("^\\[INFO\\] ZERO DE COMPENSATION DECLARE \\(", r$sortie)
+verifier("recensement : zéros littéraux d'un appel non évaluable : rep(0, 2L), numeric(2L) et double(1L) comptent (temoin.R:1, :2, :6)",
+         .passe(r) && length(zeros) == 1L && length(comp) == 1L &&
+           all(c("[INFO]   tests/unitaires/temoin.R:1 tolerance 1e-08", "[INFO]   tests/unitaires/temoin.R:2 tolerance 1e-08",
+                 "[INFO]   tests/unitaires/temoin.R:6 tolerance 1e-08") %in% r$sortie[(zeros + 1L):(comp - 1L)]))
+verifier("recensement : ne comptent pas : indice de `[` et `[[` (c, i), digits de round (d), times de rep (e), numeric(0) (g), character(0) (h)",
+         length(zeros) == 1L && length(comp) == 1L &&
+           !any(grepl("temoin.R:[345789] ", r$sortie[(zeros + 1L):(comp - 1L)])))
+verifier("recensement : tolérance non résolue (j), arguments non appariables lus par position (k : argument en trop ; l : cinq arguments) ou sous le nom attendu (n) : listés ; `...` sans attendu (m) : non",
+         length(zeros) == 1L && length(comp) == 1L &&
+           all(c("[INFO]   tests/unitaires/temoin.R:10 tolerance non resolue", "[INFO]   tests/unitaires/temoin.R:11 tolerance 1e-08",
+                 "[INFO]   tests/unitaires/temoin.R:12 tolerance non resolue", "[INFO]   tests/unitaires/temoin.R:14 tolerance 1e-08") %in%
+                 r$sortie[(zeros + 1L):(comp - 1L)]) &&
+           !any(grepl("temoin.R:13 ", r$sortie[(zeros + 1L):(comp - 1L)])) && grepl(" : 7 appels$", r$sortie[zeros]))
+r <- cas_recensement(c("# zero_compense : deux zeros dans l'appel",
+                       "verifier_egal(\"a\", x - y, list(f(y), 0, 0), tolerance = 1e-8)",
+                       "# zero_compense : un zero",
+                       "verifier_egal(\"b\", x - y, 0, tolerance = 1e-8)",
+                       "# zero_compense : appel sans zero",
+                       "verifier_egal(\"c\", x, 1, tolerance = 1e-8)",
+                       "# zero_compense : pas d'appel",
+                       "x <- 1",
+                       "# zero_compense : appel a tolerance nulle",
+                       "verifier_egal(\"d\", x, 0)",
+                       "# zero_compense : fin de fichier"))
+multi <- grep("^\\[INFO\\] ZERO DE COMPENSATION DECLARE A PLUSIEURS ZEROS ", r$sortie)
+orph <- grep("^\\[INFO\\] MARQUES zero_compense ORPHELINES ", r$sortie)
+verifier("recensement : deux appels marqués à zéro (temoin.R:2 et :4, rubrique « déclaré »), dont un à plusieurs zéros listé à part (temoin.R:2, 2 zéros)",
+         .passe(r) && any(grepl("^\\[INFO\\] ZERO DE COMPENSATION DECLARE \\(.* : 2 appels$", r$sortie)) && length(multi) == 1L &&
+           grepl(" : 1 appels$", r$sortie[multi]) && identical(r$sortie[multi + 1L], "[INFO]   tests/unitaires/temoin.R:2 tolerance 1e-08, 2 zeros"))
+verifier("recensement : marques orphelines : appel sans zéro (temoin.R:5), pas d'appel (:7), appel à tolérance nulle (:9), fin de fichier (:11) ; les marques des lignes 1 et 3 ne le sont pas",
+         length(orph) == 1L && grepl(" : 4 marques$", r$sortie[orph]) &&
+           identical(r$sortie[(orph + 1L):(orph + 4L)],
+                     c("[INFO]   tests/unitaires/temoin.R:5 appel sans zero reel a tolerance > 0 (ou a tolerance 0)",
+                       "[INFO]   tests/unitaires/temoin.R:7 aucun appel de verifier_egal() a la ligne suivante",
+                       "[INFO]   tests/unitaires/temoin.R:9 appel sans zero reel a tolerance > 0 (ou a tolerance 0)",
+                       "[INFO]   tests/unitaires/temoin.R:11 aucun appel de verifier_egal() a la ligne suivante")))
+r <- cas_recensement(c("# zero_compense : sans aucun appel a tolerance > 0 dans le fichier", "x <- 1"))
+verifier("recensement : une marque orpheline est listée même sans appel à tolérance > 0 dans le dépôt (temoin.R:1), statut 0",
+         .passe(r) && any(grepl("aucun appel a tolerance > 0", r$sortie, fixed = TRUE)) &&
+           any(grepl(" : 1 marques$", r$sortie)) &&
+           any(grepl("temoin.R:1 aucun appel de verifier_egal() a la ligne suivante", r$sortie, fixed = TRUE)))
+
+# --- paquets_java.sh (#120 ; #95, point 5) --------------------------------------------------
+# Script bash : appelé par bash (system2), les listes avant / après sont des fichiers texte. Les
+# noms de paquets Java interdits par absence_java.R sont fabriqués comme ailleurs dans ce fichier
+# (absence_java.R le balaie). Seul le fichier de motifs, tests/controles/paquets_java_motifs.sh,
+# est une exclusion déclarée d'absence_java.R ; paquets_java.sh reste balayé.
+section("contrôles : paquets_java.sh, paquets système installés (#120)")
+r <- cas_java(list("tests/controles/paquets_java_motifs.sh" = c(paste0("MOTIFS=('^", JDK, "')"))))
+verifier("#120 : tests/controles/paquets_java_motifs.sh, exclusion déclarée : un nom de JDK en clair passe", .passe(r))
+r <- cas_java(list("tests/controles/paquets_java.sh" = c(paste0("MOTIFS=('^", JDK, "')"))))
+verifier("#120 : le script paquets_java.sh reste balayé : un nom de JDK en clair y est refusé, :1",
+         .echoue_en(r, "tests/controles/paquets_java.sh", 1L, JDK))
+r <- cas_java(list("tests/controles/autre.sh" = c(paste0("MOTIFS=('^", JDK, "')"))))
+verifier("#120 : le même contenu dans un autre script reste refusé, autre.sh:1", .echoue_en(r, "tests/controles/autre.sh", 1L, JDK))
+if (nzchar(Sys.which("bash"))) {
+  JRE <- paste0("default-", "jre")
+  .script_paquets <- file.path(racine, "tests", "controles", "paquets_java.sh")
+  # Lance le script avec `args` (et `env`) ; rend list(statut, sortie). Un échec de lancement
+  # donne une ligne [ECHEC] et non une erreur R.
+  .lancer_paquets <- function(args, env = character(0)) {
+    tryCatch({
+      sortie <- suppressWarnings(system2("bash", c(shQuote(.script_paquets), args), stdout = TRUE, stderr = TRUE, env = env))
+      statut <- attr(sortie, "status")
+      list(statut = if (is.null(statut)) 0L else statut, sortie = sortie)
+    }, error = function(e) list(statut = NA_integer_, sortie = paste0("[ECHEC] lancement impossible : ", conditionMessage(e))))
+  }
+  .essai_paquets <- function(avant, apres, env = character(0)) {
+    d <- tempfile("paquets-")
+    dir.create(d)
+    on.exit(unlink(d, recursive = TRUE), add = TRUE)
+    writeLines(avant, file.path(d, "avant.txt"))
+    writeLines(apres, file.path(d, "apres.txt"))
+    .lancer_paquets(c(shQuote(file.path(d, "avant.txt")), shQuote(file.path(d, "apres.txt"))), env)
+  }
+  # `paquet` : nom attendu dans la ligne [ECHEC], sans suffixe :arch ni \r.
+  .refuse <- function(r, paquet) isTRUE(r$statut == 1L) && any(startsWith(r$sortie, paste0("[ECHEC] ", paquet, " : ")))
+  AVANT <- c("bash", "libc6", paste0(OJ, "-headless"))
+  for (p in c("libpdfbox-java", JRE, JDK, OJ, "java-common", "libreoffice-java-common", "libx-jni",
+              "temurin-17-jdk", "zulu17-jdk", "gcj-12-jdk",
+              "openjfx", "openjd", "openjf-x", "jarwrapper", "jarwrapper-extra")) {
+    r <- .essai_paquets(AVANT, c(AVANT, "tex-gyre", p))
+    verifier(paste0("paquets_java.sh : paquet installé refusé, ", p), .refuse(r, p))
+  }
+  r <- .essai_paquets(AVANT, c(AVANT, "tex-gyre", "libpdfbox-java:amd64"))
+  verifier("paquets_java.sh : suffixe :arch retiré avant la comparaison (libpdfbox-java:amd64 refusé)", .refuse(r, "libpdfbox-java"))
+  r <- .essai_paquets(AVANT, c(AVANT, "tex-gyre", "libpdfbox-java\r"))
+  verifier("paquets_java.sh : \\r final retiré avant la comparaison (libpdfbox-java\\r refusé)", .refuse(r, "libpdfbox-java"))
+  r <- .essai_paquets(c(AVANT, "tex-gyre:amd64"), c(AVANT, "tex-gyre"))
+  verifier("paquets_java.sh : un même paquet avec et sans :arch n'est pas une installation, 0 paquet",
+           .passe(r) && any(grepl("^\\[OK\\] 0 paquet", r$sortie)))
+  r <- .essai_paquets(AVANT, c(AVANT, "tex-gyre", "openjade", "nodejs", "libjavascriptcoregtk-4.1-0"))
+  verifier("paquets_java.sh : openjade (et nodejs, libjavascriptcore...) acceptés, statut 0, 4 paquets installés",
+           .passe(r) && any(grepl("^\\[OK\\] 4 paquet", r$sortie)))
+  r <- .essai_paquets(AVANT, AVANT)
+  verifier("paquets_java.sh : un paquet Java déjà présent avant (image du runner) n'est pas refusé (différence), 0 paquet",
+           .passe(r) && any(grepl("^\\[OK\\] 0 paquet", r$sortie)))
+  r <- .essai_paquets(AVANT, c(AVANT, "tex-gyre", JRE, "libpdfbox-java"))
+  verifier("paquets_java.sh : deux paquets Java installés, deux lignes [ECHEC]",
+           sum(startsWith(r$sortie, "[ECHEC] ")) == 2L && r$statut == 1L)
+  r <- .essai_paquets(AVANT, c(AVANT, "libpdfbox-java"), env = "GITHUB_ACTIONS=true")
+  verifier("paquets_java.sh : sous GITHUB_ACTIONS=true, annotation ::error:: en plus de [ECHEC]",
+           .refuse(r, "libpdfbox-java") && any(startsWith(r$sortie, "::error::")))
+  # env ajoute des variables sans en retirer : la CI pose GITHUB_ACTIONS=true, d'où "false" explicite.
+  r <- .essai_paquets(AVANT, c(AVANT, "libpdfbox-java"), env = "GITHUB_ACTIONS=false")
+  verifier("paquets_java.sh : hors GitHub Actions, aucune annotation ::error::", .refuse(r, "libpdfbox-java") && !any(startsWith(r$sortie, "::error::")))
+  # Limite écrite (en-tête du script) : un contrôle par nom ; un paquet Java d'un autre nom passe.
+  r <- .essai_paquets(AVANT, c(AVANT, "libnom-opaque-1"))
+  verifier("paquets_java.sh, limite documentée : un paquet d'un autre nom passe au travers", .passe(r))
+  # Liste APRES vide : refusée (statut 2), jamais « [OK] 0 paquet ».
+  r <- .essai_paquets(AVANT, character(0))
+  verifier("paquets_java.sh : liste APRES vide, statut 2 et aucun [OK]", identical(r$statut, 2L) && !any(startsWith(r$sortie, "[OK]")))
+  r <- .lancer_paquets(character(0))
+  verifier("paquets_java.sh : sans argument, usage et statut 2", identical(r$statut, 2L))
+  # --lister avec un dpkg-query factice : en échec (statut non nul, aucune liste) ou muet (statut 2).
+  d_faux <- tempfile("faux-dpkg-")
+  dir.create(d_faux)
+  env_faux <- paste0("PATH=", d_faux, ":", Sys.getenv("PATH"))
+  .deposer(file.path(d_faux, "dpkg-query"), c("#!/bin/sh", "exit 1"))
+  Sys.chmod(file.path(d_faux, "dpkg-query"), "0755")
+  r <- .lancer_paquets("--lister", env_faux)
+  verifier("paquets_java.sh --lister : dpkg-query en échec, statut non nul (pas de liste vide à statut 0)",
+           !is.na(r$statut) && r$statut != 0L && !any(grepl("^[a-z]", r$sortie)))
+  .deposer(file.path(d_faux, "dpkg-query"), c("#!/bin/sh", "exit 0"))
+  r <- .lancer_paquets("--lister", env_faux)
+  verifier("paquets_java.sh --lister : dpkg-query muet, liste vide refusée, statut 2", identical(r$statut, 2L))
+  .deposer(file.path(d_faux, "dpkg-query"), c("#!/bin/sh", "echo 'ii  bash'", "echo 'rc  ancien'", "echo 'ii  libc6'"))
+  r <- .lancer_paquets("--lister", env_faux)
+  verifier("paquets_java.sh --lister : seuls les paquets à l'état ii, triés, statut 0",
+           identical(r$statut, 0L) && identical(r$sortie, c("bash", "libc6")))
+  unlink(d_faux, recursive = TRUE)
+} else {
+  cat("  (bash absent : témoins de paquets_java.sh non joués)\n")
+}
+
+# --- couloir.sh (#94 ; ADR 0012, points 5, 6 et 23) -----------------------------------------
+# Script bash, sans git dans ces cas : ses témoins (mode --temoins : listes construites, dont le
+# témoin négatif d'un fichier hors couloir) et la lecture de fiches données par --fiche. Le
+# contrôle du diff réel (git diff origin/main...HEAD) tourne dans le job « Contrôles du dépôt »
+# de la CI, après --temoins, comme commit_reference.sh. Les motifs de sortie sont ASCII (« .+ »
+# pour les lettres et guillemets accentués) : aucun littéral non ASCII dans les motifs.
+section("contrôles : couloir.sh, couloirs des branches parallèles (#94)")
+if (nzchar(Sys.which("bash"))) {
+  .script_couloir <- file.path(racine, "tests", "controles", "couloir.sh")
+  .lancer_couloir <- function(args) {
+    tryCatch({
+      sortie <- suppressWarnings(system2("bash", c(shQuote(.script_couloir), args), stdout = TRUE, stderr = TRUE))
+      statut <- attr(sortie, "status")
+      list(statut = if (is.null(statut)) 0L else statut, sortie = sortie)
+    }, error = function(e) list(statut = NA_integer_, sortie = paste0("[ECHEC] lancement impossible : ", conditionMessage(e))))
+  }
+  .essai_couloir <- function(fiche) {
+    f <- tempfile("fiche-", fileext = ".md")
+    on.exit(unlink(f), add = TRUE)
+    .deposer(f, fiche)
+    .lancer_couloir(c("--branche=br/a", paste0("--fiche=", shQuote(f))))
+  }
+  r <- .lancer_couloir("--temoins")
+  verifier("couloir.sh --temoins : tous les témoins conformes, statut 0",
+           identical(r$statut, 0L) && any(grepl("^\\[OK\\] t.+moins : [0-9]+ cas", r$sortie)) && !any(startsWith(r$sortie, "[ECHEC]")))
+  r <- .essai_couloir(c("```couloir br/a", "+ R/a.R", "bidon", "```"))
+  verifier("couloir.sh : une ligne de forme inconnue est un [ECHEC] fiche:3, statut 1",
+           identical(r$statut, 1L) && any(grepl("^\\[ECHEC\\] .*\\.md:3 : ligne de forme inconnue", r$sortie)))
+  r <- .essai_couloir(c("```couloir br/a", "+ R/a.R", "```", "```couloir br/a", "+ R/b.R", "```"))
+  verifier("couloir.sh : deux blocs pour la même branche, [ECHEC], statut 1",
+           identical(r$statut, 1L) && any(grepl(": 2 blocs .+ couloir br/a .+ \\(lignes 1 4\\)", r$sortie)))
+  r <- .essai_couloir(c("```text", "+ R/a.R", "```"))
+  verifier("couloir.sh : un bloc sous une autre chaîne d'information n'est pas un couloir, [INFO], statut 0",
+           .passe(r) && any(startsWith(r$sortie, "[INFO]")))
+  r <- .lancer_couloir(c("--branche=sans/bloc", paste0("--fiche=", shQuote(file.path(racine, "docs", "feuille-de-route.md")))))
+  verifier("couloir.sh : la feuille de route du dépôt se lit sans erreur de forme ; branche sans bloc : [INFO], statut 0",
+           .passe(r) && any(startsWith(r$sortie, "[INFO]")))
+  r <- .lancer_couloir("--inconnue")
+  verifier("couloir.sh : option inconnue, usage et statut 2", identical(r$statut, 2L))
+} else {
+  cat("  (bash absent : témoins de couloir.sh non joués)\n")
+}

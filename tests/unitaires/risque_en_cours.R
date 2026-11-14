@@ -182,9 +182,12 @@ verifier_egal("T8 (a) (#91) : hors_axes = refus : arrêt hors_axes, CT2",
               { r <- risque(b_t8, plan_p3()); list(r$cellules$statut_calcul, r$cellules$motif_arret, attr(r$cellules, "identifiant_arret")) },
               list("arrete", "hors_axes", "CT2"))
 verifier_egal("T8 (b) (#91) : derniere_valeur : 7 473,9357625788 (formule fermée, t3 = 2,9999925144), jugement_expert (cellule et contrat CT2 ; avant : exact)",
-              list(r_t8$cellules$montant, r_t8$cellules$montant - (t1$montant + 100000 * 0.98 * 0.97 * 0.03 * 1.02^(-(364 / 365 + 2 + 1 / 366))),
-                   r_t8$cellules$statut_resultat, r_t8$contrats$statut_resultat),
-              list(7473.9357625788, 0, "jugement_expert", "jugement_expert"), tolerance = TOL)
+              list(r_t8$cellules$montant, r_t8$cellules$statut_resultat, r_t8$contrats$statut_resultat),
+              list(7473.9357625788, "jugement_expert", "jugement_expert"), tolerance = TOL)
+# Écart mesuré le 14/11/2026 : -5,5e-12, soit 6 pas de 9,1e-13 (le pas des flottants voisins de 7 474) ; tolérance absolue déclarée 1e-10 (110 pas).
+# zero_compense : montant moins formule fermée, deux termes d'environ 7 474
+verifier_egal("T8 (b) (#91) : derniere_valeur : écart à la formule fermée, nul à la tolérance absolue déclarée 1e-10 (zéro de compensation)",
+              r_t8$cellules$montant - (t1$montant + 100000 * 0.98 * 0.97 * 0.03 * 1.02^(-(364 / 365 + 2 + 1 / 366))), 0, tolerance = 1e-10)
 verifier_egal("T8 (b) (#91) : une ligne hors_axes_derniere_valeur, après les lignes A132_1 : valeur_regle NA, valeur_retenue 1, depassement TRUE, detail usage=mortalite_tarif;identifiant=mortalite_fictive_b2;id_contrat=CT2;axe=age;valeurs=43",
               list(r_t8$indicateurs$regle, s3_t8$poste, s3_t8$garantie, s3_t8$valeur_regle, s3_t8$valeur_retenue, s3_t8$depassement,
                    s3_t8$detail),
@@ -332,11 +335,12 @@ excl_ligne <- function(base, plan = plan_p3(), table = NULL, lignes = integer(0)
 }
 p_27 <- plan_p3(D("2027-01-01"))
 b_27 <- b2_base_p3(extraction = D("2027-06-30"))
-verifier_egal("(3.18) assures : (a) AS2 exclu pour risque_en_cours : arrêt parametre_non_determine (CT2) ; (b) exclu pour engagement : 4 786,6205305652 exact ; (c) arrêté 2027-01-01, AS2 exclu : 0 exact (fin de couverture par date_terme)",
-              list(excl_ligne(b2_base_p3(), table = "assures", lignes = 1L),
-                   excl_ligne(b2_base_p3(), table = "assures", lignes = 1L, famille = "engagement"),
-                   excl_ligne(b_27, p_27, "assures", 1L)),
-              list(arret_p3(), calcule_p3(v_t1), calcule_p3(0)), tolerance = TOL)
+verifier_egal("(3.18) assures : (a) AS2 exclu pour risque_en_cours : arrêt parametre_non_determine (CT2) ; (b) exclu pour engagement : 4 786,6205305652 exact",
+              (o_318a <- list(excl_ligne(b2_base_p3(), table = "assures", lignes = 1L),
+                              excl_ligne(b2_base_p3(), table = "assures", lignes = 1L, famille = "engagement"),
+                              excl_ligne(b_27, p_27, "assures", 1L)))[1:2], list(arret_p3(), calcule_p3(v_t1)), tolerance = TOL)
+verifier_egal("(3.18) assures : (c) arrêté 2027-01-01, AS2 exclu : 0 exact (fin de couverture par date_terme)",
+              o_318a[3L], list(calcule_p3(0)))
 verifier_egal("(3.18) sinistres : (d) SI2 deces retenu : 0 exact (témoin) ; (e) SI2 deces exclu pour risque_en_cours : arrêt (CT2) ; (f) exclu pour engagement : 0 exact ; (g) SI2 et copie SI2B, SI2B seul exclu : 0 exact (sinistre connu) ; (h) arrêté 2027-01-01, SI2 exclu : 0 exact",
               list(excl_ligne(avec_si2(b2_base_p3())), excl_ligne(avec_si2(b2_base_p3()), table = "sinistres", lignes = 1L),
                    excl_ligne(avec_si2(b2_base_p3()), table = "sinistres", lignes = 1L, famille = "engagement"),
@@ -431,15 +435,16 @@ verifier_egal("(4.7) (q) et (r) contre-témoins : CT2 sorti par un sinistre dece
 b_87s <- b2_base_p3()
 b_87s$contrats$date_fin[b_87s$contrats$id_contrat == "CT2"] <- D("2024-10-31")
 b_87s$contrats$motif_fin[b_87s$contrats$id_contrat == "CT2"] <- "resiliation_adherent"
-verifier_egal("(4.7) (s) contrat sorti par sa date_fin rendue visible par D03g (délai 0) : segment CT2 à 0, jugement_expert, deux lignes d'échéancier de flux 0 ; délai 400 : 4 786,6205305652, jugement_expert",
-              { q0 <- plan_87ct(0)
-                q0$restitution$echeanciers <- "tous"
-                r0 <- calculer_provisions(b_87s, q0, tid)
-                e <- r0$echeanciers[r0$echeanciers$poste == P3 & r0$echeanciers$cle == "CT2", , drop = FALSE]
-                list(p3_87(r0), list(e$type_flux, e$flux), p3_87(calculer_provisions(b_87s, plan_87ct(400), tid))) },
+verifier_egal("(4.7) (s) contrat sorti par sa date_fin rendue visible par D03g (délai 0) : segment CT2 à 0 exact, jugement_expert, deux lignes d'échéancier de flux 0",
+              (o_87s <- { q0 <- plan_87ct(0)
+                          q0$restitution$echeanciers <- "tous"
+                          r0 <- calculer_provisions(b_87s, q0, tid)
+                          e <- r0$echeanciers[r0$echeanciers$poste == P3 & r0$echeanciers$cle == "CT2", , drop = FALSE]
+                          list(p3_87(r0), list(e$type_flux, e$flux), p3_87(calculer_provisions(b_87s, plan_87ct(400), tid))) })[1:2],
               list(list(c("ct", "ensemble"), c("CT2", "ensemble"), c(0, 0), c("jugement_expert", "jugement_expert")),
-                   list(c("capital_unique", "frais"), c(0, 0)),
-                   list(c("ct", "ensemble"), c("CT2", "ensemble"), rep(v_t1, 2L), c("jugement_expert", "jugement_expert"))),
+                   list(c("capital_unique", "frais"), c(0, 0))))
+verifier_egal("(4.7) (s) délai 400 : 4 786,6205305652, jugement_expert",
+              o_87s[[3L]], list(c("ct", "ensemble"), c("CT2", "ensemble"), rep(v_t1, 2L), c("jugement_expert", "jugement_expert")),
               tolerance = TOL)
 # (t) contre-témoins (erratum v1.0.19, réserve R6) : voie de sortie observée. (t1) date_fin de
 # CT2 au 2024-10-31 sous D03g, visible (délai 0), et SI2 deces saisi ; (t2) sans date_fin, SI2

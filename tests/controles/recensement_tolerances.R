@@ -26,10 +26,39 @@
 # non nulle est sous ce seuil (tolerance lue) est liste sous PETITES VALEURS, en plus de son
 # classement (la regle vaut aussi pour un scalaire) ; la parade est tolerance = 1e-10 * |r| ou la
 # comparaison de obtenu / r a 1 (valeur attendue melant des ordres de grandeur : voir tests/harnais.R).
+# Les zeros attendus (verifier_egal seulement ; #111) : un zero attendu compare a tolerance > 0 est admis
+# a |x| <= tolerance (tests/harnais.R) : il se compare a part, a tolerance nulle s'il est exact par
+# construction, sinon a tolerance absolue declaree. Un appel a tolerance > 0 (ou non resolue) dont
+# l'argument attendu contient un zero reel (un zero entier, 0L, est exact par son type) est liste sous
+# ZEROS ATTENDUS A TOLERANCE > 0 : feuille numerique nulle de la valeur evaluee, ou, si l'argument n'est
+# pas evaluable sans les donnees des tests, constante litterale 0 de l'expression (une expression non
+# evaluable peut en cacher d'autres : le critere est syntaxique, il n'est pas exhaustif). Dans un appel
+# non evaluable, les arguments qui ne sont pas des valeurs ne comptent pas : indices de `[` et `[[`,
+# times, length.out et each de rep(), digits de round() et signif(), longueur de character(0) ; numeric(n)
+# et double(n) avec n litteral > 0 comptent n zeros. Pour un appel dont les arguments ne s'apparient pas,
+# l'attendu est lu par position (3e argument sans nom) ou sous son nom.
+# Un zero obtenu par compensation (ecart de passage, total moins la somme de ses parties), que le
+# harnais compare a tolerance absolue declaree, reste a tolerance, dans son propre appel : la ligne qui
+# precede l'appel porte la marque `# zero_compense : <motif>`, et l'appel est compte a part (ZERO DE
+# COMPENSATION DECLARE), hors de la rubrique des zeros a corriger ; un appel marque qui contient plus
+# d'un zero reel est liste a part (A PLUSIEURS ZEROS), et une marque sur un appel sans zero, ou sans
+# appel de verifier_egal() a la ligne suivante, sous MARQUES ORPHELINES. Ces rubriques sont informatives.
 # Les appels directs de all.equal(tolerance = ...) dans verifier() ne passent pas par
 # verifier_egal() : ils sont listes a part, memes criteres.
 # Sortie informative : lignes [INFO] ; [ECHEC] seulement si un fichier n'est pas analysable ou si
 # le recensement des appels n'est pas coherent (statut 1). Aucune ligne [ECHEC] pour un signalement.
+# Limites connues (reserves d'audit non corrigees, suivies par la question Q-32 / Q-33 de la
+# feuille de route ; chacune mesuree sur une racine fictive) :
+#   - r1 : un commentaire `# zero_compense` en fin de ligne (`x <- 1  # zero_compense : m`) est
+#     pris pour une marque : l'appel de la ligne suivante est range sous ZERO DE COMPENSATION
+#     DECLARE ;
+#   - r2 : rep(0, k), avec k non evaluable, ne compte qu'un zero (c(0, 0) en compte deux) : un
+#     appel marque qui porte rep(0, k) n'est pas liste sous A PLUSIEURS ZEROS ;
+#   - r3 : pour un appel dont les arguments ne s'apparient pas (argument en trop, `...`),
+#     `attendu` est lu par position, comme 3e argument sans nom : si des arguments nommes
+#     (`nom =`, `obtenu =`) sont en tete, il manque, et ses zeros ne sont pas comptes ;
+#   - le motif d'une marque n'est pas controle : `# zero_compense` sans motif compte comme une
+#     marque.
 # Usage, depuis la racine du depot : Rscript tests/controles/recensement_tolerances.R
 # Un argument facultatif designe une autre racine. Code ASCII, R de base seulement.
 
@@ -86,6 +115,58 @@ feuilles <- function(x) {
   numeric(0)
 }
 
+# Zeros d'une valeur evaluee : feuilles reelles (double) finies nulles (dates exclues, listes et colonnes
+# parcourues) ; un zero entier (0L) est exact par son type, il n'est pas compte.
+zeros_feuilles <- function(x) {
+  if (is.null(x) || inherits(x, "Date")) return(0L)
+  if (is.list(x)) return(sum(unlist(lapply(x, zeros_feuilles), use.names = FALSE)))
+  if (is.double(x)) return(sum(is.finite(x) & x == 0))
+  0L
+}
+
+# Nombre de constantes litterales 0 (reelles) d'une expression (a defaut de pouvoir l'evaluer) ; un 0 qui
+# n'est pas une valeur n'est pas compte : arguments de longueur ou d'indice (voir l'en-tete). rep(0, k) compte
+# pour une constante. Les appels de FONCTIONS_SANS_ZERO (entiers, caracteres, logiques) ne portent aucun zero reel.
+FONCTIONS_SANS_ZERO <- c("character", "integer", "logical", "seq_len")
+FONCTIONS_PREMIER_ARGUMENT <- c("[", "[[", "rep", "rep_len", "round", "signif")
+zeros_litteraux <- function(e) {
+  if (is.double(e)) return(sum(is.finite(e) & e == 0))
+  if (is.call(e) && is.symbol(e[[1L]])) {
+    f <- as.character(e[[1L]])
+    a <- as.list(e)[-1L]
+    if (f %in% FONCTIONS_SANS_ZERO) return(0L)
+    if (f %in% FONCTIONS_PREMIER_ARGUMENT) {
+      # seul l'objet (premier argument sans nom, ou `x`) porte des valeurs ; les autres sont des longueurs ou des indices
+      if (length(a) == 0L) return(0L)
+      nm <- if (is.null(names(a))) rep("", length(a)) else names(a)
+      k <- which(nm == "x")
+      if (length(k) == 0L) k <- which(nm == "")[1L]
+      if (is.na(k[1L]) || identical(a[[k[1L]]], quote(expr = ))) return(0L)
+      return(zeros_litteraux(a[[k[1L]]]))
+    }
+    if (f %in% c("numeric", "double", "vector")) {
+      # n zeros reels pour une longueur litterale n > 0 (vector : mode numeric ou double seulement)
+      m <- tryCatch(match.call(if (f == "vector") function(mode, length) NULL else function(length) NULL, e, envir = emptyenv()),
+                    error = function(err) NULL)
+      if (is.null(m)) return(0L)
+      if (f == "vector" && !(is.character(m$mode) && m$mode %in% c("numeric", "double"))) return(0L)
+      n <- m$length
+      return(if (is.numeric(n) && length(n) == 1L && is.finite(n) && n > 0) as.integer(n) else 0L)
+    }
+  }
+  if (is.call(e) || is.expression(e)) {
+    return(sum(vapply(seq_along(e), function(i) if (identical(e[[i]], quote(expr = ))) 0L else zeros_litteraux(e[[i]]),
+                      integer(1L))))
+  }
+  0L
+}
+
+# Nombre de zeros d'une expression attendue : valeur evaluee si elle l'est, sinon constantes litterales.
+compter_zeros <- function(expr, constantes) {
+  r <- evaluer(expr, constantes)
+  if (r$ok) zeros_feuilles(r$valeur) else zeros_litteraux(expr)
+}
+
 # Evaluation sans effet de bord : l'environnement a pour parent emptyenv() et ne contient que les
 # constantes du fichier et une liste blanche de fonctions pures ; tout autre appel (file.create,
 # quit, une fonction de test...) ou toute variable est introuvable, l'evaluation echoue et
@@ -110,14 +191,31 @@ seuil_petites <- function(tol) min(1, tol / EFFET_RELATIF)
 # petite |feuille| non nulle evaluee (NA si aucune).
 classer <- function(expr, constantes, tol = NA_real_) {
   r <- evaluer(expr, constantes)
-  if (!r$ok) return(list(classe = "indetermine", detail = "", petites = FALSE, min_abs = NA_real_))
+  if (!r$ok) {
+    n <- if (is.na(tol) || tol > 0) zeros_litteraux(expr) else 0L
+    return(list(classe = "indetermine", detail = "", petites = FALSE, min_abs = NA_real_, zeros = n > 0L, n_zeros = n))
+  }
+  n <- if (is.na(tol) || tol > 0) zeros_feuilles(r$valeur) else 0L
   f <- feuilles(r$valeur)
   petit <- if (length(f) > 0L) min(f) else NA_real_
   petites <- length(f) > 0L && !is.na(tol) && tol > 0 && petit < seuil_petites(tol)
-  if (length(f) < 2L) return(list(classe = "scalaire", detail = "", petites = petites, min_abs = petit))
+  if (length(f) < 2L) return(list(classe = "scalaire", detail = "", petites = petites, min_abs = petit, zeros = n > 0L,
+                                                  n_zeros = n))
   rapport <- max(f) / min(f)
   list(classe = if (rapport >= RAPPORT_ORDRES) "signale" else "homogene",
-       detail = sprintf("%d feuilles, max/min = %.3g", length(f), rapport), petites = petites, min_abs = petit)
+       detail = sprintf("%d feuilles, max/min = %.3g", length(f), rapport), petites = petites, min_abs = petit, zeros = n > 0L,
+       n_zeros = n)
+}
+
+# Argument attendu d'un appel de verifier_egal() dont les arguments ne s'apparient pas : sous son nom, ou
+# 3e argument sans nom si aucun `...` ne le precede (NULL sinon).
+attendu_par_position <- function(a) {
+  if (!is.null(a[["attendu"]])) return(a[["attendu"]])
+  args <- as.list(a)[-1L]
+  nm <- if (is.null(names(args))) rep("", length(args)) else names(args)
+  sans_nom <- args[nm == ""]
+  if (length(sans_nom) < 3L || any(vapply(sans_nom[1:3], function(x) identical(x, quote(...)), logical(1L)))) return(NULL)
+  sans_nom[[3L]]
 }
 
 resoudre_tolerance <- function(expr, constantes) {
@@ -139,6 +237,8 @@ lignes_de <- function(chemin, jeton) {
 }
 
 recensement <- list()
+marques <- list()
+appels_egal <- list()
 total_egal <- 0L
 for (chemin in fichiers) {
   exprs <- tryCatch(parse(chemin, keep.source = TRUE), error = function(e) NULL)
@@ -146,6 +246,12 @@ for (chemin in fichiers) {
     echec("non analysable", rel(chemin))
     next
   }
+  # marques `# zero_compense` : lignes des commentaires qui la portent
+  d <- getParseData(exprs)
+  marques_fichier <- if (is.null(d)) integer(0) else
+    d$line1[d$token == "COMMENT" & grepl("^#[[:space:]]*zero_compense([[:space:]]|:|$)", d$text)]
+  marques[[length(marques) + 1L]] <- data.frame(fichier = rep(rel(chemin), length(marques_fichier)), ligne = marques_fichier,
+                                                stringsAsFactors = FALSE)
   # constantes numeriques litterales des affectations de premier niveau
   constantes <- list()
   for (e in exprs) {
@@ -161,7 +267,11 @@ for (chemin in fichiers) {
                     length(appels), length(lignes)), rel(chemin))
       next
     }
-    if (jeton == "verifier_egal") total_egal <- total_egal + length(appels)
+    if (jeton == "verifier_egal") {
+      total_egal <- total_egal + length(appels)
+      appels_egal[[length(appels_egal) + 1L]] <- data.frame(fichier = rep(rel(chemin), length(lignes)), ligne = lignes,
+                                                            stringsAsFactors = FALSE)
+    }
     for (i in seq_along(appels)) {
       a <- appels[[i]]
       signature <- if (jeton == "verifier_egal") function(nom, obtenu, attendu, tolerance = 0) NULL
@@ -173,7 +283,10 @@ for (chemin in fichiers) {
       if (is.null(m)) {
         tol <- if (is.null(a[["tolerance"]])) NA_real_ else resoudre_tolerance(a[["tolerance"]], constantes)
         if (!is.na(tol) && tol == 0) next
-        cl <- list(classe = "indetermine", detail = "arguments non appariables", petites = FALSE, min_abs = NA_real_)
+        att <- if (jeton == "verifier_egal") attendu_par_position(a) else NULL
+        n <- if (!is.null(att) && (is.na(tol) || tol > 0)) compter_zeros(att, constantes) else 0L
+        cl <- list(classe = "indetermine", detail = "arguments non appariables", petites = FALSE, min_abs = NA_real_,
+                   zeros = n > 0L, n_zeros = n)
       } else {
         if (is.null(m$tolerance)) next
         tol <- resoudre_tolerance(m$tolerance, constantes)
@@ -184,7 +297,8 @@ for (chemin in fichiers) {
       recensement[[length(recensement) + 1L]] <- data.frame(
         fichier = rel(chemin), ligne = lignes[i], appel = jeton,
         tolerance = if (is.na(tol)) "non resolue" else format(tol), classe = cl$classe, detail = cl$detail,
-        petites = cl$petites, min_abs = cl$min_abs, stringsAsFactors = FALSE)
+        petites = cl$petites, min_abs = cl$min_abs, zeros = cl$zeros, n_zeros = cl$n_zeros,
+        compense = (lignes[i] - 1L) %in% marques_fichier, stringsAsFactors = FALSE)
     }
   }
 }
@@ -209,6 +323,18 @@ if (is.null(res)) {
     info(sprintf("  %s:%d tolerance %s, plus petit |r| non nul = %.3g (seuil %.3g)", petites$fichier[i], petites$ligne[i],
                  petites$tolerance[i], petites$min_abs[i], seuil_petites(as.numeric(petites$tolerance[i]))))
   }
+  zeros <- egal[egal$zeros & !egal$compense, ]
+  info(sprintf("ZEROS ATTENDUS A TOLERANCE > 0 (valeur attendue qui contient un zero, evalue ou litteral : a comparer a part, a tolerance nulle si le zero est exact par construction, sinon a tolerance absolue declaree ; tests/harnais.R) : %d appels",
+               nrow(zeros)))
+  for (i in seq_len(nrow(zeros))) info(sprintf("  %s:%d tolerance %s", zeros$fichier[i], zeros$ligne[i], zeros$tolerance[i]))
+  declares <- egal[egal$zeros & egal$compense, ]
+  info(sprintf("ZERO DE COMPENSATION DECLARE (marque `# zero_compense` sur la ligne qui precede l'appel ; tolerance absolue declaree) : %d appels",
+               nrow(declares)))
+  for (i in seq_len(nrow(declares))) info(sprintf("  %s:%d tolerance %s", declares$fichier[i], declares$ligne[i], declares$tolerance[i]))
+  multi <- declares[declares$n_zeros > 1L, ]
+  info(sprintf("ZERO DE COMPENSATION DECLARE A PLUSIEURS ZEROS (un appel marque ne porte que le zero de compensation, les autres zeros se comparent a part) : %d appels",
+               nrow(multi)))
+  for (i in seq_len(nrow(multi))) info(sprintf("  %s:%d tolerance %s, %d zeros", multi$fichier[i], multi$ligne[i], multi$tolerance[i], multi$n_zeros[i]))
   if (any(!is.na(egal$min_abs))) {
     info(sprintf("plus petit |r| non nul parmi les valeurs attendues evaluees : %.3g", min(egal$min_abs, na.rm = TRUE)))
   }
@@ -224,5 +350,22 @@ if (is.null(res)) {
     info(sprintf("  %s:%d tolerance %s, attendu : %s %s", direct$fichier[i], direct$ligne[i], direct$tolerance[i],
                  direct$classe[i], direct$detail[i]))
   }
+}
+# Marques `# zero_compense` orphelines : la ligne suivante n'est pas un appel de verifier_egal() qui porte un zero.
+# (data.frame vide type en tete : sans fichier analyse, rbind(list()) vaudrait NULL)
+vide <- data.frame(fichier = character(0), ligne = integer(0), stringsAsFactors = FALSE)
+marques <- do.call(rbind, c(list(vide), marques))
+portent <- if (is.null(res)) character(0) else {
+  k <- res[res$appel == "verifier_egal" & res$zeros, ]
+  paste(k$fichier, k$ligne)
+}
+appels_egal <- do.call(rbind, c(list(vide), appels_egal))
+orphelines <- marques[!(paste(marques$fichier, marques$ligne + 1L) %in% portent), ]
+info(sprintf("MARQUES zero_compense ORPHELINES (la ligne suivante n'est pas un appel de verifier_egal() qui porte un zero) : %d marques",
+             nrow(orphelines)))
+for (i in seq_len(nrow(orphelines))) {
+  suivant <- paste(orphelines$fichier[i], orphelines$ligne[i] + 1L) %in% paste(appels_egal$fichier, appels_egal$ligne)
+  info(sprintf("  %s:%d %s", orphelines$fichier[i], orphelines$ligne[i],
+               if (suivant) "appel sans zero reel a tolerance > 0 (ou a tolerance 0)" else "aucun appel de verifier_egal() a la ligne suivante"))
 }
 quit(save = "no", status = if (.n_echec > 0L) 1L else 0L)
