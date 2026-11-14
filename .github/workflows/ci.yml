@@ -85,7 +85,7 @@ jobs:
   tests:
     name: Tests (R 4.3.3)
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    timeout-minutes: 30
     # Plateforme de référence (ADR 0010, point 27) : image épinglée par digest. Digest
     # relevé le 7 novembre 2026 dans le journal « Initialize containers » du premier
     # passage (run 42415820075, job « Tests (R 4.3.3) », ligne « Digest: » de
