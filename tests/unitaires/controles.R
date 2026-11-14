@@ -899,3 +899,96 @@ verifier("recensement : une marque orpheline est listée même sans appel à tol
          .passe(r) && any(grepl("aucun appel a tolerance > 0", r$sortie, fixed = TRUE)) &&
            any(grepl(" : 1 marques$", r$sortie)) &&
            any(grepl("temoin.R:1 aucun appel de verifier_egal() a la ligne suivante", r$sortie, fixed = TRUE)))
+
+# --- paquets_java.sh (#120 ; #95, point 5) --------------------------------------------------
+# Script bash : appelé par bash (system2), les listes avant / après sont des fichiers texte. Les
+# noms de paquets Java interdits par absence_java.R sont fabriqués comme ailleurs dans ce fichier
+# (absence_java.R le balaie). Seul le fichier de motifs, tests/controles/paquets_java_motifs.sh,
+# est une exclusion déclarée d'absence_java.R ; paquets_java.sh reste balayé.
+section("contrôles : paquets_java.sh, paquets système installés (#120)")
+r <- cas_java(list("tests/controles/paquets_java_motifs.sh" = c(paste0("MOTIFS=('^", JDK, "')"))))
+verifier("#120 : tests/controles/paquets_java_motifs.sh, exclusion déclarée : un nom de JDK en clair passe", .passe(r))
+r <- cas_java(list("tests/controles/paquets_java.sh" = c(paste0("MOTIFS=('^", JDK, "')"))))
+verifier("#120 : le script paquets_java.sh reste balayé : un nom de JDK en clair y est refusé, :1",
+         .echoue_en(r, "tests/controles/paquets_java.sh", 1L, JDK))
+r <- cas_java(list("tests/controles/autre.sh" = c(paste0("MOTIFS=('^", JDK, "')"))))
+verifier("#120 : le même contenu dans un autre script reste refusé, autre.sh:1", .echoue_en(r, "tests/controles/autre.sh", 1L, JDK))
+if (nzchar(Sys.which("bash"))) {
+  JRE <- paste0("default-", "jre")
+  .script_paquets <- file.path(racine, "tests", "controles", "paquets_java.sh")
+  # Lance le script avec `args` (et `env`) ; rend list(statut, sortie). Un échec de lancement
+  # donne une ligne [ECHEC] et non une erreur R.
+  .lancer_paquets <- function(args, env = character(0)) {
+    tryCatch({
+      sortie <- suppressWarnings(system2("bash", c(shQuote(.script_paquets), args), stdout = TRUE, stderr = TRUE, env = env))
+      statut <- attr(sortie, "status")
+      list(statut = if (is.null(statut)) 0L else statut, sortie = sortie)
+    }, error = function(e) list(statut = NA_integer_, sortie = paste0("[ECHEC] lancement impossible : ", conditionMessage(e))))
+  }
+  .essai_paquets <- function(avant, apres, env = character(0)) {
+    d <- tempfile("paquets-")
+    dir.create(d)
+    on.exit(unlink(d, recursive = TRUE), add = TRUE)
+    writeLines(avant, file.path(d, "avant.txt"))
+    writeLines(apres, file.path(d, "apres.txt"))
+    .lancer_paquets(c(shQuote(file.path(d, "avant.txt")), shQuote(file.path(d, "apres.txt"))), env)
+  }
+  # `paquet` : nom attendu dans la ligne [ECHEC], sans suffixe :arch ni \r.
+  .refuse <- function(r, paquet) isTRUE(r$statut == 1L) && any(startsWith(r$sortie, paste0("[ECHEC] ", paquet, " : ")))
+  AVANT <- c("bash", "libc6", paste0(OJ, "-headless"))
+  for (p in c("libpdfbox-java", JRE, JDK, OJ, "java-common", "libreoffice-java-common", "libx-jni",
+              "temurin-17-jdk", "zulu17-jdk", "gcj-12-jdk",
+              "openjfx", "openjd", "openjf-x", "jarwrapper", "jarwrapper-extra")) {
+    r <- .essai_paquets(AVANT, c(AVANT, "tex-gyre", p))
+    verifier(paste0("paquets_java.sh : paquet installé refusé, ", p), .refuse(r, p))
+  }
+  r <- .essai_paquets(AVANT, c(AVANT, "tex-gyre", "libpdfbox-java:amd64"))
+  verifier("paquets_java.sh : suffixe :arch retiré avant la comparaison (libpdfbox-java:amd64 refusé)", .refuse(r, "libpdfbox-java"))
+  r <- .essai_paquets(AVANT, c(AVANT, "tex-gyre", "libpdfbox-java\r"))
+  verifier("paquets_java.sh : \\r final retiré avant la comparaison (libpdfbox-java\\r refusé)", .refuse(r, "libpdfbox-java"))
+  r <- .essai_paquets(c(AVANT, "tex-gyre:amd64"), c(AVANT, "tex-gyre"))
+  verifier("paquets_java.sh : un même paquet avec et sans :arch n'est pas une installation, 0 paquet",
+           .passe(r) && any(grepl("^\\[OK\\] 0 paquet", r$sortie)))
+  r <- .essai_paquets(AVANT, c(AVANT, "tex-gyre", "openjade", "nodejs", "libjavascriptcoregtk-4.1-0"))
+  verifier("paquets_java.sh : openjade (et nodejs, libjavascriptcore...) acceptés, statut 0, 4 paquets installés",
+           .passe(r) && any(grepl("^\\[OK\\] 4 paquet", r$sortie)))
+  r <- .essai_paquets(AVANT, AVANT)
+  verifier("paquets_java.sh : un paquet Java déjà présent avant (image du runner) n'est pas refusé (différence), 0 paquet",
+           .passe(r) && any(grepl("^\\[OK\\] 0 paquet", r$sortie)))
+  r <- .essai_paquets(AVANT, c(AVANT, "tex-gyre", JRE, "libpdfbox-java"))
+  verifier("paquets_java.sh : deux paquets Java installés, deux lignes [ECHEC]",
+           sum(startsWith(r$sortie, "[ECHEC] ")) == 2L && r$statut == 1L)
+  r <- .essai_paquets(AVANT, c(AVANT, "libpdfbox-java"), env = "GITHUB_ACTIONS=true")
+  verifier("paquets_java.sh : sous GITHUB_ACTIONS=true, annotation ::error:: en plus de [ECHEC]",
+           .refuse(r, "libpdfbox-java") && any(startsWith(r$sortie, "::error::")))
+  # env ajoute des variables sans en retirer : la CI pose GITHUB_ACTIONS=true, d'où "false" explicite.
+  r <- .essai_paquets(AVANT, c(AVANT, "libpdfbox-java"), env = "GITHUB_ACTIONS=false")
+  verifier("paquets_java.sh : hors GitHub Actions, aucune annotation ::error::", .refuse(r, "libpdfbox-java") && !any(startsWith(r$sortie, "::error::")))
+  # Limite écrite (en-tête du script) : un contrôle par nom ; un paquet Java d'un autre nom passe.
+  r <- .essai_paquets(AVANT, c(AVANT, "libnom-opaque-1"))
+  verifier("paquets_java.sh, limite documentée : un paquet d'un autre nom passe au travers", .passe(r))
+  # Liste APRES vide : refusée (statut 2), jamais « [OK] 0 paquet ».
+  r <- .essai_paquets(AVANT, character(0))
+  verifier("paquets_java.sh : liste APRES vide, statut 2 et aucun [OK]", identical(r$statut, 2L) && !any(startsWith(r$sortie, "[OK]")))
+  r <- .lancer_paquets(character(0))
+  verifier("paquets_java.sh : sans argument, usage et statut 2", identical(r$statut, 2L))
+  # --lister avec un dpkg-query factice : en échec (statut non nul, aucune liste) ou muet (statut 2).
+  d_faux <- tempfile("faux-dpkg-")
+  dir.create(d_faux)
+  env_faux <- paste0("PATH=", d_faux, ":", Sys.getenv("PATH"))
+  .deposer(file.path(d_faux, "dpkg-query"), c("#!/bin/sh", "exit 1"))
+  Sys.chmod(file.path(d_faux, "dpkg-query"), "0755")
+  r <- .lancer_paquets("--lister", env_faux)
+  verifier("paquets_java.sh --lister : dpkg-query en échec, statut non nul (pas de liste vide à statut 0)",
+           !is.na(r$statut) && r$statut != 0L && !any(grepl("^[a-z]", r$sortie)))
+  .deposer(file.path(d_faux, "dpkg-query"), c("#!/bin/sh", "exit 0"))
+  r <- .lancer_paquets("--lister", env_faux)
+  verifier("paquets_java.sh --lister : dpkg-query muet, liste vide refusée, statut 2", identical(r$statut, 2L))
+  .deposer(file.path(d_faux, "dpkg-query"), c("#!/bin/sh", "echo 'ii  bash'", "echo 'rc  ancien'", "echo 'ii  libc6'"))
+  r <- .lancer_paquets("--lister", env_faux)
+  verifier("paquets_java.sh --lister : seuls les paquets à l'état ii, triés, statut 0",
+           identical(r$statut, 0L) && identical(r$sortie, c("bash", "libc6")))
+  unlink(d_faux, recursive = TRUE)
+} else {
+  cat("  (bash absent : témoins de paquets_java.sh non joués)\n")
+}

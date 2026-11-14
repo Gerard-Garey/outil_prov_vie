@@ -24,12 +24,23 @@
 #      (YAML, shell, Dockerfile, Makefile) que s'il commence un mot hors guillemets ; JSON,
 #      lock et js : aucun commentaire retire (cote sur).
 #      Exclusions, la seule justification etant celle-ci : le present script
-#      (tests/controles/absence_java.R de la racine examinee), qui porte la liste ; .git/ et
+#      (tests/controles/absence_java.R de la racine examinee), qui porte la liste ;
+#      tests/controles/paquets_java_motifs.sh (#120, M360), fichier de motifs de noms de paquets
+#      systeme qu'il INTERDIT (noms de JDK ecrits en clair : le balayage le prendrait pour
+#      une installation d'environnement Java) ; son script, paquets_java.sh, reste balaye
+#      (il ne cite aucun nom Java) ; .git/ et
 #      .claude/worktrees/ (copies de travail, hors du depot suivi). Les temoins versionnes de
 #      tests/unitaires/controles.R ne sont PAS exclus : ils fabriquent les noms interdits
 #      (paste0("r", "Java")) et n'ecrivent jamais un nom interdit en clair ; ne pas elargir
 #      les exclusions pour eux. La documentation (docs/) n'est balayee que par ses fichiers
 #      de code (aucune extension de prose n'est dans la liste).
+# PERIMETRE ET LIMITE (#120, #95 point 5) : le script controle les FICHIERS du depot, jamais
+# les paquets SYSTEME (apt, dpkg) : un paquet Java installe par la CI ou par un hook passe ici
+# sans bruit. Ce controle-la est celui de tests/controles/paquets_java.sh (difference des
+# paquets installes avant / apres, par nom de paquet), appele par le job "Documents LaTeX"
+# de .github/workflows/ci.yml et par .claude/hooks/installer_latex.sh ; il n'est pas lance
+# par les batteries (ses temoins le sont : tests/unitaires/controles.R). Limite commune aux
+# deux : un controle par nom ; un paquet Java d'un autre nom passe au travers.
 # La liste est un jugement de mise en oeuvre (packages CRAN a Java notoirement requis) ; un
 # ajout se fait ici, avec sa raison.
 # Usage, depuis la racine du depot : Rscript tests/controles/absence_java.R
@@ -125,10 +136,10 @@ if (.n_echec == avant) {
 }
 
 # --- 2. Balayage des fichiers ------------------------------------------------------------
-# DESCRIPTION est traitee plus haut (declarations) ; le present script est exclu par son chemin
+# DESCRIPTION est traitee plus haut (declarations) ; le present script et paquets_java_motifs.sh sont exclus par leur chemin
 # relatif a la racine examinee (et non par celui du script qui tourne : sur une copie du
 # depot, la copie du script serait sinon balayee).
-EXCLUS <- "tests/controles/absence_java.R"
+EXCLUS <- c("tests/controles/absence_java.R", "tests/controles/paquets_java_motifs.sh")
 DOSSIERS_EXCLUS <- c(".git/", ".claude/worktrees/")
 EXTENSIONS <- "\\.(R|Rmd|yml|yaml|sh|json|toml|lock|js|dockerfile)$"
 NOMS <- "^(NAMESPACE|Dockerfile(\\..*)?|Makefile|\\.Rprofile|Rprofile\\.site|\\.Renviron|Renviron\\.site|Brewfile|Aptfile)$"
