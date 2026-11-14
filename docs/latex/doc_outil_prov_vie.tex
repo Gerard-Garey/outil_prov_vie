@@ -778,6 +778,11 @@ paramétrés.
   constantes placé dans la partie du module\fsp; la batterie de
   concordance compare au code les valeurs qui y sont écrites sous une
   forme littérale (section~\ref{sec:concordance}).
+\item \textbf{Décomptes du texte courant.} Un nombre de fonctions, de
+  fonctions exportées ou de constantes écrit dans la prose est déclaré par
+  un commentaire du source, invisible ici, que la batterie de concordance
+  compare au code, avec les nombres écrits en toutes lettres du paragraphe
+  qui le porte (section~\ref{sec:concordance}).
 \item \textbf{Chiffres.} Aucun chiffre issu d'une exécution du package
   n'est écrit dans ce document.
 \end{itemize}
@@ -5479,9 +5484,34 @@ point~: elles ne sont pas exigées, et une telle constante citée dans un
 tableau de constantes est un écart (constante absente du module)\fsp;
 elles se citent dans le texte, d'après le code.
 
+\textbf{Décomptes du texte courant.} Un décompte écrit dans la prose
+(nombre de fonctions d'un module, de ses fonctions exportées ou de ses
+constantes, nombre de fonctions exportées par le package) est déclaré par
+une ligne de commentaire LaTeX, absente du document imprimé, placée juste
+avant le paragraphe qui le porte~:
+\code{\% concordance-decomptes~: <portée> <grandeur>=<N>}, la portée étant
+l'un des quinze modules ou le package, et la grandeur \code{fonctions},
+\code{exportees} ou \code{constantes} (\code{exportees} seule pour le
+package)\fsp; chaque module et le package portent au moins un tel marqueur
+(issue~104, décision du mainteneur du 14~novembre~2026, M356). La batterie
+compare chaque valeur déclarée au code, recensé comme pour les tableaux,
+puis lit, dans le paragraphe qui suit le marqueur, les nombres écrits en
+toutes lettres de «~deux~» à «~vingt~», ou «~zéro~», placés juste avant
+«~fonction(s)~», «~exportée(s)~» ou «~constante(s)~», et les compare à la
+grandeur déclarée correspondante. «~Un~» et «~une~», d'abord des articles,
+ne sont pas lus, ni un nombre placé devant une grandeur que le marqueur ne
+déclare pas, ni un nombre composé. Elle relève comme écarts un marqueur mal
+formé, une portée ou une grandeur inconnue, une grandeur déclarée deux
+fois, une valeur différente du code, un nombre en lettres différent de la
+valeur déclarée, un marqueur que ne suit aucun paragraphe et une portée
+sans aucun marqueur. Les règles de lecture du paragraphe (espace
+insécable, majuscule initiale, commentaires de fin de ligne) et leur
+limite connue, un nombre placé dans une commande de mise en forme n'étant
+pas lu, sont écrites dans \code{docs/latex/CONVENTIONS.md}.
+
 Avec l'option \code{-{}-strict}, tout écart, comme l'absence du document,
 fait échouer la batterie\fsp; sans elle, les écarts sont des avertissements.
-La convention d'écriture des tableaux qu'elle lit est fixée par
-\code{docs/latex/CONVENTIONS.md}.
+La convention d'écriture des tableaux et des marqueurs qu'elle lit est
+fixée par \code{docs/latex/CONVENTIONS.md}.
 
 \end{document}
