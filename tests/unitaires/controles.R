@@ -992,3 +992,46 @@ if (nzchar(Sys.which("bash"))) {
 } else {
   cat("  (bash absent : témoins de paquets_java.sh non joués)\n")
 }
+
+# --- couloir.sh (#94 ; ADR 0012, points 5, 6 et 23) -----------------------------------------
+# Script bash, sans git dans ces cas : ses témoins (mode --temoins : listes construites, dont le
+# témoin négatif d'un fichier hors couloir) et la lecture de fiches données par --fiche. Le
+# contrôle du diff réel (git diff origin/main...HEAD) tourne dans le job « Contrôles du dépôt »
+# de la CI, après --temoins, comme commit_reference.sh. Les motifs de sortie sont ASCII (« .+ »
+# pour les lettres et guillemets accentués) : aucun littéral non ASCII dans les motifs.
+section("contrôles : couloir.sh, couloirs des branches parallèles (#94)")
+if (nzchar(Sys.which("bash"))) {
+  .script_couloir <- file.path(racine, "tests", "controles", "couloir.sh")
+  .lancer_couloir <- function(args) {
+    tryCatch({
+      sortie <- suppressWarnings(system2("bash", c(shQuote(.script_couloir), args), stdout = TRUE, stderr = TRUE))
+      statut <- attr(sortie, "status")
+      list(statut = if (is.null(statut)) 0L else statut, sortie = sortie)
+    }, error = function(e) list(statut = NA_integer_, sortie = paste0("[ECHEC] lancement impossible : ", conditionMessage(e))))
+  }
+  .essai_couloir <- function(fiche) {
+    f <- tempfile("fiche-", fileext = ".md")
+    on.exit(unlink(f), add = TRUE)
+    .deposer(f, fiche)
+    .lancer_couloir(c("--branche=br/a", paste0("--fiche=", shQuote(f))))
+  }
+  r <- .lancer_couloir("--temoins")
+  verifier("couloir.sh --temoins : tous les témoins conformes, statut 0",
+           identical(r$statut, 0L) && any(grepl("^\\[OK\\] t.+moins : [0-9]+ cas", r$sortie)) && !any(startsWith(r$sortie, "[ECHEC]")))
+  r <- .essai_couloir(c("```couloir br/a", "+ R/a.R", "bidon", "```"))
+  verifier("couloir.sh : une ligne de forme inconnue est un [ECHEC] fiche:3, statut 1",
+           identical(r$statut, 1L) && any(grepl("^\\[ECHEC\\] .*\\.md:3 : ligne de forme inconnue", r$sortie)))
+  r <- .essai_couloir(c("```couloir br/a", "+ R/a.R", "```", "```couloir br/a", "+ R/b.R", "```"))
+  verifier("couloir.sh : deux blocs pour la même branche, [ECHEC], statut 1",
+           identical(r$statut, 1L) && any(grepl(": 2 blocs .+ couloir br/a .+ \\(lignes 1 4\\)", r$sortie)))
+  r <- .essai_couloir(c("```text", "+ R/a.R", "```"))
+  verifier("couloir.sh : un bloc sous une autre chaîne d'information n'est pas un couloir, [INFO], statut 0",
+           .passe(r) && any(startsWith(r$sortie, "[INFO]")))
+  r <- .lancer_couloir(c("--branche=sans/bloc", paste0("--fiche=", shQuote(file.path(racine, "docs", "feuille-de-route.md")))))
+  verifier("couloir.sh : la feuille de route du dépôt se lit sans erreur de forme ; branche sans bloc : [INFO], statut 0",
+           .passe(r) && any(startsWith(r$sortie, "[INFO]")))
+  r <- .lancer_couloir("--inconnue")
+  verifier("couloir.sh : option inconnue, usage et statut 2", identical(r$statut, 2L))
+} else {
+  cat("  (bash absent : témoins de couloir.sh non joués)\n")
+}
