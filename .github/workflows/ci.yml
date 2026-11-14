@@ -10,7 +10,8 @@ name: CI
 #     fond, puis le contrôle du préambule (issue #7).
 # Le workflow de régénération des références de non-régression est
 # regenerer-references.yml (même image, lancé à la main, hors du ruleset ; ADR 0011) ; le
-# job « Contrôles du dépôt » contrôle les commits de référence (commit_reference.sh).
+# job « Contrôles du dépôt » contrôle les commits de référence (commit_reference.sh) et le
+# couloir de la branche (couloir.sh).
 
 on:
   pull_request:
@@ -31,7 +32,8 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
-      # Historique complet : commit_reference.sh lit les commits de la PR et leurs parents.
+      # Historique complet : commit_reference.sh lit les commits de la PR et leurs parents ;
+      # couloir.sh lit le diff avec origin/main.
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           persist-credentials: false
@@ -81,6 +83,23 @@ jobs:
             plage="$TETE~1..$TETE"
           fi
           bash tests/controles/commit_reference.sh "$plage"
+      # ADR 0012, points 5, 6 et 23 ; #94 : les fichiers touchés par la PR sont dans le couloir
+      # déclaré de sa branche (bloc « couloir <branche> » de docs/feuille-de-route.md), ou sont
+      # des recouvrements maîtrisés ou des points de contact ; sans bloc (branche unique) :
+      # [INFO], statut 0. Témoins négatifs d'abord. Branche : GITHUB_HEAD_REF, posée par
+      # GitHub Actions sur une PR. L'intersection avec l'autre branche (--autre=) n'est pas
+      # lancée ici : contrôle local avant push (en-tête du script).
+      - name: Couloir de la branche
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          set -euo pipefail
+          bash tests/controles/couloir.sh --temoins
+          if [ -n "$BASE_REF" ]; then
+            bash tests/controles/couloir.sh --base="origin/$BASE_REF"
+          else
+            bash tests/controles/couloir.sh
+          fi
 
   tests:
     name: Tests (R 4.3.3)
