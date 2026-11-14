@@ -41,10 +41,10 @@ donnees/controles/colonne	character
 donnees/controles/detection	character
 donnees/controles/nombre	integer
 donnees/controles/identifiants	character
-donnees/controles_non_executes/code	character	D03h	D09	D03d	D09	D14	D08	D11	D10e	D07	D09	D10d	D10f	D12	D09	D09
-donnees/controles_non_executes/table	character	garanties_souscrites	parametres	assures	affiliations	famille	sinistres	sinistres	beneficiaires	evenements	evenements	evenements	evenements	evenements	prestations	cotisations
-donnees/controles_non_executes/colonne	character	\N	\N	situation_familiale	\N	\N	\N	date_survenance	qualite	\N	\N	\N	\N	type_evenement	\N	\N
-donnees/controles_non_executes/cause	character	non_lisible	non_implemente	non_implemente	non_implemente	non_implemente	non_implemente	non_implemente	non_implemente	non_implemente	non_implemente	non_implemente	non_implemente	non_implemente	non_implemente	non_implemente
+donnees/controles_non_executes/code	character	D03h	D09	D03d	D09	D09	D09	D09
+donnees/controles_non_executes/table	character	garanties_souscrites	parametres	assures	affiliations	evenements	prestations	cotisations
+donnees/controles_non_executes/colonne	character	\N	\N	situation_familiale	\N	\N	\N	\N
+donnees/controles_non_executes/cause	character	non_lisible	non_implemente	non_implemente	non_implemente	non_implemente	non_implemente	non_implemente
 donnees/refus_tables/table	character
 donnees/refus_tables/colonne	character
 donnees/refus_tables/motif	character

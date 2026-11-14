@@ -41,10 +41,10 @@ donnees/controles/colonne	character	sexe	date_naissance	date_naissance	salaire_r
 donnees/controles/detection	character	exacte	exacte	exacte	exacte	exacte	exacte	exacte	exacte	exacte	exacte	exacte	exacte	exacte	exacte
 donnees/controles/nombre	integer	6	11	11	11	4	3	2	3	2	1	1	4	4	4
 donnees/controles/identifiants	character	AS0045;AS0089;AS0105;AS0232;AS0295;AS0415	AS0066;AS0077;AS0134;AS0136;AS0271;AS0316;AS0339;AS0367;AS0434;AS0471	AS0066;AS0077;AS0134;AS0136;AS0271;AS0316;AS0339;AS0367;AS0434;AS0471	AF0001;AF0029;AF0038;AF0050;AF0169;AF0195;AF0224;AF0299;AF0307;AF0400	SI0018;SI0019;SI0023;SI0043	EV00024;EV00044;EV00059	EV00030;EV00066	EV00036;EV00106;EV00122	PR00027;PR00039	PR00010	PR00027	CO0223;CO0224;CO0225;CO0226	CO0223;CO0224;CO0225;CO0226	CO0044;CO0080;CO0138;CO0172
-donnees/controles_non_executes/code	character	D03h	D09	D03d	D09	D14	D08	D11	D10e	D07	D09	D10d	D10f	D12	D01b	D09	prestations_ecartees	D09
-donnees/controles_non_executes/table	character	garanties_souscrites	parametres	assures	affiliations	famille	sinistres	sinistres	beneficiaires	evenements	evenements	evenements	evenements	evenements	prestations	prestations	prestations	cotisations
-donnees/controles_non_executes/colonne	character	\N	\N	situation_familiale	\N	\N	\N	date_survenance	qualite	\N	\N	\N	\N	type_evenement	\N	\N	montant	\N
-donnees/controles_non_executes/cause	character	non_lisible	non_implemente	non_implemente	non_implemente	non_implemente	non_implemente	non_implemente	non_implemente	non_implemente	non_implemente	non_implemente	non_implemente	non_implemente	D09	non_implemente	D09	non_implemente
+donnees/controles_non_executes/code	character	D03h	D09	D03d	D09	D09	D01b	D09	prestations_ecartees	D09
+donnees/controles_non_executes/table	character	garanties_souscrites	parametres	assures	affiliations	evenements	prestations	prestations	prestations	cotisations
+donnees/controles_non_executes/colonne	character	\N	\N	situation_familiale	\N	\N	\N	\N	montant	\N
+donnees/controles_non_executes/cause	character	non_lisible	non_implemente	non_implemente	non_implemente	non_implemente	D09	non_implemente	D09	non_implemente
 donnees/refus_tables/table	character	prestations
 donnees/refus_tables/colonne	character	montant
 donnees/refus_tables/motif	character	D09

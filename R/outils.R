@@ -570,14 +570,14 @@ calculer_age <- function(date_naissance, date, convention) {
   .controler_convention_age(convention, "calculer_age")
   .controler_dates_age(date_naissance, "date_naissance", "calculer_age")
   .controler_dates_age(date, "date", "calculer_age")
-  n <- .longueur_commune(length(date_naissance), length(date), "calculer_age")
+  n <- longueur_commune(length(date_naissance), length(date), "calculer_age")
   naissance <- rep_len(as.numeric(date_naissance), n)
   jour <- rep_len(as.numeric(date), n)
   age <- rep(NA_integer_, n)
   ok <- !is.na(naissance) & !is.na(jour) & jour >= naissance
   if (!any(ok)) return(age)
-  nai <- .composantes_date(naissance[ok])
-  d <- .composantes_date(jour[ok])
+  nai <- decomposer_date(naissance[ok])
+  d <- decomposer_date(jour[ok])
   if (convention == "naissance_31_decembre") {
     report <- nai$annee - as.integer(nai$mois * 100L + nai$jour <= 701L)
     nai <- list(annee = report, mois = rep(12L, length(report)), jour = rep(31L, length(report)))
@@ -614,21 +614,21 @@ date_atteinte_age <- function(date_naissance, age, convention) {
     stop(paste0("date_atteinte_age() : `age` doit \u00eatre un vecteur d'entiers de 0 \u00e0 ", AGE_MAXIMUM,
                 " (ou NA)"), call. = FALSE)
   }
-  n <- .longueur_commune(length(date_naissance), length(age), "date_atteinte_age")
+  n <- longueur_commune(length(date_naissance), length(age), "date_atteinte_age")
   naissance <- rep_len(as.numeric(date_naissance), n)
   a <- rep_len(as.integer(age), n)
   res <- rep(NA_real_, n)
   ok <- !is.na(naissance) & !is.na(a)
   if (any(ok)) {
-    nai <- .composantes_date(naissance[ok])
+    nai <- decomposer_date(naissance[ok])
     ak <- a[ok]
     jours <- switch(convention,
       revolu = .anniversaire(nai, ak),
-      millesime = .jour_de(nai$annee + ak, 1L, 1L),
+      millesime = composer_date(nai$annee + ak, 1L, 1L),
       naissance_31_decembre = {
         report <- nai$annee - as.integer(nai$mois * 100L + nai$jour <= 701L)
         # âge 0 dès la naissance (calculer_age() le borne à 0 avant le 31 décembre reporté)
-        ifelse(ak == 0L, naissance[ok], .jour_de(report + ak, 12L, 31L))
+        ifelse(ak == 0L, naissance[ok], composer_date(report + ak, 12L, 31L))
       },
       plus_proche = {
         precedent <- .anniversaire(nai, pmax(ak - 1L, 0L))
@@ -662,14 +662,17 @@ date_atteinte_age <- function(date_naissance, age, convention) {
   invisible(NULL)
 }
 
-.longueur_commune <- function(n1, n2, fonction) {
+# Longueur commune de deux entrées vectorisées (égales, ou l'une de longueur 1) ; erreur R
+# ordinaire sinon. Sans point : lue par `donnees` (periode_cotisation_regle()) ; non exportée.
+longueur_commune <- function(n1, n2, fonction) {
   if (n1 == n2 || n2 == 1L) return(n1)
   if (n1 == 1L) return(n2)
   stop(paste0(fonction, "() : longueurs incompatibles (", n1, " et ", n2, ")"), call. = FALSE)
 }
 
-# Année, mois, jour (entiers) de dates données en nombre de jours depuis 1970-01-01.
-.composantes_date <- function(jours) {
+# Année, mois, jour (entiers) de dates données en nombre de jours depuis 1970-01-01. Sans
+# point : lue par `donnees` (periode_cotisation_regle()) ; non exportée.
+decomposer_date <- function(jours) {
   lt <- as.POSIXlt(structure(jours, class = "Date"))
   list(annee = lt$year + 1900L, mois = lt$mon + 1L, jour = lt$mday)
 }
@@ -677,8 +680,9 @@ date_atteinte_age <- function(date_naissance, age, convention) {
 # Nombre de jours (depuis 1970-01-01) de la date annee-mois-jour ; un quantième absent du
 # mois (29 février d'une année non bissextile, 31 d'un mois de trente jours) est lu premier
 # jour du mois suivant. Seule arithmétique de quantième du package (ajouter_mois(),
-# anniversaires de date_atteinte_age()).
-.jour_de <- function(annee, mois, jour) {
+# anniversaires de date_atteinte_age()). Sans point : lue par `donnees`
+# (periode_cotisation_regle()) ; non exportée.
+composer_date <- function(annee, mois, jour) {
   n <- max(length(annee), length(mois), length(jour))
   annee <- rep_len(as.integer(annee), n)
   mois <- rep_len(as.integer(mois), n)
@@ -705,17 +709,17 @@ date_atteinte_age <- function(date_naissance, age, convention) {
 
 # Date `k` mois après `d` (Date ou nombre de jours depuis 1970-01-01 ; vectorisé, `d` et `k`
 # de même longueur ou l'un de longueur 1 ; `k` entier, négatif pour reculer) : même quantième,
-# un quantième absent du mois visé donnant le premier jour du mois suivant (.jour_de(), comme
+# un quantième absent du mois visé donnant le premier jour du mois suivant (composer_date(), comme
 # l'anniversaire d'un 29 février de date_atteinte_age()). Rend des nombres de jours. Sans
 # point : lue par `engagement` (critère sans_evenement ; 1er janvier des années civiles du
 # découpage des durées, ajouter_mois(0, 12 (y - 1970))) et `risque_en_cours` (pas, échéances,
 # anniversaires) ; non exportée.
 ajouter_mois <- function(d, k) {
-  n <- .longueur_commune(length(d), length(k), "ajouter_mois")
-  c0 <- .composantes_date(rep_len(as.numeric(d), n))
+  n <- longueur_commune(length(d), length(k), "ajouter_mois")
+  c0 <- decomposer_date(rep_len(as.numeric(d), n))
   m <- c0$annee * 12L + c0$mois - 1L + rep_len(as.integer(k), n)
-  .jour_de(m %/% 12L, m %% 12L + 1L, c0$jour)
+  composer_date(m %/% 12L, m %% 12L + 1L, c0$jour)
 }
 
 # Anniversaire d'ordre `age` d'une naissance (composantes) : en nombre de jours.
-.anniversaire <- function(nai, age) .jour_de(nai$annee + age, nai$mois, nai$jour)
+.anniversaire <- function(nai, age) composer_date(nai$annee + age, nai$mois, nai$jour)

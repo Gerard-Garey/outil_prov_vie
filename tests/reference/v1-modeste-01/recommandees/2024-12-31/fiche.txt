@@ -72,6 +72,7 @@ plan/donnees/seuils/d03g_delai_jours/famille	integer	3
 plan/donnees/seuils/d03g_delai_jours/prestations	integer	0
 plan/donnees/seuils/d03g_delai_jours/rentes	integer	2
 plan/donnees/seuils/d03g_delai_jours/sinistres	integer	5
+plan/donnees/seuils/d07b_mois	integer	6
 plan/restitution/echeanciers	character	aucun
 plan/restitution/triangles	character	aucun
 plan/liens	liste
@@ -127,11 +128,11 @@ empreintes/donnees/cotisations	character	e6180b03514460cfedc660ea126e4515
 empreintes/fichiers	null
 empreintes/tables/mortalite_fictive_v1_03	character	4eb68f9af5835cad25255f14232f5df0
 empreintes/tables/tme_fictive_v1_03	character	a5b4c1cf5cf86afc6ac166504fe808d7
-empreintes/resultat	character	2035281fe0bcf62092e93d8c95aaaad2
-empreintes/code	character	667d17c334357ba12a15d30d94de3599
+empreintes/resultat	character	391ed123018116ab06bd14bea6df8d0c
+empreintes/code	character	1877715c3b41ed2ccd5d0389e260b364
 empreintes/representation	character	provie-resultat-1
 versions/r	character	4.3.3
-versions/provie	character	0.5.0
+versions/provie	character	0.7.0
 versions/fiche	integer	1
 versions/dictionnaire	character	1.5
 plateforme/r	character	R version 4.3.3 (2024-02-29)

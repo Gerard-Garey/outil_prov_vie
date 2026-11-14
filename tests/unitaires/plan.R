@@ -437,37 +437,37 @@ verifier("empreintes des données : indépendantes de l'ordre des tables et des 
 section("plan : contrôles du rejeu (critère 1.7)")
 
 verifier_egal("rejeu sur les mêmes données et tables : aucun signalement",
-              nrow(ns$.controler_rejeu(fiche, base, tables)$signalements), 0L)
+              nrow(ns$controler_rejeu(fiche, base, tables)$signalements), 0L)
 f2 <- fiche; f2$versions$fiche <- 2L
-verifier_refus("version de fiche différente : version_discordante", ns$.controler_rejeu(f2, base, tables), "version_discordante")
+verifier_refus("version de fiche différente : version_discordante", ns$controler_rejeu(f2, base, tables), "version_discordante")
 b2 <- base
 # assures précède contrats dans l'ordre alphabétique, contrats (T3) précède assures (T6) dans
 # celui du dictionnaire : le test départage les deux ordres.
 b2$assures$date_naissance[1L] <- b2$assures$date_naissance[1L] + 1
 b2$contrats$date_effet[1L] <- b2$contrats$date_effet[1L] + 1
-r <- refus_de(ns$.controler_rejeu(fiche, b2, tables))
+r <- refus_de(ns$controler_rejeu(fiche, b2, tables))
 verifier("tables contrats et assures modifiées : empreinte_discordante sur contrats, première dans l'ordre du dictionnaire (non alphabétique)",
          !is.null(r) && r$motif == "empreinte_discordante" && identical(r$table, "contrats"))
-r <- refus_de(ns$.controler_rejeu(f2, b2, tables))
+r <- refus_de(ns$controler_rejeu(f2, b2, tables))
 verifier("ordre des refus : la version de la fiche avant les empreintes", !is.null(r) && r$motif == "version_discordante")
 b3 <- base; b3$cotisations <- NULL
-r <- refus_de(ns$.controler_rejeu(fiche, b3, tables))
+r <- refus_de(ns$controler_rejeu(fiche, b3, tables))
 verifier("table de la base absente des données : empreinte_discordante", !is.null(r) && r$motif == "empreinte_discordante" &&
            identical(r$table, "cotisations"))
 f3 <- fiche; f3$versions$r <- "4.3.2"; f3$versions$provie <- "0.3.0"
-s <- ns$.controler_rejeu(f3, base, tables)$signalements
+s <- ns$controler_rejeu(f3, base, tables)$signalements
 verifier_egal("versions de R et de provie différentes : signalées, sans refus", s,
               data.frame(grandeur = c("r", "provie"), fiche = c("4.3.2", "0.3.0"),
                          courant = c(fiche$versions$r, fiche$versions$provie), stringsAsFactors = FALSE))
-verifier_refus("table de la fiche non reçue : table_absente", ns$.controler_rejeu(fiche, base, tables["tme_fictive_b2"]),
+verifier_refus("table de la fiche non reçue : table_absente", ns$controler_rejeu(fiche, base, tables["tme_fictive_b2"]),
                "table_absente")
 t2 <- tables; t2$tme_fictive_b2 <- table_recue(strrep("d", 32))
-r <- refus_de(ns$.controler_rejeu(fiche, base, t2))
+r <- refus_de(ns$controler_rejeu(fiche, base, t2))
 verifier("empreinte d'une table reçue différente : empreinte_discordante", !is.null(r) && r$motif == "empreinte_discordante" &&
            identical(r$usage, "tme_fictive_b2"))
-r <- refus_de(ns$.controler_rejeu(fiche, b2, t2))
+r <- refus_de(ns$controler_rejeu(fiche, b2, t2))
 verifier("ordre des refus : les données avant les tables", !is.null(r) && identical(r$table, "contrats"))
-verifier("fiche relue : mêmes contrôles", nrow(ns$.controler_rejeu(lire_fiche(of), base, tables)$signalements) == 0L)
+verifier("fiche relue : mêmes contrôles", nrow(ns$controler_rejeu(lire_fiche(of), base, tables)$signalements) == 0L)
 
 section("plan : sous-schéma donnees inchangé (critère 1.8)")
 
@@ -494,8 +494,8 @@ exports <- getNamespaceExports("provie")
 verifier("exports du § 2.9 : valider_plan, canoniser_plan, ecrire_plan, lire_plan, ecrire_fiche, lire_fiche, catalogue_garanties",
          all(c("valider_plan", "canoniser_plan", "ecrire_plan", "lire_plan", "ecrire_fiche", "lire_fiche",
                "catalogue_garanties") %in% exports))
-verifier("construire_fiche() et .controler_rejeu() ne sont pas exportés ; rejouer_fiche() l'est, avec calculer_provisions() (issue 4, #67)",
-         !any(c("construire_fiche", ".controler_rejeu") %in% exports) && "rejouer_fiche" %in% exports)
+verifier("construire_fiche() et controler_rejeu() ne sont pas exportés ; rejouer_fiche() l'est, avec calculer_provisions() (issue 4, #67)",
+         !any(c("construire_fiche", "controler_rejeu") %in% exports) && "rejouer_fiche" %in% exports)
 verifier("méthodes print et format de plan_calcul et fiche_calcul enregistrées",
          all(vapply(list(c("format", "plan_calcul"), c("print", "plan_calcul"), c("format", "fiche_calcul"),
                          c("print", "fiche_calcul")),

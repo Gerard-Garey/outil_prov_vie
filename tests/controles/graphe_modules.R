@@ -34,10 +34,11 @@
 #      son module ne porte pas de point" (issue #74, M405) ; un nom ecrit en chaine, qui
 #      egale exactement un tel identifiant d'un autre fichier (vapply(x, ".aux", 1) :
 #      match.fun), vaut son emploi (m1 ; pas pour les noms sans point, voir plus bas).
-#      Exceptions declarees en dur (EXCEPTIONS_POINT, chacune renvoyee a l'issue #102) : un
-#      emploi non declare est un [ECHEC] fichier:ligne ; une exception declaree dont le fichier appelant et le fichier
-#      de definition sont presents et qui ne se produit plus est aussi un [ECHEC] (a retirer
-#      de la liste), comme un succes inattendu.
+#      Exceptions declarees en dur (EXCEPTIONS_POINT, chacune avec le renvoi a son issue ;
+#      vide depuis #102) : un emploi non declare est un [ECHEC] fichier:ligne ; une
+#      exception declaree dont le fichier appelant et le fichier de definition sont presents
+#      et qui ne se produit plus est aussi un [ECHEC] (a retirer de la liste), comme un
+#      succes inattendu.
 # Limite documentee (m1) : une chaine qui egale un nom de fonction sans point d'un autre
 # module n'est pas comptee comme arete de la regle 2 (sur R/, des noms de colonnes comme
 # "probabilite" ou "empreinte" valent des noms de fonctions : fausses aretes) ;
@@ -102,13 +103,13 @@ MODULES <- names(AUTORISE)
 
 arete_permise <- function(de, vers) de == vers || vers %in% AUTORISE[[de]]
 
-# Emplois d'un identifiant a point hors de son fichier : exceptions declarees (point 6 ;
-# issue #102 : a renommer sans point dans leur module, puis a retirer d'ici).
+# Emplois d'un identifiant a point hors de son fichier : exceptions declarees (point 6),
+# chacune avec son renvoi a une issue. Vide depuis #102 (les quatre auxiliaires qu'elle
+# declarait sont renommes sans point dans leur module) ; le mecanisme reste, une exception
+# nouvelle s'ajoutant ici avec son renvoi.
 EXCEPTIONS_POINT <- data.frame(
-  appelant = c("donnees", "donnees", "donnees", "calculer_provisions"),
-  identifiant = c(".longueur_commune", ".composantes_date", ".jour_de", ".controler_rejeu"),
-  defini_dans = c("outils", "outils", "outils", "plan"),
-  renvoi = "#102", stringsAsFactors = FALSE)
+  appelant = character(0), identifiant = character(0), defini_dans = character(0),
+  renvoi = character(0), stringsAsFactors = FALSE)
 
 # Emplois d'introspection admis (M409) : un appel de APPELS_DYNAMIQUES dans une fonction
 # precise d'un module precis (pas toute ligne du fichier). Declaree en dur ; perimee (echec)
@@ -422,7 +423,7 @@ for (k in seq_len(nrow(EXCEPTIONS_POINT))) {
   }
 }
 if (.n_echec == avant) {
-  ok(sprintf("identifiants a point : aucun emploi hors de son fichier hors des exceptions declarees (#102) : %d exception(s) declaree(s), %d constatee(s)",
+  ok(sprintf("identifiants a point : aucun emploi hors de son fichier hors des exceptions declarees : %d exception(s) declaree(s), %d constatee(s)",
              length(declare), sum(declare %in% cle_emploi)))
 }
 
