@@ -42,6 +42,17 @@ r <- executer_harnais("verifier_egal('a', 1, 1 + 1e-10, tolerance = 1e-8)")
 verifier("tolérance relative", r$statut == 0L)
 r <- executer_harnais("verifier_egal('a', 1L, 1)")
 verifier("tolérance nulle : le type compte", r$statut == 1L)
+r <- executer_harnais("verifier_egal('z', 0.1 + 0.2 - 0.3, 0, 0)")
+verifier("TEMOIN : tolérance nulle, zéro obtenu par compensation : échec dont le message donne l'écart, pas « TRUE » (#110)",
+         r$statut == 1L && grepl("[ECHEC] z", r$sortie, fixed = TRUE) && !grepl("TRUE", r$sortie, fixed = TRUE) &&
+           grepl("écart 5.55", r$sortie, fixed = TRUE))
+r <- executer_harnais("verifier_egal('z', 0L, 0, 0)")
+verifier("TEMOIN : tolérance nulle, integer contre double : échec dont le message donne le type, pas « TRUE » (#110)",
+         r$statut == 1L && !grepl("TRUE", r$sortie, fixed = TRUE) && grepl("integer", r$sortie, fixed = TRUE))
+r <- executer_harnais("verifier_egal('pl', pairlist(a = 1), list(a = 1), 0)")
+verifier("TEMOIN : tolérance nulle, objets non identiques sans écart relevé (pairlist contre list) : échec, message de repli (#110)",
+         r$statut == 1L && grepl("[ECHEC] pl -- objets non identiques", r$sortie, fixed = TRUE) &&
+           grepl("sans écart valeur par valeur", r$sortie, fixed = TRUE))
 
 section("harnais : verifier_egal à tolérance, valeur par valeur (#79 ; ADR 0011, point 7)")
 # Témoin du défaut de all.equal() : écart relatif moyen sur les seuls éléments qui diffèrent.
