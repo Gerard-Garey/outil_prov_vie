@@ -6731,16 +6731,18 @@ parties_ligne <- function() lapply(.PARTIES_LIGNE, function(p) list(table = p$ta
 
 # Lignes de `table` dont l'identifiant (clé primaire), doublé par les lignes `lignes` d'un
 # écart D01a, porte des valeurs différentes de `colonne` entre ses lignes en double (D10) ;
-# integer(0) si toutes concordent (doublons à l'identique : chiffrés).
+# integer(0) si toutes concordent (doublons à l'identique : chiffrés). Identifiants regroupés
+# à l'égalité exacte de chaque colonne de clé, comme D01a (.code_groupe(), sans paste() : un
+# « NA » littéral ne se confond pas avec l'absence, #121).
 .divergences_d01a <- function(ctx, table, lignes, colonne) {
   cle <- eclater_champ(ctx$dico$tables$cle_primaire[ctx$dico$tables$table == table])
   if (colonne %in% cle) return(integer(0))
-  k <- do.call(paste, c(lapply(cle, function(c1) as.character(.valeurs(ctx, table, c1))), sep = "\r"))
+  k <- .code_groupe(lapply(cle, function(c1) .valeurs(ctx, table, c1)))
   grp <- which(k %in% k[lignes])
   if (length(grp) == 0L) return(integer(0))
   x <- .valeurs(ctx, table, colonne)[grp]
   diverge <- tapply(seq_along(grp), k[grp], function(i) length(unique(x[i])) > 1L)
-  grp[k[grp] %in% names(diverge)[diverge]]
+  grp[k[grp] %in% as.integer(names(diverge)[diverge])]
 }
 
 # Rangées de l'enjeu d'un groupe d'éléments (spécification, § 4.5) : une ligne par garantie

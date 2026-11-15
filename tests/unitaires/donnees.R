@@ -2121,6 +2121,19 @@ ordre_montants <- function(m) {
 }
 verifier_egal("#131, ordre canonique : montants (NA, NaN, 1) et (1, NaN, NA) rangés dans le même ordre (1, NA, NaN)",
               list(ordre_montants(c(NA, NaN, 1)), ordre_montants(c(1, NaN, NA))), list(c(1, NA, NaN), c(1, NA, NaN)))
+# lignes de l'écart D01a dont les doubles divergent (.divergences_d01a()) : identifiants
+# regroupés à l'égalité exacte, un « NA » littéral distinct de l'absence (#121 (iii)) ; DO3 et sa
+# copie (sur GS1) sous un identifiant manquant, DO1 renommé « NA »
+divergences_131 <- function(id1) {
+  b <- avec(function(b) { b$dossiers <- rbind(b$dossiers, transform(b$dossiers[3L, ], id_garantie_souscrite = "GS1"))
+                          b$dossiers$id_dossier[c(1L, 3L, 4L)] <- c(id1, NA, NA); b })
+  list(lignes = ns$.divergences_d01a(ns$.contexte(b, d, list(date_extraction = A), A), "dossiers", 4L, "id_garantie_souscrite"),
+       non_executes = grep("^[a-z_]+ dossiers [a-z_]+ D01a$", cles_131(cb(b)$controles_non_executes), value = TRUE))
+}
+verifier_egal("#131, lignes de l'écart D01a divergentes : un identifiant « NA » littéral (DO1) n'est pas regroupé avec les identifiants manquants (lignes 3 et 4) : seule id_garantie_souscrite diverge (composantes 2 à 4 publiées sur elle) ; témoin DOZ (avant : lignes 1, 3 et 4 sous « NA », ij_en_vigueur publiée sur dossiers.id_sinistre et paiements_cumules sur dossiers.date_ouverture)",
+              list(divergences_131("NA"), divergences_131("DOZ")),
+              rep(list(list(lignes = 3:4, non_executes = paste(c("capital_fixe", "ij_en_vigueur", "rente_annuelle_en_vigueur"),
+                                                                "dossiers id_garantie_souscrite D01a"))), 2L))
 # rattachement d'une affiliation par une garantie souscrite en double (#131, Q3 d'`actuary`) :
 # lecture existentielle sur les occurrences ; une copie de GS1 (ou GS2) sur CT2 rend le
 # rattachement des dossiers non déterminé (nombre_dossiers NA de l'écart d'affiliations), dans les
