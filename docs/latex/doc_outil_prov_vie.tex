@@ -1676,7 +1676,8 @@ rédaction du même jour versé sur sa décision\fsp; errata du 15~novembre~2026
 sans changement de version, ceux des issues~131 et~123 visés par lui le
 même jour, M391, celui de l'issue~122 visé par lui le même jour, M395,
 et celui de la reprise de fin de branche visé par lui le même jour, M396~:
-regroupement exact des doubles de l'écart D01a, issue~131), sous le dictionnaire de la base en version~1.5. La date d'arrêté est obligatoire,
+regroupement exact des doubles de l'écart D01a, issue~131\fsp; clé vide
+tenue pour une clé manquante, issue~123), sous le dictionnaire de la base en version~1.5. La date d'arrêté est obligatoire,
 sans valeur par défaut. \code{declarations} est le sous-schéma
 \code{donnees} du plan (rubriques \code{exclusions}, \code{hypotheses},
 \code{seuils}, \code{evaluations\_gestion})\fsp; \code{conventions} est la
@@ -1949,9 +1950,10 @@ règle~P.
   conversion~: la règle \code{hors\_domaine} de toute colonne
   conditionnelle (clés étrangères conditionnelles comprises),
   \code{garanties\_souscrites.college} (collège d'un contrat individuel),
-  \code{famille.situation} et \code{evenements.motif}. Les règles qui la
-  lisent depuis une autre colonne la tiennent pour une valeur inconnue,
-  comme tout refus de valeur. La règle des clés n'est pas une règle de
+  \code{famille.situation} et \code{evenements.motif}. Les règles qui
+  lisent une colonne non clé vide depuis une autre colonne la tiennent
+  pour une valeur inconnue, comme tout refus de valeur\fsp; une clé vide
+  suit la règle de la clé manquante (point suivant). La règle des clés n'est pas une règle de
   domaine~: deux clés vides d'une même table sont en double (D01a) en plus
   de leur \code{chaine\_vide}, deux anomalies distinctes (mesure
   exécutée). Motif~: le dictionnaire dit qu'une chaîne vide est hors
@@ -1965,6 +1967,76 @@ règle~P.
   anomalie\fsp; (b)~la tenir pour un manquant, qui ajouterait
   \code{manquant\_obligatoire} sous la condition et contredirait le §~1.6
   du dictionnaire.
+\item \textbf{Clé vide} (spécification, §~2.2, B.4, «~Chaîne vide~», point
+  «~Clé vide~», erratum du 15~novembre~2026\fsp; décision du mainteneur du
+  15~novembre~2026, M396\fsp; issue~123\fsp; jugement d'expert). Une
+  chaîne vide dans une colonne de clé, primaire ou étrangère, suit la
+  règle de la clé manquante (point «~Clé manquante~» ci-dessous)~: elle
+  ne s'apparie à aucune ligne, d'un côté comme de l'autre, dans toute
+  entrée existentielle des règles~B, P et~V, dans les jointures à une
+  ligne et dans les rattachements de la visibilité et de l'enjeu\fsp; une
+  règle qui lit par cette clé y lit une valeur absente et connue, comme
+  pour une clé manquante, sans écarter la ligne. La cellule garde son seul
+  code \code{chaine\_vide}, et la détection D01a lit la cellule telle
+  quelle~: deux clés vides d'une même table restent en double (point
+  précédent). Deux fonctions internes portent la règle~:
+  \code{.cle\_manquante()}, qui tient une chaîne vide de clé pour une
+  valeur manquante, et \code{.cle3()}, la même règle sur une entrée à
+  trois valeurs (valeurs et domaines). Sites~: la jointure par
+  identifiant (\code{.index\_jointure()}~: aucune ligne jointe, pas même
+  parmi des clés primaires vides en double)\fsp; le noyau des entrées
+  existentielles (\code{.existe\_kleene()}), où la clé composite de la
+  recherche des orphelines prend un préfixe non vide\fsp; les
+  appariements un à plusieurs (\code{.paires()}~: rattachements, versions
+  d'un membre, règles~V)\fsp; les cinq règles~B qui comparent deux clés,
+  côté de la ligne et côté joint (\code{hors\_domaine} de
+  \code{prestations.id\_rente}, \code{evenements.id\_rente},
+  \code{evenements.id\_dossier} et \code{famille.id\_sinistre}\fsp; D10h de
+  \code{victimes.id\_sinistre})\fsp; dans la visibilité, la règle~1
+  (date de la ligne parente, \code{.date\_parente()}), la version valable
+  de \code{famille}, les adhérents et les assurés référencés\fsp; la
+  saisie avant la ligne parente de la règle~P D02b
+  (\code{.avant\_parente3()})\fsp; la parente de l'hypothèse de D03g\fsp; la
+  cascade d'exclusion de la vue\fsp; les lignes parentes d'une cause de
+  ligne écartée\fsp; dans l'enjeu, le rattachement d'un événement par son
+  sinistre et d'une affiliation par son contrat, le sinistre d'un écart
+  D12, l'unité et l'indemnité brute d'un événement de rente vide\fsp; dans
+  les règles~V, la personne d'un emploi d'assuré, les sorties de reprise
+  (S1) et le sinistre des événements. Restent hors de la règle, renvoyés à
+  des issues ouvertes~: \code{.maintien\_d11()}, où l'assuré et le contrat s'apparient
+  par un test d'appartenance qui apparie une clé manquante à une clé manquante, et une
+  clé vide à une clé vide (issue~152), et les clés
+  composites mises bout à bout en texte (\code{.garantie\_en\_vigueur3()},
+  regroupement des lignes distinctes de l'enjeu\fsp; issue~153). Mesures
+  exécutées sur des bases construites de la batterie unitaire (résultat
+  exact)~: une clé étrangère vide face à une clé primaire vide
+  (\code{evenements.id\_dossier}, \code{famille.id\_sinistre},
+  \code{evenements.id\_rente}, \code{prestations.id\_rente},
+  \code{victimes.id\_sinistre}, \code{rentes.id\_dossier}, cette dernière
+  face à une clé primaire vide unique puis en double aux lignes
+  divergentes) ne reçoit que \code{chaine\_vide}\fsp; un contrat
+  individuel d'identifiant vide, privé de sa date de terme, dont la
+  garantie souscrite porte un contrat vide, ne reçoit que
+  \code{chaine\_vide}, alors que, sous un identifiant renseigné, il reçoit
+  \code{manquant\_obligatoire} sur \code{date\_terme}\fsp; un adhérent
+  vide référencé par un contrat d'adhérent vide n'est ni visible ni
+  rattaché à un dossier\fsp; deux versions de \code{famille} de membre
+  vide sont deux membres, visibles tous deux\fsp; une affiliation de
+  contrat vide n'est rattachée à aucun dossier d'une garantie souscrite de
+  contrat vide. L'état antérieur, où deux chaînes vides s'appariaient,
+  ajoutait sur ces bases des \code{hors\_domaine}, D10a, D10h ou
+  \code{manquant\_obligatoire} fondés sur ce lien, et rattachait ces lignes
+  à des dossiers (messages des commits de l'issue, non remesuré ici)\fsp;
+  aucune provision ne change. Motif~: une clé vide n'identifie rien, comme
+  une clé manquante, et apparier deux chaînes vides inventerait un
+  lien\fsp; la ligne porte déjà un refus de portée table (\code{chaine\_vide}
+  d'une colonne de clé). Alternatives écartées~: (a)~apparier une clé vide
+  à une clé vide, comportement antérieur, qui fondait des constats et des
+  rattachements sur un lien inventé\fsp; (b)~tenir une clé vide pour une
+  valeur inconnue (ligne écartée, cause \code{chaine\_vide}), écartée
+  comme l'alternative~(b) du chevauchement (point «~Calcul du
+  chevauchement~» ci-dessous)~: une clé n'a pas de domaine, et la ligne
+  porte déjà un refus de portée table.
 \item \textbf{Graphe et strates.} Les nœuds du graphe de dépendance sont
   les colonnes non clés refusables pour leur valeur\fsp; une arête va de X à
   Y quand une règle concernée de portée \code{colonne} contrôle Y et lit
@@ -2035,7 +2107,7 @@ règle~P.
 \textcolor{financeblue}{\textbf{Forme}} & \textcolor{financeblue}{\textbf{Verdict à trois valeurs}} \\
 Colonne conditionnelle (colonne requise, interdite ou libre selon d'autres colonnes) & Exigence inconnue si deux valeurs du domaine des colonnes lues donnent deux exigences différentes. \code{manquant\_obligatoire} (requise et absente) est faux si la colonne est présente, \code{hors\_domaine} (interdite et présente) est faux si elle est absente\fsp; «~libre~» n'est pas «~inconnu~»~: les deux verdicts y sont faux. Une chaîne vide n'est ni présente ni absente~: elle ne reçoit que \code{chaine\_vide} (point «~Chaîne vide~» ci-dessus). \\
 Borne qui dépend d'une autre colonne (date d'effet d'un événement, jour d'échéance, taux technique, signe d'un montant) & Pour D02c sur \code{evenements.date\_effet}~: (date antérieure au 1er~janvier~1901) ou (type non programmable et date postérieure à l'extraction)\fsp; vrai si la date précède 1901, faux si elle est au plus l'extraction, sinon inconnu si le type, ou le motif quand le type est programmable selon le motif, est inconnu. \\
-Jointure ou appartenance («~il existe une ligne jointe telle que\ldots~», par exemple une garantie décès du contrat) & Vrai si une ligne jointe satisfait la condition quelle que soit la valeur de ses inconnues\fsp; faux si aucune ligne jointe ne le peut\fsp; inconnu sinon. Une clé manquante ne s'apparie à aucune ligne (point ci-dessous). \\
+Jointure ou appartenance («~il existe une ligne jointe telle que\ldots~», par exemple une garantie décès du contrat) & Vrai si une ligne jointe satisfait la condition quelle que soit la valeur de ses inconnues\fsp; faux si aucune ligne jointe ne le peut\fsp; inconnu sinon. Une clé manquante ne s'apparie à aucune ligne (point ci-dessous), une clé vide non plus (point «~Clé vide~» ci-dessus). \\
 Chevauchement (versions de \code{garanties\_souscrites} par contrat, garantie et collège\fsp; paliers d'âge de \code{parametres}) & Vrai si, pour toute affectation des valeurs inconnues, la ligne recouvre une autre ligne de même groupe\fsp; faux si aucune affectation ne la fait recouvrir une autre ligne\fsp; inconnu sinon. Une ligne dont une composante de clé du groupe manque est hors du contrôle (point ci-dessous). \\
 \end{tabular}
 \end{center}
@@ -2043,7 +2115,8 @@ Chevauchement (versions de \code{garanties\_souscrites} par contrat, garantie et
 \begin{itemize}[itemsep=2pt]
 \item \textbf{Clé manquante} (spécification, §~2.2, B.4, versions~1.6
   et~1.7\fsp; décisions du mainteneur du 13~novembre~2026, M335, et du
-  14~novembre~2026, M376\fsp; issues~56 et~130\fsp; jugement d'expert). Dans
+  14~novembre~2026, M376\fsp; erratum du 15~novembre~2026, M396, pour la
+  clé vide\fsp; issues~56, 130 et~123\fsp; jugement d'expert). Dans
   la forme «~jointure ou appartenance~», une clé manquante ne s'apparie à
   aucune ligne, d'un côté comme de l'autre~: une ligne de clé manquante
   n'a aucune ligne jointe, et une ligne jointe de clé manquante n'est
@@ -2053,7 +2126,9 @@ Chevauchement (versions de \code{garanties\_souscrites} par contrat, garantie et
   orphelines à référence composite, \code{affiliations.college} (où une
   clé dont une partie manque ne s'apparie pas davantage), et pour les
   règles~V\fsp; la jointure par identifiant du module
-  (\code{.index\_jointure()}) suit la même règle, comme, depuis
+  (\code{.index\_jointure()}) suit la même règle (une valeur de clé
+  manquante ou vide n'y a aucune ligne jointe, et une clé primaire
+  manquante ou vide n'y est jamais jointe, même en double), comme, depuis
   l'issue~130, les deux règles~B \code{hors\_domaine} de
   \code{designations.id\_affiliation} et de
   \code{ayants\_droit\_sante.id\_affiliation}, qui testent l'existence de
@@ -2086,7 +2161,10 @@ Chevauchement (versions de \code{garanties\_souscrites} par contrat, garantie et
   \code{parametres} sans \code{id\_garantie\_souscrite} reçoivent D01a en
   plus de \code{manquant\_obligatoire}, mesure exécutée)\fsp; cet écart au
   principe, sur une table déjà refusée en portée table, est renvoyé à
-  l'issue~143 (décision du mainteneur du 14~novembre~2026, M382).
+  l'issue~143 (décision du mainteneur du 14~novembre~2026, M382). Une
+  clé vide, primaire ou étrangère, suit la même règle (point «~Clé
+  vide~» ci-dessus, qui en donne les sites), et D01a apparie de même
+  deux clés primaires vides.
 \item \textbf{Calcul du chevauchement.} Les bornes de chaque ligne sont
   prises au pire (début au plus tard, fin au plus tôt, absence d'une borne
   qui retirerait la ligne du contrôle exclue)\fsp; ce pire ne dépend pas de
@@ -2619,8 +2697,9 @@ contrat se lit sur toutes ses occurrences (spécification, §~2.2, B.4,
 version~1.7, erratum du 15~novembre~2026\fsp; issue~131)~: la paire
 (affiliation, dossier) est gardée si chaque occurrence porte le contrat de
 l'affiliation, exclue si aucune ne le porte, et de rattachement non
-déterminé sinon\fsp; une affiliation sans contrat n'est portée par aucune
-occurrence, et sa paire est exclue (clé manquante). Une paire non
+déterminé sinon\fsp; une affiliation sans contrat, ou de contrat vide,
+n'est portée par aucune occurrence, et sa paire est exclue (clé
+manquante\fsp; clé vide, erratum du 15~novembre~2026, M396). Une paire non
 déterminée entre dans le terme de sa ligne par un ET de Kleene~:
 $\mathrm{statut}(\ell)$ est alors remplacé par
 $\mathrm{statut}(\ell) \wedge \text{inconnu}$, de sorte qu'un dossier
