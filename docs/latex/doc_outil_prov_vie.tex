@@ -1999,7 +1999,7 @@ règle~P.
 Colonne conditionnelle (colonne requise, interdite ou libre selon d'autres colonnes) & Exigence inconnue si deux valeurs du domaine des colonnes lues donnent deux exigences différentes. \code{manquant\_obligatoire} (requise et absente) est faux si la colonne est présente, \code{hors\_domaine} (interdite et présente) est faux si elle est absente\fsp; «~libre~» n'est pas «~inconnu~»~: les deux verdicts y sont faux. \\
 Borne qui dépend d'une autre colonne (date d'effet d'un événement, jour d'échéance, taux technique, signe d'un montant) & Pour D02c sur \code{evenements.date\_effet}~: (date antérieure au 1er~janvier~1901) ou (type non programmable et date postérieure à l'extraction)\fsp; vrai si la date précède 1901, faux si elle est au plus l'extraction, sinon inconnu si le type, ou le motif quand le type est programmable selon le motif, est inconnu. \\
 Jointure ou appartenance («~il existe une ligne jointe telle que\ldots~», par exemple une garantie décès du contrat) & Vrai si une ligne jointe satisfait la condition quelle que soit la valeur de ses inconnues\fsp; faux si aucune ligne jointe ne le peut\fsp; inconnu sinon. Une clé manquante ne s'apparie à aucune ligne (point ci-dessous). \\
-Chevauchement (versions de \code{garanties\_souscrites} par contrat, garantie et collège\fsp; paliers d'âge de \code{parametres}) & Vrai si, pour toute affectation des valeurs inconnues, la ligne recouvre une autre ligne de même groupe\fsp; faux si aucune affectation ne la fait recouvrir une autre ligne\fsp; inconnu sinon. \\
+Chevauchement (versions de \code{garanties\_souscrites} par contrat, garantie et collège\fsp; paliers d'âge de \code{parametres}) & Vrai si, pour toute affectation des valeurs inconnues, la ligne recouvre une autre ligne de même groupe\fsp; faux si aucune affectation ne la fait recouvrir une autre ligne\fsp; inconnu sinon. Une ligne dont une composante de clé du groupe manque est hors du contrôle (point ci-dessous). \\
 \end{tabular}
 \end{center}
 
@@ -2043,8 +2043,13 @@ Chevauchement (versions de \code{garanties\_souscrites} par contrat, garantie et
   reçoit plus (mesure exécutée, résultat exact). Seuls changent ainsi des
   bilans où une clé manque des deux côtés d'une jointure, sur des tables
   déjà refusées en portée table~; aucune provision ne change. Le
-  chevauchement, qui n'est pas une jointure, garde sa propre convention
-  (point suivant).
+  chevauchement, qui n'est pas une jointure, applique la même règle à ses
+  colonnes de clé (point suivant). Seul D01a apparie encore deux clés
+  primaires dont une composante obligatoire manque (deux lignes de
+  \code{parametres} sans \code{id\_garantie\_souscrite} reçoivent D01a en
+  plus de \code{manquant\_obligatoire}, mesure exécutée)\fsp; cet écart au
+  principe, sur une table déjà refusée en portée table, est renvoyé à
+  l'issue~143 (décision du mainteneur du 14~novembre~2026, M382).
 \item \textbf{Calcul du chevauchement.} Les bornes de chaque ligne sont
   prises au pire (début au plus tard, fin au plus tôt, absence d'une borne
   qui retirerait la ligne du contrôle exclue)\fsp; ce pire ne dépend pas de
@@ -2054,8 +2059,32 @@ Chevauchement (versions de \code{garanties\_souscrites} par contrat, garantie et
   chaque valeur du domaine de ses colonnes de groupe inconnues, une ligne
   de ce groupe, connu, la recouvre au pire\fsp; un collège inconnu, code
   opaque, peut prendre une valeur nouvelle et n'est donc jamais recouvert
-  sous toute affectation. Comme dans la forme à deux valeurs, une clé
-  manquante forme un groupe. Le tableau des formes de la spécification
+  sous toute affectation. Une ligne dont une composante de clé du groupe
+  manque (\code{garanties\_souscrites.id\_contrat}\fsp;
+  \code{parametres.id\_garantie\_souscrite} ou \code{parametres.parametre})
+  est hors du contrôle~: elle n'est ni détectée ni écartée, et ne recouvre
+  aucune ligne (spécification, §~2.2, B.4, version~1.7\fsp; issue~121\fsp;
+  jugement d'expert). L'absence de \code{parametres.categorie\_invalidite},
+  composante de la clé primaire légitimement absente hors des paramètres à
+  dimension catégorie, reste une valeur du groupe~: deux paliers sans
+  catégorie d'un même (garantie, paramètre) sont du même groupe. Deux
+  lignes ne sont du même groupe que si chaque composante est égale, une
+  absence n'égalant que l'absence, jamais une chaîne («~NA~» littéral
+  compris)~: le groupe est codé composante par composante
+  (\code{.code\_groupe()}, \code{.egal\_valeur()}), sans mise bout à bout
+  des valeurs en texte. Les colonnes de groupe qui ne sont pas des clés
+  (code de garantie, collège) restent dans la lecture à trois valeurs~:
+  une valeur manquante y est refusée, donc inconnue. Motif~: celui de la
+  forme «~jointure ou appartenance~»\fsp; une ligne sans clé n'appartient
+  à aucun contrat ni à aucune garantie connus, et porte déjà un refus de
+  portée table. Alternatives écartées~: (a)~garder l'appariement des
+  absences, qui détectait un chevauchement entre deux versions sans
+  contrat de même code et collège\fsp; (b)~tenir une composante de clé
+  manquante pour une valeur inconnue, qui écarterait la ligne face à toute
+  ligne de même code et collège de tout contrat, alors qu'un identifiant
+  n'a pas de domaine\fsp; (c)~exclure aussi l'absence de catégorie, qui
+  laisserait passer en silence deux paliers sans catégorie qui se
+  chevauchent. Le tableau des formes de la spécification
   (B.4) ne donne, pour le chevauchement, qu'une condition suffisante du
   verdict vrai (recouvrement d'une ligne de groupe et d'intervalle
   connus)~: c'est la définition ci-dessus, plus large, que le code
