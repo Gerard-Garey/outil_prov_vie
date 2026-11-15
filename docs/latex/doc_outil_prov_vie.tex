@@ -1993,21 +1993,33 @@ règle~P.
   \code{prestations.id\_rente}, \code{evenements.id\_rente},
   \code{evenements.id\_dossier} et \code{famille.id\_sinistre}\fsp; D10h de
   \code{victimes.id\_sinistre})\fsp; dans la visibilité, la règle~1
-  (date de la ligne parente, \code{.date\_parente()}), la version valable
-  de \code{famille}, les adhérents et les assurés référencés\fsp; la
-  saisie avant la ligne parente de la règle~P D02b
-  (\code{.avant\_parente3()})\fsp; la parente de l'hypothèse de D03g\fsp; la
+  (statut de la ligne parente), la version valable de \code{famille}, les
+  adhérents et les assurés référencés\fsp; la date de la ligne parente
+  (\code{.date\_parente()}), lue par la saisie avant la ligne parente de
+  la règle~P D02b (\code{.avant\_parente3()}) et par la parente de
+  l'hypothèse de D03g\fsp; la
   cascade d'exclusion de la vue\fsp; les lignes parentes d'une cause de
-  ligne écartée\fsp; dans l'enjeu, le rattachement d'un événement par son
-  sinistre et d'une affiliation par son contrat, le sinistre d'un écart
-  D12, l'unité et l'indemnité brute d'un événement de rente vide\fsp; dans
-  les règles~V, la personne d'un emploi d'assuré, les sorties de reprise
-  (S1) et le sinistre des événements. Restent hors de la règle, renvoyés à
-  des issues ouvertes~: \code{.maintien\_d11()}, où l'assuré et le contrat s'apparient
-  par un test d'appartenance qui apparie une clé manquante à une clé manquante, et une
-  clé vide à une clé vide (issue~152), et les clés
-  composites mises bout à bout en texte (\code{.garantie\_en\_vigueur3()},
-  regroupement des lignes distinctes de l'enjeu\fsp; issue~153). Mesures
+  ligne écartée\fsp; le sinistre d'un écart D12 (placement des
+  constats)\fsp; dans l'enjeu, le rattachement d'un événement par son
+  sinistre et d'une affiliation par son contrat, l'unité et l'indemnité
+  brute d'un événement de rente vide\fsp; dans les règles~V, la personne
+  d'un emploi d'assuré, les sorties de reprise (S1) et le sinistre des
+  événements\fsp; le \emph{sinistre payé} (point «~Clé manquante~»
+  ci-dessous), lu par la règle~B \code{manquant\_obligatoire} de
+  \code{evenements.motif} et par la règle~V D05\fsp; les lecteurs de la
+  vue, \code{etats\_a\_date()} (garantie souscrite et sinistre du
+  dossier) et \code{segments\_vue()} (garantie souscrite du dossier,
+  contrat des unités contrat, sinistre de l'année de survenance, nature
+  du contrat). Restent hors de la règle, renvoyés à des issues~:
+  \code{.maintien\_d11()}, où l'assuré et le contrat s'apparient par un
+  test d'appartenance qui apparie une clé manquante à une clé manquante,
+  et une clé vide à une clé vide (issue~152)\fsp; les clés composites
+  mises bout à bout en texte (\code{.garantie\_en\_vigueur3()},
+  regroupement des lignes distinctes de l'enjeu\fsp; issue~153)\fsp;
+  l'appartenance aux garanties de couverture exclue
+  (\code{garanties\_couverture\_exclue()} et ses appelants), où le contrat
+  et la garantie souscrite s'apparient par un test d'appartenance
+  (issue~154\fsp; accessibilité par une base non mesurée). Mesures
   exécutées sur des bases construites de la batterie unitaire (résultat
   exact)~: une clé étrangère vide face à une clé primaire vide
   (\code{evenements.id\_dossier}, \code{famille.id\_sinistre},
@@ -2023,7 +2035,18 @@ règle~P.
   rattaché à un dossier\fsp; deux versions de \code{famille} de membre
   vide sont deux membres, visibles tous deux\fsp; une affiliation de
   contrat vide n'est rattachée à aucun dossier d'une garantie souscrite de
-  contrat vide. L'état antérieur, où deux chaînes vides s'appariaient,
+  contrat vide\fsp; une sortie sans motif de sinistre vide, face à un
+  dossier de sinistre vide qui porte une prestation, ne reçoit pas
+  \code{manquant\_obligatoire} sur \code{evenements.motif}, comme sous des
+  clés manquantes\fsp; à l'arrêté égal à la date d'extraction, où la vue
+  retient les lignes d'une table refusée, un dossier de garantie
+  souscrite vide n'a ni état ni unité de calcul, un dossier de sinistre
+  vide n'a ni état du sinistre ni année de survenance, et un contrat vide
+  ne forme aucune unité de calcul. D05 n'est pas atteignable par une
+  base (une clé vide de \code{evenements.id\_sinistre} ou de
+  \code{dossiers.id\_sinistre} refuse sa table en portée table, et D05,
+  qui les lit, est bloquée)~: un appel interne la vérifie. L'état
+  antérieur, où deux chaînes vides s'appariaient,
   ajoutait sur ces bases des \code{hors\_domaine}, D10a, D10h ou
   \code{manquant\_obligatoire} fondés sur ce lien, et rattachait ces lignes
   à des dossiers (messages des commits de l'issue, non remesuré ici)\fsp;
@@ -2135,10 +2158,11 @@ Chevauchement (versions de \code{garanties\_souscrites} par contrat, garantie et
   l'affiliation, et le \emph{sinistre payé} (sinistre dont un dossier porte
   une prestation), qui a une seule définition, lue par la règle~B
   \code{manquant\_obligatoire} de \code{evenements.motif} et par la
-  règle~V D05~: un événement sans \code{id\_sinistre} n'est jamais payé,
-  même quand une prestation orpheline, une prestation sans
-  \code{id\_dossier} ou un dossier sans \code{id\_sinistre} place une clé
-  manquante parmi les sinistres payés. Pour D05, et pour les tests
+  règle~V D05~: un événement sans \code{id\_sinistre}, ou d'\code{id\_sinistre}
+  vide, n'est jamais payé, même quand une prestation orpheline, une
+  prestation sans \code{id\_dossier} ou un dossier sans \code{id\_sinistre}
+  ou de sinistre vide place une clé manquante parmi les sinistres payés
+  (point «~Clé vide~» ci-dessus). Pour D05, et pour les tests
   d'appartenance de D07~(c) (dossier clos) et de D10~(d) (événement sans
   dossier), une clé manquante n'est pas atteignable~: elle refuse sa table
   en portée table (\code{manquant\_obligatoire}), et la règle~V, bloquée,
@@ -2163,7 +2187,8 @@ Chevauchement (versions de \code{garanties\_souscrites} par contrat, garantie et
   principe, sur une table déjà refusée en portée table, est renvoyé à
   l'issue~143 (décision du mainteneur du 14~novembre~2026, M382). Une
   clé vide, primaire ou étrangère, suit la même règle (point «~Clé
-  vide~» ci-dessus, qui en donne les sites), et D01a apparie de même
+  vide~» ci-dessus, qui en donne les sites, dont le sinistre payé, et les
+  exceptions), et D01a apparie de même
   deux clés primaires vides.
 \item \textbf{Calcul du chevauchement.} Les bornes de chaque ligne sont
   prises au pire (début au plus tard, fin au plus tôt, absence d'une borne
@@ -2250,9 +2275,9 @@ Chevauchement (versions de \code{garanties\_souscrites} par contrat, garantie et
   mise bout à bout des valeurs en texte~: un identifiant «~NA~» littéral
   n'est pas regroupé avec un identifiant manquant (erratum du
   15~novembre~2026, M396\fsp; issue~131). Mesure exécutée (batterie
-  unitaire)~: un dossier d'identifiant «~NA~» et deux dossiers
-  d'identifiant manquant, rattachés à deux garanties différentes, ne
-  divergent que sur \code{id\_garantie\_souscrite} (lignes~3 et~4), seule
+  unitaire)~: deux dossiers d'identifiant manquant, rattachés à deux
+  garanties différentes, en présence d'un dossier d'identifiant
+  «~NA~», ne divergent que sur \code{id\_garantie\_souscrite} (lignes~3 et~4), seule
   colonne où se publient les composantes empêchées de cause D01a, comme
   sous un identifiant ordinaire (témoin \code{DOZ})~; la mise bout à bout
   antérieure écrivait «~NA~» pour les deux identifiants et regroupait les
