@@ -1928,6 +1928,35 @@ règle~P.
   \code{table} lit la colonne qu'elle contrôle comme toute colonne lue,
   sans quoi le refus d'une cellule deviendrait celui d'une table\fsp; le
   seul cas est D10a sur \code{prestations.type\_prestation}.
+\item \textbf{Chaîne vide} (spécification, §~2.2, B.4, version~1.7, et
+  erratum du 15~novembre~2026\fsp; issue~123\fsp; jugement d'expert sur la
+  lecture du dictionnaire de la base, §~1.6, 1.7 et~1.10). Une chaîne vide
+  d'une colonne de type \code{character} reçoit le seul code
+  \code{chaine\_vide}~: pour toute autre règle de domaine de sa propre
+  colonne, qui la lit telle quelle (modalités, liste des motifs du type
+  d'événement, condition d'une colonne conditionnelle, compatibilité avec
+  une autre colonne), elle n'est ni une valeur présente ni un manquant.
+  Le code l'écarte ainsi en quatre endroits, par la fonction interne
+  \code{.chaine\_vide()}, fausse hors du type \code{character}, sans
+  conversion~: la règle \code{hors\_domaine} de toute colonne
+  conditionnelle (clés étrangères conditionnelles comprises),
+  \code{garanties\_souscrites.college} (collège d'un contrat individuel),
+  \code{famille.situation} et \code{evenements.motif}. Les règles qui la
+  lisent depuis une autre colonne la tiennent pour une valeur inconnue,
+  comme tout refus de valeur. La règle des clés n'est pas une règle de
+  domaine~: deux clés vides d'une même table sont en double (D01a) en plus
+  de leur \code{chaine\_vide}, deux anomalies distinctes (mesure
+  exécutée). Motif~: le dictionnaire dit qu'une chaîne vide est hors
+  domaine, sous le code \code{chaine\_vide}, et n'est pas un
+  manquant (§~1.6), et que chaque anomalie s'enregistre sous l'un des
+  codes (§~1.10)\fsp; la coder aussi \code{hors\_domaine} l'enregistrerait
+  deux fois, et la cause publiée serait, depuis l'issue~59, le code
+  générique plutôt que le code propre. Aucun amendement du dictionnaire
+  n'est requis. Alternatives écartées~: (a)~tenir la chaîne vide pour une
+  valeur présente, comportement antérieur, qui donnait deux codes à une
+  anomalie\fsp; (b)~la tenir pour un manquant, qui ajouterait
+  \code{manquant\_obligatoire} sous la condition et contredirait le §~1.6
+  du dictionnaire.
 \item \textbf{Graphe et strates.} Les nœuds du graphe de dépendance sont
   les colonnes non clés refusables pour leur valeur\fsp; une arête va de X à
   Y quand une règle concernée de portée \code{colonne} contrôle Y et lit
@@ -1996,7 +2025,7 @@ règle~P.
 \begin{tabular}{@{}p{4.2cm}p{10.9cm}@{}}
 \rowcolor{tableheader}
 \textcolor{financeblue}{\textbf{Forme}} & \textcolor{financeblue}{\textbf{Verdict à trois valeurs}} \\
-Colonne conditionnelle (colonne requise, interdite ou libre selon d'autres colonnes) & Exigence inconnue si deux valeurs du domaine des colonnes lues donnent deux exigences différentes. \code{manquant\_obligatoire} (requise et absente) est faux si la colonne est présente, \code{hors\_domaine} (interdite et présente) est faux si elle est absente\fsp; «~libre~» n'est pas «~inconnu~»~: les deux verdicts y sont faux. \\
+Colonne conditionnelle (colonne requise, interdite ou libre selon d'autres colonnes) & Exigence inconnue si deux valeurs du domaine des colonnes lues donnent deux exigences différentes. \code{manquant\_obligatoire} (requise et absente) est faux si la colonne est présente, \code{hors\_domaine} (interdite et présente) est faux si elle est absente\fsp; «~libre~» n'est pas «~inconnu~»~: les deux verdicts y sont faux. Une chaîne vide n'est ni présente ni absente~: elle ne reçoit que \code{chaine\_vide} (point «~Chaîne vide~» ci-dessus). \\
 Borne qui dépend d'une autre colonne (date d'effet d'un événement, jour d'échéance, taux technique, signe d'un montant) & Pour D02c sur \code{evenements.date\_effet}~: (date antérieure au 1er~janvier~1901) ou (type non programmable et date postérieure à l'extraction)\fsp; vrai si la date précède 1901, faux si elle est au plus l'extraction, sinon inconnu si le type, ou le motif quand le type est programmable selon le motif, est inconnu. \\
 Jointure ou appartenance («~il existe une ligne jointe telle que\ldots~», par exemple une garantie décès du contrat) & Vrai si une ligne jointe satisfait la condition quelle que soit la valeur de ses inconnues\fsp; faux si aucune ligne jointe ne le peut\fsp; inconnu sinon. Une clé manquante ne s'apparie à aucune ligne (point ci-dessous). \\
 Chevauchement (versions de \code{garanties\_souscrites} par contrat, garantie et collège\fsp; paliers d'âge de \code{parametres}) & Vrai si, pour toute affectation des valeurs inconnues, la ligne recouvre une autre ligne de même groupe\fsp; faux si aucune affectation ne la fait recouvrir une autre ligne\fsp; inconnu sinon. Une ligne dont une composante de clé du groupe manque est hors du contrôle (point ci-dessous). \\
