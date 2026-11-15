@@ -1674,7 +1674,9 @@ version~1.6 sur ses décisions du 13~novembre~2026, M335 à M338\fsp;
 version~1.7 visée en bloc le 14~novembre~2026, M376, avec l'erratum de
 rédaction du même jour versé sur sa décision\fsp; errata du 15~novembre~2026,
 sans changement de version, ceux des issues~131 et~123 visés par lui le
-même jour, M391, celui de l'issue~122 visé par lui le même jour, M395), sous le dictionnaire de la base en version~1.5. La date d'arrêté est obligatoire,
+même jour, M391, celui de l'issue~122 visé par lui le même jour, M395,
+et celui de la reprise de fin de branche visé par lui le même jour, M396~:
+regroupement exact des doubles de l'écart D01a, issue~131), sous le dictionnaire de la base en version~1.5. La date d'arrêté est obligatoire,
 sans valeur par défaut. \code{declarations} est le sous-schéma
 \code{donnees} du plan (rubriques \code{exclusions}, \code{hypotheses},
 \code{seuils}, \code{evaluations\_gestion})\fsp; \code{conventions} est la
@@ -2163,7 +2165,20 @@ Chevauchement (versions de \code{garanties\_souscrites} par contrat, garantie et
   après \code{NA})\fsp; une colonne de type non atomique, défaut de forme,
   se trie sur l'écriture exacte de chaque valeur. C'est la convention de
   la copie de D01b («~saisie après l'original~»), étendue au départage des
-  égalités, et non plus l'ordre des lignes. Dans l'enjeu, la garantie d'un
+  égalités, et non plus l'ordre des lignes. Les identifiants dont les
+  doubles divergent sur une colonne lue (\code{.divergences\_d01a()}) se
+  regroupent à l'égalité exacte de chaque colonne de clé, celle de la
+  détection D01a, par \code{.code\_groupe()} comme le chevauchement, sans
+  mise bout à bout des valeurs en texte~: un identifiant «~NA~» littéral
+  n'est pas regroupé avec un identifiant manquant (erratum du
+  15~novembre~2026, M396\fsp; issue~131). Mesure exécutée (batterie
+  unitaire)~: un dossier d'identifiant «~NA~» et deux dossiers
+  d'identifiant manquant, rattachés à deux garanties différentes, ne
+  divergent que sur \code{id\_garantie\_souscrite} (lignes~3 et~4), seule
+  colonne où se publient les composantes empêchées de cause D01a, comme
+  sous un identifiant ordinaire (témoin \code{DOZ})~; la mise bout à bout
+  antérieure écrivait «~NA~» pour les deux identifiants et regroupait les
+  trois lignes. Dans l'enjeu, la garantie d'un
   dossier dont les doubles divergent sur \code{id\_garantie\_souscrite},
   ou dont la garantie souscrite est en double avec des codes de garantie
   divergents, est \code{non\_rattache} (lien non déterminé, comme la
