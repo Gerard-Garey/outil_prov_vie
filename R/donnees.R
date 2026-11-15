@@ -435,14 +435,16 @@ etats_a_date <- function(vue, garanties, famille) {
   }
   ctx <- vue$ctx
   vv <- function(t, c1) .valeurs_vue(ctx, t, c1)
-  jointure <- function(x, t, cle, c1) vv(t, c1)[match(as.character(x), as.character(vv(t, cle)), incomparables = NA)]
+  # clés appariées : une chaîne vide vaut clé manquante, aucun appariement (.cle_manquante(), #123)
+  cle_vue <- function(x) .cle_manquante(as.character(x))
+  jointure <- function(x, t, cle, c1) vv(t, c1)[match(cle_vue(x), cle_vue(vv(t, cle)), incomparables = NA)]
   gs <- vv("dossiers", "id_garantie_souscrite")
   code <- jointure(gs, "garanties_souscrites", "id_garantie_souscrite", "code_garantie")
   k <- which(ctx$retenu$dossiers & code %in% garanties)
   n <- length(k)
   id_dossier <- vv("dossiers", "id_dossier")[k]
   id_sinistre <- vv("dossiers", "id_sinistre")[k]
-  i_sin <- match(as.character(id_sinistre), as.character(vv("sinistres", "id_sinistre")), incomparables = NA)
+  i_sin <- match(cle_vue(id_sinistre), cle_vue(vv("sinistres", "id_sinistre")), incomparables = NA)
   nature <- vv("sinistres", "nature_sinistre")[i_sin]
   etat <- ifelse(nature %in% "deces", "deces", ifelse(nature %in% "iad", "iad", NA_character_))
   date_entree <- vv("sinistres", "date_survenance")[i_sin]
@@ -608,6 +610,8 @@ segments_vue <- function(vue, segmentations, garanties) {
   gs_code <- vv("garanties_souscrites", "code_garantie")[r_gs]
   ct_id <- as.character(vv("contrats", "id_contrat"))
   ct_nature <- vv("contrats", "nature_contrat")
+  # clés appariées : une chaîne vide vaut clé manquante, aucun appariement (.cle_manquante(), #123)
+  cle_vue <- function(x) .cle_manquante(as.character(x))
   # unités : dossiers, puis contrats
   # couverture exclue (erratum v1.0.13) : un dossier d'une garantie souscrite exclue pour engagement
   # (unités de P1 et P2) et un contrat dont les garanties souscrites sont exclues pour
@@ -615,11 +619,12 @@ segments_vue <- function(vue, segmentations, garanties) {
   exclue_eng <- gs_id %in% garanties_couverture_exclue(vue, "engagement")
   exclue_rec <- gs_id %in% garanties_couverture_exclue(vue, "risque_en_cours")
   k <- which(ctx$retenu$dossiers)
-  i_gs <- match(as.character(vv("dossiers", "id_garantie_souscrite"))[k], gs_id, incomparables = NA)
+  i_gs <- match(cle_vue(vv("dossiers", "id_garantie_souscrite"))[k], cle_vue(gs_id), incomparables = NA)
   i_gs[!is.na(i_gs)][exclue_eng[i_gs[!is.na(i_gs)]]] <- NA_integer_
   k <- k[!is.na(i_gs)]
   i_gs <- i_gs[!is.na(i_gs)]
-  contrats_u <- sort(unique(gs_contrat[!exclue_rec & gs_contrat %in% ct_id[ctx$retenu$contrats]]), method = "radix")
+  contrats_u <- sort(unique(gs_contrat[!exclue_rec & !is.na(match(cle_vue(gs_contrat), cle_vue(ct_id[ctx$retenu$contrats]),
+                                                                  incomparables = NA))]), method = "radix")
   u_dossier <- c(as.character(vv("dossiers", "id_dossier"))[k], rep(NA_character_, length(contrats_u)))
   u_sinistre <- c(as.character(vv("dossiers", "id_sinistre"))[k], rep(NA_character_, length(contrats_u)))
   u_contrat <- c(gs_contrat[i_gs], contrats_u)
@@ -628,8 +633,8 @@ segments_vue <- function(vue, segmentations, garanties) {
   }, "", USE.NAMES = FALSE)
   u_codes <- c(gs_code[i_gs], codes_contrat)
   si_survenance <- vv("sinistres", "date_survenance")
-  u_annee <- c(as.character(as.POSIXlt(si_survenance[match(u_sinistre[seq_along(k)],
-                                                            as.character(vv("sinistres", "id_sinistre")),
+  u_annee <- c(as.character(as.POSIXlt(si_survenance[match(cle_vue(u_sinistre[seq_along(k)]),
+                                                            cle_vue(vv("sinistres", "id_sinistre")),
                                                             incomparables = NA)])$year + 1900L),
                rep("hors_survenance", length(contrats_u)))
   lignes <- lapply(names(segmentations), function(nom) {
@@ -637,7 +642,7 @@ segments_vue <- function(vue, segmentations, garanties) {
     segment <- switch(s$regle,
       contrat = u_contrat,
       annee_survenance = u_annee,
-      nature_contrat = ct_nature[match(u_contrat, ct_id, incomparables = NA)],
+      nature_contrat = ct_nature[match(cle_vue(u_contrat), cle_vue(ct_id), incomparables = NA)],
       ligne_activite = vapply(u_codes, function(x) {
         paste(sort(unique(vapply(strsplit(x, ";", fixed = TRUE)[[1L]], function(g) s$correspondance[[g]], "")),
                    method = "radix"), collapse = ";")
@@ -2310,11 +2315,12 @@ lire_declarations <- function(declarations, dico) {
            "dossiers.id_dossier", "dossiers.id_sinistre"), "R", "exacte", function() {
     # sinistre d'une prestation : celui de son dossier ; sur un dossier en double aux
     # occurrences divergentes, l'un des leurs (lecture existentielle, #131) : un sinistre payé
-    # par ce seul chemin l'est de façon inconnue (cause candidate D01a)
+    # par ce seul chemin l'est de façon inconnue (cause candidate D01a) ; sinistres comparés :
+    # une chaîne vide vaut clé manquante (.cle_manquante(), #123)
     js <- .joindre3(ctx, "dossiers", "id_dossier", "id_sinistre", v("prestations", "id_dossier"))
-    sinistres_payes <- unique(js$valeurs[!js$diverge])
-    possibles <- unique(unlist(lapply(js$index[js$diverge], function(o) v("dossiers", "id_sinistre")[o])))
-    ev_sinistre <- v("evenements", "id_sinistre")
+    sinistres_payes <- unique(.cle_manquante(js$valeurs[!js$diverge]))
+    possibles <- unique(.cle_manquante(unlist(lapply(js$index[js$diverge], function(o) v("dossiers", "id_sinistre")[o]))))
+    ev_sinistre <- .cle_manquante(v("evenements", "id_sinistre"))
     paye <- !is.na(match(ev_sinistre, sinistres_payes, incomparables = NA))
     paye_inconnu <- !paye & !is.na(match(ev_sinistre, possibles, incomparables = NA))
     .verdict3(list(motif = soi("evenements.motif"), type = e3("evenements.type_evenement"),
@@ -3901,12 +3907,15 @@ parties_ligne <- function() lapply(.PARTIES_LIGNE, function(p) list(table = p$ta
   # sinistre ; D05 sur la vue, sauf les lignes déjà refusées par manquant_obligatoire en
   # règle B (motif manquant avec une prestation du sinistre dans la base entière) : la vue
   # étant incluse dans la base, l'absence de prestation se lit sur la base entière ; « payé »
-  # a une seule définition, celle de la règle B (clé du sinistre connue et appariée)
+  # a une seule définition, celle de la règle B (clé du sinistre connue et appariée ; une chaîne
+  # vide vaut clé manquante, .cle_manquante(), #123)
   .regle_vue(ctx, "D05", "evenements", "motif",
              c("evenements.type_evenement", "evenements.id_sinistre", "prestations.id_dossier", "dossiers.id_dossier",
                "dossiers.id_sinistre"), "H;S", "exacte", function() {
-    payes <- unique(.joindre(ctx, "dossiers", "id_dossier", "id_sinistre", .valeurs(ctx, "prestations", "id_dossier")))
-    type() %in% c("sortie", "cloture_dossier") & is.na(motif()) & is.na(match(vv("evenements", "id_sinistre"), payes, incomparables = NA))
+    payes <- unique(.cle_manquante(.joindre(ctx, "dossiers", "id_dossier", "id_sinistre",
+                                            .valeurs(ctx, "prestations", "id_dossier"))))
+    type() %in% c("sortie", "cloture_dossier") & is.na(motif()) &
+      is.na(match(.cle_manquante(vv("evenements", "id_sinistre")), payes, incomparables = NA))
   })
   # D06 : clôture sans justificatif ; clôture `regle` sans prestation du dossier, ou
   # `depot_cdc` sans prestation `capital` (prestations visibles à l'arrêté)

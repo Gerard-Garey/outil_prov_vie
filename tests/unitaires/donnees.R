@@ -3535,6 +3535,64 @@ verifier_egal("#123, recensement : référence \"\" d'un adhérent ou d'un assur
                    c("refus_induit NA 6 6 EV1;EV2;EV3;EV4;EV5;EV6 3", "chaine_vide id_dossier 1 1 EV4 2"),
                    "chaine_vide id_membre 2 2 |2025-02-01;|2025-03-01 2", "chaine_vide id_dossier 1 1 EV2 1",
                    c("refus_induit NA 1 1 AF1 0", "chaine_vide id_contrat 1 1 AF1 0")))
+# Sinistre payé (règle B manquant_obligatoire de evenements.motif) : EV3, sortie sans motif, et
+# DO3 (seul dossier de SI2, payé par PR1) de sinistre "" : EV3 n'est pas « payé » par
+# l'appariement de "" à "", aucun manquant_obligatoire (avant : 1 ligne) ; témoin : NA
+paye_123 <- function(z) {
+  r <- cb(avec(function(b) { b$evenements$motif[3L] <- NA; b$evenements$id_sinistre[3L] <- z; b$dossiers$id_sinistre[3L] <- z; b }))
+  nrow(refus(r, "manquant_obligatoire", "evenements", "motif"))
+}
+verifier_egal("#123, sinistre payé (règle B, manquant_obligatoire de evenements.motif) : sortie sans motif de sinistre \"\" face au dossier payé de sinistre \"\" : aucun refus, comme avec NA (avant : manquant_obligatoire)",
+              list(paye_123(""), paye_123(NA_character_)), list(0L, 0L))
+# D05 (règle V) : site non atteint par une base (une clé "" de evenements.id_sinistre ou de
+# dossiers.id_sinistre refuse sa table en portée table ; D05, qui les lit, est bloquée) : appel
+# interne de .regle_v_clotures() sur le contexte de la vue de la base de référence à A, motif de
+# EV3 (sortie) ôté, sinistre de EV3 et de DO3 (payé) remplacés : D05 détecte EV3 avec "" comme
+# avec NA (avant : EV3 « payé » par l'appariement de "" à "", aucune détection) ; SI2 : payé
+d05_123 <- function(z) {
+  ctx <- copie40(ns$vue_a_date(base_ref, A, NULL, NULL)$ctx)
+  ctx$base$evenements$motif[3L] <- NA
+  ctx$base$evenements$id_sinistre[3L] <- z
+  ctx$base$dossiers$id_sinistre[3L] <- z
+  n0 <- length(ctx$constats)
+  ns$.regle_v_clotures(ctx)
+  k <- ctx$constats[seq_len(length(ctx$constats) - n0) + n0]
+  as.integer(unlist(lapply(k, function(x) if (x$code == "D05") x$lignes)))
+}
+verifier_egal("#123, D05 (appel interne) : sortie sans motif de sinistre \"\" face au dossier payé de sinistre \"\" : détectée, comme avec NA (avant : non détectée) ; sinistre SI2 apparié : non détectée",
+              list(d05_123(""), d05_123(NA_character_), d05_123("SI2")), list(3L, 3L, integer(0)))
+# etats_a_date() et segments_vue() (lecteurs de la vue, B2) : à l'arrêté égal à l'extraction, la
+# vue retient aussi les lignes d'une table refusée en portée table (vue totale) ; une clé "" n'y
+# s'apparie à rien, comme NA (témoin). Garantie souscrite "" de DO1 et de GS1 : DO1 sans code de
+# garantie, hors des états et des unités (avant : DO1 décès) ; sinistre "" de DO1, DO2 et SI1 :
+# DO1 sans état ni année de survenance (avant : deces, 2025) ; contrat "" de GS1 et de CT1 : aucune
+# unité contrat "" (avant : une), DO1 sans nature de contrat (avant : collectif_obligatoire)
+vue_123 <- function(f, z) {
+  v <- ns$vue_a_date(avec(function(b) f(b, z)), A, NULL, NULL)
+  list(etats = ns$etats_a_date(v, "deces", "engagement"),
+       segments = ns$segments_vue(v, list(c = list(regle = "contrat"), n = list(regle = "nature_contrat"),
+                                          a = list(regle = "annee_survenance")), "deces"))
+}
+seg_123 <- function(s, regle, dossier) s$segment[s$segmentation == regle & s$id_dossier %in% dossier]
+v_gs <- lapply(list("", NA_character_), function(z) vue_123(function(b, z) {
+  b$dossiers$id_garantie_souscrite[1L] <- z; b$garanties_souscrites$id_garantie_souscrite[1L] <- z; b }, z))
+v_si <- lapply(list("", NA_character_), function(z) vue_123(function(b, z) {
+  b$dossiers$id_sinistre[1:2] <- z; b$sinistres$id_sinistre[1L] <- z; b }, z))
+v_ct <- lapply(list("", NA_character_), function(z) vue_123(function(b, z) {
+  b$garanties_souscrites$id_contrat[1L] <- z; b$contrats$id_contrat[1L] <- z; b }, z))
+verifier_egal("#123, etats_a_date(), garantie souscrite \"\" du dossier face à la garantie souscrite \"\" : aucun état, comme avec NA (avant : DO1 décès)",
+              lapply(v_gs, function(x) x$etats$id_dossier), list(character(0), character(0)))
+verifier_egal("#123, segments_vue(), garantie souscrite \"\" du dossier face à la garantie souscrite \"\" : DO1 n'est pas une unité, comme avec NA (avant : une unité par segmentation)",
+              lapply(v_gs, function(x) sum(x$segments$id_dossier %in% "DO1")), list(0L, 0L))
+verifier_egal("#123, etats_a_date(), sinistre \"\" du dossier face au sinistre \"\" : DO1 sans état, comme avec NA (avant : deces)",
+              lapply(v_si, function(x) x$etats$etat[x$etats$id_dossier == "DO1"]), list(NA_character_, NA_character_))
+verifier_egal("#123, segments_vue(), annee_survenance, sinistre \"\" du dossier face au sinistre \"\" : DO1 sans année, comme avec NA (avant : 2025)",
+              lapply(v_si, function(x) seg_123(x$segments, "a", "DO1")), list(NA_character_, NA_character_))
+verifier_egal("#123, segments_vue(), unités contrat : contrat \"\" de garantie souscrite face au contrat \"\" : une seule unité contrat (CT2), comme avec NA (avant : CT2 et \"\")",
+              lapply(v_ct, function(x) x$segments$id_contrat[x$segments$segmentation == "c" & is.na(x$segments$id_dossier)]),
+              list("CT2", "CT2"))
+verifier_egal("#123, segments_vue(), nature_contrat, contrat \"\" du dossier face au contrat \"\" : DO1 sans nature, comme avec NA (avant : collectif_obligatoire)",
+              lapply(v_ct, function(x) seg_123(x$segments, "n", "DO1")), list(NA_character_, NA_character_))
 
 # C59-3 : règle bloquée par deux défauts de forme sur deux colonnes lues (D02b sur
 # evenements.date_saisie, qui lit date_effet, type_evenement et motif), à A0 : colonne_absente
