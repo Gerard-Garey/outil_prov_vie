@@ -165,7 +165,7 @@ CONVENTIONS_LIMITE_AGE <- c("revolu", "millesime")
 .TRAITEMENTS_SOUS_CAS_D10 <- c(D10a = "R", D10b = "S;X", D10c = "S", D10d = "S", D10e = "X", D10f = "H;S",
                                D10h = "R")
 # Motifs dont le refus porte sur une clé étrangère (lien) : cette colonne ne bloque pas
-# l'enjeu de son propre écart (.cause_enjeu(), réserve Q4).
+# l'enjeu de son propre écart (.causes_enjeu(), réserve Q4).
 .MOTIFS_LIEN_ECART <- c("D04a", "D04b", "D10a", "D10h")
 # Tables de D03g (date_saisie, ou date_saisie_fin d'un contrat ou d'une affiliation) : noms
 # admis de seuils$d03g_delai_jours.
@@ -2640,8 +2640,8 @@ lire_declarations <- function(declarations, dico) {
   invisible(NULL)
 }
 
-# Motif qui empêche une composante de l'enjeu de lire `table.colonne` pour l'écart `ecart`
-# (décisions du mainteneur, D7 et D10, lecture d'E2.5), NA si elle se lit : une forme
+# Motifs qui empêchent une composante de l'enjeu de lire `table.colonne` pour l'écart `ecart`
+# (décisions du mainteneur, D7 et D10, lecture d'E2.5), aucun si elle se lit : une forme
 # illisible, un refus de la colonne, un autre refus direct de portée table de la table. Le
 # refus qui constitue l'écart (refus de portée table) ne bloque pas son propre enjeu (D10) :
 # il n'empêche que la lecture de sa propre colonne, hors D01a (doublon de clé : chiffré, une
@@ -2655,18 +2655,20 @@ lire_declarations <- function(declarations, dico) {
 # spécification, § 4.2) ; à l'extraction, la vue est la base entière (règle 3) et la colonne
 # n'est pas lue, comme par les règles V (décision du mainteneur du 9 novembre 2026, Q2, #33).
 # `valeur` : la composante lit aussi la colonne comme valeur (.LUS_VALEUR_ENJEU) ; à
-# l'extraction, où la ligne refusée est lue, le refus l'empêche alors (M169). Entre plusieurs
-# refus de la colonne (`refus_pv$colonnes`, dans l'ordre des constats), ou plusieurs refus
-# directs de la table, le premier dans l'ordre des constats : l'enjeu est hors du départage de
-# #59 (spécification `donnees` v1.6, § 3.1, critère C59-7 : enjeu inchangé ; décision du
-# mainteneur du 13 novembre 2026), son départage est reporté à #122.
-.cause_enjeu <- function(ctx, table, colonne, ecart, valeur = FALSE) {
-  forme <- .cause(ctx, table, colonne, forme_seule = TRUE)
-  if (!is.na(forme)) return(forme)
+# l'extraction, où la ligne refusée est lue, le refus l'empêche alors (M169). Rend l'ensemble
+# des causes que la colonne rend éligibles (character(0) si elle se lit) : sa forme
+# illisible, chacun de ses refus de colonne, chaque refus direct de portée table de sa table,
+# le refus induit de sa table ; ces règles d'éligibilité sont seules gardées, les préséances
+# d'ordre (forme d'abord, colonne avant table, premier dans l'ordre des constats) sont
+# remplacées par l'ordre (rang, position) entre les causes de toutes les colonnes lues
+# (.cause_colonnes() ; spécification `donnees` v1.7, § 3.1, « Cause d'une composante de
+# l'enjeu », #122).
+.causes_enjeu <- function(ctx, table, colonne, ecart, valeur = FALSE) {
+  forme <- .causes(ctx, table, colonne, forme_seule = TRUE)
   c1 <- ctx$refus_pv$colonnes[[table]]
   visibilite <- colonne %in% .DATES_VISIBILITE[[table]] && !is.null(.lignes_refusees(ctx, table, colonne)) &&
     !(valeur && .vue_totale(ctx))
-  if (!is.null(c1) && colonne %in% names(c1) && !visibilite) return(c1[[colonne]][1L])
+  propres <- if (!is.null(c1) && colonne %in% names(c1) && !visibilite) c1[[colonne]]
   propre <- !is.null(ecart) && identical(ecart$action, "refus") && !is.na(ecart$table) &&
     .portee_effective(ctx$dico, ecart$motif, ecart$table, ecart$colonne) == "table"
   d <- ctx$refus_pv$directs[[table]]
@@ -2676,18 +2678,18 @@ lire_declarations <- function(declarations, dico) {
     # (réserve Q4) ; toute autre colonne de l'écart reste illisible
     lien <- ecart$motif %in% .MOTIFS_LIEN_ECART &&
       any(nzchar(ctx$dico$colonnes$reference[ctx$dico$colonnes$table == table & ctx$dico$colonnes$colonne %in% colonne]))
-    if (ecart$motif != "D01a" && identical(colonne, ecart$colonne) && !lien) return(ecart$motif)
+    if (ecart$motif != "D01a" && identical(colonne, ecart$colonne) && !lien) propres <- c(propres, ecart$motif)
     d <- d[!(d$code == ecart$motif & d$colonne %in% ecart$colonne), , drop = FALSE]
   }
-  if (!is.null(d) && nrow(d) > 0L) return(d$code[1L])
+  causes <- unique(as.character(c(forme, propres, if (!is.null(d)) d$code)))
   r <- ctx$refus_pv$racines[[table]]
-  if (is.null(r)) return(NA_character_)
+  if (is.null(r)) return(causes)
   # cascade chiffrée si elle ne procède que du refus de l'écart : la racine est la table de
   # l'écart et n'y porte aucun autre refus direct (réserve Q-b)
-  if (!propre || !identical(r, ecart$table)) return("refus_induit")
+  if (!propre || !identical(r, ecart$table)) return(unique(c(causes, "refus_induit")))
   dr <- ctx$refus_pv$directs[[r]]
   autre <- !is.null(dr) && any(!(dr$code == ecart$motif & dr$colonne %in% ecart$colonne))
-  if (autre) "refus_induit" else NA_character_
+  if (autre) unique(c(causes, "refus_induit")) else causes
 }
 
 # --- Règle P et vue à une date ---------------------------------------------------------
@@ -5902,15 +5904,42 @@ parties_ligne <- function() lapply(.PARTIES_LIGNE, function(p) list(table = p$ta
   res
 }
 
-# Première cause qui empêche de lire l'une des colonnes `lus` (« table.colonne ») :
-# c(table, colonne, cause), ou NULL ; `forme_seule` : écarts de forme seulement (.cause()).
+# Cause qui empêche de lire l'une des colonnes `lus` (« table.colonne ») : c(table, colonne,
+# cause), ou NULL ; `forme_seule` : écarts de forme seulement (.causes()). Cause et colonne
+# suivent .cause_colonnes() : elles ne dépendent pas de l'ordre de `lus` (spécification
+# `donnees` v1.7, § 3.1, « Cause d'une composante de l'enjeu », #122).
 .cause_lecture <- function(ctx, lus, forme_seule = FALSE) {
-  for (tc in lus) {
+  lus <- unique(lus)
+  .cause_colonnes(ctx, lus, lapply(lus, function(tc) {
     m <- strsplit(tc, ".", fixed = TRUE)[[1L]]
-    cause <- .cause(ctx, m[1L], m[2L], forme_seule)
-    if (!is.na(cause)) return(c(table = m[1L], colonne = m[2L], cause = cause))
-  }
-  NULL
+    .causes(ctx, m[1L], m[2L], forme_seule)
+  }))
+}
+
+# Cause d'une lecture de plusieurs colonnes (spécification `donnees` v1.7, § 3.1, « Cause
+# d'une composante de l'enjeu », #122) : `candidates`, liste des causes candidates de chaque
+# colonne de `lus` (« table.colonne », sans doublon) ; cause retenue : la plus petite de leur
+# union dans l'ordre (rang, position) (.cause_retenue()) ; table et colonne publiées : celles
+# de la colonne qui la porte, la première dans l'ordre du dictionnaire (.ordre_dictionnaire())
+# si plusieurs la portent. Rend c(table, colonne, cause), NULL sans cause. Minimum sous un
+# ordre total, puis premier dans un ordre total : indépendant de l'ordre de `lus`.
+.cause_colonnes <- function(ctx, lus, candidates) {
+  candidates <- lapply(candidates, function(x) x[!is.na(x)])
+  if (length(unlist(candidates)) == 0L) return(NULL)
+  cause <- .cause_retenue(unlist(candidates), ctx$dico, ctx$ordre_codes)
+  porte <- lus[vapply(candidates, function(x) cause %in% x, NA)]
+  tc <- porte[.ordre_dictionnaire(ctx$dico, porte)[1L]]
+  m <- strsplit(tc, ".", fixed = TRUE)[[1L]]
+  c(table = m[1L], colonne = m[2L], cause = cause)
+}
+
+# Ordre du dictionnaire de colonnes « table.colonne » : tables de tables.csv, puis colonnes de
+# colonnes.csv (permutation, comme order()) ; une colonne absente du dictionnaire après les
+# colonnes de sa table, une table absente après toutes les autres ; départage final par le nom.
+.ordre_dictionnaire <- function(dico, lus) {
+  t <- sub("\\..*$", "", lus)
+  order(match(t, dico$tables$table), match(paste(t, sub("^[^.]*\\.", "", lus)), paste(dico$colonnes$table, dico$colonnes$colonne)),
+        lus, method = "radix")
 }
 
 # Paires (i, j) telles que x[i] == y[j], valeurs manquantes exclues (jointure un à plusieurs),
@@ -5943,8 +5972,10 @@ parties_ligne <- function() lapply(.PARTIES_LIGNE, function(p) list(table = p$ta
 # numéros de ligne de la table et de dossiers, sans doublon, triés ; sur : TRUE, NA pour une
 # paire de rattachement non déterminé, garantie souscrite en double d'une affiliation, #131)
 # et `cause` (colonne de clé
-# illisible par sa forme : c(table, colonne, cause), sinon NULL). evenements : par id_dossier,
-# sinon par le sinistre ; affiliations : dossiers des sinistres de l'assuré sous le même
+# illisible par sa forme : c(table, colonne, cause), sinon NULL ; plus petite cause de forme
+# des colonnes des chemins, colonne publiée la première qui la porte dans l'ordre du
+# dictionnaire, .cause_lecture() ; spécification `donnees` v1.7, § 3.1, #122). evenements :
+# par id_dossier, sinon par le sinistre ; affiliations : dossiers des sinistres de l'assuré sous le même
 # contrat (pas de cascade) ; cotisations, evaluations_gestion, designations,
 # ayants_droit_sante : aucun dossier. Calculé une fois par table, pour toutes ses lignes.
 .CHEMINS_RATTACHEMENT <- list(
@@ -6056,9 +6087,9 @@ parties_ligne <- function() lapply(.PARTIES_LIGNE, function(p) list(table = p$ta
 # garantie du dossier n'a pas de valeur), `indetermine` (par composante, dossier dont une
 # ligne qui entre dans la valeur a une visibilité non déterminée : la valeur n'est pas connue
 # à l'arrêté, réserve Q8 (b)), `lus` (colonnes lues par composante ; la cause qui l'empêche
-# dépend de l'écart, .cause_enjeu()) et `forme` (première colonne lue illisible par sa forme :
-# la valeur n'est pas calculée). Les montants sont pris tels quels (aucune correction,
-# dictionnaire, § 1.10) ; sommes en ordre trié des montants, indépendantes de l'ordre des
+# dépend de l'écart, .causes_enjeu()) et `forme` (colonne lue illisible par sa forme,
+# .cause_lecture() : la valeur n'est pas calculée). Les montants sont pris tels quels (aucune
+# correction, dictionnaire, § 1.10) ; sommes en ordre trié des montants, indépendantes de l'ordre des
 # lignes (réserve m3). Calculé une fois par appel.
 .composantes_dossiers <- function(ctx, d03g = FALSE) {
   nom <- if (d03g) "composantes_g" else "composantes"
@@ -6413,7 +6444,7 @@ parties_ligne <- function() lapply(.PARTIES_LIGNE, function(p) list(table = p$ta
 # porteur et composante : `porteur` (dossiers ou table de la ligne), `indice` (NA : élément
 # sans porteur, qui porte la cause d'une composante empêchée dans toute rangée où elle
 # figure, réserve Q10), `garantie`, `connu`, `composante`, `unite`, `valeur` (NA : aucune
-# valeur), `cause` (motif d'un refus ou forme illisible, .cause_enjeu() ; ou
+# valeur), `cause` (motif d'un refus ou forme illisible, .causes_enjeu() ; ou
 # `visibilite_non_determinee` pour un porteur dont la visibilité, ou celle d'une ligne qui
 # entre dans sa valeur, n'est pas déterminée, réserve Q8 (b) ; `D01a` pour un porteur
 # touché par un identifiant de l'écart D01a dont les doubles divergent sur une colonne lue,
@@ -6432,7 +6463,7 @@ parties_ligne <- function() lapply(.PARTIES_LIGNE, function(p) list(table = p$ta
 .FAMILLE_COUPLE <- c(rep("dossier", 4L), "prestation", "cotisation", "cotisation", rep("evenement", 3L))
 .CAUSE_VISIBILITE <- "visibilite_non_determinee"
 # Colonne de visibilité que les composantes 2 à 4 lisent aussi comme valeur : départage des
-# derniers événements par la date de saisie (spécification, § 4.2, point 3 ; .cause_enjeu() ;
+# derniers événements par la date de saisie (spécification, § 4.2, point 3 ; .causes_enjeu() ;
 # paiements_cumules ne la lit pas).
 .LUS_VALEUR_ENJEU <- "evenements.date_saisie"
 # Colonnes lues par la composante portée par une ligne de evenements (montant_evenement),
@@ -6462,18 +6493,17 @@ parties_ligne <- function() lapply(.PARTIES_LIGNE, function(p) list(table = p$ta
     ajouter(porteur, NA_integer_, "non_rattache", NA, composante, unite, NA_real_, cz[["cause"]], cz[["table"]],
             cz[["colonne"]])
   }
-  # première colonne lue empêchée ; une cause directe (forme, refus) d'une colonne prime sur
-  # le refus induit d'une autre (priorité des causes, M185)
+  # cause qui empêche la composante : la plus petite, dans l'ordre (rang, position), des
+  # causes éligibles de toutes les colonnes lues (.causes_enjeu()) ; table et colonne publiées :
+  # la première colonne qui la porte dans l'ordre du dictionnaire (.cause_colonnes() ; une
+  # cause directe d'une colonne prime sur le refus induit d'une autre, M185 : rang 3 contre 7 ;
+  # spécification `donnees` v1.7, § 3.1, « Cause d'une composante de l'enjeu », #122)
   cause_de <- function(lus, valeur = character(0)) {
-    induite <- NULL
-    for (tc in lus) {
+    lus <- unique(lus)
+    .cause_colonnes(ctx, lus, lapply(lus, function(tc) {
       m <- strsplit(tc, ".", fixed = TRUE)[[1L]]
-      cz <- .cause_enjeu(ctx, m[1L], m[2L], ecart, tc %in% valeur)
-      if (is.na(cz)) next
-      if (cz != "refus_induit") return(c(table = m[1L], colonne = m[2L], cause = cz))
-      if (is.null(induite)) induite <- c(table = m[1L], colonne = m[2L], cause = cz)
-    }
-    induite
+      .causes_enjeu(ctx, m[1L], m[2L], ecart, tc %in% valeur)
+    }))
   }
   familles <- character(0)
   familles_cause <- character(0)
@@ -6634,10 +6664,14 @@ parties_ligne <- function() lapply(.PARTIES_LIGNE, function(p) list(table = p$ta
   # D01a de l'écart (D10) : un porteur est sans valeur, cause D01a, pour une composante dont
   # une colonne lue diverge entre les lignes en double d'un identifiant qui le touche ; un
   # dossier ainsi touché porte la cause aussi pour une composante qu'il ne porte pas (sa
-  # garantie, lue sur une colonne divergente, n'est pas déterminée)
+  # garantie, lue sur une colonne divergente, n'est pas déterminée) ; colonnes parcourues dans
+  # l'ordre du dictionnaire : la colonne d'un élément est la première colonne divergente dans cet
+  # ordre, quel que soit l'ordre de `lus` (spécification `donnees` v1.7, § 3.1, #122)
   if (identical(ecart$action, "refus") && identical(ecart$motif, "D01a") && length(familles) > 0L) {
     marquer <- function(porteur, composante, unite, lus, touches_de) {
-      lus_t <- sub("^[^.]*\\.", "", lus[startsWith(lus, paste0(table, "."))])
+      lus <- unique(lus[startsWith(lus, paste0(table, "."))])
+      lus_t <- sub("^[^.]*\\.", "", lus[.ordre_dictionnaire(ctx$dico, lus)])
+      sans_porteur <- FALSE
       for (c1 in lus_t) {
         rangs <- .divergences_d01a(ctx, table, lignes, c1)
         if (length(rangs) == 0L) next
@@ -6660,9 +6694,12 @@ parties_ligne <- function() lapply(.PARTIES_LIGNE, function(p) list(table = p$ta
         }
         # ligne de l'écart sans élément pour ce couple alors qu'une colonne qui le classe
         # diverge (type, rente, nature, montant d'un événement) : couple empêché pour toute
-        # garantie
+        # garantie, par un seul élément sans porteur, de la première de ces colonnes dans l'ordre
+        # du dictionnaire (spécification `donnees` v1.7, § 3.1, #122 ; alternative A2, une ligne
+        # par colonne, écartée)
         manque <- intersect(manque, lignes[!(connus[lignes] %in% FALSE)])
-        if (porteur != "dossiers" && length(manque) > 0L && c1 %in% .CLASSE_D01A[[porteur]]) {
+        if (porteur != "dossiers" && !sans_porteur && length(manque) > 0L && c1 %in% .CLASSE_D01A[[porteur]]) {
+          sans_porteur <- TRUE
           el <<- rbind(el, data.frame(porteur = porteur, indice = NA_integer_, garantie = "non_rattache", connu = NA,
                                       composante = composante, unite = unite, valeur = NA_real_, cause = "D01a",
                                       cause_table = table, cause_colonne = c1, stringsAsFactors = FALSE))
@@ -6711,7 +6748,9 @@ parties_ligne <- function() lapply(.PARTIES_LIGNE, function(p) list(table = p$ta
 # familles de composantes du groupe (pour une garantie, celles qui y ont un dossier ou une
 # ligne) ; montant sommé sur les porteurs distincts connus qui ont une valeur (en ordre trié,
 # indépendant de l'ordre des lignes ; jamais arrondi), NA si une cause empêche la composante
-# (la première cause de refus, sinon la visibilité non déterminée) ; nombre_dossiers :
+# (la plus petite cause de refus des éléments dans l'ordre (rang, position), .cause_retenue(),
+# indépendante de l'ordre des éléments et des écarts, spécification `donnees` v1.7, § 3.1,
+# #122 ; sinon la visibilité non déterminée) ; nombre_dossiers :
 # dossiers distincts comptés pour la famille de composantes du couple (réserve M3 : un dossier
 # rattaché par une prestation écartée n'est compté que pour prestations_ecartees), NA si le
 # rattachement est illisible ou un dossier de rattachement non déterminé (§ 4.4) ;
@@ -6721,7 +6760,7 @@ parties_ligne <- function() lapply(.PARTIES_LIGNE, function(p) list(table = p$ta
 # écarts (§ 4.4, M219) ; un dossier rattaché par un écart n'est plus porteur de visibilité non
 # déterminée par le rattachement non déterminé d'un autre (ses éléments de connu NA et de
 # cause visibilite_non_determinee tombent ; une autre cause, D01a par exemple, demeure).
-.rangees_enjeu <- function(elements, dossiers, familles_cause, familles) {
+.rangees_enjeu <- function(elements, dossiers, familles_cause, familles, dico, ordre = .ordre_codes(dico)) {
   dossiers$connu <- .ou_kleene(paste(dossiers$dossier, dossiers$famille), dossiers$connu)
   dossiers <- dossiers[!duplicated(dossiers[, c("dossier", "famille")]), , drop = FALSE]
   if (!is.null(elements)) {
@@ -6776,7 +6815,7 @@ parties_ligne <- function() lapply(.PARTIES_LIGNE, function(p) list(table = p$ta
         montant <- NA_real_
         nombre_valeurs <- NA_integer_
         refus <- causes[causes != .CAUSE_VISIBILITE]
-        cause <- if (length(refus)) refus[1L] else .CAUSE_VISIBILITE
+        cause <- if (length(refus)) .cause_retenue(refus, dico, ordre) else .CAUSE_VISIBILITE
       } else {
         avec <- if (is.null(e)) logical(0) else e$connu %in% TRUE & !is.na(e$valeur)
         montant <- if (is.null(e)) 0 else sum(sort(e$valeur[avec], method = "radix"))
@@ -6811,7 +6850,7 @@ parties_ligne <- function() lapply(.PARTIES_LIGNE, function(p) list(table = p$ta
   for (e in ecarts) {
     el <- .enjeu_elementaire(ctx, e)
     if (length(el$familles) == 0L) next
-    r <- .rangees_enjeu(el$elements, el$dossiers, el$familles_cause, el$familles)
+    r <- .rangees_enjeu(el$elements, el$dossiers, el$familles_cause, el$familles, dico, ctx$ordre_codes)
     rangs[[length(rangs) + 1L]] <- data.frame(table = e$table, colonne = e$colonne, motif = e$motif, famille = e$famille,
                                               action = e$action, r[, "garantie", drop = FALSE], poste = "ensemble",
                                               r[, c("composante", "unite", "montant", "nombre_dossiers", "nombre_valeurs",
@@ -6830,7 +6869,7 @@ parties_ligne <- function() lapply(.PARTIES_LIGNE, function(p) list(table = p$ta
     }
   }
   for (g in groupes) {
-    r <- .rangees_enjeu(g$elements, g$dossiers, g$familles_cause, g$familles)
+    r <- .rangees_enjeu(g$elements, g$dossiers, g$familles_cause, g$familles, dico, ctx$ordre_codes)
     rangs[[length(rangs) + 1L]] <- data.frame(table = NA_character_, colonne = NA_character_, motif = "ensemble",
                                               famille = g$famille, action = g$action, r[, "garantie", drop = FALSE],
                                               poste = "ensemble",
