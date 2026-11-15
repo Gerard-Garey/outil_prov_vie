@@ -1671,8 +1671,10 @@ le 10~novembre~2026 avec ses précisions P1 à~P5, M222\fsp; errata~1.5.1
 et~1.5.2 et précisions~1.5.3 et~1.5.4 sur ses décisions du même jour, M223
 à M226, et erratum~1.5.5 visé le même jour\fsp; décisions de la version~1.2, M194 et M195, prises par lui\fsp;
 version~1.6 sur ses décisions du 13~novembre~2026, M335 à M338\fsp;
-version~1.7 visée en bloc le 14~novembre~2026, M376, avec ses errata des
-14 et 15~novembre~2026, sans changement de version), sous le dictionnaire de la base en version~1.5. La date d'arrêté est obligatoire,
+version~1.7 visée en bloc le 14~novembre~2026, M376, avec l'erratum de
+rédaction du même jour versé sur sa décision\fsp; errata du 15~novembre~2026,
+sans changement de version, ceux des issues~131 et~123 visés par lui le
+même jour, M391, celui de l'issue~122 visé par lui le même jour, M395), sous le dictionnaire de la base en version~1.5. La date d'arrêté est obligatoire,
 sans valeur par défaut. \code{declarations} est le sous-schéma
 \code{donnees} du plan (rubriques \code{exclusions}, \code{hypotheses},
 \code{seuils}, \code{evaluations\_gestion})\fsp; \code{conventions} est la
@@ -1792,7 +1794,11 @@ suivant~:
   parente, sa date, sur la parente d'une ligne écartée), le plus petit dans
   l'ordre du départage à rang égal (paragraphe «~Priorité des
   causes~»)\fsp; la table n'a pas de préséance sur la parente. Une ligne écartée qu'aucun refus de valeur
-  n'explique arrête le calcul («~erreur interne de provie~»).
+  n'explique arrête le calcul («~erreur interne de provie~»). Une clé
+  primaire en double n'explique jamais une ligne écartée de la règle~P~:
+  D01a refuse sa table en portée table, et la règle~P qui la lit, ou lit
+  une table qu'il induit à refuser, est bloquée, de cause D01a ou
+  \code{refus\_induit} (mesure exécutée).
 \item \textbf{À un arrêté antérieur à l'extraction}, la visibilité d'une
   ligne, ou d'une partie de ligne, se calcule dans la même logique
   (paragraphe «~Visibilité à l'arrêté~» ci-dessous). Elle
@@ -2132,8 +2138,8 @@ Chevauchement (versions de \code{garanties\_souscrites} par contrat, garantie et
   cause candidate D01a (cause directe, rang~3), départagée avec les autres
   (paragraphe «~Départage à rang égal~»). Des doublons à l'identique
   concordent sur toute colonne et laissent les verdicts déterminés. Les
-  règles~V, qui lisent la vue, d'où une table refusée en portée table est
-  absente, ne joignent jamais une clé en double. Avant l'issue~131, la
+  règles~P et~V et la vue, qui ne lisent pas une table refusée en portée
+  table, ne joignent jamais une clé en double. Avant l'issue~131, la
   jointure prenait la première occurrence, et le bilan dépendait de
   l'ordre des lignes de la base. Alternatives écartées~: (a)~une valeur
   jointe inconnue, de domaine celui du dictionnaire, dès que la clé est en
@@ -2149,8 +2155,10 @@ Chevauchement (versions de \code{garanties\_souscrites} par contrat, garantie et
   identifiant. Les lignes qui portent l'écart, dont dépendent
   \code{nombre\_visibles}, \code{nombre\_dossiers} et l'enjeu, sont les
   $k - 1$ occurrences qui suivent l'\emph{original} dans un ordre
-  canonique (\code{.ordre\_canonique()})~: date qui gouverne la visibilité
-  de la table, puis contenu entier de la ligne, colonnes dans l'ordre du
+  canonique (\code{.ordre\_canonique()})~: première date qui gouverne la
+  visibilité de la table (\code{date\_saisie} pour \code{prestations}\fsp;
+  aucune pour une table sans date de visibilité propre), puis contenu
+  entier de la ligne, colonnes dans l'ordre du
   dictionnaire, en tri radix, valeur manquante en dernier (\code{NaN}
   après \code{NA})\fsp; une colonne de type non atomique, défaut de forme,
   se trie sur l'écriture exacte de chaque valeur. C'est la convention de
@@ -2206,7 +2214,8 @@ Chevauchement (versions de \code{garanties\_souscrites} par contrat, garantie et
   rang égal (paragraphe «~Priorité des causes~»)~: ni l'ordre des colonnes
   lues ni celui des constats n'y entrent. C'est une cause directe (rang~3,
   paragraphe «~Priorité des causes~»). Une ligne écartée qu'aucun refus
-  n'explique arrête le calcul («~erreur interne de provie~»). Comme les
+  de valeur ni aucune clé jointe en double n'explique arrête le calcul
+  («~erreur interne de provie~»). Comme les
   constats de la règle~B, ces lignes ne dépendent pas de l'arrêté.
 \item \textbf{Hors du mécanisme.} Le refus d'une colonne clé garde la
   portée table\fsp; une colonne lue illisible par sa forme bloque la règle
@@ -2600,8 +2609,9 @@ occurrence, et sa paire est exclue (clé manquante). Une paire non
 déterminée entre dans le terme de sa ligne par un ET de Kleene~:
 $\mathrm{statut}(\ell)$ est alors remplacé par
 $\mathrm{statut}(\ell) \wedge \text{inconnu}$, de sorte qu'un dossier
-visible, rattaché par une telle paire à une affiliation visible et par
-aucune autre ligne de l'écart, est de rattachement non déterminé, et que
+visible, rattaché par une telle paire à une affiliation visible ou non
+déterminée, et qu'aucune ligne visible de l'écart ne rattache par une
+paire gardée, est de rattachement non déterminé, et que
 \code{nombre\_dossiers} de l'écart vaut \code{NA}. Ce chemin n'est pas
 fermé par la portée table~: l'écart D01a de \code{garanties\_souscrites}
 induit le refus des \code{affiliations}, dont \code{nombre\_dossiers} se
