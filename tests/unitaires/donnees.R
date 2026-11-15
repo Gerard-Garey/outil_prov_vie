@@ -2035,6 +2035,154 @@ verifier_egal("#33, cas limite 3 étendu : D02b de dossiers, beneficiaires, rent
                    c("dossiers manquant_obligatoire", "beneficiaires manquant_obligatoire", "evenements manquant_obligatoire"),
                    c("dossiers D01a", "beneficiaires D01a", "rentes D01a", "evenements D01a"),
                    c("dossiers D01a", "beneficiaires D01a", "rentes D01a", "evenements D01a")))
+# #131 : clé primaire en double (D01a), lecture existentielle sur les occurrences
+# (spécification `donnees` v1.7, § 2.2, B.4, « Clé primaire en double » ; Q-40 (b)) : une
+# valeur jointe sur une clé portée par k ≥ 2 lignes est connue si les occurrences concordent,
+# inconnue sinon (ligne écartée, cause candidate D01a) ; lignes de l'écart D01a en ordre
+# canonique. Invariance par permutation des lignes de chaque table (C131-1, C131-2) :
+# inversion, puis permutation tirée sous graine locale explicite, état du générateur rétabli.
+inverser_lignes <- function(b) permuter_lignes(b, function(n) rev(seq_len(n)))
+permuter_lignes <- function(b, ordre) lapply(b, function(t) {
+  if (!is.data.frame(t) || nrow(t) < 2L) return(t)
+  x <- t[ordre(nrow(t)), , drop = FALSE]
+  rownames(x) <- NULL
+  x
+})
+melanger_lignes <- function(b, graine) {
+  etat <- if (exists(".Random.seed", globalenv())) get(".Random.seed", globalenv())
+  ancien <- RNGkind()
+  on.exit({
+    RNGkind(ancien[1L], ancien[2L], ancien[3L])
+    if (is.null(etat)) rm(".Random.seed", envir = globalenv()) else assign(".Random.seed", etat, globalenv())
+  })
+  set.seed(graine, kind = "Mersenne-Twister", normal.kind = "Inversion", sample.kind = "Rejection")
+  permuter_lignes(b, function(n) sample.int(n))
+}
+invariant_131 <- function(b, arrete) {
+  r <- controler_base(b, arrete)
+  c(inversion = identical(controler_base(inverser_lignes(b), arrete), r),
+    permutation = identical(controler_base(melanger_lignes(b, 131L), arrete), r))
+}
+etat_avant <- if (exists(".Random.seed", globalenv())) get(".Random.seed", globalenv())
+verifier_egal("#131, C131-1 et C131-2 : cas d01_33 (DO2 en double, GS3 puis GS1), à A0 et à A : bilan identique après inversion des lignes de chaque table et après une permutation tirée sous graine (131), état du générateur rétabli",
+              list(invariant_131(d01_33, A0), invariant_131(d01_33, A),
+                   identical(if (exists(".Random.seed", globalenv())) get(".Random.seed", globalenv()), etat_avant)),
+              list(c(inversion = TRUE, permutation = TRUE), c(inversion = TRUE, permutation = TRUE), TRUE))
+# occurrences divergentes : DO2 en double, garanties GS3 (rente_education) et GS1 (deces), sans
+# autre défaut ; la garantie jointe par DO2 est inconnue, de domaine {rente_education, deces}
+d01_131 <- avec(function(b) { b$dossiers <- rbind(b$dossiers, transform(b$dossiers[2L, ], id_garantie_souscrite = "GS1")); b })
+cles_131 <- function(df) paste(df$code, df$table, df$colonne, df$cause)
+r131 <- list(direct = cb(d01_131), inverse = cb(inverser_lignes(d01_131)))
+verifier_egal("#131, occurrences divergentes (C131-2) : DO2 en double sur deux garanties : ni D10a (rentes.id_dossier, prestations.type_prestation) ni hors_domaine (evenements.type_evenement) dans les deux ordres ; lignes écartées, cause D01a",
+              lapply(r131, function(r) list(
+                nrow(refus(r, "D10a", "rentes")) + nrow(refus(r, "D10a", "prestations")) +
+                  nrow(refus(r, "hors_domaine", "evenements", "type_evenement")),
+                intersect(cles_131(r$controles_non_executes),
+                          c("D10a rentes id_dossier D01a", "D10a prestations type_prestation D01a",
+                            "hors_domaine evenements type_evenement D01a")))),
+              stats::setNames(rep(list(list(0L, c("D10a rentes id_dossier D01a", "hors_domaine evenements type_evenement D01a",
+                                                  "D10a prestations type_prestation D01a"))), 2L), c("direct", "inverse")))
+enjeu_131 <- function(r) {
+  e <- r$enjeu[r$enjeu$table == "dossiers" & r$enjeu$motif == "D01a", , drop = FALSE]
+  sort(unique(e$garantie), method = "radix")
+}
+verifier_egal("#131, lignes de l'écart D01a : garantie d'un dossier dont les doubles divergent sur id_garantie_souscrite : non_rattache (rangées de l'écart sous non_rattache et ensemble seulement), dans les deux ordres",
+              lapply(r131, enjeu_131), list(direct = c("ensemble", "non_rattache"), inverse = c("ensemble", "non_rattache")))
+# occurrences concordantes : DO3 (incapacite) en double, même garantie, date d'ouverture
+# postérieure à A0 pour la copie ; PR4, capital sur DO3 : D10a détecté (garantie jointe connue)
+d01_131c <- avec(function(b) {
+  b$dossiers <- rbind(transform(b$dossiers[3L, ], date_ouverture = D("2025-09-01")), b$dossiers)
+  b$prestations <- rbind(b$prestations, transform(b$prestations[2L, ], id_prestation = "PR4", id_dossier = "DO3"))
+  b
+})
+r131c <- list(direct = controler_base(d01_131c, A0), inverse = controler_base(inverser_lignes(d01_131c), A0))
+verifier_egal("#131, occurrences concordantes : DO3 en double sur la même garantie (incapacite) : D10a de PR4 (capital) détecté, aucune ligne écartée de cause D01a en règle B ; ligne de l'écart D01a : la copie ouverte après A0 (ordre canonique), invisible à A0 ; bilan identique dans les deux ordres",
+              list(refus(r131c$direct, "D10a", "prestations")$identifiants,
+                   grep("^D10a .* D01a$", cles_131(r131c$direct$controles_non_executes), value = TRUE),
+                   refus(r131c$direct, "D01a", "dossiers")$nombre_visibles, identical(r131c$direct, r131c$inverse)),
+              list("PR4", character(0), 0L, TRUE))
+# C131-3 : doublons à l'identique d'un dossier (DO2) : aucun verdict inconnu nouveau (garde de
+# l'option (a) écartée, Q-40)
+r <- cb(avec(function(b) { b$dossiers <- rbind(b$dossiers, b$dossiers[2L, ]); b }))
+verifier_egal("#131, C131-3 : DO2 en double à l'identique : aucune ligne écartée de cause D01a en règle B (rentes, prestations, evenements)",
+              grep("^(D10a|hors_domaine) .* D01a$", cles_131(r$controles_non_executes), value = TRUE), character(0))
+# ordre canonique sur une colonne non atomique (défaut de forme : liste) : ordre total, sans erreur
+b <- avec(function(b) { b$dossiers <- rbind(b$dossiers, b$dossiers[2L, ])
+                        b$dossiers$date_ouverture <- I(as.list(b$dossiers$date_ouverture)); b })
+r <- tryCatch(cb(b), error = function(e) conditionMessage(e))
+verifier_egal("#131, lignes de l'écart D01a en ordre canonique, colonne de type liste (type_incompatible) dans la table : bilan rendu, D01a et type_incompatible sur dossiers",
+              if (is.character(r)) r else paste(refus(r, c("D01a", "type_incompatible"), "dossiers")$motif),
+              c("D01a", "type_incompatible"))
+# ordre canonique : NA et NaN d'une colonne en double précision départagés (clé is.nan()),
+# même ordre des valeurs quel que soit l'ordre des lignes
+ordre_montants <- function(m) {
+  b <- avec(function(b) { b$prestations <- b$prestations[c(1L, 1L, 1L), ]; b$prestations$montant <- m; b })
+  ctx <- ns$.contexte(b, d, list(date_extraction = A), A)
+  m[ns$.ordre_canonique(ctx, "prestations")]
+}
+verifier_egal("#131, ordre canonique : montants (NA, NaN, 1) et (1, NaN, NA) rangés dans le même ordre (1, NA, NaN)",
+              list(ordre_montants(c(NA, NaN, 1)), ordre_montants(c(1, NaN, NA))), list(c(1, NA, NaN), c(1, NA, NaN)))
+# rattachement d'une affiliation par une garantie souscrite en double (#131, Q3 d'`actuary`) :
+# lecture existentielle sur les occurrences ; une copie de GS1 (ou GS2) sur CT2 rend le
+# rattachement des dossiers non déterminé (nombre_dossiers NA de l'écart d'affiliations), dans les
+# deux ordres ; témoin : une copie à l'identique (CT1) rattache (3 dossiers)
+ratt_131 <- function(k, contrat) {
+  b <- avec(function(b) {
+    b$garanties_souscrites <- rbind(b$garanties_souscrites, transform(b$garanties_souscrites[k, ], id_contrat = contrat)); b })
+  r <- list(controler_base(b, A), controler_base(inverser_lignes(b), A))
+  list(identique = identical(r[[1L]], r[[2L]]),
+       nombre_dossiers = vapply(r, function(x) refus(x, "refus_induit", "affiliations")$nombre_dossiers, 0L))
+}
+verifier_egal("#131, rattachement d'affiliations, copie de GS1 sur CT2 : bilan identique dans les deux ordres, nombre_dossiers de l'écart d'affiliations NA",
+              ratt_131(1L, "CT2"), list(identique = TRUE, nombre_dossiers = c(NA_integer_, NA_integer_)))
+verifier_egal("#131, rattachement d'affiliations, copie de GS2 sur CT2 : bilan identique, nombre_dossiers NA ; témoin, copie de GS2 à l'identique (CT1) : 3 dossiers dans les deux ordres",
+              list(ratt_131(2L, "CT2"), ratt_131(2L, "CT1")),
+              list(list(identique = TRUE, nombre_dossiers = c(NA_integer_, NA_integer_)),
+                   list(identique = TRUE, nombre_dossiers = c(3L, 3L))))
+# affiliation d'id_contrat manquant : une clé manquante ne s'apparie à aucune ligne, aucune
+# paire (0 dossier), seule ou avec GS1 en double (sur CT2), dans les deux ordres
+ratt_na_131 <- function(double) {
+  b <- avec(function(b) {
+    if (double) b$garanties_souscrites <- rbind(b$garanties_souscrites, transform(b$garanties_souscrites[1L, ], id_contrat = "CT2"))
+    b$affiliations$id_contrat[1L] <- NA
+    b
+  })
+  r <- tryCatch(list(controler_base(b, A), controler_base(inverser_lignes(b), A)), error = function(e) conditionMessage(e))
+  if (is.character(r)) return(r)
+  x <- r[[1L]]$refus_tables
+  list(identique = identical(r[[1L]], r[[2L]]),
+       nombre_dossiers = stats::setNames(x$nombre_dossiers[x$table == "affiliations"], x$motif[x$table == "affiliations"]))
+}
+verifier_egal("#131, rattachement d'une affiliation d'id_contrat manquant : bilan rendu, 0 dossier ; avec GS1 en double (CT2) : 0 dossier ; dans les deux ordres",
+              list(ratt_na_131(FALSE), ratt_na_131(TRUE)),
+              list(list(identique = TRUE, nombre_dossiers = c(manquant_obligatoire = 0L)),
+                   list(identique = TRUE, nombre_dossiers = c(refus_induit = 0L, manquant_obligatoire = 0L))))
+# .verdict3() : lignes à domaine propre regroupées sur une clé injective (constat d'`audit`) :
+# séparateurs dans une valeur, NA contre NaN ; verdict de chaque ligne égal à celui de la ligne
+# seule
+e_sep <- list(tc = "sinistres.id_assure", valeurs = c(NA, NA), inconnu = c(TRUE, TRUE), index = NULL, domaine = NULL,
+              domaines = list(c("a\002=b", "c"), c("a", "b\002=c")), d01a = c(TRUE, TRUE))
+e_nan <- list(tc = "t.x", valeurs = c(NA, NA), inconnu = c(TRUE, TRUE), index = NULL, domaine = NULL,
+              domaines = list(c(NaN, 1), c(NA, 1)), d01a = c(TRUE, TRUE))
+verifier_egal("#131, .verdict3(), domaines propres : clé injective (séparateurs dans une chaîne ; NA et NaN distincts) : TRUE puis NA ; FALSE puis NA",
+              list(as.vector(ns$.verdict3(list(assure = e_sep, local = ns$.connue3("famille.id_assure", c("a", "a"))),
+                                          function(x) !is.na(x$assure) & x$assure != x$local)),
+                   as.vector(ns$.verdict3(list(x = e_nan), function(x) x$x %in% NA_real_))),
+              list(c(TRUE, NA), c(FALSE, NA)))
+# bout en bout : SI1 et SI2 en double, assurés « a\002=b » ou « c », « a » ou « b\002=c » ;
+# famille de l'assuré « a » sur chacun : même bilan dans les deux ordres
+b <- avec(function(b) {
+  s <- b$sinistres
+  b$sinistres <- rbind(transform(s[1L, ], id_assure = "a\002=b"), transform(s[1L, ], id_assure = "c"),
+                       transform(s[2L, ], id_assure = "a"), transform(s[2L, ], id_assure = "b\002=c"))
+  f <- b$famille[c(1L, 1L), ]
+  f$id_sinistre <- c("SI1", "SI2")
+  f$id_assure <- "a"
+  b$famille <- f
+  b
+})
+verifier("#131, .verdict3(), domaines propres à séparateurs : bilan identique dans les deux ordres",
+         identical(controler_base(b, A), controler_base(inverser_lignes(b), A)))
 # règle écrite sur dossiers à A0 (aucune règle V ne lit dossiers.date_ouverture comme valeur :
 # .regle() appelée directement) : colonne lue comme valeur, cause directe ; lue pour la vue
 # seulement (dans la table ou dans la parente), refus de portée table

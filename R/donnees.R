@@ -1165,8 +1165,9 @@ lire_declarations <- function(declarations, dico) {
     # cause = le plus petit des motifs des refus de valeur qui touchent une ligne écartée :
     # refus d'une colonne de la table sur l'une d'elles, refus d'une colonne de la parente
     # (date de la parente d'une fille) sur une parente de l'une d'elles. Un verdict inconnu
-    # procède toujours d'une valeur refusée d'une colonne lue (.inconnu()) : son absence est
-    # une erreur interne.
+    # procède toujours d'une valeur refusée d'une colonne lue (.inconnu()), ou d'une clé jointe
+    # en double aux occurrences divergentes (D01a, .entree3()) : son absence est une erreur
+    # interne.
     ecartees <- which(is.na(detecte))
     if (length(ecartees) > 0L) {
       # lignes de chaque table lue qui expliquent une ligne écartée : les lignes écartées
@@ -1197,6 +1198,16 @@ lire_declarations <- function(declarations, dico) {
             motifs <- c(motifs, r$code)
             porteuses <- c(porteuses, tc)
           }
+        }
+      }
+      # clé jointe portée par k ≥ 2 lignes aux occurrences divergentes (attribut `d01a`,
+      # .verdict3()) : cause candidate D01a, portée par la colonne lue (spécification `donnees`
+      # v1.7, § 2.2, B.4, « Clé primaire en double », #131)
+      d01a <- attr(detecte, "d01a")
+      for (tc in names(d01a)) {
+        if (any(d01a[[tc]][ecartees])) {
+          motifs <- c(motifs, "D01a")
+          porteuses <- c(porteuses, tc)
         }
       }
       if (length(motifs) == 0L) stop("erreur interne de provie : r\u00e8gle ", if (regle_b) "B" else "P",
@@ -1407,8 +1418,53 @@ lire_declarations <- function(declarations, dico) {
 }
 
 # Ligne de `table_cible` dont la clé `cle_cible` vaut chaque valeur de `valeurs_cle` (NA : aucune).
+# Clé primaire en double (D01a ; spécification `donnees` v1.7, § 2.2, B.4, « Clé primaire en
+# double », #131) : la première occurrence n'est qu'un repère, jamais « la » ligne jointe ;
+# l'attribut `occurrences` (liste alignée sur `valeurs_cle`, NULL où la clé est portée par au
+# plus une ligne ; absent sans clé en double jointe) donne toutes les lignes de la clé, lues
+# par .entree3() et .joindre3() (lecture existentielle sur les occurrences).
 .index_jointure <- function(ctx, table_cible, cle_cible, valeurs_cle) {
-  match(valeurs_cle, .valeurs(ctx, table_cible, cle_cible), incomparables = NA)
+  cle <- .valeurs(ctx, table_cible, cle_cible)
+  i <- match(valeurs_cle, cle, incomparables = NA)
+  doubles <- which(!is.na(cle) & (duplicated(cle) | duplicated(cle, fromLast = TRUE)))
+  if (length(doubles) == 0L) return(i)
+  j <- match(valeurs_cle, cle[doubles], incomparables = NA)
+  if (all(is.na(j))) return(i)
+  # lignes en double regroupées par clé (repère : première ligne de la clé), dans l'ordre des lignes
+  groupes <- split(doubles, match(cle[doubles], cle[doubles]))
+  occurrences <- vector("list", length(valeurs_cle))
+  occurrences[!is.na(j)] <- unname(groupes[as.character(j[!is.na(j)])])
+  attr(i, "occurrences") <- occurrences
+  i
+}
+
+# Valeur jointe de `colonne_cible` lue sur toutes les occurrences de sa clé (lecture
+# existentielle, spécification `donnees` v1.7, § 2.2, B.4, « Clé primaire en double », #131) :
+# `valeurs` (valeur de la ligne jointe ; NA hors jointure), `diverge` (clé portée par k ≥ 2
+# lignes dont les valeurs ne concordent pas : valeur jointe inconnue, cause candidate D01a),
+# `domaines` (liste alignée : valeurs distinctes des occurrences d'une ligne qui diverge, NULL
+# ailleurs) et `index` (liste alignée : lignes jointes, toutes les occurrences d'une clé en
+# double). `inconnu` (facultatif) : lignes de la table cible de valeur inconnue (refus de
+# valeur) ; une occurrence refusée empêche la concordance et prend le domaine de sa colonne,
+# rendu par `domaine()` (appelée seulement alors).
+# `index` : jointure déjà calculée (.index_jointure()), `cle_cible` et `valeurs_cle` sont alors
+# ignorées.
+.joindre3 <- function(ctx, table_cible, cle_cible, colonne_cible, valeurs_cle, inconnu = NULL, domaine = NULL,
+                      index = .index_jointure(ctx, table_cible, cle_cible, valeurs_cle)) {
+  x <- .valeurs(ctx, table_cible, colonne_cible)
+  occ <- attr(index, "occurrences")
+  n <- length(index)
+  res <- list(valeurs = x[index], diverge = rep(FALSE, n), domaines = vector("list", n), index = as.list(index))
+  if (is.null(occ)) return(res)
+  for (r in which(lengths(occ) > 0L)) {
+    o <- occ[[r]]
+    u <- if (is.null(inconnu)) rep(FALSE, length(o)) else inconnu[o]
+    res$index[[r]] <- o
+    if (!any(u) && length(unique(x[o])) == 1L) next   # occurrences concordantes : valeur connue
+    res$diverge[r] <- TRUE
+    res$domaines[[r]] <- unique(c(x[o][!u], if (any(u)) domaine()))
+  }
+  res
 }
 
 # Domaine d'une colonne lue (spécification, § 2.2, B.4) : modalités du dictionnaire, liste de
@@ -1444,19 +1500,48 @@ lire_declarations <- function(declarations, dico) {
 # refusée pour sa valeur (.inconnu() ; `connue` : colonne contrôlée par une règle de portée
 # colonne, lue telle quelle, P4), domaine de la colonne (.domaine3(), ou `domaine`).
 # `.connue3()` : entrée connue, dérivée de colonnes de clé.
+# Clé jointe portée par k ≥ 2 lignes (attribut `occurrences` de `index`, .index_jointure() ;
+# spécification `donnees` v1.7, § 2.2, B.4, « Clé primaire en double », #131) : la valeur
+# jointe est l'une des valeurs des occurrences ; connue si elles concordent (même valeur,
+# toutes connues), inconnue sinon (`d01a` : cause candidate D01a), de domaine propre à la
+# ligne (`domaines` : valeurs des occurrences, le domaine de la colonne pour une occurrence
+# refusée) ; `index` porte alors toutes les occurrences (cause d'une ligne écartée).
 .entree3 <- function(ctx, tc, index = NULL, domaine = NULL, connue = FALSE) {
   m <- strsplit(tc, ".", fixed = TRUE)[[1L]]
   x <- .valeurs(ctx, m[1L], m[2L])
   inconnu <- if (connue) rep(FALSE, length(x)) else .inconnu(ctx, m[1L], m[2L])
+  d01a <- NULL
+  domaines <- NULL
   if (!is.null(index)) {
+    if (!is.null(attr(index, "occurrences"))) {
+      j <- .joindre3(ctx, m[1L], NA_character_, m[2L], NULL, inconnu = inconnu,
+                     domaine = function() if (is.null(domaine)) .domaine3(ctx, m[1L], m[2L]) else domaine, index = index)
+      d01a <- j$diverge
+      domaines <- j$domaines
+    }
     x <- x[index]
     inconnu <- !is.na(index) & inconnu[index]
+    if (!is.null(d01a)) {
+      inconnu <- inconnu | d01a
+      index <- j$index
+    }
   }
-  if (any(inconnu) && is.null(domaine)) domaine <- .domaine3(ctx, m[1L], m[2L])
-  list(tc = tc, valeurs = x, inconnu = inconnu, index = index, domaine = domaine)
+  # domaine de la colonne pour les lignes inconnues sans domaine propre
+  if (any(inconnu & (if (is.null(d01a)) TRUE else !d01a)) && is.null(domaine)) domaine <- .domaine3(ctx, m[1L], m[2L])
+  list(tc = tc, valeurs = x, inconnu = inconnu, index = index, domaine = domaine, domaines = domaines, d01a = d01a)
 }
 .connue3 <- function(tc, valeurs) list(tc = tc, valeurs = valeurs, inconnu = rep(FALSE, length(valeurs)), index = NULL,
                                        domaine = NULL)
+# Entrée d'une colonne `tc` jointe par la clé primaire `cle` de sa table et lue telle quelle
+# (colonne de clé ou jamais refusée pour sa valeur) : connue, sauf sur une clé jointe en
+# double aux occurrences divergentes (lecture existentielle, .joindre3() ; spécification
+# `donnees` v1.7, § 2.2, B.4, « Clé primaire en double », #131).
+.jointe3 <- function(ctx, tc, cle, valeurs_cle) {
+  m <- strsplit(tc, ".", fixed = TRUE)[[1L]]
+  j <- .joindre3(ctx, m[1L], cle, m[2L], valeurs_cle)
+  list(tc = tc, valeurs = j$valeurs, inconnu = j$diverge, index = if (any(j$diverge)) j$index, domaine = NULL,
+       domaines = j$domaines, d01a = j$diverge)
+}
 
 # Motif existentiel de Kleene (forme « jointure ou appartenance », spécification, § 2.2, B.4),
 # noyau unique des règles B (.existe3(), site 39 de .orphelines()) et V (.existe_vue3()) :
@@ -1512,23 +1597,61 @@ lire_declarations <- function(declarations, dico) {
   lignes <- which(rowSums(inconnu) > 0L)
   if (length(lignes) > 0L) {
     motifs <- apply(inconnu[lignes, , drop = FALSE], 1L, function(z) paste(which(z), collapse = ","))
-    for (motif in unique(motifs)) {
-      l <- lignes[motifs == motif]
-      s <- as.integer(strsplit(motif, ",", fixed = TRUE)[[1L]])
-      grille <- expand.grid(lapply(entrees[s], function(e) seq_along(e$domaine)))
+    # domaine d'une entrée sur les lignes `l` : le sien, ou celui de leurs lignes (clé jointe en
+    # double, .entree3() ; les lignes `l` ont alors le même domaine propre, `propre_cle`)
+    domaine_de <- function(e, l) if (!is.null(e$domaines[[l[1L]]])) e$domaines[[l[1L]]] else e$domaine
+    essayer <- function(l, s) {
+      doms <- lapply(entrees[s], domaine_de, l)
+      grille <- expand.grid(lapply(doms, seq_along))
       nl <- length(l)
       nc <- nrow(grille)
       essai <- lapply(valeurs, function(x) rep(x[l], times = nc))
-      for (j in seq_along(s)) essai[[s[j]]] <- rep(entrees[[s[j]]]$domaine[grille[[j]]], each = nl)
+      for (j in seq_along(s)) essai[[s[j]]] <- rep(doms[[j]][grille[[j]]], each = nl)
       vrais <- rowSums(matrix(g(essai) %in% TRUE, nrow = nl))
-      r[l] <- ifelse(vrais == nc, TRUE, ifelse(vrais == 0L, FALSE, NA))
+      r[l] <<- ifelse(vrais == nc, TRUE, ifelse(vrais == 0L, FALSE, NA))
+    }
+    propre <- rep(FALSE, length(r))
+    for (e in entrees) if (!is.null(e$domaines)) propre <- propre | lengths(e$domaines) > 0L
+    # clé injective des domaines propres d'une ligne sur les entrées `s` : chaque valeur a un
+    # code auto-délimité (N : NA, M : NaN, D<hexadécimal>; : nombre ou date, L1 / L0 : logique,
+    # S<octets>:<texte> : chaîne, longueur en préfixe), chaque domaine son nombre de valeurs en
+    # préfixe, Z pour une entrée sans domaine propre ; deux lignes de même clé ont les mêmes
+    # domaines, les lignes de même clé sont essayées ensemble (travail par domaine distinct)
+    code_valeurs <- function(x) {
+      num <- is.numeric(x) || inherits(x, "Date")
+      code <- if (num) paste0("D", sprintf("%a", as.numeric(x)), ";") else if (is.logical(x)) ifelse(x, "L1", "L0") else {
+        x <- as.character(x)
+        paste0("S", nchar(x, type = "bytes"), ":", x)
+      }
+      code[is.na(x)] <- "N"
+      if (num) code[is.nan(as.numeric(x))] <- "M"
+      paste0(length(x), "|", paste(code, collapse = ""))
+    }
+    propre_cle <- function(k, s) {
+      paste(vapply(entrees[s], function(e) if (is.null(e$domaines[[k]])) "Z" else code_valeurs(e$domaines[[k]]), ""),
+            collapse = "")
+    }
+    for (motif in unique(motifs)) {
+      l <- lignes[motifs == motif]
+      s <- as.integer(strsplit(motif, ",", fixed = TRUE)[[1L]])
+      commun <- l[!propre[l]]
+      if (length(commun) > 0L) essayer(commun, s)
+      lp <- l[propre[l]]
+      if (length(lp) > 0L) {
+        for (g_l in split(lp, vapply(lp, propre_cle, "", s))) essayer(g_l, s)
+      }
     }
   }
   index <- list()
+  d01a <- list()
   for (e in entrees) {
     if (!is.null(e$index)) index[[e$tc]] <- if (is.null(index[[e$tc]])) e$index else Map(c, index[[e$tc]], e$index)
+    if (!is.null(e$d01a)) d01a[[e$tc]] <- if (is.null(d01a[[e$tc]])) e$d01a else d01a[[e$tc]] | e$d01a
   }
   attr(r, "index") <- index
+  # lignes dont une entrée lit une clé jointe en double aux occurrences divergentes (cause
+  # candidate D01a d'une ligne écartée, .regle())
+  if (length(d01a) > 0L) attr(r, "d01a") <- d01a
   r
 }
 
@@ -1969,9 +2092,10 @@ lire_declarations <- function(declarations, dico) {
   }, partiel = TRUE)
   .regle(ctx, "hors_domaine", "famille", "id_sinistre",
          c("famille.id_assure", "sinistres.id_sinistre", "sinistres.id_assure"), "R", "exacte", function() {
-    assure <- .joindre(ctx, "sinistres", "id_sinistre", "id_assure", v("famille", "id_sinistre"))
-    !is.na(assure) & assure != v("famille", "id_assure")
-  })
+    .verdict3(list(assure = .jointe3(ctx, "sinistres.id_assure", "id_sinistre", v("famille", "id_sinistre")),
+                   local = .connue3("famille.id_assure", v("famille", "id_assure"))),
+              function(x) !is.na(x$assure) & x$assure != x$local)
+  }, partiel = TRUE)
 
   # dossiers, rentes, prestations : D10 (a), garantie ou type de prestation incompatible ;
   # garantie d'un dossier : code_garantie de sa garantie souscrite, jointe par la clé
@@ -1980,7 +2104,49 @@ lire_declarations <- function(declarations, dico) {
   gar3 <- function(ids_gs) {
     e3("garanties_souscrites.code_garantie", index = .index_jointure(ctx, "garanties_souscrites", "id_garantie_souscrite", ids_gs))
   }
-  gar_dossier3 <- function(ids_dossier) gar3(.joindre(ctx, "dossiers", "id_dossier", "id_garantie_souscrite", ids_dossier))
+  # garantie jointe par le dossier : sur un dossier en double dont les occurrences divergent sur
+  # id_garantie_souscrite, l'une des garanties de ses occurrences (lecture existentielle,
+  # spécification `donnees` v1.7, § 2.2, B.4, « Clé primaire en double », #131) : connue si
+  # elles concordent sur code_garantie, inconnue sinon (cause candidate D01a), de domaine leurs
+  # codes (le domaine de la colonne pour un code refusé)
+  gar_dossier3 <- function(ids_dossier) {
+    jd <- .joindre3(ctx, "dossiers", "id_dossier", "id_garantie_souscrite", ids_dossier)
+    e <- gar3(jd$valeurs)
+    l <- which(jd$diverge)
+    if (length(l) == 0L) return(e)
+    n <- length(ids_dossier)
+    if (is.null(e$d01a)) e$d01a <- rep(FALSE, n)
+    if (is.null(e$domaines)) e$domaines <- vector("list", n)
+    e$index <- as.list(e$index)
+    # garanties des occurrences divergentes, jointes une seule fois sur leur union (coût d'une
+    # jointure, non d'une jointure par ligne)
+    gs <- v("dossiers", "id_garantie_souscrite")
+    ids <- lapply(l, function(r) unique(gs[jd$index[[r]]]))
+    u <- unique(unlist(ids))
+    eu <- gar3(u)
+    index_u <- as.list(eu$index)
+    qs <- split(match(unlist(ids), u), factor(rep(seq_along(ids), lengths(ids)), levels = seq_along(ids)))
+    for (k in seq_along(l)) {
+      r <- l[k]
+      q <- qs[[k]]
+      inconnu_q <- eu$inconnu[q]
+      dom <- unique(unlist(lapply(q, function(z) {
+        if (!eu$inconnu[z]) eu$valeurs[z] else if (!is.null(eu$domaines[[z]])) eu$domaines[[z]] else eu$domaine
+      })))
+      e$index[[r]] <- unique(stats::na.omit(unlist(index_u[q])))
+      if (!any(inconnu_q) && length(dom) == 1L) {
+        e$valeurs[r] <- dom
+        e$inconnu[r] <- FALSE
+        e$d01a[r] <- FALSE
+        e$domaines[r] <- list(NULL)
+        next
+      }
+      e$inconnu[r] <- TRUE
+      e$d01a[r] <- TRUE
+      e$domaines[[r]] <- dom
+    }
+    e
+  }
   nature_sinistre3 <- function(ids_sinistre) {
     e3("sinistres.nature_sinistre", index = .index_jointure(ctx, "sinistres", "id_sinistre", ids_sinistre))
   }
@@ -2013,9 +2179,10 @@ lire_declarations <- function(declarations, dico) {
                    function(x) ifelse(is.na(x$type), NA, x$type == "arrerage"), type_p3)
   .regle(ctx, "hors_domaine", "prestations", "id_rente", c("rentes.id_rente", "rentes.id_dossier",
                                                            "prestations.id_dossier"), "R", "exacte", function() {
-    d <- .joindre(ctx, "rentes", "id_rente", "id_dossier", v("prestations", "id_rente"))
-    !is.na(d) & !is.na(v("prestations", "id_dossier")) & d != v("prestations", "id_dossier")
-  })
+    .verdict3(list(d = .jointe3(ctx, "rentes.id_dossier", "id_rente", v("prestations", "id_rente")),
+                   local = .connue3("prestations.id_dossier", v("prestations", "id_dossier"))),
+              function(x) !is.na(x$d) & !is.na(x$local) & x$d != x$local)
+  }, partiel = TRUE)
   for (colonne in c("debut_periode", "fin_periode")) {
     .regle_condition(ctx, "prestations", colonne, "prestations.type_prestation",
                      function(x) ifelse(is.na(x$type), NA, x$type != "capital"), type_p3, defaut_manquant = TRUE)
@@ -2051,14 +2218,16 @@ lire_declarations <- function(declarations, dico) {
   }, function() list(type = e3("evenements.type_evenement"), g = gar_dossier3(v("evenements", "id_dossier"))))
   .regle(ctx, "hors_domaine", "evenements", "id_dossier",
          c("evenements.id_sinistre", "dossiers.id_dossier", "dossiers.id_sinistre"), "R", "exacte", function() {
-    s <- .joindre(ctx, "dossiers", "id_dossier", "id_sinistre", v("evenements", "id_dossier"))
-    !is.na(s) & s != v("evenements", "id_sinistre")
-  })
+    .verdict3(list(s = .jointe3(ctx, "dossiers.id_sinistre", "id_dossier", v("evenements", "id_dossier")),
+                   local = .connue3("evenements.id_sinistre", v("evenements", "id_sinistre"))),
+              function(x) !is.na(x$s) & x$s != x$local)
+  }, partiel = TRUE)
   .regle(ctx, "hors_domaine", "evenements", "id_rente",
          c("evenements.id_dossier", "rentes.id_rente", "rentes.id_dossier"), "R", "exacte", function() {
-    d <- .joindre(ctx, "rentes", "id_rente", "id_dossier", v("evenements", "id_rente"))
-    !is.na(d) & !is.na(v("evenements", "id_dossier")) & d != v("evenements", "id_dossier")
-  })
+    .verdict3(list(d = .jointe3(ctx, "rentes.id_dossier", "id_rente", v("evenements", "id_rente")),
+                   local = .connue3("evenements.id_dossier", v("evenements", "id_dossier"))),
+              function(x) !is.na(x$d) & !is.na(x$local) & x$d != x$local)
+  }, partiel = TRUE)
   # type compatible avec la nature du sinistre (niveau sinistre : arrêt de travail) ou avec
   # la garantie du dossier (types_evenements.garanties)
   .regle(ctx, "hors_domaine", "evenements", "type_evenement",
@@ -2100,10 +2269,18 @@ lire_declarations <- function(declarations, dico) {
   .regle(ctx, "manquant_obligatoire", "evenements", "motif",
          c("evenements.type_evenement", "evenements.id_sinistre", "prestations.id_dossier",
            "dossiers.id_dossier", "dossiers.id_sinistre"), "R", "exacte", function() {
-    sinistres_payes <- unique(.joindre(ctx, "dossiers", "id_dossier", "id_sinistre", v("prestations", "id_dossier")))
+    # sinistre d'une prestation : celui de son dossier ; sur un dossier en double aux
+    # occurrences divergentes, l'un des leurs (lecture existentielle, #131) : un sinistre payé
+    # par ce seul chemin l'est de façon inconnue (cause candidate D01a)
+    js <- .joindre3(ctx, "dossiers", "id_dossier", "id_sinistre", v("prestations", "id_dossier"))
+    sinistres_payes <- unique(js$valeurs[!js$diverge])
+    possibles <- unique(unlist(lapply(js$index[js$diverge], function(o) v("dossiers", "id_sinistre")[o])))
+    ev_sinistre <- v("evenements", "id_sinistre")
+    paye <- !is.na(match(ev_sinistre, sinistres_payes, incomparables = NA))
+    paye_inconnu <- !paye & !is.na(match(ev_sinistre, possibles, incomparables = NA))
     .verdict3(list(motif = soi("evenements.motif"), type = e3("evenements.type_evenement"),
-                   paye = .connue3("evenements.id_sinistre",
-                                   !is.na(match(v("evenements", "id_sinistre"), sinistres_payes, incomparables = NA)))),
+                   paye = list(tc = "dossiers.id_sinistre", valeurs = paye, inconnu = paye_inconnu, index = NULL,
+                               domaine = c(TRUE, FALSE), d01a = paye_inconnu)),
               function(x) {
       d05 <- x$type %in% c("sortie", "cloture_dossier") & !x$paye
       is.na(x$motif) & requiert(x$type, "motif") %in% TRUE & !d05
@@ -2116,9 +2293,10 @@ lire_declarations <- function(declarations, dico) {
                    function() list(statut = e3("victimes.statut_victime")))
   .regle(ctx, "D10h", "victimes", "id_sinistre", c("victimes.id_assure", "sinistres.id_sinistre", "sinistres.id_assure"),
          "R", "exacte", function() {
-    assure <- .joindre(ctx, "sinistres", "id_sinistre", "id_assure", v("victimes", "id_sinistre"))
-    !is.na(assure) & !is.na(v("victimes", "id_assure")) & assure != v("victimes", "id_assure")
-  })
+    .verdict3(list(assure = .jointe3(ctx, "sinistres.id_assure", "id_sinistre", v("victimes", "id_sinistre")),
+                   local = .connue3("victimes.id_assure", v("victimes", "id_assure"))),
+              function(x) !is.na(x$assure) & !is.na(x$local) & x$assure != x$local)
+  }, partiel = TRUE)
 
   # evaluations_gestion (dictionnaire, § 7.5 : incohérences, refus de la table seule)
   .hors_bornes(ctx, "evaluations_gestion", "montant_restant", mini = 0)
@@ -2142,9 +2320,12 @@ lire_declarations <- function(declarations, dico) {
   .regle(ctx, "hors_domaine", "ayants_droit_sante", "id_affiliation",
          c("affiliations.id_affiliation", "affiliations.sante_organisme"), "R", "exacte", function() {
     # une clé manquante ne s'apparie à aucune ligne (index NA ; spécification v1.6, § 2.2, B.4, #130)
-    i <- .index_jointure(ctx, "affiliations", "id_affiliation", v("ayants_droit_sante", "id_affiliation"))
-    !is.na(i) & !(v("affiliations", "sante_organisme")[i] %in% TRUE)
-  })
+    ids <- v("ayants_droit_sante", "id_affiliation")
+    .verdict3(list(trouve = .connue3("ayants_droit_sante.id_affiliation",
+                                     !is.na(.index_jointure(ctx, "affiliations", "id_affiliation", ids))),
+                   sante = .jointe3(ctx, "affiliations.sante_organisme", "id_affiliation", ids)),
+              function(x) x$trouve & !(x$sante %in% TRUE))
+  }, partiel = TRUE)
   invisible(NULL)
 }
 
@@ -2178,8 +2359,13 @@ lire_declarations <- function(declarations, dico) {
   for (table in setdiff(ctx$tables, "extraction")) {
     cle <- eclater_champ(dico$tables$cle_primaire[dico$tables$table == table])
     lit <- paste(table, cle, sep = ".")
+    # lignes de l'écart : les k - 1 occurrences de chaque clé qui suivent l'original dans l'ordre
+    # canonique (.ordre_canonique()), et non dans l'ordre des lignes (#131)
     .regle(ctx, "D01a", table, cle[1L], lit, "R", "exacte", function() {
-      duplicated(as.data.frame(lapply(cle, function(c1) .valeurs(ctx, table, c1)), stringsAsFactors = FALSE))
+      o <- .ordre_canonique(ctx, table)
+      r <- logical(length(o))
+      r[o] <- duplicated(as.data.frame(lapply(cle, function(c1) .valeurs(ctx, table, c1)[o]), stringsAsFactors = FALSE))
+      r
     })
   }
   .orphelines(ctx)
@@ -2230,6 +2416,32 @@ lire_declarations <- function(declarations, dico) {
     r
   }, partiel = TRUE)
   invisible(NULL)
+}
+
+# Ordre canonique des lignes de `table` (spécification `donnees` v1.7, § 2.2, B.4, « Clé
+# primaire en double », lignes de l'écart D01a, #131) : date qui gouverne la visibilité
+# (première de .DATES_VISIBILITE, comme la copie de D01b), puis contenu entier de la ligne,
+# colonnes dans l'ordre du dictionnaire, en tri radix, valeur manquante en dernier. L'original
+# d'un identifiant en double est sa première ligne dans cet ordre ; deux lignes à égalité ont
+# le même contenu. Une colonne de date se trie sur sa valeur numérique, une colonne logique,
+# numérique, textuelle ou facteur telle quelle (une colonne de type incompatible garde son type
+# lu) ; toute autre (liste, par exemple : défaut de forme) sur le texte exact de chaque valeur
+# (deparse() à 17 chiffres, NA et attributs gardés), pour que l'ordre reste total. Une colonne
+# en double précision est précédée de la clé is.nan() : le tri radix place NA et NaN à égalité,
+# ils sont ainsi départagés (NaN après NA).
+.ordre_canonique <- function(ctx, table) {
+  num <- function(x) {
+    if (inherits(x, "Date")) return(as.numeric(x))
+    if (!is.list(x) && (is.numeric(x) || is.character(x) || is.logical(x) || is.factor(x))) return(x)
+    vapply(x, function(z) paste(deparse(z, control = c("keepNA", "keepInteger", "niceNames", "showAttributes", "digits17")),
+                                collapse = "\n"), "", USE.NAMES = FALSE)
+  }
+  colonnes <- c(.DATES_VISIBILITE[[table]][1L], .colonnes_dico(ctx, table)$colonne)
+  cles <- unlist(lapply(colonnes, function(c1) {
+    x <- num(.valeurs(ctx, table, c1))
+    if (is.double(x)) list(is.nan(x), x) else list(x)
+  }), recursive = FALSE)
+  do.call(order, c(unname(cles), list(method = "radix", na.last = TRUE)))
 }
 
 # Clés étrangères orphelines (D04a, D04b ; référence composite de affiliations.college),
@@ -5718,7 +5930,9 @@ parties_ligne <- function() lapply(.PARTIES_LIGNE, function(p) list(table = p$ta
 
 # Rattachement des lignes d'une table aux dossiers (spécification, § 4.4), par chemins de clés
 # (colonne locale, table visée, colonne visée) : rend `paires` (data.frame ligne, dossier :
-# numéros de ligne de la table et de dossiers, sans doublon, triés) et `cause` (colonne de clé
+# numéros de ligne de la table et de dossiers, sans doublon, triés ; sur : TRUE, NA pour une
+# paire de rattachement non déterminé, garantie souscrite en double d'une affiliation, #131)
+# et `cause` (colonne de clé
 # illisible par sa forme : c(table, colonne, cause), sinon NULL). evenements : par id_dossier,
 # sinon par le sinistre ; affiliations : dossiers des sinistres de l'assuré sous le même
 # contrat (pas de cascade) ; cotisations, evaluations_gestion, designations,
@@ -5745,12 +5959,12 @@ parties_ligne <- function() lapply(.PARTIES_LIGNE, function(p) list(table = p$ta
 
 .rattacher <- function(ctx, table) {
   if (!is.null(ctx$rattachements[[table]])) return(ctx$rattachements[[table]])
-  vide <- data.frame(ligne = integer(0), dossier = integer(0))
+  vide <- data.frame(ligne = integer(0), dossier = integer(0), sur = logical(0))
   chemins <- .CHEMINS_RATTACHEMENT[[table]]
   n <- nrow(ctx$base[[table]])
   res <- list(paires = vide, cause = NULL)
   if (table == "dossiers") {
-    res$paires <- data.frame(ligne = seq_len(n), dossier = seq_len(n))
+    res$paires <- data.frame(ligne = seq_len(n), dossier = seq_len(n), sur = rep(TRUE, n))
   } else if (!is.null(chemins) && !is.null(ctx$base$dossiers)) {
     lus <- unlist(lapply(chemins, function(ch) {
       courante <- table
@@ -5779,12 +5993,25 @@ parties_ligne <- function() lapply(.PARTIES_LIGNE, function(p) list(table = p$ta
         p
       })
       p <- do.call(rbind, paires)
+      p$sur <- rep(TRUE, nrow(p))
       if (table == "affiliations" && nrow(p) > 0L) {
-        contrat <- .joindre(ctx, "garanties_souscrites", "id_garantie_souscrite", "id_contrat",
-                            .valeurs(ctx, "dossiers", "id_garantie_souscrite")[p$j])
-        p <- p[!is.na(contrat) & contrat == .valeurs(ctx, "affiliations", "id_contrat")[p$i], , drop = FALSE]
+        # contrat de la garantie souscrite du dossier : lecture existentielle sur les occurrences
+        # d'une garantie souscrite en double (spécification `donnees` v1.7, § 2.2, B.4, #131) :
+        # paire gardée si chaque occurrence porte le contrat de l'affiliation, exclue si aucune,
+        # sinon rattachement non déterminé (`sur` NA) ; une seule jointure (.joindre3())
+        jc <- .joindre3(ctx, "garanties_souscrites", "id_garantie_souscrite", "id_contrat",
+                        .valeurs(ctx, "dossiers", "id_garantie_souscrite")[p$j])
+        ctr <- .valeurs(ctx, "garanties_souscrites", "id_contrat")
+        ca <- .valeurs(ctx, "affiliations", "id_contrat")[p$i]
+        egal <- vapply(seq_len(nrow(p)), function(r) {
+          o <- jc$index[[r]]
+          e <- !is.na(o) & !is.na(ctr[o]) & !is.na(ca[r]) & ctr[o] == ca[r]
+          if (all(e)) TRUE else if (!any(e)) FALSE else NA
+        }, NA)
+        p <- p[!(egal %in% FALSE), , drop = FALSE]
+        p$sur <- egal[!(egal %in% FALSE)]
       }
-      p <- unique(data.frame(ligne = p$i, dossier = p$j))
+      p <- unique(data.frame(ligne = p$i, dossier = p$j, sur = p$sur))
       p <- p[order(p$ligne, p$dossier, method = "radix"), , drop = FALSE]
       rownames(p) <- NULL
       res$paires <- p
@@ -5831,8 +6058,12 @@ parties_ligne <- function() lapply(.PARTIES_LIGNE, function(p) list(table = p$ta
   a <- as.numeric(ctx$arrete)
   lus_g <- c("dossiers.id_garantie_souscrite", "garanties_souscrites.id_garantie_souscrite",
              "garanties_souscrites.code_garantie")
+  # garantie souscrite en double aux occurrences divergentes sur code_garantie : lien non
+  # déterminé, non_rattache (lecture existentielle, spécification `donnees` v1.7, § 2.2, B.4,
+  # « Clé primaire en double », #131 ; même lecture que la garantie d'un lien non résolu, § 4.4)
   garantie <- if (is.null(.cause_lecture(ctx, lus_g, forme_seule = TRUE))) {
-    .joindre(ctx, "garanties_souscrites", "id_garantie_souscrite", "code_garantie", v("dossiers", "id_garantie_souscrite"))
+    j <- .joindre3(ctx, "garanties_souscrites", "id_garantie_souscrite", "code_garantie", v("dossiers", "id_garantie_souscrite"))
+    ifelse(j$diverge, NA_character_, j$valeurs)
   } else rep(NA_character_, nd)
   garantie[is.na(garantie)] <- "non_rattache"
   commun <- c("dossiers.id_dossier", "dossiers.date_ouverture")
@@ -6141,7 +6372,8 @@ parties_ligne <- function() lapply(.PARTIES_LIGNE, function(p) list(table = p$ta
 .statut_rattachement <- function(ctx, table, lignes, d03g = FALSE) {
   p <- .rattacher(ctx, table)$paires
   p <- p[p$ligne %in% lignes, , drop = FALSE]
-  ou <- .ou_kleene(p$dossier, .connus(ctx, table, d03g)[p$ligne])
+  # paire de rattachement non déterminé (`sur` NA, .rattacher()) : ET de Kleene avec la visibilité
+  ou <- .ou_kleene(p$dossier, .connus(ctx, table, d03g)[p$ligne] & p$sur)
   garde <- !duplicated(p$dossier)
   d <- p$dossier[garde]
   o <- order(d, method = "radix")
@@ -6257,6 +6489,14 @@ parties_ligne <- function() lapply(.PARTIES_LIGNE, function(p) list(table = p$ta
       lien_g <- identical(ecart$action, "refus") && ecart$motif %in% .MOTIFS_LIEN_ECART &&
         paste(ecart$table, ecart$colonne, sep = ".") %in% cd$lus_g
       garantie <- if (is.null(cause_de(cd$lus_g)) && !lien_g) cd$garantie[d] else rep("non_rattache", length(d))
+      # écart D01a de dossiers : un dossier dont les doubles divergent sur une colonne de dossiers
+      # que lit sa garantie (id_garantie_souscrite) est non_rattache, et non la garantie de
+      # l'occurrence retenue (spécification `donnees` v1.7, § 2.2, B.4, lignes de l'écart D01a, #131)
+      if (table == "dossiers" && identical(ecart$action, "refus") && identical(ecart$motif, "D01a")) {
+        for (c1 in sub("^dossiers\\.", "", cd$lus_g[startsWith(cd$lus_g, "dossiers.")])) {
+          garantie[d %in% .divergences_d01a(ctx, "dossiers", lignes, c1)] <- "non_rattache"
+        }
+      }
       dossiers <- do.call(rbind, lapply(tags, function(f) {
         data.frame(dossier = d, garantie = garantie, connu = st$statut, famille = rep(f, length(d)), stringsAsFactors = FALSE)
       }))
