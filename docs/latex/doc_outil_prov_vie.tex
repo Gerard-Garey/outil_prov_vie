@@ -2725,7 +2725,8 @@ exacte pour \code{famille}, que l'issue~49 demande.
 \end{itemize}
 
 Une composante de l'enjeu empêchée par un refus y figure aussi, sous le
-code de la composante, avec la table et la colonne lues. Une composante
+code de la composante, avec la table et la colonne de la colonne lue qui
+porte la cause retenue (paragraphe «~Composante de l'enjeu~» ci-dessous). Une composante
 dont la visibilité à l'arrêté n'est pas déterminée n'y figure pas~: sa
 cause, \code{visibilite\_non\_determinee}, se lit dans l'élément
 \code{enjeu}. Une ligne de visibilité non déterminée par un refus de
@@ -2819,7 +2820,9 @@ candidates de toutes les émissions de la clé~:
   refus de valeur qui touchent une ligne écartée, et D01a pour une ligne
   écartée par une clé jointe en double aux occurrences divergentes\fsp;
 \item règle~V, cause~($\gamma$)~: la cause de chaque élément non
-  déterminé qui peut changer le verdict d'une ligne écartée.
+  déterminé qui peut changer le verdict d'une ligne écartée\fsp;
+\item composante de l'enjeu empêchée~: les causes éligibles de chaque
+  colonne lue (paragraphe «~Composante de l'enjeu~» ci-dessous).
 \end{itemize}
 La cause retenue est ainsi le minimum d'un ensemble sous un ordre
 total~: elle ne dépend ni de l'ordre d'exécution (règles, emplois,
@@ -2838,26 +2841,77 @@ changerait le vocabulaire de la colonne \code{cause}\fsp; départager par
 la colonne lue, que \code{controles\_non\_executes} ne publie pas\fsp;
 l'ordre alphabétique des codes, déclaré mais arbitraire.
 
-\textbf{Exception~: l'enjeu} (décision du mainteneur du 13~novembre~2026,
-erratum~1.6.1 de la spécification, issue~122). La cause d'une composante
-de l'enjeu empêchée reste hors de ce départage~: \code{enjeu\$cause}, et
-la ligne de la composante dans \code{controles\_non\_executes}, gardent
-le défaut de forme, à défaut le premier refus de la colonne dans l'ordre
-des constats, et la table et la colonne de leur clé restent celles de la
-première colonne lue empêchée. Seul le dédoublonnement entre émissions
-de même clé suit l'ordre (rang, position). D'ici l'issue~122, une même
-colonne peut donc publier deux causes~: celle d'une règle (la plus
-petite) et celle d'une composante de l'enjeu (la première dans l'ordre
-des constats)~; les deux refus figurent dans \code{refus\_tables}.
+\textbf{Composante de l'enjeu} (spécification, §~3.1, «~Cause d'une
+composante de l'enjeu~», version~1.7, et erratum du 15~novembre~2026\fsp;
+décision du mainteneur du 14~novembre~2026, M383\fsp; issue~122\fsp;
+jugement d'expert). La cause d'une composante de l'enjeu empêchée suit le
+même départage. Pour un écart, chaque colonne lue par la composante
+(colonnes de la garantie comprises quand elles l'empêchent) rend
+éligibles un ensemble de causes~: son défaut de forme, chacun de ses
+refus de colonne, chaque refus direct de portée table de sa table et le
+refus induit de sa table. Les règles d'éligibilité sont gardées~: le
+refus de valeur d'une colonne de visibilité lue pour la visibilité seule
+n'empêche pas la composante (paragraphe «~À l'arrêté égal à
+l'extraction~» ci-dessus)\fsp; le refus qui constitue l'écart n'empêche
+que la lecture de sa propre colonne, hors D01a et hors clé étrangère de
+l'écart (lien non résolu)\fsp; un refus induit qui procède seulement du
+refus de l'écart n'empêche pas. La cause retenue est la plus petite, dans
+l'ordre (rang, position), de l'union des causes de toutes les colonnes
+lues\fsp; pour une composante~1 à~4 empêchée par un rattachement illisible
+par sa forme, de l'union des causes de forme des colonnes du chemin. La
+table et la colonne publiées, clé de la ligne de la composante dans
+\code{controles\_non\_executes}, sont celles de la colonne lue qui porte
+la cause retenue\fsp; si plusieurs la portent, la première dans l'ordre
+du dictionnaire (tables de \code{tables.csv}, puis colonnes de
+\code{colonnes.csv}). La colonne d'un élément de cause D01a suit la même
+règle~: c'est la première colonne divergente dans l'ordre du
+dictionnaire\fsp; une ligne de l'écart, dans \code{evenements} ou
+\code{cotisations}, dont une colonne qui la classe diverge (type, rente
+ou montant d'un événement, nature d'un mouvement) empêche le couple
+(composante, unité) pour toute garantie par un seul élément sans porteur
+par écart, publié sur la première de ces colonnes divergentes. Dans
+\code{enjeu}, la cause d'une rangée est la plus petite des causes de ses
+éléments autres que \code{visibilite\_non\_determinee}, celle-ci n'étant
+retenue qu'à défaut, pour la rangée par motif comme pour la rangée
+\code{motif = ensemble}. Cause, table et colonne ne dépendent ainsi ni de
+l'ordre des colonnes lues, ni de celui des constats, ni de celui des
+éléments ou des écarts (minimum sous un ordre total, puis premier dans un
+ordre total~: résultat exact). À ensemble de causes éligibles égal, une
+règle et une composante qui lisent la même colonne publient la même
+cause~: l'incohérence transitoire que déclarait l'erratum~1.6.1 de la
+spécification (deux causes publiées pour une même colonne) est levée.
+Elles peuvent encore différer par l'éligibilité seule (le refus de
+l'écart n'empêche pas son propre enjeu\fsp; une colonne de visibilité
+lue pour la visibilité seule)~: c'est une différence déclarée, non un
+départage. Alternatives écartées~: (A1)~garder comme sous-règle les
+anciennes préséances d'ordre (forme d'abord, colonne avant table,
+premier refus dans l'ordre des constats, première colonne lue), qui
+laisserait deux causes publiées pour une même colonne\fsp; (A2)~une ligne
+par colonne qui empêche la composante, qui publierait des causes qui ne
+sont pas celle de la composante\fsp; (A3)~une colonne \code{NA}, qui
+perdrait la colonne lue\fsp; (A4)~un départage des colonnes par
+proximité de l'écart, ordre à définir table par table, non dérivé d'un
+fichier. La batterie unitaire vérifie que le départage est identique sous
+les 120~permutations de deux jeux de cinq colonnes lues et sous
+200~permutations tirées sous graine locale explicite de jeux de huit et
+de sept colonnes~: vérification sur un corpus fini de cas, non preuve.
 
 Dans le code, la fonction interne \code{.dedoublonner\_non\_executes()}
 applique cet ordre, comme la cause d'une règle bloquée ou exécutée en
-partie et la cause~($\gamma$)~: une seule implémentation, la clé (rang,
-position) d'une cause (\code{.cle\_causes()}) et la plus petite d'un
-ensemble (\code{.cause\_retenue()}), la position étant lue dans l'ordre
-des codes dérivé du dictionnaire (\code{.ordre\_codes()}), seul endroit
-où cet ordre est écrit, et calculé au plus une fois par contrôle de la
-base (issue~55). Les rangs sont lus dans deux constantes internes~:
+partie, la cause~($\gamma$) et la cause d'une composante de l'enjeu~: une
+seule implémentation, la clé (rang, position) d'une cause
+(\code{.cle\_causes()}) et la plus petite d'un ensemble
+(\code{.cause\_retenue()}), la position étant lue dans l'ordre des codes
+dérivé du dictionnaire (\code{.ordre\_codes()}), seul endroit où cet
+ordre est écrit, et calculé au plus une fois par contrôle de la base
+(issue~55). Pour une composante de l'enjeu, \code{.causes\_enjeu()} rend
+les causes éligibles d'une colonne lue, et \code{.cause\_colonnes()}
+retient la cause et la colonne publiées, la colonne étant rangée dans
+l'ordre du dictionnaire par \code{.ordre\_dictionnaire()}\fsp; la cause
+d'une composante empêchée par un rattachement illisible
+(\code{.cause\_lecture()}) passe aussi par \code{.cause\_colonnes()}, et
+celle d'une rangée de l'enjeu (\code{.rangees\_enjeu()}) par
+\code{.cause\_retenue()}. Les rangs sont lus dans deux constantes internes~:
 \code{.RANGS\_CAUSES}, qui donne les rangs des six causes nommées
 ci-dessus, et \code{.RANG\_CAUSE\_DIRECTE}, qui vaut~3. Le rang d'une
 cause est cherché dans \code{.RANGS\_CAUSES} avant de tester si elle est
