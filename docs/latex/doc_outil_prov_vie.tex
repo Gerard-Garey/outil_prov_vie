@@ -1665,11 +1665,14 @@ calcul. Il ne peut appeler que \code{dictionnaire} et
 
 \code{controler\_base(donnees, arrete, declarations, conventions)}
 applique la spécification du module \code{donnees}
-(\code{docs/specifications/module-donnees-v1.md}, version~1.5.5\fsp;
+(\code{docs/specifications/module-donnees-v1.md}, version~1.7\fsp;
 versions~1.1, 1.3, 1.4 et~1.5 visées par le mainteneur, la version~1.5
 le 10~novembre~2026 avec ses précisions P1 à~P5, M222\fsp; errata~1.5.1
 et~1.5.2 et précisions~1.5.3 et~1.5.4 sur ses décisions du même jour, M223
-à M226, et erratum~1.5.5 visé le même jour\fsp; décisions de la version~1.2, M194 et M195, prises par lui), sous le dictionnaire de la base en version~1.5. La date d'arrêté est obligatoire,
+à M226, et erratum~1.5.5 visé le même jour\fsp; décisions de la version~1.2, M194 et M195, prises par lui\fsp;
+version~1.6 sur ses décisions du 13~novembre~2026, M335 à M338\fsp;
+version~1.7 visée en bloc le 14~novembre~2026, M376, avec ses errata des
+14 et 15~novembre~2026, sans changement de version), sous le dictionnaire de la base en version~1.5. La date d'arrêté est obligatoire,
 sans valeur par défaut. \code{declarations} est le sous-schéma
 \code{donnees} du plan (rubriques \code{exclusions}, \code{hypotheses},
 \code{seuils}, \code{evaluations\_gestion})\fsp; \code{conventions} est la
@@ -2001,25 +2004,33 @@ Chevauchement (versions de \code{garanties\_souscrites} par contrat, garantie et
 \end{center}
 
 \begin{itemize}[itemsep=2pt]
-\item \textbf{Clé manquante} (spécification, §~2.2, B.4, version~1.6\fsp;
-  décision du mainteneur du 13~novembre~2026, M335\fsp; issue~56\fsp;
-  jugement d'expert). Dans la forme «~jointure ou appartenance~», une clé
-  manquante ne s'apparie à aucune ligne, d'un côté comme de l'autre~: une
-  ligne de clé manquante n'a aucune ligne jointe, et une ligne jointe de
-  clé manquante n'est jointe à aucune ligne. Un seul noyau porte cette
-  forme pour l'entrée «~décès souscrit~» de la règle~B, pour la recherche
-  des orphelines à référence composite, \code{affiliations.college} (où
-  une clé dont une partie manque ne s'apparie pas davantage), et pour les
+\item \textbf{Clé manquante} (spécification, §~2.2, B.4, versions~1.6
+  et~1.7\fsp; décisions du mainteneur du 13~novembre~2026, M335, et du
+  14~novembre~2026, M376\fsp; issues~56 et~130\fsp; jugement d'expert). Dans
+  la forme «~jointure ou appartenance~», une clé manquante ne s'apparie à
+  aucune ligne, d'un côté comme de l'autre~: une ligne de clé manquante
+  n'a aucune ligne jointe, et une ligne jointe de clé manquante n'est
+  jointe à aucune ligne. La règle vaut pour toute entrée existentielle des
+  règles~B, P et~V, test d'appartenance compris. Un seul noyau la porte
+  pour l'entrée «~décès souscrit~» de la règle~B, pour la recherche des
+  orphelines à référence composite, \code{affiliations.college} (où une
+  clé dont une partie manque ne s'apparie pas davantage), et pour les
   règles~V\fsp; la jointure par identifiant du module
-  (\code{.index\_jointure()}) suit la même règle. Écart connu du code à la
-  spécification, renvoyé à l'issue~130 (décision du mainteneur du
-  13~novembre~2026)~: deux règles~B \code{hors\_domaine}, sur
-  \code{designations.id\_affiliation} et sur
-  \code{ayants\_droit\_sante.id\_affiliation}, testent l'existence de
-  l'affiliation par \code{\%in\%}, qui apparie une clé manquante à une clé
-  manquante~; l'effet se borne à une ligne \code{hors\_domaine} de trop
-  sur une table déjà refusée en portée table, sans provision ni verdict
-  touché. Motif~: une clé manquante n'identifie rien, et
+  (\code{.index\_jointure()}) suit la même règle, comme, depuis
+  l'issue~130, les deux règles~B \code{hors\_domaine} de
+  \code{designations.id\_affiliation} et de
+  \code{ayants\_droit\_sante.id\_affiliation}, qui testent l'existence de
+  l'affiliation, et le \emph{sinistre payé} (sinistre dont un dossier porte
+  une prestation), qui a une seule définition, lue par la règle~B
+  \code{manquant\_obligatoire} de \code{evenements.motif} et par la
+  règle~V D05~: un événement sans \code{id\_sinistre} n'est jamais payé,
+  même quand une prestation orpheline, une prestation sans
+  \code{id\_dossier} ou un dossier sans \code{id\_sinistre} place une clé
+  manquante parmi les sinistres payés. Pour D05, et pour les tests
+  d'appartenance de D07~(c) (dossier clos) et de D10~(d) (événement sans
+  dossier), une clé manquante n'est pas atteignable~: elle refuse sa table
+  en portée table (\code{manquant\_obligatoire}), et la règle~V, bloquée,
+  n'est pas exécutée (mesure exécutée). Motif~: une clé manquante n'identifie rien, et
   apparier deux absences inventerait un lien, ce qui serait une
   imputation\fsp; la ligne porte déjà un refus de portée table (clé
   primaire ou étrangère manquante). L'alternative écartée, «~une clé
