@@ -375,7 +375,7 @@ cles_lignes_hypothese <- function(vue, table, lignes, colonne) {
         t <- liens$table[i]
         u <- liens$table_cible[i]
         if (!any(x[[u]])) next
-        cles <- as.character(.valeurs(ctx, u, liens$colonne_cible[i]))[x[[u]]]
+        cles <- .cle_manquante(as.character(.valeurs(ctx, u, liens$colonne_cible[i]))[x[[u]]])
         nouveau <- x[[t]] | as.character(.valeurs(ctx, t, liens$colonne[i])) %in% cles[!is.na(cles)]
         if (!identical(nouveau, x[[t]])) {
           x[[t]] <- nouveau
@@ -1181,7 +1181,8 @@ lire_declarations <- function(declarations, dico) {
         if (!is.null(index[[tc]])) return(unique(stats::na.omit(unlist(index[[tc]][ecartees]))))
         if (u == table) return(ecartees)
         if (is.null(parente) || u != parente[2L]) return(integer(0))
-        which(.valeurs(ctx, u, parente[3L]) %in% stats::na.omit(.valeurs(ctx, table, parente[1L])[ecartees]))
+        which(.cle_manquante(.valeurs(ctx, u, parente[3L])) %in%
+                stats::na.omit(.cle_manquante(.valeurs(ctx, table, parente[1L])[ecartees])))
       }
       # motifs de tous les refus de valeur qui touchent une ligne écartée, sur toutes les
       # colonnes lues (`porteuses` : colonne de chacun) ; la cause est le plus petit dans
@@ -1423,10 +1424,17 @@ lire_declarations <- function(declarations, dico) {
 # l'attribut `occurrences` (liste alignée sur `valeurs_cle`, NULL où la clé est portée par au
 # plus une ligne ; absent sans clé en double jointe) donne toutes les lignes de la clé, lues
 # par .entree3() et .joindre3() (lecture existentielle sur les occurrences).
+# Clé manquante (spécification `donnees` v1.7, § 2.2, B.4, « Clé manquante ») : elle ne
+# s'apparie à aucune ligne, d'un côté comme de l'autre. Une clé "" suit la règle « Clé
+# manquante », primaire ou étrangère (même section, « Chaîne vide », erratum du 15 novembre
+# 2026, décision du mainteneur ; .cle_manquante(), #123) : aucune ligne jointe, pas même parmi
+# des clés primaires "" en double (une chaîne vide ne reçoit que chaine_vide, jamais le code
+# d'une règle qui lit la ligne jointe).
 .index_jointure <- function(ctx, table_cible, cle_cible, valeurs_cle) {
   cle <- .valeurs(ctx, table_cible, cle_cible)
   i <- match(valeurs_cle, cle, incomparables = NA)
-  doubles <- which(!is.na(cle) & (duplicated(cle) | duplicated(cle, fromLast = TRUE)))
+  i[.chaine_vide(valeurs_cle)] <- NA_integer_
+  doubles <- which(!is.na(cle) & !.chaine_vide(cle) & (duplicated(cle) | duplicated(cle, fromLast = TRUE)))
   if (length(doubles) == 0L) return(i)
   j <- match(valeurs_cle, cle[doubles], incomparables = NA)
   if (all(is.na(j))) return(i)
@@ -1549,9 +1557,12 @@ lire_declarations <- function(declarations, dico) {
 # vaut vrai si une ligne `vrai` (connue, qui satisfait) a cette clé ; inconnu sinon si une
 # ligne `possible` (inconnue, qui peut satisfaire) l'a ; faux sinon. Une clé manquante ne
 # s'apparie à aucune ligne, d'un côté comme de l'autre (spécification `donnees` v1.6, § 2.2,
-# B.4, « Clé manquante », #56). `index` : pour une valeur inconnue, les lignes `possible` de
-# même clé, dans l'ordre des lignes (cause d'une ligne écartée) ; NULL ailleurs.
+# B.4, « Clé manquante », #56), une chaîne vide non plus (.cle_manquante(), #123). `index` :
+# pour une valeur inconnue, les lignes `possible` de même clé, dans l'ordre des lignes (cause
+# d'une ligne écartée) ; NULL ailleurs.
 .existe_kleene <- function(valeurs_cle, cle, vrai, possible) {
+  valeurs_cle <- .cle_manquante(valeurs_cle)
+  cle <- .cle_manquante(cle)
   existe <- !is.na(match(valeurs_cle, cle[vrai], incomparables = NA))
   lignes_p <- which(possible & !is.na(cle))
   j <- match(valeurs_cle, cle[lignes_p], incomparables = NA)
@@ -1949,6 +1960,20 @@ lire_declarations <- function(declarations, dico) {
 # (spécification `donnees` v1.7, § 2.2, B.4, « Chaîne vide », #123). FAUX hors du type
 # character, sans conversion (une date comparée à "" serait mise en texte à chaque appel).
 .chaine_vide <- function(x) if (is.character(x)) x %in% "" else logical(length(x))
+# Valeurs d'une clé lue pour un appariement ou une comparaison de clés : une chaîne vide y suit
+# la règle de la clé manquante (NA : aucun appariement, valeur absente et connue ; spécification
+# `donnees` v1.7, § 2.2, B.4, « Clé manquante » et « Chaîne vide », erratum du 15 novembre
+# 2026, #123). `.cle3()` : la même règle sur une entrée à trois valeurs (.connue3(),
+# .jointe3()), valeurs et domaines propres.
+.cle_manquante <- function(x) {
+  x[.chaine_vide(x)] <- NA
+  x
+}
+.cle3 <- function(e) {
+  e$valeurs <- .cle_manquante(e$valeurs)
+  if (!is.null(e$domaines)) e$domaines <- lapply(e$domaines, function(d) if (!is.null(d)) unique(.cle_manquante(d)))
+  e
+}
 
 .hors_bornes <- function(ctx, table, colonne, mini = -Inf, maxi = Inf, lit = character(0),
                          code = "hors_domaine") {
@@ -2101,8 +2126,9 @@ lire_declarations <- function(declarations, dico) {
   }, partiel = TRUE)
   .regle(ctx, "hors_domaine", "famille", "id_sinistre",
          c("famille.id_assure", "sinistres.id_sinistre", "sinistres.id_assure"), "R", "exacte", function() {
-    .verdict3(list(assure = .jointe3(ctx, "sinistres.id_assure", "id_sinistre", v("famille", "id_sinistre")),
-                   local = .connue3("famille.id_assure", v("famille", "id_assure"))),
+    # clés comparées : une chaîne vide vaut clé manquante (.cle3(), #123)
+    .verdict3(list(assure = .cle3(.jointe3(ctx, "sinistres.id_assure", "id_sinistre", v("famille", "id_sinistre"))),
+                   local = .cle3(.connue3("famille.id_assure", v("famille", "id_assure")))),
               function(x) !is.na(x$assure) & x$assure != x$local)
   }, partiel = TRUE)
 
@@ -2188,8 +2214,9 @@ lire_declarations <- function(declarations, dico) {
                    function(x) ifelse(is.na(x$type), NA, x$type == "arrerage"), type_p3)
   .regle(ctx, "hors_domaine", "prestations", "id_rente", c("rentes.id_rente", "rentes.id_dossier",
                                                            "prestations.id_dossier"), "R", "exacte", function() {
-    .verdict3(list(d = .jointe3(ctx, "rentes.id_dossier", "id_rente", v("prestations", "id_rente")),
-                   local = .connue3("prestations.id_dossier", v("prestations", "id_dossier"))),
+    # clés comparées : une chaîne vide vaut clé manquante (.cle3(), #123)
+    .verdict3(list(d = .cle3(.jointe3(ctx, "rentes.id_dossier", "id_rente", v("prestations", "id_rente"))),
+                   local = .cle3(.connue3("prestations.id_dossier", v("prestations", "id_dossier")))),
               function(x) !is.na(x$d) & !is.na(x$local) & x$d != x$local)
   }, partiel = TRUE)
   for (colonne in c("debut_periode", "fin_periode")) {
@@ -2227,14 +2254,16 @@ lire_declarations <- function(declarations, dico) {
   }, function() list(type = e3("evenements.type_evenement"), g = gar_dossier3(v("evenements", "id_dossier"))))
   .regle(ctx, "hors_domaine", "evenements", "id_dossier",
          c("evenements.id_sinistre", "dossiers.id_dossier", "dossiers.id_sinistre"), "R", "exacte", function() {
-    .verdict3(list(s = .jointe3(ctx, "dossiers.id_sinistre", "id_dossier", v("evenements", "id_dossier")),
-                   local = .connue3("evenements.id_sinistre", v("evenements", "id_sinistre"))),
+    # clés comparées : une chaîne vide vaut clé manquante (.cle3(), #123)
+    .verdict3(list(s = .cle3(.jointe3(ctx, "dossiers.id_sinistre", "id_dossier", v("evenements", "id_dossier"))),
+                   local = .cle3(.connue3("evenements.id_sinistre", v("evenements", "id_sinistre")))),
               function(x) !is.na(x$s) & x$s != x$local)
   }, partiel = TRUE)
   .regle(ctx, "hors_domaine", "evenements", "id_rente",
          c("evenements.id_dossier", "rentes.id_rente", "rentes.id_dossier"), "R", "exacte", function() {
-    .verdict3(list(d = .jointe3(ctx, "rentes.id_dossier", "id_rente", v("evenements", "id_rente")),
-                   local = .connue3("evenements.id_dossier", v("evenements", "id_dossier"))),
+    # clés comparées : une chaîne vide vaut clé manquante (.cle3(), #123)
+    .verdict3(list(d = .cle3(.jointe3(ctx, "rentes.id_dossier", "id_rente", v("evenements", "id_rente"))),
+                   local = .cle3(.connue3("evenements.id_dossier", v("evenements", "id_dossier")))),
               function(x) !is.na(x$d) & !is.na(x$local) & x$d != x$local)
   }, partiel = TRUE)
   # type compatible avec la nature du sinistre (niveau sinistre : arrêt de travail) ou avec
@@ -2303,8 +2332,9 @@ lire_declarations <- function(declarations, dico) {
                    function() list(statut = e3("victimes.statut_victime")))
   .regle(ctx, "D10h", "victimes", "id_sinistre", c("victimes.id_assure", "sinistres.id_sinistre", "sinistres.id_assure"),
          "R", "exacte", function() {
-    .verdict3(list(assure = .jointe3(ctx, "sinistres.id_assure", "id_sinistre", v("victimes", "id_sinistre")),
-                   local = .connue3("victimes.id_assure", v("victimes", "id_assure"))),
+    # clés comparées : une chaîne vide vaut clé manquante (.cle3(), #123)
+    .verdict3(list(assure = .cle3(.jointe3(ctx, "sinistres.id_assure", "id_sinistre", v("victimes", "id_sinistre"))),
+                   local = .cle3(.connue3("victimes.id_assure", v("victimes", "id_assure")))),
               function(x) !is.na(x$assure) & !is.na(x$local) & x$assure != x$local)
   }, partiel = TRUE)
 
@@ -2329,7 +2359,7 @@ lire_declarations <- function(declarations, dico) {
   }, partiel = TRUE)
   .regle(ctx, "hors_domaine", "ayants_droit_sante", "id_affiliation",
          c("affiliations.id_affiliation", "affiliations.sante_organisme"), "R", "exacte", function() {
-    # une clé manquante ne s'apparie à aucune ligne (index NA ; spécification v1.6, § 2.2, B.4, #130)
+    # une clé manquante ne s'apparie à aucune ligne (index NA ; spécification `donnees` v1.7, § 2.2, B.4, #130)
     ids <- v("ayants_droit_sante", "id_affiliation")
     .verdict3(list(trouve = .connue3("ayants_droit_sante.id_affiliation",
                                      !is.na(.index_jointure(ctx, "affiliations", "id_affiliation", ids))),
@@ -2481,9 +2511,10 @@ lire_declarations <- function(declarations, dico) {
         connue <- !Reduce(`|`, inconnues)
         # clé composite des colonnes `k` (toutes par défaut), manquante si l'une l'est (une clé
         # manquante ne s'apparie à aucune ligne, .existe_kleene()) ; sans colonne (`k` vide, toutes
-        # les colonnes cibles inconnues), la même pour toutes les lignes
+        # les colonnes cibles inconnues), la même pour toutes les lignes (préfixe "\r" : jamais
+        # une chaîne vide, que .existe_kleene() tient pour une clé manquante, #123)
         cle_de <- function(valeurs, k = seq_along(valeurs)) {
-          x <- do.call(paste, c(list(rep("", length(valeurs[[1L]]))), valeurs[k], sep = "\r"))
+          x <- do.call(paste, c(list(rep("\r", length(valeurs[[1L]]))), valeurs[k], sep = "\r"))
           if (length(k) > 0L) x[Reduce(`|`, lapply(valeurs[k], is.na))] <- NA
           x
         }
@@ -2853,10 +2884,11 @@ parties_ligne <- function() lapply(.PARTIES_LIGNE, function(p) list(table = p$ta
 }
 
 # Première date d'une ligne parente pour chaque clé de `cle` (la plus ancienne si la clé
-# n'est pas unique : versions de famille), NA si la parente n'existe pas.
+# n'est pas unique : versions de famille), NA si la parente n'existe pas (clé manquante ou "" :
+# aucune, .cle_manquante(), #123).
 .date_parente <- function(cle, cle_parente, date_parente) {
   o <- order(as.numeric(date_parente), na.last = TRUE, method = "radix")
-  as.numeric(date_parente)[o][match(cle, cle_parente[o], incomparables = NA)]
+  as.numeric(date_parente)[o][match(.cle_manquante(cle), .cle_manquante(cle_parente)[o], incomparables = NA)]
 }
 
 # Logique à trois valeurs de la règle P (logique de Kleene ; spécification, § 2.2, (b) et
@@ -2912,7 +2944,8 @@ parties_ligne <- function() lapply(.PARTIES_LIGNE, function(p) list(table = p$ta
 # uniques (versions), et sa date de saisie, colonne de clé, n'est jamais refusée pour sa
 # valeur.
 .avant_parente3 <- function(x, ix, cle, cle_parente, date_parente, inconnue_parente) {
-  .avant3(x, ix, .date_parente(cle, cle_parente, date_parente), !is.na(cle) & cle %in% cle_parente[inconnue_parente])
+  cle <- .cle_manquante(cle)
+  .avant3(x, ix, .date_parente(cle, cle_parente, date_parente), !is.na(cle) & cle %in% .cle_manquante(cle_parente)[inconnue_parente])
 }
 # Hypothèse de D02b déclarée pour chaque référentiel (la vue est commune aux deux).
 .h_d02b <- function(ctx) {
@@ -3107,9 +3140,9 @@ parties_ligne <- function() lapply(.PARTIES_LIGNE, function(p) list(table = p$ta
     for (i in which(liens$table == t)) {
       u <- liens$table_cible[i]
       if (!lisible(t, liens$colonne[i]) || !lisible(u, liens$colonne_cible[i])) return(rep(NA_real_, length(x)))
-      cle <- .valeurs(ctx, t, liens$colonne[i])
+      cle <- .cle_manquante(.valeurs(ctx, t, liens$colonne[i]))
       p <- .date_parente(cle, .valeurs(ctx, u, liens$colonne_cible[i]), vd[[u]])
-      orpheline <- is.na(cle) | !(cle %in% .valeurs(ctx, u, liens$colonne_cible[i]))
+      orpheline <- is.na(cle) | !(cle %in% .cle_manquante(.valeurs(ctx, u, liens$colonne_cible[i])))
       x <- pmax(x, ifelse(orpheline, -Inf, p))
     }
     x
@@ -4215,7 +4248,8 @@ parties_ligne <- function() lapply(.PARTIES_LIGNE, function(p) list(table = p$ta
   # (`val` : .valeurs_vue(), ou `vnd` sur les lignes non déterminées) ; `source` : table et ligne
   # de chaque référence (assures_sinistre, assures_affiliation)
   assure_de <- function(t, val = vv) {
-    match(as.character(val(t, "id_assure")), as.character(v("assures", "id_assure")), incomparables = NA)
+    match(.cle_manquante(as.character(val(t, "id_assure"))), .cle_manquante(as.character(v("assures", "id_assure"))),
+          incomparables = NA)
   }
   propre <- function(t) function() list(p = seq_len(nrow(ctx$base[[t]])), date = vv(t, "date_saisie"))
   n_de <- function(t) NROW(ctx$base[[t]])
@@ -4999,7 +5033,7 @@ parties_ligne <- function() lapply(.PARTIES_LIGNE, function(p) list(table = p$ta
     delai <- vapply(valeurs, function(x) if (length(x) == 1L) x else NA_real_, 0, USE.NAMES = FALSE)
     # sorties reprise_travail d'un sinistre arret_travail (S1), retenues ou non déterminées
     type <- v("evenements", "type_evenement")
-    i1 <- match(as.character(v("evenements", "id_sinistre")), id_s, incomparables = NA)
+    i1 <- match(.cle_manquante(as.character(v("evenements", "id_sinistre"))), .cle_manquante(id_s), incomparables = NA)
     sortie <- type %in% "sortie" & v("evenements", "motif") %in% "reprise_travail" & !is.na(i1) &
       arret[ifelse(is.na(i1), 1L, i1)]
     effet <- .date_connue(ctx, "evenements", "date_effet")
@@ -5428,8 +5462,8 @@ parties_ligne <- function() lapply(.PARTIES_LIGNE, function(p) list(table = p$ta
   te <- ctx$dico$types_evenements
   n <- nrow(ctx$base$evenements)
   type <- v("evenements", "type_evenement")
-  sin <- as.character(v("evenements", "id_sinistre"))
-  k <- match(sin, as.character(v("sinistres", "id_sinistre")), incomparables = NA)
+  sin <- .cle_manquante(as.character(v("evenements", "id_sinistre")))
+  k <- match(sin, .cle_manquante(as.character(v("sinistres", "id_sinistre"))), incomparables = NA)
   arret <- !is.na(k) & v("sinistres", "nature_sinistre")[ifelse(is.na(k), 1L, k)] %in% "arret_travail"
   etat <- arret & type %in% te$type_evenement[!is.na(te$etat_depuis) & nzchar(te$etat_depuis)]
   ret <- which(ctx$retenu$evenements & etat)
@@ -5798,8 +5832,8 @@ parties_ligne <- function() lapply(.PARTIES_LIGNE, function(p) list(table = p$ta
         t <- liens$table[i]
         u <- liens$table_cible[i]
         if (lisible(t, liens$colonne[i]) && lisible(u, liens$colonne_cible[i])) {
-          cle <- as.character(.valeurs(ctx, t, liens$colonne[i]))
-          cible <- as.character(.valeurs(ctx, u, liens$colonne_cible[i]))
+          cle <- .cle_manquante(as.character(.valeurs(ctx, t, liens$colonne[i])))
+          cible <- .cle_manquante(as.character(.valeurs(ctx, u, liens$colonne_cible[i])))
           vu <- statut[[u]]
           parente <- ifelse(is.na(cle) | !(cle %in% cible) | cle %in% cible[vu %in% TRUE], TRUE,
                             ifelse(cle %in% cible[is.na(vu)], NA, FALSE))
@@ -5824,8 +5858,8 @@ parties_ligne <- function() lapply(.PARTIES_LIGNE, function(p) list(table = p$ta
   if ("famille" %in% tables) {
     valable <- statut$famille
     if (lisible("famille", "id_membre")) {
-      membre <- as.character(.valeurs(ctx, "famille", "id_membre"))
-      membre[is.na(membre)] <- paste0("\r", which(is.na(membre)))   # un manquant : un membre à part
+      membre <- .cle_manquante(as.character(.valeurs(ctx, "famille", "id_membre")))
+      membre[is.na(membre)] <- paste0("\r", which(is.na(membre)))   # un manquant ("" compris) : un membre à part
       saisie <- if (lisible("famille", "date_saisie")) as.numeric(.valeurs(ctx, "famille", "date_saisie")) else
         rep(NA_real_, length(membre))
       g <- ctx$date_g$famille
@@ -5854,13 +5888,13 @@ parties_ligne <- function() lapply(.PARTIES_LIGNE, function(p) list(table = p$ta
     if (totale) next
     cle_t <- eclater_champ(ctx$dico$tables$cle_primaire[ctx$dico$tables$table == t])[1L]
     if (!lisible(t, cle_t)) { statut[[t]] <- rep(NA, n_de(t)); next }
-    cle <- as.character(.valeurs(ctx, t, cle_t))
+    cle <- .cle_manquante(as.character(.valeurs(ctx, t, cle_t)))
     vrai <- character(0)
     indet <- character(0)
     for (r in references[[t]]) {
       if (!(r[1L] %in% tables)) next
       if (!lisible(r[1L], r[2L])) { indet <- c(indet, cle); next }
-      x <- as.character(.valeurs(ctx, r[1L], r[2L]))
+      x <- .cle_manquante(as.character(.valeurs(ctx, r[1L], r[2L])))
       s <- if (r[1L] == "famille") valable else statut[[r[1L]]]
       vrai <- c(vrai, x[s %in% TRUE])
       indet <- c(indet, x[is.na(s)])
@@ -5943,11 +5977,12 @@ parties_ligne <- function() lapply(.PARTIES_LIGNE, function(p) list(table = p$ta
 }
 
 # Paires (i, j) telles que x[i] == y[j], valeurs manquantes exclues (jointure un à plusieurs),
-# triées par i puis j ; composition de deux relations (i -> k, k -> j). Par correspondance
-# (match) sur les clés distinctes de y : coût proportionnel au nombre de paires rendues.
+# une chaîne vide comme une valeur manquante (.cle_manquante(), #123), triées par i puis j ;
+# composition de deux relations (i -> k, k -> j). Par correspondance (match) sur les clés
+# distinctes de y : coût proportionnel au nombre de paires rendues.
 .paires <- function(x, y) {
-  x <- as.character(x)
-  y <- as.character(y)
+  x <- .cle_manquante(as.character(x))
+  y <- .cle_manquante(as.character(y))
   i <- which(!is.na(x))
   j <- which(!is.na(y))
   if (length(i) == 0L || length(j) == 0L) return(data.frame(i = integer(0), j = integer(0)))
@@ -6021,7 +6056,7 @@ parties_ligne <- function() lapply(.PARTIES_LIGNE, function(p) list(table = p$ta
       paires <- lapply(seq_along(chemins), function(k) {
         depart <- seq_len(n)
         # evenements : le chemin par le sinistre ne sert qu'aux événements sans dossier
-        if (table == "evenements" && k == 2L) depart <- which(is.na(.valeurs(ctx, "evenements", "id_dossier")))
+        if (table == "evenements" && k == 2L) depart <- which(is.na(.cle_manquante(.valeurs(ctx, "evenements", "id_dossier"))))
         p <- data.frame(i = depart, j = depart)
         courante <- table
         for (h in chemins[[k]]) {
@@ -6042,8 +6077,8 @@ parties_ligne <- function() lapply(.PARTIES_LIGNE, function(p) list(table = p$ta
         # sinon rattachement non déterminé (`sur` NA) ; une seule jointure (.joindre3())
         jc <- .joindre3(ctx, "garanties_souscrites", "id_garantie_souscrite", "id_contrat",
                         .valeurs(ctx, "dossiers", "id_garantie_souscrite")[p$j])
-        ctr <- .valeurs(ctx, "garanties_souscrites", "id_contrat")
-        ca <- .valeurs(ctx, "affiliations", "id_contrat")[p$i]
+        ctr <- .cle_manquante(.valeurs(ctx, "garanties_souscrites", "id_contrat"))
+        ca <- .cle_manquante(.valeurs(ctx, "affiliations", "id_contrat"))[p$i]
         egal <- vapply(seq_len(nrow(p)), function(r) {
           o <- jc$index[[r]]
           e <- !is.na(o) & !is.na(ctr[o]) & !is.na(ca[r]) & ctr[o] == ca[r]
@@ -6220,7 +6255,7 @@ parties_ligne <- function() lapply(.PARTIES_LIGNE, function(p) list(table = p$ta
       valeurs$ij_en_vigueur <- ifelse(garantie %in% "incapacite" & en_service, montant_ev[dernier], NA_real_)
     }
     if (is.null(forme_brut$ij_en_vigueur)) {
-      sans_rente <- is.na(v("evenements", "id_rente"))
+      sans_rente <- is.na(.cle_manquante(v("evenements", "id_rente")))   # "" : manquant (#123)
       pb <- p[sans_rente[p$i], , drop = FALSE]
       dernier_b <- .dernier_evenement(ctx, pb, nd)
       brutes$ij_en_vigueur <- ifelse(!is.na(dernier_b) & type[dernier_b] %in% service, montant_ev[dernier_b], NA_real_)
@@ -6309,8 +6344,8 @@ parties_ligne <- function() lapply(.PARTIES_LIGNE, function(p) list(table = p$ta
     lignes_x <- lignes
     if (k$code == "D12") {
       table_x <- "sinistres"
-      sin_e <- as.character(.valeurs(ctx, "evenements", "id_sinistre"))[lignes]
-      lignes_x <- which(as.character(.valeurs(ctx, "sinistres", "id_sinistre")) %in% sin_e[!is.na(sin_e)])
+      sin_e <- .cle_manquante(as.character(.valeurs(ctx, "evenements", "id_sinistre"))[lignes])
+      lignes_x <- which(.cle_manquante(as.character(.valeurs(ctx, "sinistres", "id_sinistre"))) %in% sin_e[!is.na(sin_e)])
     }
     # une déclaration de la règle P qui n'est pas appliquée à la vue n'est pas placée ; un
     # constat couvert n'est placé que sur un axe (un motif à traitement unique n'est jamais
@@ -6605,7 +6640,8 @@ parties_ligne <- function() lapply(.PARTIES_LIGNE, function(p) list(table = p$ta
         g <- garantie_dossier(v("evenements", "id_dossier")[l])
         unite <- ifelse(type %in% "fixation_capital", "euro",
                  ifelse(type %in% c("ouverture_service", "modification_montant"),
-                        ifelse(!is.na(v("evenements", "id_rente")[l]), "euro_par_an", "euro_par_jour"), NA_character_))
+                        ifelse(!is.na(.cle_manquante(v("evenements", "id_rente")[l])), "euro_par_an", "euro_par_jour"),
+                        NA_character_))
         list(g = g, unite = unite)
       }
       x <- unite_de(vus)

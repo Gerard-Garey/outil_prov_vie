@@ -3409,6 +3409,132 @@ x <- r$controles_non_executes
 verifier_egal("#123 : EV3 de type zzz et de source_information \"\", condition inconnue : deux refus de valeur, aucune ligne partielle (hors_domaine, evenements, source_information) (avant #123 : cause hors_domaine)",
               list(refus_de_b(r), nrow(x[x$code == hd & x$table == "evenements" & x$colonne %in% "source_information", , drop = FALSE])),
               list(c("evenements type_evenement hors_domaine colonne EV3", "evenements source_information chaine_vide colonne EV3"), 0L))
+# clé étrangère "" face à une clé primaire "" (copie d'une ligne de la table visée sous
+# l'identifiant "") : une chaîne vide ne s'apparie à aucune ligne, comme une clé manquante
+# (.index_jointure() ; spécification `donnees` v1.7, § 2.2, B.4, « Chaîne vide » et « Clé
+# manquante ») ; la cellule ne reçoit que chaine_vide (avant : hors_domaine, D10h ou D10a en
+# plus, lus sur la ligne d'identifiant "")
+cle_vide_123 <- list(
+  list(function(b) { b$evenements$id_dossier[4L] <- ""; b$dossiers <- rbind(b$dossiers, transform(b$dossiers[3L, ], id_dossier = "")); b },
+       "evenements", "id_dossier"),
+  list(function(b) { b$famille$id_sinistre <- ""; b$sinistres <- rbind(b$sinistres, transform(b$sinistres[2L, ], id_sinistre = "", id_assure = "AS2")); b },
+       "famille", "id_sinistre"),
+  list(function(b) { b$evenements$id_rente[6L] <- ""; b$rentes <- rbind(b$rentes, transform(b$rentes[1L, ], id_rente = "", id_dossier = "DO1")); b },
+       "evenements", "id_rente"),
+  list(function(b) { b$prestations$id_rente[3L] <- ""; b$rentes <- rbind(b$rentes, transform(b$rentes[1L, ], id_rente = "", id_dossier = "DO1")); b },
+       "prestations", "id_rente"),
+  list(function(b) { b$victimes$id_sinistre <- ""; b$victimes$id_assure <- "AS1"
+                     b$sinistres <- rbind(b$sinistres, transform(b$sinistres[2L, ], id_sinistre = "", id_assure = "AS2")); b },
+       "victimes", "id_sinistre"),
+  list(function(b) { b$rentes$id_dossier <- ""; b$dossiers <- rbind(b$dossiers, transform(b$dossiers[1L, ], id_dossier = "")); b },
+       "rentes", "id_dossier"),
+  list(function(b) { b$prestations$id_dossier[3L] <- ""; b$dossiers <- rbind(b$dossiers, transform(b$dossiers[1L, ], id_dossier = "")); b },
+       "prestations", c("id_dossier", "type_prestation")),
+  # clé primaire "" en double aux lignes divergentes (copies de DO1 et de DO3 sous "" ; audit M-1) :
+  # aucune occurrence lue, pas plus que la première (avant : D10a, garantie lue sur les occurrences)
+  list(function(b) { b$rentes$id_dossier <- ""
+                     b$dossiers <- rbind(b$dossiers, transform(b$dossiers[1L, ], id_dossier = ""), transform(b$dossiers[3L, ], id_dossier = ""))
+                     b },
+       "rentes", "id_dossier"))
+verifier_egal("#123, clé étrangère \"\" face à une clé primaire \"\" : chaine_vide seul sur evenements.id_dossier, famille.id_sinistre, evenements.id_rente, prestations.id_rente, victimes.id_sinistre, rentes.id_dossier (clé primaire \"\" unique, puis en double aux lignes divergentes), et aucun D10a de prestations.type_prestation (avant : hors_domaine, D10h ou D10a en plus)",
+              lapply(cle_vide_123, function(k) cons123(k[[1L]], k[[2L]], k[[3L]])),
+              list("chaine_vide EV4", "chaine_vide ME1|2025-02-01", "chaine_vide EV6", "chaine_vide PR3", "chaine_vide VI1",
+                   "chaine_vide RE1", "chaine_vide PR3", "chaine_vide RE1"))
+# Une clé "" suit la règle de la clé manquante, primaire ou étrangère (spécification `donnees`
+# v1.7, § 2.2, B.4, « Chaîne vide », erratum du 15 novembre 2026, décision du mainteneur ;
+# .cle_manquante()) : aucun appariement, et une règle qui lit par cette clé y lit une valeur
+# absente et connue, sans écarter la ligne. Constats d'une table (code, colonne, identifiants)
+# et ses lignes de refus (motif, colonne, nombre, nombre_visibles, identifiants, nombre_dossiers).
+constats_123 <- function(f, table, arrete = A) {
+  x <- cb(avec(f), arrete)$controles
+  x <- x[x$table == table, , drop = FALSE]
+  paste(x$code, x$colonne, x$identifiants)
+}
+refus_123 <- function(f, table, arrete = A) {
+  x <- cb(avec(f), arrete)$refus_tables
+  x <- x[x$table == table, , drop = FALSE]
+  paste(x$motif, x$colonne, x$nombre, x$nombre_visibles, x$identifiants, x$nombre_dossiers)
+}
+# ligne PR3 entière (réserve R3 d'`actuary`) : tous les constats de prestations et leurs lignes de
+# refus, sous prestations.id_dossier "" de PR3 face au dossier "" (copie de DO1)
+verifier_egal("#123, R3 : PR3 d'id_dossier \"\" face au dossier \"\" : constats de prestations (chaine_vide seul sur PR3, et le refus induit des trois prestations par le dossier \"\") et lignes de refus (PR3 rattachée à aucun dossier ; refus induit : deux dossiers) (avant : hors_domaine sur prestations.id_rente, nombre_dossiers 1 et 3)",
+              list(constats_123(cle_vide_123[[7L]][[1L]], "prestations"), refus_123(cle_vide_123[[7L]][[1L]], "prestations")),
+              list(c("refus_induit NA PR1;PR2;PR3", "chaine_vide id_dossier PR3"),
+                   c("refus_induit NA 3 3 PR1;PR2;PR3 2", "chaine_vide id_dossier 1 1 PR3 0")))
+# R1 (a), entrée existentielle (.existe_kleene(), .existe3() : garantie décès du contrat) : CT2
+# d'identifiant "" et sans date_terme, GS4 d'id_contrat "" ; témoin CTX (clé renseignée :
+# manquant_obligatoire sur date_terme)
+r1a_123 <- function(id) constats_123(function(b) { b$contrats$id_contrat[2L] <- id; b$contrats$date_terme[2L] <- NA
+                                                   b$garanties_souscrites$id_contrat[4L] <- id; b }, "contrats")
+verifier_egal("#123, R1 (a) : contrat \"\" sans date_terme, garantie souscrite GS4 de contrat \"\" : chaine_vide seul, la garantie décès n'est pas appariée (avant : manquant_obligatoire sur date_terme) ; témoin CTX inchangé",
+              list(r1a_123(""), r1a_123("CTX")), list("chaine_vide id_contrat ", "manquant_obligatoire date_terme CTX"))
+# R1 (b), rattachement de l'enjeu (.paires()) : un bénéficiaire d'id_dossier "" face au dossier ""
+# n'est rattaché à aucun dossier (avant : nombre_dossiers 1)
+verifier_egal("#123, R1 (b) : BE1 d'id_dossier \"\" face au dossier \"\" (copie de DO1) : nombre_dossiers 0 (avant : 1)",
+              refus_123(function(b) { b$beneficiaires$id_dossier[1L] <- ""
+                                      b$dossiers <- rbind(b$dossiers, transform(b$dossiers[1L, ], id_dossier = "")); b }, "beneficiaires"),
+              c("refus_induit NA 1 1 BE1 0", "chaine_vide id_dossier 1 1 BE1 0"))
+# R1 (c), règles B qui comparent deux clés (.cle3()) : une clé "" vaut clé manquante, lue telle
+# quelle (colonne locale) ou jointe (valeur de la ligne visée) ; la règle ne détecte rien
+r1c_123 <- list(
+  list(function(b) { b$prestations$id_dossier[3L] <- ""; b }, "prestations"),       # hors_domaine prestations.id_rente, locale
+  list(function(b) { b$rentes$id_dossier[1L] <- ""; b }, "prestations"),            # id. jointe ; refus induit de RE1
+  list(function(b) { b$evenements$id_dossier[6L] <- ""; b }, "evenements"),         # hors_domaine evenements.id_rente, locale
+  list(function(b) { b$rentes$id_dossier[1L] <- ""; b }, "evenements"),             # id. jointe
+  list(function(b) { b$evenements$id_sinistre[4L] <- ""; b }, "evenements"),        # hors_domaine evenements.id_dossier, locale
+  list(function(b) { b$dossiers$id_sinistre[1L] <- ""; b }, "evenements"),          # id. jointe
+  list(function(b) { b$famille$id_assure[1L] <- ""; b }, "famille"),                # hors_domaine famille.id_sinistre, locale
+  list(function(b) { b$sinistres$id_assure[1L] <- ""; b }, "famille"),              # id. jointe
+  list(function(b) { b$victimes$id_sinistre <- "SI1"; b$victimes$id_assure <- ""; b }, "victimes"),   # D10h victimes, locale
+  list(function(b) { b$victimes$id_sinistre <- "SI1"; b$victimes$id_assure <- "AS1"; b$sinistres$id_assure[1L] <- ""; b },
+       "victimes"))                                                                   # id. jointe
+verifier_egal("#123, R1 (c) : clé \"\" comparée par hors_domaine (prestations.id_rente, evenements.id_rente, evenements.id_dossier, famille.id_sinistre) et D10h (victimes.id_sinistre), lue sur la ligne ou jointe : aucune détection (avant : hors_domaine ou D10h sur la ligne)",
+              lapply(r1c_123, function(k) constats_123(k[[1L]], k[[2L]])),
+              list("chaine_vide id_dossier PR3", "refus_induit NA PR1;PR2;PR3", "chaine_vide id_dossier EV6",
+                   "refus_induit NA EV1;EV2;EV3;EV4;EV5;EV6", "chaine_vide id_sinistre EV4", "refus_induit NA EV1;EV2;EV3;EV4;EV5;EV6",
+                   "chaine_vide id_assure ME1|2025-02-01", "refus_induit NA ME1|2025-02-01", "chaine_vide id_assure VI1",
+                   "refus_induit NA VI1"))
+# Date de la parente (.date_parente()) et fille saisie avant sa parente (.avant_parente3(),
+# D02b) : une clé "" n'a pas de parente, pas même une parente de clé "" (réserve R-d
+# d'`actuary`) ; fille saisie le 2019-06-01, parentes "" (2020-01-01) et A (2021-01-01) ; dans le
+# second cas, la date de la parente "" est inconnue
+verifier_egal("#123, .date_parente() : clés \"\", A et NA face aux parentes \"\" et A : NA, date de A, NA (avant : la date de la parente \"\")",
+              ns$.date_parente(c("", "A", NA), c("", "A"), D(c("2020-01-01", "2021-01-01"))), c(NA, 18628, NA))
+verifier_egal("#123, .avant_parente3() : fille de clé \"\" saisie avant la parente \"\" : faux, connue ou non la date de la parente (avant : vrai, puis inconnu) ; fille de clé A : vrai",
+              list(ns$.avant_parente3(as.numeric(D(rep("2019-06-01", 3L))), rep(FALSE, 3L), c("", "A", NA), c("", "A"),
+                                      D(c("2020-01-01", "2021-01-01")), c(FALSE, FALSE)),
+                   ns$.avant_parente3(as.numeric(D(rep("2019-06-01", 2L))), c(FALSE, FALSE), c("", "A"), c("", "A"),
+                                      D(c(NA, "2021-01-01")), c(TRUE, FALSE))),
+              list(c(FALSE, TRUE, FALSE), c(FALSE, TRUE)))
+# Recensement (même règle, sites de la visibilité et de l'enjeu ; témoin : la clé manquante) :
+# - adhérent et assuré visibles s'ils sont référencés par une ligne visible : une référence ""
+#   ne vise pas l'adhérent ou l'assuré "" (à A0 ; avant : nombre_visibles 1, et 3 et 1 dossiers) ;
+# - règle 1 : EV4 de dossier "" ne suit pas le dossier "" ouvert après A0 (orpheline : sa propre
+#   visibilité ; avant : invisible, nombre_visibles 0 et 5 du refus induit) ;
+# - version valable de famille : deux versions d'identifiant "" sont deux membres (avant : un
+#   membre, la version la plus ancienne non valable : nombre_visibles 1) ;
+# - rattachement d'un événement sans dossier par son sinistre : EV2 d'id_dossier "" est
+#   rattaché par SI2 (avant : aucun dossier) ;
+# - rattachement d'une affiliation : contrat "" de AF1 face au contrat "" de GS1 (DO1) : aucun
+#   dossier (avant : 1)
+rec_123 <- list(
+  refus_123(function(b) { b$contrats$id_adherent[1L] <- ""; b$adherents <- rbind(b$adherents, transform(b$adherents[1L, ], id_adherent = "")); b },
+            "adherents", A0),
+  refus_123(function(b) { b$sinistres$id_assure[2L] <- ""; b$assures <- rbind(b$assures, transform(b$assures[1L, ], id_assure = "")); b },
+            "assures", A0),
+  refus_123(function(b) { b$evenements$id_dossier[4L] <- ""
+                          b$dossiers <- rbind(b$dossiers, transform(b$dossiers[1L, ], id_dossier = "", date_ouverture = D("2025-12-01"))); b },
+            "evenements", A0),
+  refus_123(function(b) { b$famille <- rbind(b$famille, b$famille); b$famille$id_membre <- ""; b$famille$date_saisie[2L] <- D("2025-03-01"); b },
+            "famille"),
+  refus_123(function(b) { b$evenements$id_dossier[2L] <- ""; b }, "evenements"),
+  refus_123(function(b) { b$affiliations$id_contrat <- ""; b$garanties_souscrites$id_contrat[1L] <- ""; b }, "affiliations"))
+verifier_egal("#123, recensement : référence \"\" d'un adhérent ou d'un assuré, règle 1 de la visibilité, version valable de famille, rattachement par le sinistre et rattachement d'une affiliation : une clé \"\" ne s'apparie à rien (avant : adhérent et assuré visibles et rattachés, EV4 invisible, une version valable sur deux, EV2 et AF1 non rattachés ou rattachés à tort)",
+              rec_123,
+              list("chaine_vide id_adherent 1 0  0", "chaine_vide id_assure 1 0  0",
+                   c("refus_induit NA 6 6 EV1;EV2;EV3;EV4;EV5;EV6 3", "chaine_vide id_dossier 1 1 EV4 2"),
+                   "chaine_vide id_membre 2 2 |2025-02-01;|2025-03-01 2", "chaine_vide id_dossier 1 1 EV2 1",
+                   c("refus_induit NA 1 1 AF1 0", "chaine_vide id_contrat 1 1 AF1 0")))
 
 # C59-3 : règle bloquée par deux défauts de forme sur deux colonnes lues (D02b sur
 # evenements.date_saisie, qui lit date_effet, type_evenement et motif), à A0 : colonne_absente
