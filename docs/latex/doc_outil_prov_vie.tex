@@ -2089,6 +2089,55 @@ Chevauchement (versions de \code{garanties\_souscrites} par contrat, garantie et
   verdict vrai (recouvrement d'une ligne de groupe et d'intervalle
   connus)~: c'est la définition ci-dessus, plus large, que le code
   applique.
+\item \textbf{Clé primaire en double} (spécification, §~2.2, B.4,
+  version~1.7\fsp; décision du mainteneur du 14~novembre~2026, M381,
+  option~(b)\fsp; issue~131\fsp; jugement d'expert). Une jointure lit «~la~»
+  ligne d'une table par sa clé primaire. Quand cette clé est portée par
+  $k \geq 2$ lignes (identifiant en double, D01a), la valeur jointe est
+  l'une des valeurs de ces $k$ occurrences, sans qu'on sache laquelle~:
+  elle est connue si les occurrences concordent (toutes connues, de même
+  valeur ou toutes absentes)\fsp; sinon elle est inconnue, de domaine les valeurs des
+  occurrences, le domaine de la colonne remplaçant la valeur d'une
+  occurrence refusée pour sa valeur. Le verdict suit la lecture
+  existentielle ci-dessus~: verdict commun, ou ligne écartée, avec la
+  cause candidate D01a (cause directe, rang~3), départagée avec les autres
+  (paragraphe «~Départage à rang égal~»). Des doublons à l'identique
+  concordent sur toute colonne et laissent les verdicts déterminés. Les
+  règles~V, qui lisent la vue, d'où une table refusée en portée table est
+  absente, ne joignent jamais une clé en double. Avant l'issue~131, la
+  jointure prenait la première occurrence, et le bilan dépendait de
+  l'ordre des lignes de la base. Alternatives écartées~: (a)~une valeur
+  jointe inconnue, de domaine celui du dictionnaire, dès que la clé est en
+  double, qui écarterait les lignes jointes à des doublons à l'identique,
+  où rien n'est ambigu, et prêterait aux occurrences des valeurs qu'aucune
+  ne porte\fsp; (c)~aucune ligne jointe, comme pour une clé manquante, qui
+  rendrait des verdicts faux déterminés au lieu d'inconnus (une détection
+  manquée sans ligne partielle)\fsp; (d)~une occurrence canonique, qui
+  choisirait une valeur parmi des valeurs divergentes, imputation
+  silencieuse.
+\item \textbf{Lignes de l'écart D01a} (même décision). Le nombre et les
+  identifiants du constat D01a ne changent pas~: $k - 1$ lignes par
+  identifiant. Les lignes qui portent l'écart, dont dépendent
+  \code{nombre\_visibles}, \code{nombre\_dossiers} et l'enjeu, sont les
+  $k - 1$ occurrences qui suivent l'\emph{original} dans un ordre
+  canonique (\code{.ordre\_canonique()})~: date qui gouverne la visibilité
+  de la table, puis contenu entier de la ligne, colonnes dans l'ordre du
+  dictionnaire, en tri radix, valeur manquante en dernier (\code{NaN}
+  après \code{NA})\fsp; une colonne de type non atomique, défaut de forme,
+  se trie sur l'écriture exacte de chaque valeur. C'est la convention de
+  la copie de D01b («~saisie après l'original~»), étendue au départage des
+  égalités, et non plus l'ordre des lignes. Dans l'enjeu, la garantie d'un
+  dossier dont les doubles divergent sur \code{id\_garantie\_souscrite},
+  ou dont la garantie souscrite est en double avec des codes de garantie
+  divergents, est \code{non\_rattache} (lien non déterminé, comme la
+  garantie d'un lien non résolu), et non celle d'une occurrence. La
+  batterie unitaire vérifie, sur des bases construites (dossier en double
+  sur deux garanties ou sur la même garantie\fsp; garantie souscrite en
+  double sous un autre contrat), que le bilan est identique après
+  inversion des lignes de chaque table et, pour un dossier en double sur
+  deux garanties, après une permutation tirée sous graine locale
+  explicite, et qu'un dossier en double à l'identique n'écarte aucune
+  ligne~: vérification sur un corpus fini de cas, non preuve.
 \item \textbf{Exécution.} Une passe par strate du graphe dérivé, de~0 à~3, puis une passe
   des règles de portée \code{table}\fsp; dans une passe, les règles
   s'exécutent dans l'ordre du code. Les refus de valeur d'une colonne sont
@@ -2122,7 +2171,9 @@ Chevauchement (versions de \code{garanties\_souscrites} par contrat, garantie et
   pas un zéro rassurant. Sa cause est, parmi les motifs de tous les refus
   de valeur qui touchent une ligne écartée, sur toutes les colonnes lues
   (refus sur la ligne écartée elle-même, ou, pour une colonne d'une autre
-  table, sur la ligne jointe), le plus petit dans l'ordre du départage à
+  table, sur la ligne jointe), et D01a pour une ligne écartée parce qu'elle
+  lit une clé jointe en double aux occurrences divergentes (point
+  «~Clé primaire en double~»), le plus petit dans l'ordre du départage à
   rang égal (paragraphe «~Priorité des causes~»)~: ni l'ordre des colonnes
   lues ni celui des constats n'y entrent. C'est une cause directe (rang~3,
   paragraphe «~Priorité des causes~»). Une ligne écartée qu'aucun refus
@@ -2508,7 +2559,24 @@ s(d) = \mathrm{statut}(d) \wedge \bigvee_{\ell \in L \text{ rattachée à } d} \
 en logique de Kleene, les statuts étant ceux de l'évaluation unique de la
 visibilité (vrai~: visible\fsp; faux~: invisible de façon déterminée\fsp;
 inconnu~: non déterminé)\fsp; pour la table \code{dossiers}, la ligne est le
-dossier. Le rattachement est non déterminé pour un dossier non déterminé
+dossier. Une affiliation est rattachée aux dossiers des sinistres de son
+assuré sous le même contrat, le contrat d'un dossier étant celui de sa
+garantie souscrite. Si cette garantie souscrite est en double (D01a), le
+contrat se lit sur toutes ses occurrences (spécification, §~2.2, B.4,
+version~1.7, erratum du 15~novembre~2026\fsp; issue~131)~: la paire
+(affiliation, dossier) est gardée si chaque occurrence porte le contrat de
+l'affiliation, exclue si aucune ne le porte, et de rattachement non
+déterminé sinon\fsp; une affiliation sans contrat n'est portée par aucune
+occurrence, et sa paire est exclue (clé manquante). Une paire non
+déterminée entre dans le terme de sa ligne par un ET de Kleene~:
+$\mathrm{statut}(\ell)$ est alors remplacé par
+$\mathrm{statut}(\ell) \wedge \text{inconnu}$, de sorte qu'un dossier
+visible, rattaché par une telle paire à une affiliation visible et par
+aucune autre ligne de l'écart, est de rattachement non déterminé, et que
+\code{nombre\_dossiers} de l'écart vaut \code{NA}. Ce chemin n'est pas
+fermé par la portée table~: l'écart D01a de \code{garanties\_souscrites}
+induit le refus des \code{affiliations}, dont \code{nombre\_dossiers} se
+calcule par ce rattachement. Le rattachement est non déterminé pour un dossier non déterminé
 rattaché par une ligne visible ou non déterminée, et pour un dossier
 visible rattaché seulement par des lignes dont aucune n'est visible et
 l'une au moins est non déterminée. La conjonction est fausse dès qu'un
@@ -2719,7 +2787,8 @@ candidates de toutes les émissions de la clé~:
   ordre (la table n'a plus la préséance)~; un \code{refus\_induit} n'est
   retenu que si aucune autre cause ne l'est (rang~7)\fsp;
 \item règle~B ou règle~P exécutée en partie~: les motifs de tous les
-  refus de valeur qui touchent une ligne écartée\fsp;
+  refus de valeur qui touchent une ligne écartée, et D01a pour une ligne
+  écartée par une clé jointe en double aux occurrences divergentes\fsp;
 \item règle~V, cause~($\gamma$)~: la cause de chaque élément non
   déterminé qui peut changer le verdict d'une ligne écartée.
 \end{itemize}
