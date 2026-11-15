@@ -1665,11 +1665,19 @@ calcul. Il ne peut appeler que \code{dictionnaire} et
 
 \code{controler\_base(donnees, arrete, declarations, conventions)}
 applique la spécification du module \code{donnees}
-(\code{docs/specifications/module-donnees-v1.md}, version~1.5.5\fsp;
+(\code{docs/specifications/module-donnees-v1.md}, version~1.7\fsp;
 versions~1.1, 1.3, 1.4 et~1.5 visées par le mainteneur, la version~1.5
 le 10~novembre~2026 avec ses précisions P1 à~P5, M222\fsp; errata~1.5.1
 et~1.5.2 et précisions~1.5.3 et~1.5.4 sur ses décisions du même jour, M223
-à M226, et erratum~1.5.5 visé le même jour\fsp; décisions de la version~1.2, M194 et M195, prises par lui), sous le dictionnaire de la base en version~1.5. La date d'arrêté est obligatoire,
+à M226, et erratum~1.5.5 visé le même jour\fsp; décisions de la version~1.2, M194 et M195, prises par lui\fsp;
+version~1.6 sur ses décisions du 13~novembre~2026, M335 à M338\fsp;
+version~1.7 visée en bloc le 14~novembre~2026, M376, avec l'erratum de
+rédaction du même jour versé sur sa décision\fsp; errata du 15~novembre~2026,
+sans changement de version, ceux des issues~131 et~123 visés par lui le
+même jour, M391, celui de l'issue~122 visé par lui le même jour, M395,
+et celui de la reprise de fin de branche visé par lui le même jour, M396~:
+regroupement exact des doubles de l'écart D01a, issue~131\fsp; clé vide
+tenue pour une clé manquante, issue~123), sous le dictionnaire de la base en version~1.5. La date d'arrêté est obligatoire,
 sans valeur par défaut. \code{declarations} est le sous-schéma
 \code{donnees} du plan (rubriques \code{exclusions}, \code{hypotheses},
 \code{seuils}, \code{evaluations\_gestion})\fsp; \code{conventions} est la
@@ -1789,7 +1797,11 @@ suivant~:
   parente, sa date, sur la parente d'une ligne écartée), le plus petit dans
   l'ordre du départage à rang égal (paragraphe «~Priorité des
   causes~»)\fsp; la table n'a pas de préséance sur la parente. Une ligne écartée qu'aucun refus de valeur
-  n'explique arrête le calcul («~erreur interne de provie~»).
+  n'explique arrête le calcul («~erreur interne de provie~»). Une clé
+  primaire en double n'explique jamais une ligne écartée de la règle~P~:
+  D01a refuse sa table en portée table, et la règle~P qui la lit, ou lit
+  une table qu'il induit à refuser, est bloquée, de cause D01a ou
+  \code{refus\_induit} (mesure exécutée).
 \item \textbf{À un arrêté antérieur à l'extraction}, la visibilité d'une
   ligne, ou d'une partie de ligne, se calcule dans la même logique
   (paragraphe «~Visibilité à l'arrêté~» ci-dessous). Elle
@@ -1925,6 +1937,129 @@ règle~P.
   \code{table} lit la colonne qu'elle contrôle comme toute colonne lue,
   sans quoi le refus d'une cellule deviendrait celui d'une table\fsp; le
   seul cas est D10a sur \code{prestations.type\_prestation}.
+\item \textbf{Chaîne vide} (spécification, §~2.2, B.4, version~1.7, et
+  erratum du 15~novembre~2026\fsp; issue~123\fsp; jugement d'expert sur la
+  lecture du dictionnaire de la base, §~1.6, 1.7 et~1.10). Une chaîne vide
+  d'une colonne de type \code{character} reçoit le seul code
+  \code{chaine\_vide}~: pour toute autre règle de domaine de sa propre
+  colonne, qui la lit telle quelle (modalités, liste des motifs du type
+  d'événement, condition d'une colonne conditionnelle, compatibilité avec
+  une autre colonne), elle n'est ni une valeur présente ni un manquant.
+  Le code l'écarte ainsi en quatre endroits, par la fonction interne
+  \code{.chaine\_vide()}, fausse hors du type \code{character}, sans
+  conversion~: la règle \code{hors\_domaine} de toute colonne
+  conditionnelle (clés étrangères conditionnelles comprises),
+  \code{garanties\_souscrites.college} (collège d'un contrat individuel),
+  \code{famille.situation} et \code{evenements.motif}. Les règles qui
+  lisent une colonne non clé vide depuis une autre colonne la tiennent
+  pour une valeur inconnue, comme tout refus de valeur\fsp; une clé vide
+  suit la règle de la clé manquante (point suivant). La règle des clés n'est pas une règle de
+  domaine~: deux clés vides d'une même table sont en double (D01a) en plus
+  de leur \code{chaine\_vide}, deux anomalies distinctes (mesure
+  exécutée). Motif~: le dictionnaire dit qu'une chaîne vide est hors
+  domaine, sous le code \code{chaine\_vide}, et n'est pas un
+  manquant (§~1.6), et que chaque anomalie s'enregistre sous l'un des
+  codes (§~1.10)\fsp; la coder aussi \code{hors\_domaine} l'enregistrerait
+  deux fois, et la cause publiée serait, depuis l'issue~59, le code
+  générique plutôt que le code propre. Aucun amendement du dictionnaire
+  n'est requis. Alternatives écartées~: (a)~tenir la chaîne vide pour une
+  valeur présente, comportement antérieur, qui donnait deux codes à une
+  anomalie\fsp; (b)~la tenir pour un manquant, qui ajouterait
+  \code{manquant\_obligatoire} sous la condition et contredirait le §~1.6
+  du dictionnaire.
+\item \textbf{Clé vide} (spécification, §~2.2, B.4, «~Chaîne vide~», point
+  «~Clé vide~», erratum du 15~novembre~2026\fsp; décision du mainteneur du
+  15~novembre~2026, M396\fsp; issue~123\fsp; jugement d'expert). Une
+  chaîne vide dans une colonne de clé, primaire ou étrangère, suit la
+  règle de la clé manquante (point «~Clé manquante~» ci-dessous)~: elle
+  ne s'apparie à aucune ligne, d'un côté comme de l'autre, dans toute
+  entrée existentielle des règles~B, P et~V, dans les jointures à une
+  ligne et dans les rattachements de la visibilité et de l'enjeu\fsp; une
+  règle qui lit par cette clé y lit une valeur absente et connue, comme
+  pour une clé manquante, sans écarter la ligne. La cellule garde son seul
+  code \code{chaine\_vide}, et la détection D01a lit la cellule telle
+  quelle~: deux clés vides d'une même table restent en double (point
+  précédent). Deux fonctions internes portent la règle~:
+  \code{.cle\_manquante()}, qui tient une chaîne vide de clé pour une
+  valeur manquante, et \code{.cle3()}, la même règle sur une entrée à
+  trois valeurs (valeurs et domaines). Sites~: la jointure par
+  identifiant (\code{.index\_jointure()}~: aucune ligne jointe, pas même
+  parmi des clés primaires vides en double)\fsp; le noyau des entrées
+  existentielles (\code{.existe\_kleene()}), où la clé composite de la
+  recherche des orphelines prend un préfixe non vide\fsp; les
+  appariements un à plusieurs (\code{.paires()}~: rattachements, versions
+  d'un membre, règles~V)\fsp; les cinq règles~B qui comparent deux clés,
+  côté de la ligne et côté joint (\code{hors\_domaine} de
+  \code{prestations.id\_rente}, \code{evenements.id\_rente},
+  \code{evenements.id\_dossier} et \code{famille.id\_sinistre}\fsp; D10h de
+  \code{victimes.id\_sinistre})\fsp; dans la visibilité, la règle~1
+  (statut de la ligne parente), la version valable de \code{famille}, les
+  adhérents et les assurés référencés\fsp; la date de la ligne parente
+  (\code{.date\_parente()}), lue par la saisie avant la ligne parente de
+  la règle~P D02b (\code{.avant\_parente3()}) et par la parente de
+  l'hypothèse de D03g\fsp; la
+  cascade d'exclusion de la vue\fsp; les lignes parentes d'une cause de
+  ligne écartée\fsp; le sinistre d'un écart D12 (placement des
+  constats)\fsp; dans l'enjeu, le rattachement d'un événement par son
+  sinistre et d'une affiliation par son contrat, l'unité et l'indemnité
+  brute d'un événement de rente vide\fsp; dans les règles~V, la personne
+  d'un emploi d'assuré, les sorties de reprise (S1) et le sinistre des
+  événements\fsp; le \emph{sinistre payé} (point «~Clé manquante~»
+  ci-dessous), lu par la règle~B \code{manquant\_obligatoire} de
+  \code{evenements.motif} et par la règle~V D05\fsp; les lecteurs de la
+  vue, \code{etats\_a\_date()} (garantie souscrite et sinistre du
+  dossier) et \code{segments\_vue()} (garantie souscrite du dossier,
+  contrat des unités contrat, sinistre de l'année de survenance, nature
+  du contrat). Restent hors de la règle, renvoyés à des issues~:
+  \code{.maintien\_d11()}, où l'assuré et le contrat s'apparient par un
+  test d'appartenance qui apparie une clé manquante à une clé manquante,
+  et une clé vide à une clé vide (issue~152)\fsp; les clés composites
+  mises bout à bout en texte (\code{.garantie\_en\_vigueur3()},
+  regroupement des lignes distinctes de l'enjeu\fsp; issue~153)\fsp;
+  l'appartenance aux garanties de couverture exclue
+  (\code{garanties\_couverture\_exclue()} et ses appelants), où le contrat
+  et la garantie souscrite s'apparient par un test d'appartenance
+  (issue~154\fsp; accessibilité par une base non mesurée). Mesures
+  exécutées sur des bases construites de la batterie unitaire (résultat
+  exact)~: une clé étrangère vide face à une clé primaire vide
+  (\code{evenements.id\_dossier}, \code{famille.id\_sinistre},
+  \code{evenements.id\_rente}, \code{prestations.id\_rente},
+  \code{victimes.id\_sinistre}, \code{rentes.id\_dossier}, cette dernière
+  face à une clé primaire vide unique puis en double aux lignes
+  divergentes) ne reçoit que \code{chaine\_vide}\fsp; un contrat
+  individuel d'identifiant vide, privé de sa date de terme, dont la
+  garantie souscrite porte un contrat vide, ne reçoit que
+  \code{chaine\_vide}, alors que, sous un identifiant renseigné, il reçoit
+  \code{manquant\_obligatoire} sur \code{date\_terme}\fsp; un adhérent
+  vide référencé par un contrat d'adhérent vide n'est ni visible ni
+  rattaché à un dossier\fsp; deux versions de \code{famille} de membre
+  vide sont deux membres, visibles tous deux\fsp; une affiliation de
+  contrat vide n'est rattachée à aucun dossier d'une garantie souscrite de
+  contrat vide\fsp; une sortie sans motif de sinistre vide, face à un
+  dossier de sinistre vide qui porte une prestation, ne reçoit pas
+  \code{manquant\_obligatoire} sur \code{evenements.motif}, comme sous des
+  clés manquantes\fsp; à l'arrêté égal à la date d'extraction, où la vue
+  retient les lignes d'une table refusée, un dossier de garantie
+  souscrite vide n'a ni état ni unité de calcul, un dossier de sinistre
+  vide n'a ni état du sinistre ni année de survenance, et un contrat vide
+  ne forme aucune unité de calcul. D05 n'est pas atteignable par une
+  base (une clé vide de \code{evenements.id\_sinistre} ou de
+  \code{dossiers.id\_sinistre} refuse sa table en portée table, et D05,
+  qui les lit, est bloquée)~: un appel interne la vérifie. L'état
+  antérieur, où deux chaînes vides s'appariaient,
+  ajoutait sur ces bases des \code{hors\_domaine}, D10a, D10h ou
+  \code{manquant\_obligatoire} fondés sur ce lien, et rattachait ces lignes
+  à des dossiers (messages des commits de l'issue, non remesuré ici)\fsp;
+  aucune provision ne change. Motif~: une clé vide n'identifie rien, comme
+  une clé manquante, et apparier deux chaînes vides inventerait un
+  lien\fsp; la ligne porte déjà un refus de portée table (\code{chaine\_vide}
+  d'une colonne de clé). Alternatives écartées~: (a)~apparier une clé vide
+  à une clé vide, comportement antérieur, qui fondait des constats et des
+  rattachements sur un lien inventé\fsp; (b)~tenir une clé vide pour une
+  valeur inconnue (ligne écartée, cause \code{chaine\_vide}), écartée
+  comme l'alternative~(b) du chevauchement (point «~Calcul du
+  chevauchement~» ci-dessous)~: une clé n'a pas de domaine, et la ligne
+  porte déjà un refus de portée table.
 \item \textbf{Graphe et strates.} Les nœuds du graphe de dépendance sont
   les colonnes non clés refusables pour leur valeur\fsp; une arête va de X à
   Y quand une règle concernée de portée \code{colonne} contrôle Y et lit
@@ -1993,33 +2128,45 @@ règle~P.
 \begin{tabular}{@{}p{4.2cm}p{10.9cm}@{}}
 \rowcolor{tableheader}
 \textcolor{financeblue}{\textbf{Forme}} & \textcolor{financeblue}{\textbf{Verdict à trois valeurs}} \\
-Colonne conditionnelle (colonne requise, interdite ou libre selon d'autres colonnes) & Exigence inconnue si deux valeurs du domaine des colonnes lues donnent deux exigences différentes. \code{manquant\_obligatoire} (requise et absente) est faux si la colonne est présente, \code{hors\_domaine} (interdite et présente) est faux si elle est absente\fsp; «~libre~» n'est pas «~inconnu~»~: les deux verdicts y sont faux. \\
+Colonne conditionnelle (colonne requise, interdite ou libre selon d'autres colonnes) & Exigence inconnue si deux valeurs du domaine des colonnes lues donnent deux exigences différentes. \code{manquant\_obligatoire} (requise et absente) est faux si la colonne est présente, \code{hors\_domaine} (interdite et présente) est faux si elle est absente\fsp; «~libre~» n'est pas «~inconnu~»~: les deux verdicts y sont faux. Une chaîne vide n'est ni présente ni absente~: elle ne reçoit que \code{chaine\_vide} (point «~Chaîne vide~» ci-dessus). \\
 Borne qui dépend d'une autre colonne (date d'effet d'un événement, jour d'échéance, taux technique, signe d'un montant) & Pour D02c sur \code{evenements.date\_effet}~: (date antérieure au 1er~janvier~1901) ou (type non programmable et date postérieure à l'extraction)\fsp; vrai si la date précède 1901, faux si elle est au plus l'extraction, sinon inconnu si le type, ou le motif quand le type est programmable selon le motif, est inconnu. \\
-Jointure ou appartenance («~il existe une ligne jointe telle que\ldots~», par exemple une garantie décès du contrat) & Vrai si une ligne jointe satisfait la condition quelle que soit la valeur de ses inconnues\fsp; faux si aucune ligne jointe ne le peut\fsp; inconnu sinon. Une clé manquante ne s'apparie à aucune ligne (point ci-dessous). \\
-Chevauchement (versions de \code{garanties\_souscrites} par contrat, garantie et collège\fsp; paliers d'âge de \code{parametres}) & Vrai si, pour toute affectation des valeurs inconnues, la ligne recouvre une autre ligne de même groupe\fsp; faux si aucune affectation ne la fait recouvrir une autre ligne\fsp; inconnu sinon. \\
+Jointure ou appartenance («~il existe une ligne jointe telle que\ldots~», par exemple une garantie décès du contrat) & Vrai si une ligne jointe satisfait la condition quelle que soit la valeur de ses inconnues\fsp; faux si aucune ligne jointe ne le peut\fsp; inconnu sinon. Une clé manquante ne s'apparie à aucune ligne (point ci-dessous), une clé vide non plus (point «~Clé vide~» ci-dessus). \\
+Chevauchement (versions de \code{garanties\_souscrites} par contrat, garantie et collège\fsp; paliers d'âge de \code{parametres}) & Vrai si, pour toute affectation des valeurs inconnues, la ligne recouvre une autre ligne de même groupe\fsp; faux si aucune affectation ne la fait recouvrir une autre ligne\fsp; inconnu sinon. Une ligne dont une composante de clé du groupe manque est hors du contrôle (point ci-dessous). \\
 \end{tabular}
 \end{center}
 
 \begin{itemize}[itemsep=2pt]
-\item \textbf{Clé manquante} (spécification, §~2.2, B.4, version~1.6\fsp;
-  décision du mainteneur du 13~novembre~2026, M335\fsp; issue~56\fsp;
-  jugement d'expert). Dans la forme «~jointure ou appartenance~», une clé
-  manquante ne s'apparie à aucune ligne, d'un côté comme de l'autre~: une
-  ligne de clé manquante n'a aucune ligne jointe, et une ligne jointe de
-  clé manquante n'est jointe à aucune ligne. Un seul noyau porte cette
-  forme pour l'entrée «~décès souscrit~» de la règle~B, pour la recherche
-  des orphelines à référence composite, \code{affiliations.college} (où
-  une clé dont une partie manque ne s'apparie pas davantage), et pour les
+\item \textbf{Clé manquante} (spécification, §~2.2, B.4, versions~1.6
+  et~1.7\fsp; décisions du mainteneur du 13~novembre~2026, M335, et du
+  14~novembre~2026, M376\fsp; erratum du 15~novembre~2026, M396, pour la
+  clé vide\fsp; issues~56, 130 et~123\fsp; jugement d'expert). Dans
+  la forme «~jointure ou appartenance~», une clé manquante ne s'apparie à
+  aucune ligne, d'un côté comme de l'autre~: une ligne de clé manquante
+  n'a aucune ligne jointe, et une ligne jointe de clé manquante n'est
+  jointe à aucune ligne. La règle vaut pour toute entrée existentielle des
+  règles~B, P et~V, test d'appartenance compris. Un seul noyau la porte
+  pour l'entrée «~décès souscrit~» de la règle~B, pour la recherche des
+  orphelines à référence composite, \code{affiliations.college} (où une
+  clé dont une partie manque ne s'apparie pas davantage), et pour les
   règles~V\fsp; la jointure par identifiant du module
-  (\code{.index\_jointure()}) suit la même règle. Écart connu du code à la
-  spécification, renvoyé à l'issue~130 (décision du mainteneur du
-  13~novembre~2026)~: deux règles~B \code{hors\_domaine}, sur
-  \code{designations.id\_affiliation} et sur
-  \code{ayants\_droit\_sante.id\_affiliation}, testent l'existence de
-  l'affiliation par \code{\%in\%}, qui apparie une clé manquante à une clé
-  manquante~; l'effet se borne à une ligne \code{hors\_domaine} de trop
-  sur une table déjà refusée en portée table, sans provision ni verdict
-  touché. Motif~: une clé manquante n'identifie rien, et
+  (\code{.index\_jointure()}) suit la même règle (une valeur de clé
+  manquante ou vide n'y a aucune ligne jointe, et une clé primaire
+  manquante ou vide n'y est jamais jointe, même en double), comme, depuis
+  l'issue~130, les deux règles~B \code{hors\_domaine} de
+  \code{designations.id\_affiliation} et de
+  \code{ayants\_droit\_sante.id\_affiliation}, qui testent l'existence de
+  l'affiliation, et le \emph{sinistre payé} (sinistre dont un dossier porte
+  une prestation), qui a une seule définition, lue par la règle~B
+  \code{manquant\_obligatoire} de \code{evenements.motif} et par la
+  règle~V D05~: un événement sans \code{id\_sinistre}, ou d'\code{id\_sinistre}
+  vide, n'est jamais payé, même quand une prestation orpheline, une
+  prestation sans \code{id\_dossier} ou un dossier sans \code{id\_sinistre}
+  ou de sinistre vide place une clé manquante parmi les sinistres payés
+  (point «~Clé vide~» ci-dessus). Pour D05, et pour les tests
+  d'appartenance de D07~(c) (dossier clos) et de D10~(d) (événement sans
+  dossier), une clé manquante n'est pas atteignable~: elle refuse sa table
+  en portée table (\code{manquant\_obligatoire}), et la règle~V, bloquée,
+  n'est pas exécutée (mesure exécutée). Motif~: une clé manquante n'identifie rien, et
   apparier deux absences inventerait un lien, ce qui serait une
   imputation\fsp; la ligne porte déjà un refus de portée table (clé
   primaire ou étrangère manquante). L'alternative écartée, «~une clé
@@ -2032,8 +2179,17 @@ Chevauchement (versions de \code{garanties\_souscrites} par contrat, garantie et
   reçoit plus (mesure exécutée, résultat exact). Seuls changent ainsi des
   bilans où une clé manque des deux côtés d'une jointure, sur des tables
   déjà refusées en portée table~; aucune provision ne change. Le
-  chevauchement, qui n'est pas une jointure, garde sa propre convention
-  (point suivant).
+  chevauchement, qui n'est pas une jointure, applique la même règle à ses
+  colonnes de clé (point suivant). Seul D01a apparie encore deux clés
+  primaires dont une composante obligatoire manque (deux lignes de
+  \code{parametres} sans \code{id\_garantie\_souscrite} reçoivent D01a en
+  plus de \code{manquant\_obligatoire}, mesure exécutée)\fsp; cet écart au
+  principe, sur une table déjà refusée en portée table, est renvoyé à
+  l'issue~143 (décision du mainteneur du 14~novembre~2026, M382). Une
+  clé vide, primaire ou étrangère, suit la même règle (point «~Clé
+  vide~» ci-dessus, qui en donne les sites, dont le sinistre payé, et les
+  exceptions), et D01a apparie de même
+  deux clés primaires vides.
 \item \textbf{Calcul du chevauchement.} Les bornes de chaque ligne sont
   prises au pire (début au plus tard, fin au plus tôt, absence d'une borne
   qui retirerait la ligne du contrôle exclue)\fsp; ce pire ne dépend pas de
@@ -2043,12 +2199,100 @@ Chevauchement (versions de \code{garanties\_souscrites} par contrat, garantie et
   chaque valeur du domaine de ses colonnes de groupe inconnues, une ligne
   de ce groupe, connu, la recouvre au pire\fsp; un collège inconnu, code
   opaque, peut prendre une valeur nouvelle et n'est donc jamais recouvert
-  sous toute affectation. Comme dans la forme à deux valeurs, une clé
-  manquante forme un groupe. Le tableau des formes de la spécification
+  sous toute affectation. Une ligne dont une composante de clé du groupe
+  manque (\code{garanties\_souscrites.id\_contrat}\fsp;
+  \code{parametres.id\_garantie\_souscrite} ou \code{parametres.parametre})
+  est hors du contrôle~: elle n'est ni détectée ni écartée, et ne recouvre
+  aucune ligne (spécification, §~2.2, B.4, version~1.7\fsp; issue~121\fsp;
+  jugement d'expert). L'absence de \code{parametres.categorie\_invalidite},
+  composante de la clé primaire légitimement absente hors des paramètres à
+  dimension catégorie, reste une valeur du groupe~: deux paliers sans
+  catégorie d'un même (garantie, paramètre) sont du même groupe. Deux
+  lignes ne sont du même groupe que si chaque composante est égale, une
+  absence n'égalant que l'absence, jamais une chaîne («~NA~» littéral
+  compris)~: le groupe est codé composante par composante
+  (\code{.code\_groupe()}, \code{.egal\_valeur()}), sans mise bout à bout
+  des valeurs en texte. Les colonnes de groupe qui ne sont pas des clés
+  (code de garantie, collège) restent dans la lecture à trois valeurs~:
+  une valeur manquante y est refusée, donc inconnue. Motif~: celui de la
+  forme «~jointure ou appartenance~»\fsp; une ligne sans clé n'appartient
+  à aucun contrat ni à aucune garantie connus, et porte déjà un refus de
+  portée table. Alternatives écartées~: (a)~garder l'appariement des
+  absences, qui détectait un chevauchement entre deux versions sans
+  contrat de même code et collège\fsp; (b)~tenir une composante de clé
+  manquante pour une valeur inconnue, qui écarterait la ligne face à toute
+  ligne de même code et collège de tout contrat, alors qu'un identifiant
+  n'a pas de domaine\fsp; (c)~exclure aussi l'absence de catégorie, qui
+  laisserait passer en silence deux paliers sans catégorie qui se
+  chevauchent. Le tableau des formes de la spécification
   (B.4) ne donne, pour le chevauchement, qu'une condition suffisante du
   verdict vrai (recouvrement d'une ligne de groupe et d'intervalle
   connus)~: c'est la définition ci-dessus, plus large, que le code
   applique.
+\item \textbf{Clé primaire en double} (spécification, §~2.2, B.4,
+  version~1.7\fsp; décision du mainteneur du 14~novembre~2026, M381,
+  option~(b)\fsp; issue~131\fsp; jugement d'expert). Une jointure lit «~la~»
+  ligne d'une table par sa clé primaire. Quand cette clé est portée par
+  $k \geq 2$ lignes (identifiant en double, D01a), la valeur jointe est
+  l'une des valeurs de ces $k$ occurrences, sans qu'on sache laquelle~:
+  elle est connue si les occurrences concordent (toutes connues, de même
+  valeur ou toutes absentes)\fsp; sinon elle est inconnue, de domaine les valeurs des
+  occurrences, le domaine de la colonne remplaçant la valeur d'une
+  occurrence refusée pour sa valeur. Le verdict suit la lecture
+  existentielle ci-dessus~: verdict commun, ou ligne écartée, avec la
+  cause candidate D01a (cause directe, rang~3), départagée avec les autres
+  (paragraphe «~Départage à rang égal~»). Des doublons à l'identique
+  concordent sur toute colonne et laissent les verdicts déterminés. Les
+  règles~P et~V et la vue, qui ne lisent pas une table refusée en portée
+  table, ne joignent jamais une clé en double. Avant l'issue~131, la
+  jointure prenait la première occurrence, et le bilan dépendait de
+  l'ordre des lignes de la base. Alternatives écartées~: (a)~une valeur
+  jointe inconnue, de domaine celui du dictionnaire, dès que la clé est en
+  double, qui écarterait les lignes jointes à des doublons à l'identique,
+  où rien n'est ambigu, et prêterait aux occurrences des valeurs qu'aucune
+  ne porte\fsp; (c)~aucune ligne jointe, comme pour une clé manquante, qui
+  rendrait des verdicts faux déterminés au lieu d'inconnus (une détection
+  manquée sans ligne partielle)\fsp; (d)~une occurrence canonique, qui
+  choisirait une valeur parmi des valeurs divergentes, imputation
+  silencieuse.
+\item \textbf{Lignes de l'écart D01a} (même décision). Le nombre et les
+  identifiants du constat D01a ne changent pas~: $k - 1$ lignes par
+  identifiant. Les lignes qui portent l'écart, dont dépendent
+  \code{nombre\_visibles}, \code{nombre\_dossiers} et l'enjeu, sont les
+  $k - 1$ occurrences qui suivent l'\emph{original} dans un ordre
+  canonique (\code{.ordre\_canonique()})~: première date qui gouverne la
+  visibilité de la table (\code{date\_saisie} pour \code{prestations}\fsp;
+  aucune pour une table sans date de visibilité propre), puis contenu
+  entier de la ligne, colonnes dans l'ordre du
+  dictionnaire, en tri radix, valeur manquante en dernier (\code{NaN}
+  après \code{NA})\fsp; une colonne de type non atomique, défaut de forme,
+  se trie sur l'écriture exacte de chaque valeur. C'est la convention de
+  la copie de D01b («~saisie après l'original~»), étendue au départage des
+  égalités, et non plus l'ordre des lignes. Les identifiants dont les
+  doubles divergent sur une colonne lue (\code{.divergences\_d01a()}) se
+  regroupent à l'égalité exacte de chaque colonne de clé, celle de la
+  détection D01a, par \code{.code\_groupe()} comme le chevauchement, sans
+  mise bout à bout des valeurs en texte~: un identifiant «~NA~» littéral
+  n'est pas regroupé avec un identifiant manquant (erratum du
+  15~novembre~2026, M396\fsp; issue~131). Mesure exécutée (batterie
+  unitaire)~: deux dossiers d'identifiant manquant, rattachés à deux
+  garanties différentes, en présence d'un dossier d'identifiant
+  «~NA~», ne divergent que sur \code{id\_garantie\_souscrite} (lignes~3 et~4), seule
+  colonne où se publient les composantes empêchées de cause D01a, comme
+  sous un identifiant ordinaire (témoin \code{DOZ})~; la mise bout à bout
+  antérieure écrivait «~NA~» pour les deux identifiants et regroupait les
+  trois lignes. Dans l'enjeu, la garantie d'un
+  dossier dont les doubles divergent sur \code{id\_garantie\_souscrite},
+  ou dont la garantie souscrite est en double avec des codes de garantie
+  divergents, est \code{non\_rattache} (lien non déterminé, comme la
+  garantie d'un lien non résolu), et non celle d'une occurrence. La
+  batterie unitaire vérifie, sur des bases construites (dossier en double
+  sur deux garanties ou sur la même garantie\fsp; garantie souscrite en
+  double sous un autre contrat), que le bilan est identique après
+  inversion des lignes de chaque table et, pour un dossier en double sur
+  deux garanties, après une permutation tirée sous graine locale
+  explicite, et qu'un dossier en double à l'identique n'écarte aucune
+  ligne~: vérification sur un corpus fini de cas, non preuve.
 \item \textbf{Exécution.} Une passe par strate du graphe dérivé, de~0 à~3, puis une passe
   des règles de portée \code{table}\fsp; dans une passe, les règles
   s'exécutent dans l'ordre du code. Les refus de valeur d'une colonne sont
@@ -2082,11 +2326,14 @@ Chevauchement (versions de \code{garanties\_souscrites} par contrat, garantie et
   pas un zéro rassurant. Sa cause est, parmi les motifs de tous les refus
   de valeur qui touchent une ligne écartée, sur toutes les colonnes lues
   (refus sur la ligne écartée elle-même, ou, pour une colonne d'une autre
-  table, sur la ligne jointe), le plus petit dans l'ordre du départage à
+  table, sur la ligne jointe), et D01a pour une ligne écartée parce qu'elle
+  lit une clé jointe en double aux occurrences divergentes (point
+  «~Clé primaire en double~»), le plus petit dans l'ordre du départage à
   rang égal (paragraphe «~Priorité des causes~»)~: ni l'ordre des colonnes
   lues ni celui des constats n'y entrent. C'est une cause directe (rang~3,
   paragraphe «~Priorité des causes~»). Une ligne écartée qu'aucun refus
-  n'explique arrête le calcul («~erreur interne de provie~»). Comme les
+  de valeur ni aucune clé jointe en double n'explique arrête le calcul
+  («~erreur interne de provie~»). Comme les
   constats de la règle~B, ces lignes ne dépendent pas de l'arrêté.
 \item \textbf{Hors du mécanisme.} Le refus d'une colonne clé garde la
   portée table\fsp; une colonne lue illisible par sa forme bloque la règle
@@ -2468,7 +2715,26 @@ s(d) = \mathrm{statut}(d) \wedge \bigvee_{\ell \in L \text{ rattachée à } d} \
 en logique de Kleene, les statuts étant ceux de l'évaluation unique de la
 visibilité (vrai~: visible\fsp; faux~: invisible de façon déterminée\fsp;
 inconnu~: non déterminé)\fsp; pour la table \code{dossiers}, la ligne est le
-dossier. Le rattachement est non déterminé pour un dossier non déterminé
+dossier. Une affiliation est rattachée aux dossiers des sinistres de son
+assuré sous le même contrat, le contrat d'un dossier étant celui de sa
+garantie souscrite. Si cette garantie souscrite est en double (D01a), le
+contrat se lit sur toutes ses occurrences (spécification, §~2.2, B.4,
+version~1.7, erratum du 15~novembre~2026\fsp; issue~131)~: la paire
+(affiliation, dossier) est gardée si chaque occurrence porte le contrat de
+l'affiliation, exclue si aucune ne le porte, et de rattachement non
+déterminé sinon\fsp; une affiliation sans contrat, ou de contrat vide,
+n'est portée par aucune occurrence, et sa paire est exclue (clé
+manquante\fsp; clé vide, erratum du 15~novembre~2026, M396). Une paire non
+déterminée entre dans le terme de sa ligne par un ET de Kleene~:
+$\mathrm{statut}(\ell)$ est alors remplacé par
+$\mathrm{statut}(\ell) \wedge \text{inconnu}$, de sorte qu'un dossier
+visible, rattaché par une telle paire à une affiliation visible ou non
+déterminée, et qu'aucune ligne visible de l'écart ne rattache par une
+paire gardée, est de rattachement non déterminé, et que
+\code{nombre\_dossiers} de l'écart vaut \code{NA}. Ce chemin n'est pas
+fermé par la portée table~: l'écart D01a de \code{garanties\_souscrites}
+induit le refus des \code{affiliations}, dont \code{nombre\_dossiers} se
+calcule par ce rattachement. Le rattachement est non déterminé pour un dossier non déterminé
 rattaché par une ligne visible ou non déterminée, et pour un dossier
 visible rattaché seulement par des lignes dont aucune n'est visible et
 l'une au moins est non déterminée. La conjonction est fausse dès qu'un
@@ -2588,7 +2854,8 @@ exacte pour \code{famille}, que l'issue~49 demande.
 \end{itemize}
 
 Une composante de l'enjeu empêchée par un refus y figure aussi, sous le
-code de la composante, avec la table et la colonne lues. Une composante
+code de la composante, avec la table et la colonne de la colonne lue qui
+porte la cause retenue (paragraphe «~Composante de l'enjeu~» ci-dessous). Une composante
 dont la visibilité à l'arrêté n'est pas déterminée n'y figure pas~: sa
 cause, \code{visibilite\_non\_determinee}, se lit dans l'élément
 \code{enjeu}. Une ligne de visibilité non déterminée par un refus de
@@ -2679,9 +2946,12 @@ candidates de toutes les émissions de la clé~:
   ordre (la table n'a plus la préséance)~; un \code{refus\_induit} n'est
   retenu que si aucune autre cause ne l'est (rang~7)\fsp;
 \item règle~B ou règle~P exécutée en partie~: les motifs de tous les
-  refus de valeur qui touchent une ligne écartée\fsp;
+  refus de valeur qui touchent une ligne écartée, et D01a pour une ligne
+  écartée par une clé jointe en double aux occurrences divergentes\fsp;
 \item règle~V, cause~($\gamma$)~: la cause de chaque élément non
-  déterminé qui peut changer le verdict d'une ligne écartée.
+  déterminé qui peut changer le verdict d'une ligne écartée\fsp;
+\item composante de l'enjeu empêchée~: les causes éligibles de chaque
+  colonne lue (paragraphe «~Composante de l'enjeu~» ci-dessous).
 \end{itemize}
 La cause retenue est ainsi le minimum d'un ensemble sous un ordre
 total~: elle ne dépend ni de l'ordre d'exécution (règles, emplois,
@@ -2700,26 +2970,77 @@ changerait le vocabulaire de la colonne \code{cause}\fsp; départager par
 la colonne lue, que \code{controles\_non\_executes} ne publie pas\fsp;
 l'ordre alphabétique des codes, déclaré mais arbitraire.
 
-\textbf{Exception~: l'enjeu} (décision du mainteneur du 13~novembre~2026,
-erratum~1.6.1 de la spécification, issue~122). La cause d'une composante
-de l'enjeu empêchée reste hors de ce départage~: \code{enjeu\$cause}, et
-la ligne de la composante dans \code{controles\_non\_executes}, gardent
-le défaut de forme, à défaut le premier refus de la colonne dans l'ordre
-des constats, et la table et la colonne de leur clé restent celles de la
-première colonne lue empêchée. Seul le dédoublonnement entre émissions
-de même clé suit l'ordre (rang, position). D'ici l'issue~122, une même
-colonne peut donc publier deux causes~: celle d'une règle (la plus
-petite) et celle d'une composante de l'enjeu (la première dans l'ordre
-des constats)~; les deux refus figurent dans \code{refus\_tables}.
+\textbf{Composante de l'enjeu} (spécification, §~3.1, «~Cause d'une
+composante de l'enjeu~», version~1.7, et erratum du 15~novembre~2026\fsp;
+décision du mainteneur du 14~novembre~2026, M383\fsp; issue~122\fsp;
+jugement d'expert). La cause d'une composante de l'enjeu empêchée suit le
+même départage. Pour un écart, chaque colonne lue par la composante
+(colonnes de la garantie comprises quand elles l'empêchent) rend
+éligibles un ensemble de causes~: son défaut de forme, chacun de ses
+refus de colonne, chaque refus direct de portée table de sa table et le
+refus induit de sa table. Les règles d'éligibilité sont gardées~: le
+refus de valeur d'une colonne de visibilité lue pour la visibilité seule
+n'empêche pas la composante (paragraphe «~À l'arrêté égal à
+l'extraction~» ci-dessus)\fsp; le refus qui constitue l'écart n'empêche
+que la lecture de sa propre colonne, hors D01a et hors clé étrangère de
+l'écart (lien non résolu)\fsp; un refus induit qui procède seulement du
+refus de l'écart n'empêche pas. La cause retenue est la plus petite, dans
+l'ordre (rang, position), de l'union des causes de toutes les colonnes
+lues\fsp; pour une composante~1 à~4 empêchée par un rattachement illisible
+par sa forme, de l'union des causes de forme des colonnes du chemin. La
+table et la colonne publiées, clé de la ligne de la composante dans
+\code{controles\_non\_executes}, sont celles de la colonne lue qui porte
+la cause retenue\fsp; si plusieurs la portent, la première dans l'ordre
+du dictionnaire (tables de \code{tables.csv}, puis colonnes de
+\code{colonnes.csv}). La colonne d'un élément de cause D01a suit la même
+règle~: c'est la première colonne divergente dans l'ordre du
+dictionnaire\fsp; une ligne de l'écart, dans \code{evenements} ou
+\code{cotisations}, dont une colonne qui la classe diverge (type, rente
+ou montant d'un événement, nature d'un mouvement) empêche le couple
+(composante, unité) pour toute garantie par un seul élément sans porteur
+par écart, publié sur la première de ces colonnes divergentes. Dans
+\code{enjeu}, la cause d'une rangée est la plus petite des causes de ses
+éléments autres que \code{visibilite\_non\_determinee}, celle-ci n'étant
+retenue qu'à défaut, pour la rangée par motif comme pour la rangée
+\code{motif = ensemble}. Cause, table et colonne ne dépendent ainsi ni de
+l'ordre des colonnes lues, ni de celui des constats, ni de celui des
+éléments ou des écarts (minimum sous un ordre total, puis premier dans un
+ordre total~: résultat exact). À ensemble de causes éligibles égal, une
+règle et une composante qui lisent la même colonne publient la même
+cause~: l'incohérence transitoire que déclarait l'erratum~1.6.1 de la
+spécification (deux causes publiées pour une même colonne) est levée.
+Elles peuvent encore différer par l'éligibilité seule (le refus de
+l'écart n'empêche pas son propre enjeu\fsp; une colonne de visibilité
+lue pour la visibilité seule)~: c'est une différence déclarée, non un
+départage. Alternatives écartées~: (A1)~garder comme sous-règle les
+anciennes préséances d'ordre (forme d'abord, colonne avant table,
+premier refus dans l'ordre des constats, première colonne lue), qui
+laisserait deux causes publiées pour une même colonne\fsp; (A2)~une ligne
+par colonne qui empêche la composante, qui publierait des causes qui ne
+sont pas celle de la composante\fsp; (A3)~une colonne \code{NA}, qui
+perdrait la colonne lue\fsp; (A4)~un départage des colonnes par
+proximité de l'écart, ordre à définir table par table, non dérivé d'un
+fichier. La batterie unitaire vérifie que le départage est identique sous
+les 120~permutations de deux jeux de cinq colonnes lues et sous
+200~permutations tirées sous graine locale explicite de jeux de huit et
+de sept colonnes~: vérification sur un corpus fini de cas, non preuve.
 
 Dans le code, la fonction interne \code{.dedoublonner\_non\_executes()}
 applique cet ordre, comme la cause d'une règle bloquée ou exécutée en
-partie et la cause~($\gamma$)~: une seule implémentation, la clé (rang,
-position) d'une cause (\code{.cle\_causes()}) et la plus petite d'un
-ensemble (\code{.cause\_retenue()}), la position étant lue dans l'ordre
-des codes dérivé du dictionnaire (\code{.ordre\_codes()}), seul endroit
-où cet ordre est écrit, et calculé au plus une fois par contrôle de la
-base (issue~55). Les rangs sont lus dans deux constantes internes~:
+partie, la cause~($\gamma$) et la cause d'une composante de l'enjeu~: une
+seule implémentation, la clé (rang, position) d'une cause
+(\code{.cle\_causes()}) et la plus petite d'un ensemble
+(\code{.cause\_retenue()}), la position étant lue dans l'ordre des codes
+dérivé du dictionnaire (\code{.ordre\_codes()}), seul endroit où cet
+ordre est écrit, et calculé au plus une fois par contrôle de la base
+(issue~55). Pour une composante de l'enjeu, \code{.causes\_enjeu()} rend
+les causes éligibles d'une colonne lue, et \code{.cause\_colonnes()}
+retient la cause et la colonne publiées, la colonne étant rangée dans
+l'ordre du dictionnaire par \code{.ordre\_dictionnaire()}\fsp; la cause
+d'une composante empêchée par un rattachement illisible
+(\code{.cause\_lecture()}) passe aussi par \code{.cause\_colonnes()}, et
+celle d'une rangée de l'enjeu (\code{.rangees\_enjeu()}) par
+\code{.cause\_retenue()}. Les rangs sont lus dans deux constantes internes~:
 \code{.RANGS\_CAUSES}, qui donne les rangs des six causes nommées
 ci-dessus, et \code{.RANG\_CAUSE\_DIRECTE}, qui vaut~3. Le rang d'une
 cause est cherché dans \code{.RANGS\_CAUSES} avant de tester si elle est
