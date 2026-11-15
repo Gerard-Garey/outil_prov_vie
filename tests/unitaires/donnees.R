@@ -1725,10 +1725,10 @@ verifier_egal("#33, critère 3, partie de ligne : contrats.date_fin[1] hors doma
                    ligne(r$controles_non_executes, "D03g", "contrats", "date_saisie_fin")$cause, r$vue$provisoire),
               list("contrats date_saisie_fin hors_domaine contrats.date_fin 1 CT1", TRUE, as.Date(NA), "hors_domaine", TRUE))
 r <- r33$ev_motif
-verifier_egal("#33, Q5 (logique de Kleene) : evenements.motif[3] chaîne vide (EV3, sortie, saisi après sa date d'effet), à A0 : verdict de D02b déterminé (faux) : visible (nombre_visibles 1 sous chaine_vide et hors_domaine), aucune ligne non déterminée, aucune ligne D02b dans controles_non_executes, vue non provisoire",
+verifier_egal("#33, Q5 (logique de Kleene) : evenements.motif[3] chaîne vide (EV3, sortie, saisi après sa date d'effet), à A0 : verdict de D02b déterminé (faux) : visible (nombre_visibles 1 sous chaine_vide, seul refus depuis #123 ; avant : chaine_vide et hors_domaine), aucune ligne non déterminée, aucune ligne D02b dans controles_non_executes, vue non provisoire",
               list(paste(r$refus_tables$motif, r$refus_tables$nombre_visibles), nrow(r$vue$visibilite_non_determinee),
                    nrow(ligne(r$controles_non_executes, "D02b", "evenements")), r$vue$provisoire),
-              list(c("chaine_vide 1", "hors_domaine 1"), 0L, 0L, FALSE))
+              list("chaine_vide 1", 0L, 0L, FALSE))
 # type ou motif refusé qui peut changer la visibilité (Q5) : EV1 et EV2 de type hors domaine,
 # saisis avant leur date d'effet (EV1 : 2025-09-01, postérieure à A0 ; EV2 : 2024-05-30,
 # antérieure) ; EV3 (sortie, programmable selon le motif) à motif vide, saisi avant sa date
@@ -1738,21 +1738,20 @@ ev_vise <- avec(function(b) {
   b$evenements$type_evenement[2L] <- "zzz"; b$evenements$date_saisie[2L] <- D("2024-05-01")
   b$evenements$motif[3L] <- ""; b$evenements$date_effet[3L] <- D("2025-09-01"); b })
 r33$ev_vise <- cb(ev_vise, A0)
-verifier_egal("#33, quatre motifs de refus de valeur (manquant_obligatoire, hors_domaine, chaine_vide, D02c) sur une colonne lue par la vue, à A0 : la ligne (ou la partie) seule non déterminée, sous le code et son origine, aucun refus induit (critère 2 de #33 ; chaine_vide et hors_domaine sur une colonne de texte lue par D02b, aucune colonne de date n'admettant de chaîne : type ou motif refusé d'une ligne saisie avant sa date d'effet, Q5 ; EV3 figure sous chaque couple (motif, origine), cas limite 1)",
+verifier_egal("#33, quatre motifs de refus de valeur (manquant_obligatoire, hors_domaine, chaine_vide, D02c) sur une colonne lue par la vue, à A0 : la ligne (ou la partie) seule non déterminée, sous le code et son origine, aucun refus induit (critère 2 de #33 ; chaine_vide et hors_domaine sur une colonne de texte lue par D02b, aucune colonne de date n'admettant de chaîne : type ou motif refusé d'une ligne saisie avant sa date d'effet, Q5 ; EV3 sous le seul couple (chaine_vide, evenements.motif) depuis #123, avant sous chaque couple (motif, origine), cas limite 1)",
               lapply(r33[c("date_ouverture", "ct_fin", "ev_vise", "si_saisie")], function(r) {
                 x <- r$vue$visibilite_non_determinee
                 list(any(r$refus_tables$motif == "refus_induit"), paste(x$motif, x$origine, x$identifiants)[!is.na(x$origine)])
               }),
               list(date_ouverture = list(FALSE, "manquant_obligatoire dossiers.date_ouverture DO1"),
                    ct_fin = list(FALSE, "hors_domaine contrats.date_fin CT1"),
-                   ev_vise = list(FALSE, c("chaine_vide evenements.motif EV3", "hors_domaine evenements.motif EV3",
-                                           "hors_domaine evenements.type_evenement EV1;EV2")),
+                   ev_vise = list(FALSE, c("chaine_vide evenements.motif EV3", "hors_domaine evenements.type_evenement EV1;EV2")),
                    si_saisie = list(FALSE, "D02c sinistres.date_saisie SI2")))
 r <- cb(ev_vise, A0, declarations = list(hypotheses = hyp2("D02b")))
 verifier_egal("#33, Q5, sous l'hypothèse de D02b déclarée (visibilité = max(saisie, effet)) : le type ou le motif refusé ne change la visibilité que si la date d'effet est postérieure à A0 : EV1 et EV3 non déterminés, EV2 (effet antérieur à A0) visible",
               list(nd_de(r), ctx_complet(ev_vise, A0)$retenu$evenements[2L]),
-              list(c("evenements NA chaine_vide evenements.motif 1 EV3", "evenements NA hors_domaine evenements.motif 1 EV3",
-                     "evenements NA hors_domaine evenements.type_evenement 1 EV1"), FALSE))
+              list(c("evenements NA chaine_vide evenements.motif 1 EV3", "evenements NA hors_domaine evenements.type_evenement 1 EV1"),
+                   FALSE))
 r <- cb(avec(function(b) { b$evenements$date_effet[c(2L, 6L)] <- D("1900-01-01"); b }), A0)
 verifier_egal("#33, Q5 : evenements.date_effet refusée (D02c, EV2 et EV6) : D02b ne vise pas un type programmable (EV6, fin_service age_limite : verdict déterminé), la valeur refusée ne change pas sa visibilité ; EV2 (ouverture_service, verdict inconnu) non déterminé et écarté de D02b (ligne partielle, cause D02c) ; EV6 seul refusé : aucune ligne écartée",
               list(refus(r, "D02c", "evenements", "date_effet")$identifiants, nd_de(r),
@@ -1843,7 +1842,7 @@ verifier_egal("#33, bord sous H de D02b : type refusé, saisie antérieure à un
               list(nrow(cb(b5, A0, declarations = list(hypotheses = hyp2("D02b")))$vue$visibilite_non_determinee), nd_de(cb(b5, A0))),
               list(0L, "evenements NA hors_domaine evenements.type_evenement 1 EV1"))
 verifier_egal("#33, hypothèse de D02b déclarée pour un seul référentiel : non appliquée (la vue est commune) ; EV2 de ev_vise (effet antérieur à A0) reste non déterminé",
-              nd_de(cb(ev_vise, A0, declarations = list(hypotheses = hyp2("D02b", ns$REFERENTIELS[1L]))))[3L],
+              nd_de(cb(ev_vise, A0, declarations = list(hypotheses = hyp2("D02b", ns$REFERENTIELS[1L]))))[2L],
               "evenements NA hors_domaine evenements.type_evenement 2 EV1;EV2")
 r <- cb(avec(function(b) { b$contrats$date_fin[1L] <- D("9999-12-31"); b$contrats$motif_fin[1L] <- "resiliation_adherent"
                            b$contrats$date_saisie_fin[1L] <- D("2027-03-01"); b }), A0)
@@ -2421,13 +2420,17 @@ verifier("critère 1 (v1.5) : lignes partielles de la règle B identiques à A0 
          all(vapply(names(cas42), function(n) identical(lignes_b(r42[[n]]), lignes_b(r42_a0[[n]])), NA)))
 # auto-lecture retirée de la cause (spécification, § 2.2, B.1 et B.5 : la colonne contrôlée n'est
 # ni une colonne à valeur inconnue ni une cause ; branche `admet` de .regle(), audit final de #42) :
-# EV3 de type zzz (hors_domaine) et de source_information vide (chaine_vide), à A ; la ligne
-# partielle (hors_domaine, evenements, source_information) a pour cause hors_domaine, non chaine_vide
-r <- cb(avec(function(b) { b$evenements$type_evenement[3L] <- "zzz"; b$evenements$source_information[3L] <- ""; b }), A)
+# EV3 de type vide (chaine_vide) et de source_information zzz (hors_domaine), à A ; la ligne
+# partielle (hors_domaine, evenements, source_information) a pour cause chaine_vide, non
+# hors_domaine, plus petit code, qui serait retenu si la colonne contrôlée était une cause
+# (#59). Avant #123, la configuration inverse (type zzz, source_information vide) ; une chaîne
+# vide n'étant plus une valeur présente pour la condition de sa colonne, la règle n'y laisse
+# plus de ligne partielle (#123, ci-dessous)
+r <- cb(avec(function(b) { b$evenements$type_evenement[3L] <- ""; b$evenements$source_information[3L] <- "zzz"; b }), A)
 x <- lignes_b(r)
-verifier_egal("#42, auto-lecture : EV3 de type zzz et de source_information \"\" : deux refus de valeur ; ligne partielle (hors_domaine, evenements, source_information), cause hors_domaine (non chaine_vide, la colonne contrôlée n'est pas une cause)",
+verifier_egal("#42, auto-lecture : EV3 de type \"\" et de source_information zzz : deux refus de valeur ; ligne partielle (hors_domaine, evenements, source_information), cause chaine_vide (non hors_domaine, la colonne contrôlée n'est pas une cause)",
               list(refus_de_b(r), x$cause[x$code == hd & x$table == "evenements" & x$colonne == "source_information"]),
-              list(c("evenements type_evenement hors_domaine colonne EV3", "evenements source_information chaine_vide colonne EV3"), hd))
+              list(c("evenements type_evenement chaine_vide colonne EV3", "evenements source_information hors_domaine colonne EV3"), "chaine_vide"))
 # garde de .regle() en règle B : un verdict inconnu sans refus de valeur qui l'explique est
 # une erreur interne (spécification, § 2.2, B.5)
 ctx <- ns$.contexte(base_ref, d, list(date_extraction = A), A)
@@ -3345,10 +3348,11 @@ verifier_egal("#59, C59-1 : .dedoublonner_non_executes() identical() sous les 12
 
 # C59-2 : règle B exécutée en partie, site 1 (evenements.date_effet, qui lit type_evenement et
 # motif) : EV3 d'effet 2027-03-01 (après l'extraction), type et motif refusés pour leur valeur,
-# à A ; type zzz (hors_domaine) et motif vide (chaine_vide et hors_domaine), puis les refus
-# échangés (type vide : chaine_vide ; motif zzz : hors_domaine) : cause hors_domaine dans les
-# deux cas (avant #59 : le refus de la première colonne lue, type_evenement, soit chaine_vide
-# dans le second cas)
+# à A ; type zzz (hors_domaine) et motif vide (chaine_vide seul depuis #123 ; avant : chaine_vide
+# et hors_domaine), puis les refus échangés (type vide : chaine_vide ; motif zzz : hors_domaine) :
+# cause hors_domaine dans les deux cas, plus petit code des refus de valeur des colonnes lues
+# (avant #59 : le refus de la première colonne lue, type_evenement, soit chaine_vide dans le
+# second cas)
 c59_2 <- function(type, motif) {
   r <- cb(avec(function(b) { b$evenements$type_evenement[3L] <- type; b$evenements$motif[3L] <- motif
                              b$evenements$date_effet[3L] <- D("2027-03-01"); b }), A)
@@ -3357,8 +3361,41 @@ c59_2 <- function(type, motif) {
 }
 verifier_egal("#59, C59-2 : site 1, EV3 écartée par deux refus de valeur de codes différents sur type_evenement et motif : cause hors_domaine (plus petit code), refus échangés compris (avant #59 : chaine_vide, refus de la première colonne lue)",
               list(c59_2("zzz", ""), c59_2("", "zzz")),
-              list(list(c("type_evenement hors_domaine EV3", "motif chaine_vide EV3", "motif hors_domaine EV3"), hd),
+              list(list(c("type_evenement hors_domaine EV3", "motif chaine_vide EV3"), hd),
                    list(c("type_evenement chaine_vide EV3", "motif hors_domaine EV3"), hd)))
+
+# #123 : une chaîne vide ne reçoit que chaine_vide ; pour les autres règles de domaine de sa
+# propre colonne (auto-lecture), elle n'est ni une valeur présente ni un manquant
+# (spécification `donnees` v1.7, § 2.2, B.4, « Chaîne vide » ; avant #123 : hors_domaine en plus)
+cons123 <- function(f, table, colonne) {
+  x <- cb(avec(f))$controles
+  x <- x[x$table == table & x$colonne %in% colonne, , drop = FALSE]
+  paste(x$code, x$identifiants)
+}
+# C123-1 : motif vide, sous chacun des six types de la base (liste fermée des motifs du type)
+verifier_egal("#123, C123-1 : evenements.motif \"\" sous chacun des six types d'événements : chaine_vide seul (avant #123 : hors_domaine en plus, liste des motifs du type)",
+              lapply(1:6, function(i) cons123(function(b) { b$evenements$motif[i] <- ""; b }, "evenements", "motif")),
+              as.list(paste0("chaine_vide EV", 1:6)))
+# C123-3 : collège vide d'une garantie d'un contrat individuel (GS4, CT2) ; situation vide d'un
+# membre conjoint ; colonne C hors de sa condition (contrats.motif_fin sans date_fin) ;
+# C123-4 : la même colonne sous sa condition (date_fin renseignée) : chaine_vide seul, sans
+# manquant_obligatoire (inchangé)
+verifier_egal("#123, C123-3 et C123-4 : \"\" dans garanties_souscrites.college d'un contrat individuel, dans famille.situation d'un conjoint, dans contrats.motif_fin hors de sa condition puis sous sa condition : chaine_vide seul (avant #123 : hors_domaine en plus dans les trois premiers cas)",
+              list(cons123(function(b) { b$garanties_souscrites$college[4L] <- ""; b }, "garanties_souscrites", "college"),
+                   cons123(function(b) { b$famille$lien <- "conjoint"; b$famille$situation <- ""; b }, "famille", "situation"),
+                   cons123(function(b) { b$contrats$motif_fin[1L] <- ""; b }, "contrats", "motif_fin"),
+                   cons123(function(b) { b$contrats$motif_fin[1L] <- ""; b$contrats$date_fin[1L] <- D("2026-06-30"); b },
+                           "contrats", "motif_fin")),
+              list("chaine_vide GS4", "chaine_vide ME1|2025-02-01", "chaine_vide CT1", "chaine_vide CT1"))
+# colonne C sous une condition inconnue : EV3 de type zzz (hors_domaine) et de
+# source_information vide, à A ; une chaîne vide n'étant ni présente ni manquante, la règle
+# hors_domaine de la colonne conditionnelle rend un verdict faux déterminé : aucune ligne
+# partielle (avant #123 : ligne (hors_domaine, evenements, source_information), cause hors_domaine)
+r <- cb(avec(function(b) { b$evenements$type_evenement[3L] <- "zzz"; b$evenements$source_information[3L] <- ""; b }), A)
+x <- r$controles_non_executes
+verifier_egal("#123 : EV3 de type zzz et de source_information \"\", condition inconnue : deux refus de valeur, aucune ligne partielle (hors_domaine, evenements, source_information) (avant #123 : cause hors_domaine)",
+              list(refus_de_b(r), nrow(x[x$code == hd & x$table == "evenements" & x$colonne %in% "source_information", , drop = FALSE])),
+              list(c("evenements type_evenement hors_domaine colonne EV3", "evenements source_information chaine_vide colonne EV3"), 0L))
 
 # C59-3 : règle bloquée par deux défauts de forme sur deux colonnes lues (D02b sur
 # evenements.date_saisie, qui lit date_effet, type_evenement et motif), à A0 : colonne_absente

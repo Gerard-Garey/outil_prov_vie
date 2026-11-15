@@ -1928,6 +1928,8 @@ lire_declarations <- function(declarations, dico) {
 # relève alors de ce défaut, traité en règle V) ; présent hors condition -> hors_domaine.
 # Verdict à trois valeurs (.verdict3() ; forme « colonne conditionnelle », spécification,
 # § 2.2, B.4) ; la colonne contrôlée (`y`) est lue telle quelle par une règle de portée colonne.
+# Une chaîne vide n'y est ni présente ni manquante : elle ne reçoit que chaine_vide
+# (spécification `donnees` v1.7, § 2.2, B.4, « Chaîne vide », #123 ; .chaine_vide()).
 .regle_condition <- function(ctx, table, colonne, lit, requis, entrees, defaut_manquant = FALSE) {
   tc <- paste(table, colonne, sep = ".")
   verdict <- function(code, test) {
@@ -1939,8 +1941,14 @@ lire_declarations <- function(declarations, dico) {
            function() verdict("manquant_obligatoire", function(r, y) r %in% TRUE & is.na(y)), partiel = TRUE)
   }
   .regle(ctx, "hors_domaine", table, colonne, lit, "R", "exacte",
-         function() verdict("hors_domaine", function(r, y) r %in% FALSE & !is.na(y)), partiel = TRUE)
+         function() verdict("hors_domaine", function(r, y) r %in% FALSE & !is.na(y) & !.chaine_vide(y)), partiel = TRUE)
 }
+
+# Cellules "" d'une colonne lue telle quelle par une règle de sa propre colonne (auto-lecture) :
+# elles ne reçoivent que chaine_vide, la règle ne les tient ni pour présentes ni pour manquantes
+# (spécification `donnees` v1.7, § 2.2, B.4, « Chaîne vide », #123). FAUX hors du type
+# character, sans conversion (une date comparée à "" serait mise en texte à chaque appel).
+.chaine_vide <- function(x) if (is.character(x)) x %in% "" else logical(length(x))
 
 .hors_bornes <- function(ctx, table, colonne, mini = -Inf, maxi = Inf, lit = character(0),
                          code = "hors_domaine") {
@@ -2018,7 +2026,8 @@ lire_declarations <- function(declarations, dico) {
          function() {
     i <- .index_jointure(ctx, "contrats", "id_contrat", v("garanties_souscrites", "id_contrat"))
     .verdict3(list(college = soi("garanties_souscrites.college"), nature = e3("contrats.nature_contrat", index = i)),
-              function(x) !is.na(x$nature) & x$nature == "individuel" & x$college != "ensemble")
+              function(x) !is.na(x$nature) & x$nature == "individuel" & x$college != "ensemble" &
+                !.chaine_vide(x$college))
   }, partiel = TRUE)
 
   # parametres
@@ -2088,7 +2097,7 @@ lire_declarations <- function(declarations, dico) {
   }, partiel = TRUE)
   .regle(ctx, "hors_domaine", "famille", "situation", "famille.lien", "R", "exacte", function() {
     .verdict3(list(situation = soi("famille.situation"), lien = e3("famille.lien")),
-              function(x) !is.na(x$situation) & !is.na(x$lien) & x$lien != "enfant")
+              function(x) !is.na(x$situation) & !.chaine_vide(x$situation) & !is.na(x$lien) & x$lien != "enfant")
   }, partiel = TRUE)
   .regle(ctx, "hors_domaine", "famille", "id_sinistre",
          c("famille.id_assure", "sinistres.id_sinistre", "sinistres.id_assure"), "R", "exacte", function() {
@@ -2258,11 +2267,12 @@ lire_declarations <- function(declarations, dico) {
   .regle_condition(ctx, "evenements", "source_information", "evenements.type_evenement",
                    function(x) requiert(x$type, "source_information"), type3)
   # motif : de la liste du type ; manquant pour sortie ou cloture_dossier sans prestation sur
-  # aucun dossier du sinistre (base entière) : D05, règle V ; sinon manquant_obligatoire
+  # aucun dossier du sinistre (base entière) : D05, règle V ; sinon manquant_obligatoire ; un
+  # motif vide ne reçoit que chaine_vide (#123)
   .regle(ctx, "hors_domaine", "evenements", "motif", "evenements.type_evenement", "R", "exacte", function() {
     .verdict3(list(motif = soi("evenements.motif"), type = e3("evenements.type_evenement")), function(x) {
       k <- match(x$type, te$type_evenement)
-      !is.na(x$motif) & !is.na(k) &
+      !is.na(x$motif) & !.chaine_vide(x$motif) & !is.na(k) &
         !mapply(function(m, liste) m %in% eclater_champ(liste), x$motif, te$motifs[ifelse(is.na(k), 1L, k)])
     })
   }, partiel = TRUE)
