@@ -30,13 +30,16 @@ fin <- function() quit(save = "no", status = if (.n_echec > 0L) 1L else 0L)
 IMAGE <- "rocker/r-ver:4\\.3\\.3@sha256:[0-9a-f]{64}"
 
 # Images `container:` d'un workflow (lignes) : list(images, lignes, anomalie) ; anomalie si
-# aucune, plusieurs, ou une image non epinglee par digest.
-images_container <- function(lignes) {
+# aucune, plusieurs (une seule attendue ; `plusieurs = TRUE` : plusieurs admises si elles sont
+# la meme chaine, cas de ci.yml depuis #149 : jobs "Tests (R 4.3.3)" et "Invariance du
+# bilan"), ou une image non epinglee par digest.
+images_container <- function(lignes, plusieurs = FALSE) {
   i <- grep("^\\s*container:\\s*", lignes)
   valeurs <- trimws(sub("^\\s*container:\\s*", "", lignes[i]))
-  anomalie <- if (length(i) != 1L) sprintf("%d ligne(s) container:, une attendue", length(i)) else
-    if (!grepl(paste0("^", IMAGE, "$"), valeurs)) paste0("image non epinglee par digest : ", valeurs) else NA_character_
-  list(images = valeurs, lignes = i, anomalie = anomalie)
+  anomalie <- if (length(i) == 0L || (!plusieurs && length(i) != 1L)) sprintf("%d ligne(s) container:, une attendue", length(i)) else
+    if (!all(grepl(paste0("^", IMAGE, "$"), valeurs))) paste0("image non epinglee par digest : ", paste(valeurs[!grepl(paste0("^", IMAGE, "$"), valeurs)], collapse = ", ")) else
+    if (length(unique(valeurs)) != 1L) paste0("images differentes entre les lignes container: : ", paste(unique(valeurs), collapse = ", ")) else NA_character_
+  list(images = unique(valeurs), lignes = i, anomalie = anomalie)
 }
 
 # Digest consigne par CONTEXT.md a l'entree "Plateforme de reference" (premiere image
@@ -66,7 +69,7 @@ lignes_context <- lire(context)
 if (is.null(lignes_ci) || is.null(lignes_regen) || is.null(lignes_context)) fin()
 
 avant <- .n_echec
-a <- images_container(lignes_ci)
+a <- images_container(lignes_ci, plusieurs = TRUE)
 b <- images_container(lignes_regen)
 if (!is.na(a$anomalie)) echec(paste0("ci.yml : ", a$anomalie), ci, if (length(a$lignes)) a$lignes[1L] else NA_integer_)
 if (!is.na(b$anomalie)) echec(paste0("regenerer-references.yml : ", b$anomalie), regen,
@@ -95,6 +98,9 @@ if (is.na(images_container(c("    container: rocker/r-ver:4.3.3"))$anomalie)) ec
 if (is.na(images_container(c("container: x", "container: y"))$anomalie)) echec("temoin : deux lignes container: admises")
 if (is.na(images_container(character(0))$anomalie)) echec("temoin : aucune ligne container: admise")
 if (identical(images_container(paste("    container:", autre))$images, a$images)) echec("temoin : digest different non vu")
+if (is.na(images_container(rep(paste("    container:", a$images), 2L))$anomalie)) echec("temoin : deux lignes container: admises sans plusieurs")
+if (!is.na(images_container(rep(paste("    container:", a$images), 2L), plusieurs = TRUE)$anomalie)) echec("temoin : deux lignes identiques refusees avec plusieurs")
+if (is.na(images_container(paste("    container:", c(a$images, autre)), plusieurs = TRUE)$anomalie)) echec("temoin : deux images differentes admises avec plusieurs")
 if (!is.na(digest_context("aucune plateforme"))) echec("temoin : CONTEXT.md sans entree lu comme un digest")
 if (.n_echec == avant) ok("temoins negatifs refuses (image non epinglee, deux ou aucune ligne container:, digest different, entree absente)")
 fin()

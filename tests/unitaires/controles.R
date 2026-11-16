@@ -1051,3 +1051,11 @@ if (nzchar(Sys.which("bash"))) {
 } else {
   cat("  (bash absent : témoins de couloir.sh non joués)\n")
 }
+
+# --- invariance_bilan.R (#149 ; M603) ---------------------------------------------------------
+# Contrôle long, hors des batteries : tests/test_unitaires.R le lance avec la seule racine en
+# argument, où il ne fait rien (une ligne [INFO], statut 0). Son passage complet (--complet) et son
+# échec sur une régression injectée se mesurent par son job de CI et à la main (compte rendu de #149).
+r <- .essai("invariance_bilan", list())
+verifier("#149 : invariance_bilan.R sans --complet : [INFO], aucun calcul, statut 0",
+         .passe(r) && length(r$sortie) == 1L && startsWith(r$sortie, "[INFO] invariance_bilan.R"))
