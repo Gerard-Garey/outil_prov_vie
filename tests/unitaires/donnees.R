@@ -4986,6 +4986,45 @@ verifier_egal("D11, sous-cas du maintien à trois valeurs : sortie EV3 de SI2 (2
               list(co34(controler_base(maint_nd34, A0, s34(1000), cv34), "D11"), ne34(controler_base(maint_nd34, A0, s34(1000), cv34), "D11"),
                    co34(controler_base(within(maint_nd34, evenements$date_saisie[3L] <- D("2024-11-02")), A0, s34(1000), cv34), "D11")),
               list(character(0), "sinistres date_survenance declaration_absente", rep("sinistres exacte SI1", 2L)))
+# #152, clés du sous-cas du maintien (.maintien_d11()) : une clé manquante ou vide ne s'apparie à
+# rien (spécification `donnees` v1.7, § 2.2, B.4 ; M396). Cas latent : une clé appariée manquante
+# ou vide est refusée en portée table (l'appariement ne la voit pas), aucune base ne l'amène
+# au sous-cas ; appel interne de .verdict_d11() sur un contexte dont les clés sont altérées après
+# la construction de la vue. Verdict rendu : (détecté, non_lisible), sur maint34() (SI1 décès non
+# couvert, SI2 arrêt de travail survenu pendant AF1 finie avant le décès, non clos).
+d11_ctx34 <- function(b, alterer = function(ctx) NULL) {
+  ctx <- ns$.contexte(b, d, list(date_extraction = A), A)
+  ns$.refus_regle_b(ctx); ns$.initialiser_visibilite(ctx); ns$.regle_prealable(ctx); ns$.construire_vue(ctx)
+  alterer(ctx)
+  r <- ns$.verdict_d11(ctx)
+  c(detecte = r[1L], non_lisible = attr(r, "non_lisible"))
+}
+verifier_egal("#152, témoins : clés renseignées, SI2 non clos : SI1 non détecté, sous-cas non_lisible ; SI2 clos le 2024-09-01 : SI1 détecté, aucun non_lisible (avant #152 : identique)",
+              list(d11_ctx34(maint34()), d11_ctx34(maint34("2024-09-01"))),
+              list(c(detecte = FALSE, non_lisible = TRUE), c(detecte = TRUE, non_lisible = FALSE)))
+for (vide in list(NA_character_, "")) {
+  etiq <- if (is.na(vide)) "manquante" else "vide"
+  verifier_egal(paste0("#152, id_assure ", etiq, " à SI1, SI2 et AF1 : la clé ne s'apparie à rien, la couverture de AF1 n'est pas celle de l'assuré de SI1, SI2 n'est pas son arrêt de travail : aucun verdict de maintien, SI1 détecté, aucun non_lisible (avant #152 : NA ou \"\" apparié à lui-même, SI1 non détecté, non_lisible)"),
+                d11_ctx34(maint34(), function(ctx) { ctx$base$sinistres$id_assure <- vide; ctx$base$affiliations$id_assure <- vide }),
+                c(detecte = TRUE, non_lisible = FALSE))
+}
+# id_contrat vide ou manquant (M396, « Clé vide » : "" se lit comme NA) : même verdict, par
+# l'identité des deux sorties ; valeur commune (SI1 non détecté, aucun non_lisible), figée : le
+# traitement de NA à l'atome « le contrat ne couvre pas la survenance » (NA : faux) est en attente de
+# la décision du mainteneur (#157), un changement de cette valeur y est lié.
+cle_d11_vide <- d11_ctx34(maint34(), function(ctx) { ctx$base$affiliations$id_contrat <- ""; ctx$base$garanties_souscrites$id_contrat <- "" })
+cle_d11_na <- d11_ctx34(maint34(), function(ctx) { ctx$base$affiliations$id_contrat <- NA_character_; ctx$base$garanties_souscrites$id_contrat <- NA_character_ })
+verifier("#152, id_contrat \"\" à AF1 et aux garanties GS1 et GS3 (contrat des dossiers de SI1) : même sortie que id_contrat manquant, identical() (avant #152 : \"\" donnait SI1 détecté, NA non détecté)",
+         identical(cle_d11_vide, cle_d11_na))
+verifier_egal("#152, id_contrat vide ou manquant : valeur commune figée, SI1 non détecté, aucun non_lisible (traitement de NA à l'atome nc : #157)",
+              list(cle_d11_vide, cle_d11_na),
+              rep(list(c(detecte = FALSE, non_lisible = FALSE)), 2L))
+for (vide in list(NA_character_, "")) {
+  etiq <- if (is.na(vide)) "manquant" else "vide"
+  verifier_egal(paste0("#152, id_sinistre ", etiq, " à SI2 et à la sortie EV3 (effet 2024-09-01, avant la fin de AF1) : la sortie ne clôt pas SI2, SI1 non détecté, non_lisible (avant #152 : NA ou \"\" apparié à lui-même, SI2 clos, SI1 détecté)"),
+                d11_ctx34(maint34("2024-09-01"), function(ctx) { ctx$base$sinistres$id_sinistre[2L] <- vide; ctx$base$evenements$id_sinistre[3L] <- vide }),
+                c(detecte = FALSE, non_lisible = TRUE))
+}
 nd11_34 <- aff34(sd11_34(base_ref), date_saisie = D(NA))
 verifier_egal("D11, C11-7 : AF1 sans date de saisie (A0), seule couverture possible de SI1, SI2, SI3 : écartés, cause (γ) declaration_absente (D03g)",
               list(co34(controler_base(nd11_34, A0, s34(1000), cv34), "D11"), ne34(controler_base(nd11_34, A0, s34(1000), cv34), "D11")),

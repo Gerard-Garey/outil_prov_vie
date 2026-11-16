@@ -5231,8 +5231,9 @@ parties_ligne <- function() lapply(.PARTIES_LIGNE, function(p) list(table = p$ta
   # dossiers du sinistre (retenus ou non déterminés) et contrat de leur garantie
   p <- .paires(id_s, ifelse(ctx$retenu$dossiers | nd_d, as.character(v("dossiers", "id_sinistre")), NA))
   ret <- ctx$retenu$dossiers[p$j]
-  contrat_d <- as.character(.joindre(ctx, "garanties_souscrites", "id_garantie_souscrite", "id_contrat",
-                                     v("dossiers", "id_garantie_souscrite")))[p$j]
+  # clé vide lue comme manquante (.cle_manquante(), #152) : "" et NA donnent le même verdict
+  contrat_d <- .cle_manquante(as.character(.joindre(ctx, "garanties_souscrites", "id_garantie_souscrite", "id_contrat",
+                                                    v("dossiers", "id_garantie_souscrite")))[p$j])
   # couverture de la survenance : certaine, ou possible (index : ligne ou partie non déterminée)
   cv <- .couverture3(ctx, assure, surv)
   kc <- paste(cv$i, cv$contrat, sep = "\r")
@@ -5318,7 +5319,8 @@ parties_ligne <- function() lapply(.PARTIES_LIGNE, function(p) list(table = p$ta
 # verdict à trois valeurs (.k3()) « sinistre deces dont l'assuré a un sinistre arret_travail
 # survenu pendant une couverture d'un contrat en cause, de fin connue antérieure au décès, non
 # clos à cette fin ». `p`, `ret`, `contrat_d`, `nc` : paires (sinistre, dossier), dossier retenu,
-# contrat et atome « non couvert » de .verdict_d11() ; `r` : verdict de non-couverture.
+# contrat (clé déjà normalisée par .cle_manquante()) et atome « non couvert » de .verdict_d11() ;
+# `r` : verdict de non-couverture.
 # `evenements` FALSE (evenements illisible) : la clôture n'est pas lue, le verdict est inconnu
 # (sans index) dès qu'un sinistre arret_travail, retenu ou non déterminé, tient le reste.
 .maintien_d11 <- function(ctx, p, ret, contrat_d, nc, r, evenements = TRUE) {
@@ -5326,7 +5328,11 @@ parties_ligne <- function() lapply(.PARTIES_LIGNE, function(p) list(table = p$ta
   a <- as.numeric(ctx$arrete)
   ns <- nrow(ctx$base$sinistres)
   m3 <- .k3(rep(FALSE, ns))
-  assure <- as.character(v("sinistres", "id_assure"))
+  # clés appariées : une clé manquante ou vide ne s'apparie à rien, pas même à une clé manquante
+  # ou vide (.cle_manquante(), #152 ; `dans()` : garde sur le côté gauche)
+  cle <- function(x) .cle_manquante(as.character(x))
+  dans <- function(x, y) !is.na(x) & x %in% y
+  assure <- cle(v("sinistres", "id_assure"))
   surv <- as.numeric(v("sinistres", "date_survenance"))
   deces <- which(v("sinistres", "nature_sinistre") %in% "deces" & !(r$v %in% FALSE))
   if (length(deces) == 0L) return(m3)
@@ -5348,7 +5354,7 @@ parties_ligne <- function() lapply(.PARTIES_LIGNE, function(p) list(table = p$ta
       admis <- vt("nature_contrat") %in% "individuel"
     }
     l <- which(ctx$retenu[[t]] & admis & !is.na(debut) & !is.na(fin))
-    cvt[[t]] <- data.frame(assure = as.character(vt("id_assure"))[l], contrat = as.character(vt("id_contrat"))[l],
+    cvt[[t]] <- data.frame(assure = cle(vt("id_assure"))[l], contrat = cle(vt("id_contrat"))[l],
                            debut = debut[l], fin = fin[l], stringsAsFactors = FALSE)
   }
   cvt <- do.call(rbind, unname(cvt))
@@ -5361,9 +5367,9 @@ parties_ligne <- function() lapply(.PARTIES_LIGNE, function(p) list(table = p$ta
   arret <- which(v("sinistres", "nature_sinistre") %in% "arret_travail" & (ctx$retenu$sinistres | .nd_vue(ctx, "sinistres")))
   if (!evenements) {
     for (i in deces) {
-      c_i <- cvt[cvt$assure %in% assure[i] & cvt$fin < surv[i], , drop = FALSE]
-      if (avec[i]) c_i <- c_i[c_i$contrat %in% en_cause[[i]], , drop = FALSE]
-      s <- arret[assure[arret] %in% assure[i] & !is.na(surv[arret])]
+      c_i <- cvt[dans(cvt$assure, assure[i]) & cvt$fin < surv[i], , drop = FALSE]
+      if (avec[i]) c_i <- c_i[dans(c_i$contrat, en_cause[[i]]), , drop = FALSE]
+      s <- arret[dans(assure[arret], assure[i]) & !is.na(surv[arret])]
       if (any(vapply(s, function(k) any(surv[k] >= c_i$debut & surv[k] <= c_i$fin), NA))) m3$v[i] <- NA
     }
     return(m3)
@@ -5371,20 +5377,20 @@ parties_ligne <- function() lapply(.PARTIES_LIGNE, function(p) list(table = p$ta
   type <- v("evenements", "type_evenement")
   effet <- .date_connue(ctx, "evenements", "date_effet")
   sortie <- type %in% "sortie"
-  sin_e <- as.character(v("evenements", "id_sinistre"))
-  id_s <- as.character(v("sinistres", "id_sinistre"))
+  sin_e <- cle(v("evenements", "id_sinistre"))
+  id_s <- cle(v("sinistres", "id_sinistre"))
   nd_e <- .nd_vue(ctx, "evenements")
   for (i in deces) {
-    c_i <- cvt[cvt$assure %in% assure[i] & cvt$fin < surv[i], , drop = FALSE]
-    if (avec[i]) c_i <- c_i[c_i$contrat %in% en_cause[[i]], , drop = FALSE]
+    c_i <- cvt[dans(cvt$assure, assure[i]) & cvt$fin < surv[i], , drop = FALSE]
+    if (avec[i]) c_i <- c_i[dans(c_i$contrat, en_cause[[i]]), , drop = FALSE]
     if (nrow(c_i) == 0L) next
     vrai <- FALSE
     inconnu <- integer(0)
     inconnu_s <- integer(0)
-    for (s in arret[assure[arret] %in% assure[i]]) {
+    for (s in arret[dans(assure[arret], assure[i])]) {
       for (z in seq_len(nrow(c_i))) {
         if (is.na(surv[s]) || surv[s] < c_i$debut[z] || surv[s] > c_i$fin[z]) next
-        e <- which(sortie & sin_e %in% id_s[s])
+        e <- which(sortie & dans(sin_e, id_s[s]))
         clos_r <- any(ctx$retenu$evenements[e] & as.numeric(effet[e]) <= c_i$fin[z], na.rm = TRUE)
         if (clos_r) next
         clos_n <- e[nd_e[e] & !((effet[e] > c_i$fin[z]) %in% TRUE)]
