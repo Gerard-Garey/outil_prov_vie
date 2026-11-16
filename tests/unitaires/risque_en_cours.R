@@ -526,3 +526,48 @@ verifier_egal("(4.7) (v) CT5 résilié (2021-12-31) sous D03g sur date_saisie_fi
                             c(2946.4431354470, 595.0684931507, 3541.5116285977),
                             c("exact", "approximation_numerique", "approximation_numerique"))), 4L),
               tolerance = TOL)
+
+section("clé manquante ou vide dans la population de P3 (#154 ; spécification donnees v1.8, § 2.2, B.4, « Sites résiduels »)")
+# Appels internes sur une vue mutée (ctx$base) : une clé manquante ou vide refuse sa table en
+# portée table, les postes sont arrêtés avant l'appel (sonde de #154). Chaque état pour "" et le
+# témoin NA (C123-8), contre un témoin à clés renseignées.
+vue154 <- function(b, q) {
+  cp <- ns$canoniser_plan(q)
+  ns$vue_a_date(b, cp$arrete, cp$donnees, cp$conventions)
+}
+cles154 <- list(vide = "", manquante = NA_character_)
+# (a) sortis (P3 individuel, sinistre_obs) : base de (4.7) (t1), CT2 sorti par sa date_fin au plus
+# A sous D03g (délai 0) et SI2 deces saisi ; l'assuré de CT2 et celui de SI2 de clé `cle` : SI2
+# ne s'apparie pas à l'assuré, la sortie n'est pas observée par le sinistre, CT2 restitué
+# (sortis) ; témoin renseigné (AS2) : sortie observée, aucun contrat restitué
+sortis154 <- function(cle) {
+  v <- vue154(b_87t1, plan_87ct(0))
+  if (!is.null(cle)) {
+    v$ctx$base$contrats$id_assure[v$ctx$base$contrats$id_contrat == "CT2"] <- cle
+    v$ctx$base$sinistres$id_assure[v$ctx$base$sinistres$id_sinistre == "SI2"] <- cle
+  }
+  ns$provisions_individuelles(v, plan_87ct(0), tb, FALSE)$sortis
+}
+for (k in names(cles154)) {
+  verifier_egal(paste0("#154 provisions_individuelles(), sortis : assuré de CT2 et de SI2 de clé ", k,
+                       " : sortie par le sinistre non observée, CT2 restitué ; témoin renseigné : aucun"),
+                list(sortis154(cles154[[k]]), sortis154(NULL)), list("CT2", character(0)))
+}
+# (b) champ collectif (provisions_collectives()), base de T7 à A7 : CT3 et GS3.id_contrat de clé
+# `cle` : le contrat n'est apparié à aucune garantie souscrite (site `ct`), aucun contrat du
+# champ ; témoin renseigné : CT3
+col154 <- function(cle) {
+  q <- plan_p3(A7)
+  v <- vue154(b2_base_p3(cotisation = data.frame(debut = D("2025-07-01"), fin = D("2026-06-30"), montant = 1200)), q)
+  if (!is.null(cle)) {
+    v$ctx$base$contrats$id_contrat[v$ctx$base$contrats$id_contrat %in% "CT3"] <- cle
+    v$ctx$base$garanties_souscrites$id_contrat[v$ctx$base$garanties_souscrites$id_contrat %in% "CT3"] <- cle
+  }
+  r <- ns$provisions_collectives(v, q)
+  list(r$id_contrat, attr(r, "arret"))
+}
+for (k in names(cles154)) {
+  verifier_egal(paste0("#154 provisions_collectives(), CT3 et GS3.id_contrat de clé ", k,
+                       " : aucun contrat du champ ; témoin renseigné : CT3"),
+                list(col154(cles154[[k]]), col154(NULL)), list(list(character(0), NA_character_), list("CT3", NA_character_)))
+}

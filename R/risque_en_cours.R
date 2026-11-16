@@ -140,15 +140,17 @@ provisions_individuelles <- function(vue, plan, tables, temoin) {
                sortis = character(0))
   # garanties souscrites deces retenues, version en vigueur à l'arrêté, de contrats individuels
   # couverture exclue (erratum v1.0.13) : garantie souscrite, ou contrat, exclu pour risque_en_cours
-  # hors de la population (garanties_couverture_exclue(), seule implémentation), avant toute lecture
-  gs <- which(vue$retenu$garanties_souscrites & vv("garanties_souscrites", "code_garantie") %in% "deces")
+  # hors de la population (garanties_couverture_exclue(), seule implémentation), avant toute lecture ;
+  # une garantie souscrite d'identifiant manquant ou vide n'est d'aucune population et une clé
+  # manquante ou vide ne s'apparie à rien (cle_renseignee(), apparier_cles(), #154, règles (ii) et (iii))
+  gs <- which(vue$retenu$garanties_souscrites & vv("garanties_souscrites", "code_garantie") %in% "deces" &
+                cle_renseignee(vv("garanties_souscrites", "id_garantie_souscrite")))
   gs <- gs[!(as.character(vv("garanties_souscrites", "id_garantie_souscrite"))[gs] %in%
                garanties_couverture_exclue(vue, "risque_en_cours"))]
   g_effet <- as.numeric(vv("garanties_souscrites", "date_effet"))[gs]
   g_fin <- as.numeric(vv("garanties_souscrites", "date_fin"))[gs]
   gs <- gs[g_effet <= a & (is.na(g_fin) | g_fin > a)]
-  i_ct <- match(as.character(vv("garanties_souscrites", "id_contrat")[gs]), as.character(vv("contrats", "id_contrat")),
-                incomparables = NA)
+  i_ct <- apparier_cles(vv("garanties_souscrites", "id_contrat")[gs], vv("contrats", "id_contrat"))
   garde <- !is.na(i_ct)
   garde[garde] <- vue$retenu$contrats[i_ct[garde]] &
     vv("contrats", "nature_contrat")[i_ct[garde]] %in% "individuel" &
@@ -161,7 +163,7 @@ provisions_individuelles <- function(vue, plan, tables, temoin) {
   assure <- as.character(vv("contrats", "id_assure")[i_ct])
   # ligne de assures exclue pour risque_en_cours : date de naissance inconnue, traitée comme
   # manquante (erratum v1.0.10, #82)
-  i_as <- match(assure, as.character(vv("assures", "id_assure")), incomparables = NA)
+  i_as <- apparier_cles(assure, vv("assures", "id_assure"))
   naissance <- vv("assures", "date_naissance")[i_as]
   naissance[!is.na(i_as) & exclu$assures[i_as]] <- NA
   effet <- as.numeric(vv("contrats", "date_effet"))[i_ct]
@@ -193,8 +195,9 @@ provisions_individuelles <- function(vue, plan, tables, temoin) {
   s_id <- as.character(vv("sinistres", "id_assure"))
   s <- which(vue$retenu$sinistres & !exclu$sinistres & vv("sinistres", "nature_sinistre") %in% c("deces", "iad") &
                as.numeric(vv("sinistres", "date_survenance")) <= a)
-  sinistre <- assure %in% s_id[s]
-  sinistre_inconnu <- !is.na(assure) & assure %in% s_id[vue$retenu$sinistres & exclu$sinistres]
+  # assuré du contrat et du sinistre : une clé manquante ou vide ne s'apparie à rien (#154, règle (iii))
+  sinistre <- !is.na(apparier_cles(assure, s_id[s]))
+  sinistre_inconnu <- !is.na(apparier_cles(assure, s_id[vue$retenu$sinistres & exclu$sinistres]))
   # hypothèses de la vue appliquées aux lignes lues pour le contrat (source S2, § 5.8, #87), sur
   # la population avant la sortie par un sinistre : la ligne de contrats du contrat, celle de
   # assures de son assuré, celles de sinistres de cet assuré, visibles ou non à A (statut).
@@ -224,7 +227,7 @@ provisions_individuelles <- function(vue, plan, tables, temoin) {
   s_id_tous <- as.character(vv("sinistres", "id_sinistre"))
   s_place <- nzchar(hypotheses_vue_unites(vue, .REFERENTIEL_P3, .POSTE_P3, "risque_en_cours", length(s_id_tous),
                                           list(lecture_unites("sinistres", "id_sinistre", s_id_tous))))
-  sinistre_obs <- !is.na(assure) & assure %in% s_id[s_decide & !exclu$sinistres & !s_place]
+  sinistre_obs <- !is.na(apparier_cles(assure, s_id[s_decide & !exclu$sinistres & !s_place]))
   fin_obs <- par_fin & !decide_fin
   vide$sortis <- sort(unique(id_ct[((fin > a & sinistre & decide_sin) | (par_fin & decide_fin)) & !sinistre_obs & !fin_obs]),
                       method = "radix")
@@ -411,19 +414,21 @@ provisions_collectives <- function(vue, plan) {
               arret = arret, identifiant = identifiant, hypothese = hypothese)
   }
   # couverture exclue (erratum v1.0.13) : garantie souscrite, ou contrat, exclu pour risque_en_cours
-  # hors du champ (garanties_couverture_exclue(), seule implémentation), avant toute lecture du contrat
-  gs <- which(vue$retenu$garanties_souscrites & vv("garanties_souscrites", "code_garantie") %in% "deces")
+  # hors du champ (garanties_couverture_exclue(), seule implémentation), avant toute lecture du contrat ;
+  # une garantie souscrite d'identifiant manquant ou vide n'est d'aucune population et une clé
+  # manquante ou vide ne s'apparie à rien (cle_renseignee(), apparier_cles(), #154, règles (ii) et (iii))
+  gs <- which(vue$retenu$garanties_souscrites & vv("garanties_souscrites", "code_garantie") %in% "deces" &
+                cle_renseignee(vv("garanties_souscrites", "id_garantie_souscrite")))
   gs <- gs[!(as.character(vv("garanties_souscrites", "id_garantie_souscrite"))[gs] %in%
                garanties_couverture_exclue(vue, "risque_en_cours"))]
-  ct <- which(vue$retenu$contrats & as.character(vv("contrats", "id_contrat")) %in%
-                as.character(vv("garanties_souscrites", "id_contrat"))[gs])
+  ct <- which(vue$retenu$contrats & !is.na(apparier_cles(vv("contrats", "id_contrat"),
+                                                         vv("garanties_souscrites", "id_contrat")[gs])))
   ct <- ct[!(vv("contrats", "nature_contrat")[ct] %in% "individuel")]
-  gs <- gs[as.character(vv("garanties_souscrites", "id_contrat"))[gs] %in% as.character(vv("contrats", "id_contrat")[ct])]
+  gs <- gs[!is.na(apparier_cles(vv("garanties_souscrites", "id_contrat")[gs], vv("contrats", "id_contrat")[ct]))]
   co <- which(vue$retenu$cotisations & !exclu$cotisations & vv("cotisations", "nature_mouvement") %in% .NATURES_PRORATA &
-                as.character(vv("cotisations", "id_garantie_souscrite")) %in%
-                as.character(vv("garanties_souscrites", "id_garantie_souscrite")[gs]))
-  i_gs <- match(as.character(vv("cotisations", "id_garantie_souscrite")[co]),
-                as.character(vv("garanties_souscrites", "id_garantie_souscrite")))
+                !is.na(apparier_cles(vv("cotisations", "id_garantie_souscrite"),
+                                     vv("garanties_souscrites", "id_garantie_souscrite")[gs])))
+  i_gs <- apparier_cles(vv("cotisations", "id_garantie_souscrite")[co], vv("garanties_souscrites", "id_garantie_souscrite"))
   contrat <- as.character(vv("garanties_souscrites", "id_contrat"))[i_gs]
   debut <- as.numeric(vv("cotisations", "debut_periode"))[co]
   fin <- as.numeric(vv("cotisations", "fin_periode"))[co]
