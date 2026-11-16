@@ -31,7 +31,8 @@
         "required_status_checks": [
           { "context": "Contrôles du dépôt", "integration_id": 15368 },
           { "context": "Tests (R 4.3.3)", "integration_id": 15368 },
-          { "context": "Documents LaTeX", "integration_id": 15368 }
+          { "context": "Documents LaTeX", "integration_id": 15368 },
+          { "context": "Invariance du bilan (R 4.3.3)", "integration_id": 15368 }
         ]
       }
     }
