@@ -1650,12 +1650,12 @@ calcul. Il ne peut appeler que \code{dictionnaire} et
 \code{vue\_a\_date()} & \code{donnees}, \code{arrete}, \code{declarations}, \code{conventions} & Construit une fois la vue à l'arrêté (classe \code{vue\_provie}), seule lecture de la base par les familles de calcul~: bilan de \code{controler\_base()}, lignes retenues, parties de ligne connues, lignes exclues par famille de calcul, hypothèses par défaut appliquées\fsp; mêmes refus d'appel que \code{controler\_base()}. Non exportée. \\
 \code{valeurs\_vue()} & \code{vue}, \code{table}, \code{colonne} & Rend les valeurs d'une colonne dans la vue\fsp; \code{NA} signifie «~hors de la vue~», jamais «~absente~». Non exportée. \\
 \code{cles\_lignes\_hypothese()} & \code{vue}, \code{table}, \code{lignes}, \code{colonne} & Rend la valeur de la base d'une colonne d'identifiant (\code{id\_*}, clé primaire ou clé étrangère) pour des lignes placées sous une hypothèse de la vue, visibles ou non à l'arrêté, désignées par \code{lignes}, vecteur numérique d'indices entiers, finis et positifs\fsp; tout autre appel (dont un \code{lignes} logique, \code{TRUE} par exemple) est une erreur interne\fsp; seul rattachement d'une ligne cachée à son unité, pour un statut, jamais lu pour un montant. Non exportée, appelée par \code{engagement}. \\
-\code{etats\_a\_date()} & \code{vue}, \code{garanties}, \code{famille} & Rend l'état à l'arrêté de chaque dossier des garanties demandées (B2~: \code{deces}), pour une famille de calcul exigée~: état, montant en vigueur, état du dossier (\code{ouvert}, \code{capital\_du}, \code{clos}) par l'automate du dossier, instruction\fsp; les dossiers exclus pour la famille sont rendus, et l'appelant les filtre. Non exportée. \\
-\code{garanties\_couverture\_exclue()} & \code{vue}, \code{famille} & Rend les identifiants des garanties souscrites retenues dont la ligne, ou celle de leur contrat, est exclue pour la famille de calcul\fsp; seule implémentation de la règle de population sous couverture exclue, appelée par les familles \code{engagement} et \code{risque\_en\_cours}. Non exportée. \\
+\code{etats\_a\_date()} & \code{vue}, \code{garanties}, \code{famille} & Rend l'état à l'arrêté de chaque dossier des garanties demandées (B2~: \code{deces}), pour une famille de calcul exigée~: état, montant en vigueur, état du dossier (\code{ouvert}, \code{capital\_du}, \code{clos}) par l'automate du dossier, instruction\fsp; les dossiers exclus pour la famille sont rendus, et l'appelant les filtre\fsp; la garantie souscrite et le sinistre du dossier s'apparient par \code{apparier\_cles()} (une clé manquante ou vide ne s'apparie à rien). Non exportée. \\
+\code{garanties\_couverture\_exclue()} & \code{vue}, \code{famille} & Rend les identifiants des garanties souscrites retenues dont la ligne, ou celle de leur contrat, est exclue pour la famille de calcul, triés, jamais manquants ni vides (un tel identifiant est retiré, sans erreur)\fsp; le contrat exclu s'apparie par \code{apparier\_cles()}\fsp; seule implémentation de la règle de population sous couverture exclue, appelée par les familles \code{engagement} et \code{risque\_en\_cours}. Non exportée. \\
 \code{cle\_renseignee()} & \code{x} & Rend, pour chaque valeur de clé de \code{x}, vrai si elle n'est ni manquante ni une chaîne vide (\code{.cle\_manquante()}, point «~Clé vide~» de la section~\ref{sec:donnees-bilan})\fsp; une garantie souscrite d'identifiant manquant ou vide n'appartient à aucune population (issue~154). Non exportée, appelée par \code{garanties\_couverture\_exclue()}, \code{segments\_vue()} et la famille \code{risque\_en\_cours}. \\
 \code{apparier\_cles()} & \code{x}, \code{table} & Rend la position de chaque clé de \code{x} dans \code{table} (première occurrence, comme \code{match()}), \code{NA} pour une clé manquante ou vide de l'un ou l'autre côté~: une clé manquante ou vide ne s'apparie à rien (point «~Clé vide~» de la section~\ref{sec:donnees-bilan}, issue~154)\fsp; une appartenance s'écrit \code{!is.na(apparier\_cles())}. Non exportée, appelée par \code{garanties\_couverture\_exclue()}, \code{etats\_a\_date()}, \code{segments\_vue()} et les familles \code{engagement} et \code{risque\_en\_cours}. \\
 \code{periode\_cotisation\_regle()} & \code{date\_mouvement}, \code{periodicite} & Rend la période couverte d'une cotisation sous l'hypothèse par défaut de D03f (dictionnaire de la base, §~9)~: du premier jour du mois du mouvement à ce jour plus $p$~mois moins un jour, $p = 12$, 6, 3 ou 1 pour une périodicité annuelle, semestrielle, trimestrielle ou mensuelle\fsp; \code{NA} pour la périodicité \code{unique}, une valeur illisible ou un mouvement manquant\fsp; seule implémentation de la règle, appelée par la famille \code{risque\_en\_cours} (section~\ref{sec:risque-en-cours-p3}). Non exportée. \\
-\code{segments\_vue()} & \code{vue}, \code{segmentations}, \code{garanties} & Rend les segments des unités de calcul de la vue (dossiers et contrats des garanties demandées) pour les segmentations déclarées du plan\fsp; règles admises en B2, contrôlées par \code{valider\_plan()}~: \code{contrat}, \code{nature\_contrat}, \code{annee\_survenance}, \code{ligne\_activite}. Non exportée. \\
+\code{segments\_vue()} & \code{vue}, \code{segmentations}, \code{garanties} & Rend les segments des unités de calcul de la vue (dossiers et contrats des garanties demandées) pour les segmentations déclarées du plan\fsp; règles admises en B2, contrôlées par \code{valider\_plan()}~: \code{contrat}, \code{nature\_contrat}, \code{annee\_survenance}, \code{ligne\_activite}\fsp; une garantie souscrite d'identifiant manquant ou vide ne porte aucune unité. Non exportée. \\
 \code{parties\_ligne()} & Aucun & Rend les parties de ligne (table, colonnes)\fsp; une colonne d'une partie vaut pour toute la partie. Non exportée, passée par les familles de calcul à \code{postes\_a\_arreter()}. \\
 \end{longtable}
 }
@@ -1685,7 +1685,9 @@ composante manquante, issue~143, sites résiduels de la règle de la clé
 manquante, issues~152, 153 et~154\fsp; erratum de rédaction du
 16~novembre~2026, sans changement de version, issue~152\fsp; erratum du
 16~novembre~2026 sur sa décision du même jour, M629~: catégorie
-d'invalidité vide hors du contrôle de chevauchement, issue~143), sous le dictionnaire de la base en version~1.5. La date d'arrêté est obligatoire,
+d'invalidité vide hors du contrôle de chevauchement, issue~143\fsp; errata
+de la validation de l'issue~154 visés par lui le même jour, M630~:
+population de couverture exclue), sous le dictionnaire de la base en version~1.5. La date d'arrêté est obligatoire,
 sans valeur par défaut. \code{declarations} est le sous-schéma
 \code{donnees} du plan (rubriques \code{exclusions}, \code{hypotheses},
 \code{seuils}, \code{evaluations\_gestion})\fsp; \code{conventions} est la
@@ -1980,7 +1982,7 @@ règle~P.
   «~Clé vide~», erratum du 15~novembre~2026\fsp; décision du mainteneur du
   15~novembre~2026, M396\fsp; issue~123\fsp; jugement d'expert\fsp;
   version~1.8, «~Sites résiduels de la règle de la clé manquante~»,
-  issues~152 et~153). Une
+  issues~152 à~154). Une
   chaîne vide dans une colonne de clé, primaire ou étrangère, suit la
   règle de la clé manquante (point «~Clé manquante~» ci-dessous)~: elle
   ne s'apparie à aucune ligne, d'un côté comme de l'autre, dans toute
@@ -2053,12 +2055,26 @@ règle~P.
   avec l'issue~105, si la règle~V cesse d'être bloquée, et la garde
   restreinte alors aux causes autres que les refus de valeur. Une
   composante de la clé absente, ou de longueur différente de celle des
-  survenances, est aussi une erreur interne, sans recyclage. Reste hors
-  de la règle, renvoyée à une issue~:
-  l'appartenance aux garanties de couverture exclue
-  (\code{garanties\_couverture\_exclue()} et ses appelants), où le contrat
-  et la garantie souscrite s'apparient par un test d'appartenance
-  (issue~154\fsp; accessibilité par une base non mesurée). Mesures
+  survenances, est aussi une erreur interne, sans recyclage. Le chemin
+  de la population de couverture exclue suit enfin la même règle
+  (issue~154\fsp; section~\ref{sec:donnees-etats})~: l'appartenance d'une
+  garantie souscrite au contrat exclu, dans
+  \code{garanties\_couverture\_exclue()}\fsp; le dossier de l'état et sa
+  ligne de \code{dossiers}, dans \code{calculer\_engagement()}\fsp; dans la provision
+  mathématique de la temporaire décès, garantie et contrat, contrat et
+  assuré, assuré et sinistres (champ individuel), contrat et garantie,
+  cotisation et garantie (champ collectif). Une garantie souscrite
+  d'identifiant manquant ou vide n'appartient à aucune population. Ces
+  sites appliquent la règle par deux fonctions sans point du module,
+  \code{cle\_renseignee()} et \code{apparier\_cles()}, qu'emploient aussi
+  les familles. Restent hors de la règle, renvoyés à
+  l'issue~158 (créée le 16~novembre~2026, M631)~: dans la famille
+  «~engagement~», les lectures des hypothèses de la vue et la
+  reconstitution du capital, qui apparient encore une clé vide à une clé
+  vide, sans atteinte par une base attendue (à établir par une sonde),
+  des sites dont le résultat n'est juste que par accident, et des
+  écritures locales de la règle, à remplacer par \code{apparier\_cles()}
+  (une méthode, une implémentation). Mesures
   exécutées sur des bases construites de la batterie unitaire (résultat
   exact)~: une clé étrangère vide face à une clé primaire vide
   (\code{evenements.id\_dossier}, \code{famille.id\_sinistre},
@@ -2081,7 +2097,9 @@ règle~P.
   retient les lignes d'une table refusée, un dossier de garantie
   souscrite vide n'a ni état ni unité de calcul, un dossier de sinistre
   vide n'a ni état du sinistre ni année de survenance, et un contrat vide
-  ne forme aucune unité de calcul. D05 n'est pas atteignable par une
+  ne forme aucune unité de calcul~; une garantie souscrite d'identifiant
+  manquant ou vide n'en porte aucune, avec ou sans exclusion d'elle-même
+  ou de son contrat (issue~154). D05 n'est pas atteignable par une
   base (une clé vide de \code{evenements.id\_sinistre} ou de
   \code{dossiers.id\_sinistre} refuse sa table en portée table, et D05,
   qui les lit, est bloquée)~: un appel interne la vérifie. L'état
@@ -3467,7 +3485,15 @@ M317 et M322~; section~\ref{sec:statut-unite}).
 rend une ligne par dossier retenu à l'arrêté dont la garantie souscrite a
 un code de \code{garanties} (dans l'état du code, \code{deces} seule), pour
 une famille de calcul exigée, sans valeur par défaut. Les dossiers exclus
-pour la famille restent dans la sortie~: l'appelant les écarte. Chaque
+pour la famille restent dans la sortie~: l'appelant les écarte. La
+garantie souscrite et le sinistre du dossier s'apparient selon la règle
+de la clé manquante (section~\ref{sec:donnees-bilan}, points «~Clé
+manquante~» et «~Clé vide~»)~: une clé manquante ou vide ne s'apparie à
+rien, si bien qu'un dossier de garantie souscrite manquante ou vide n'est
+pas rendu, et qu'un dossier de sinistre manquant ou vide n'a pas d'état du
+sinistre. Une telle clé refuse sa table en portée table~; le cas n'est
+atteint qu'à l'arrêté égal à la date d'extraction, où la vue retient les
+lignes d'une table refusée. Chaque
 ligne porte l'état du sinistre (\code{deces} ou \code{iad}) et sa date
 d'entrée (date de survenance), le montant en vigueur (dernier
 \code{fixation\_capital} retenu et non exclu pour la famille), l'état du
@@ -3511,12 +3537,44 @@ exclusion écarte la ligne en laissant le calcul continuer. Une exclusion
 pour une autre famille est sans effet, et le dictionnaire n'est pas
 étendu~: les lignes exclues des autres tables sont inchangées.
 
+\textbf{Couverture exclue et clé manquante} (spécification du module
+\code{donnees}, version~1.8, §~2.2, B.4, «~Sites résiduels de la règle de
+la clé manquante~», règles~(i) à~(iv), et erratum du 16~novembre~2026\fsp;
+décisions du mainteneur du 15~novembre~2026, M614, et du
+16~novembre~2026, M630\fsp; issue~154\fsp; jugement d'expert).
+L'appartenance d'une garantie souscrite au contrat exclu suit la règle
+de la clé manquante~: un contrat manquant ou vide, d'un côté ou de
+l'autre, ne s'apparie à rien. Une garantie souscrite dont l'identifiant
+manque ou est vide n'appartient à aucune population~: aucun dossier ne
+s'y rattache et aucune unité contrat ne la porte. La population exclue
+est transmise par identifiants (forme inchangée, M614)~: les identifiants
+rendus sont triés et ne sont jamais manquants ni vides, et une garantie
+souscrite retenue et exclue dont l'identifiant manque ou est vide n'est
+pas rendue, sans arrêt ni erreur. Une garde d'erreur interne avait
+d'abord été retenue sur cet état, réputé inatteignable. Il l'est pour une
+exclusion de la ligne de \code{garanties\_souscrites}, dont le refus de
+portée table empêche les exclusions, mais non pour une exclusion par le
+contrat~: à l'arrêté égal à la date d'extraction, la vue garde la ligne de
+la table refusée, et D02a peut exclure le contrat (mesure exécutée, sonde
+de l'issue)\fsp; la garde aurait fait échouer \code{calculer\_provisions()}
+sur une base dégradée. Alternative écartée~: une garde restreinte à
+l'exclusion de la ligne, sans gain, puisque le sort de la garantie est
+fixé quelle que soit la voie de l'exclusion. Chaque appariement du chemin
+de population chez les appelants suit la même règle (sections~\ref{sec:engagement-capital}
+et~\ref{sec:risque-en-cours-p3}).
+
 \textbf{Segments.} \code{segments\_vue(vue, segmentations, garanties)}
 rend le segment de chaque unité de calcul pour chaque segmentation déclarée
 par le plan. Les unités sont les dossiers retenus d'une garantie souscrite
 retenue des garanties demandées, hors couverture exclue pour la famille
 «~engagement~», et les contrats retenus qui portent une telle garantie, hors
-couverture exclue pour la famille «~risque en cours~». La clé de chaque
+couverture exclue pour la famille «~risque en cours~». Une garantie
+souscrite d'identifiant manquant ou vide ne porte aucune unité (issue~154).
+Les clés des unités (garantie souscrite du dossier, contrat des unités
+contrat, sinistre de l'année de survenance, nature du contrat) s'apparient
+selon la règle de la clé manquante~: une clé manquante ou vide ne
+s'apparie à rien (section~\ref{sec:donnees-bilan}, point «~Clé
+vide~»). La clé de chaque
 règle admise (\code{REGLES\_SEGMENTATION\_B2}) est~:
 
 \begin{itemize}[itemsep=2pt]
@@ -3968,7 +4026,23 @@ la garantie souscrite du dossier, ou son contrat, a sa ligne exclue), et non
 clos. L'exposition ainsi écartée est restituée par l'enjeu, qui mesure les
 dossiers rattachés au contrat ou à la garantie souscrite, par leur nombre
 et par les composantes de l'enjeu (paiements cumulés, capital fixé), non
-par la provision qu'ils auraient portée (section~\ref{sec:enjeu}). Les capitaux non réclamés sont les dossiers qui
+par la provision qu'ils auraient portée (section~\ref{sec:enjeu}). Chaque
+dossier de l'état est apparié à sa ligne de \code{dossiers} selon la règle
+de la clé manquante\fsp; un dossier de l'état dont l'identifiant manque ou
+est vide est une erreur interne (spécification du module \code{donnees},
+version~1.8, §~2.2, B.4, issue~154, règle~(iii), erratum du
+16~novembre~2026\fsp; décision du mainteneur du même jour, M630). Cet
+état est inatteignable par une base~: une clé primaire de \code{dossiers}
+manquante ou vide refuse sa table en portée table, et l'arrêt des postes
+lu sur le bilan précède la lecture des états (mesure de la validation
+de l'issue, non remesurée ici~: sur la base construite
+\code{construite-deces-01}, chacun de ses dossiers privé de son
+identifiant ou d'identifiant vide, à deux arrêtés, sous D04a et D04b
+conservés ou exclus, les deux postes sont arrêtés\fsp; la batterie unitaire
+le vérifie sur un cas, et la garde par un appel interne). Motif~: atteindre ce
+point révélerait une incohérence de l'arrêt des postes, et un retrait
+silencieux du dossier minorerait la provision sans trace. Alternative
+écartée~: le dossier sort de la population sans arrêt. Les capitaux non réclamés sont les dossiers qui
 remplissent le critère déclaré par le plan, réunion de
 \code{beneficiaire\_non\_identifie} (au moins un bénéficiaire retenu du
 dossier de qualité \code{non\_identifie}) et de \code{sans\_evenement}
@@ -4445,6 +4519,24 @@ prime déclarée pour un contrat à primes périodiques,
 couverture indéterminée arrêtent le poste
 (\code{parametre\_non\_determine}, premier contrat en cause).
 
+\textbf{Champ individuel~: clé manquante} (spécification du module
+\code{donnees}, version~1.8, §~2.2, B.4, «~Sites résiduels de la règle de
+la clé manquante~», issue~154, règles~(ii) et~(iii), et erratum du
+16~novembre~2026). Une garantie souscrite d'identifiant manquant ou vide
+n'appartient pas à la population. La garantie et son contrat, le contrat
+et son assuré, l'assuré et ses sinistres (sinistre qui fait sortir le
+contrat, sinistre exclu qui rend la sortie inconnue, sinistre qui la
+décide sans hypothèse) s'apparient selon la règle de la clé manquante~:
+une clé manquante ou vide ne s'apparie à rien
+(section~\ref{sec:donnees-bilan}, point «~Clé vide~»). Ainsi, un contrat
+et un sinistre dont l'assuré manque ou est vide ne s'apparient pas~: la
+date de naissance de l'assuré du contrat est inconnue et le poste est arrêté
+(\code{parametre\_non\_determine}), au lieu d'une sortie de la population
+par un décès qui n'est pas celui de l'assuré. Ces cas ne sont pas atteints
+par une base (une telle clé refuse sa table en portée table, et le poste
+est arrêté avant le calcul)\fsp; la batterie unitaire les vérifie par des
+appels internes, contre un témoin à clés renseignées.
+
 \textbf{Champ individuel~: paramètres exclus.} Les paramètres lus sont ceux
 de la méthode déclarée, pour chaque contrat de la population, quel que soit
 le chemin des données~: \code{capital\_forfaitaire} et
@@ -4568,7 +4660,11 @@ risque est uniforme sur la période et la prime pure), restituée au statut
 \code{approximation\_numerique} faute d'un statut plus juste dans la liste
 fermée~; un contrat sous l'hypothèse D03f ou dont une ligne lue (contrat,
 cotisations du champ) est placée sous une hypothèse de la vue est
-\code{jugement\_expert} (section~\ref{sec:statut-unite}).
+\code{jugement\_expert} (section~\ref{sec:statut-unite}). Une garantie
+souscrite d'identifiant manquant ou vide n'entre pas dans le champ, et le
+contrat et ses garanties, la cotisation et sa garantie s'apparient selon
+la règle de la clé manquante (issue~154\fsp; même cas latent, vérifié par
+des appels internes).
 
 \textbf{Champ collectif~: ordre d'évaluation d'une cotisation.} Chaque
 cotisation retenue du champ est lue dans cet ordre (issue~92 du dépôt~;
