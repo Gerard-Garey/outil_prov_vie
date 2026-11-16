@@ -125,6 +125,22 @@ jobs:
       - name: Concordance documentation et moteur
         run: Rscript tests/concordance_doc_moteur.R --strict
 
+  # Invariance du bilan de controler_base() sous inversion et permutation des lignes (#149,
+  # critère C131-1 ; M603) : contrôle long, hors des batteries de CLAUDE.md, donc job séparé,
+  # en parallèle des autres. Même image que « Tests (R 4.3.3) ». Son ajout aux contrôles
+  # requis du ruleset de main est un acte du mainteneur, hors du dépôt.
+  invariance:
+    name: Invariance du bilan (R 4.3.3)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    container: rocker/r-ver:4.3.3@sha256:732d15020af326da9e919c07f70ca32bf5d3e409220af32e0a4b6d0a89437309
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - name: Invariance du bilan sous inversion et permutation des lignes
+        run: Rscript tests/controles/invariance_bilan.R --complet
+
   latex:
     name: Documents LaTeX
     runs-on: ubuntu-24.04
