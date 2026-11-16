@@ -109,12 +109,14 @@ sortie_tests <- tryCatch({
   capture.output(source(file.path(racine, "tests", "unitaires", "donnees.R"),
                         local = new.env(parent = globalenv())))
 }, finally = restaure())
-n_echecs_tests <- .harnais$compteurs[["echec"]]
+# Un echec ou un succes inattendu (marque d'echec attendu devenue caduque) de la collecte est lu
+# avant la remise a zero, qui l'effacerait.
+n_echecs_tests <- .harnais$compteurs[["echec"]] + .harnais$compteurs[["inattendu"]]
 .harnais$compteurs[] <- 0L
 appels <- collecte$appels
 informer(sprintf("collecte : %d appels de controler_base() dans tests/unitaires/donnees.R, %.0f s",
                  length(appels), as.numeric(difftime(Sys.time(), t0, units = "secs"))))
-verifier("collecte : donnees.R s'execute sans verification en echec (la batterie le juge aussi)",
+verifier("collecte : donnees.R s'execute sans verification en echec ni succes inattendu (la batterie le juge aussi)",
          n_echecs_tests == 0L)
 verifier("collecte : au moins un appel enregistre", length(appels) > 0L)
 verifier("collecte : toute issue est renseignee", all(vapply(appels, function(a) !is.null(a$issue), NA)))

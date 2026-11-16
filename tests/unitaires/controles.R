@@ -1059,3 +1059,32 @@ if (nzchar(Sys.which("bash"))) {
 r <- .essai("invariance_bilan", list())
 verifier("#149 : invariance_bilan.R sans --complet : [INFO], aucun calcul, statut 0",
          .passe(r) && length(r$sortie) == 1L && startsWith(r$sortie, "[INFO] invariance_bilan.R"))
+
+# --- image_reference.R (#67 ; #149) -----------------------------------------------------------
+# Copie minimale : ci.yml (deux jobs à conteneur, depuis #149), regenerer-references.yml et
+# CONTEXT.md. Le rapport [ECHEC] cite la ligne fautive (et non la première ligne container:).
+IMG_A <- paste0("rocker/r-ver:4.3.3@sha256:", strrep("a", 64L))
+IMG_B <- paste0("rocker/r-ver:4.3.3@sha256:", strrep("b", 64L))
+cas_image <- function(ci = c(IMG_A, IMG_A), context = IMG_A) {
+  .essai("image_reference", list(
+    ".github/workflows/ci.yml" = c("jobs:", "  a:", paste("    container:", ci[1L]), "  b:",
+                                   paste("    container:", ci[2L])),
+    ".github/workflows/regenerer-references.yml" = c("jobs:", "  r:", paste("    container:", IMG_A),
+                                                      "    env:", paste("      PROVIE_IMAGE:", IMG_A)),
+    "CONTEXT.md" = paste0("**Plateforme de référence** : `", context, "`")))
+}
+r <- cas_image()
+verifier("#149 : image_reference.R : même image partout (deux conteneurs dans ci.yml), statut 0",
+         .passe(r))
+r <- cas_image(context = IMG_B)
+verifier("#149 : image_reference.R : CONTEXT.md d'un autre digest que ci.yml (deux lignes container:), [ECHEC] ci.yml:3, pas d'erreur R",
+         .echoue_en(r, ".github/workflows/ci.yml", 3L, "image differente de celle de CONTEXT.md") &&
+           !any(grepl("Error", r$sortie, fixed = TRUE)))
+r <- cas_image(ci = c(IMG_A, IMG_B))
+verifier("#149 : image_reference.R : deuxième conteneur de ci.yml d'un autre digest, [ECHEC] à sa ligne (5)",
+         .echoue_en(r, ".github/workflows/ci.yml", 5L, "images differentes entre les lignes container:"))
+r <- cas_image(ci = c(IMG_A, "rocker/r-ver:4.3.3"))
+verifier("#149 : image_reference.R : deuxième conteneur de ci.yml non épinglé, [ECHEC] à sa ligne (5)",
+         .echoue_en(r, ".github/workflows/ci.yml", 5L, "image non epinglee par digest"))
+verifier("#149 : image_reference.R : un ci.yml fautif ne produit aucun [ECHEC] parasite de témoin",
+         !any(grepl("[ECHEC] temoin", r$sortie, fixed = TRUE)))
