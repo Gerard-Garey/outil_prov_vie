@@ -571,3 +571,35 @@ for (k in names(cles154)) {
                        " : aucun contrat du champ ; témoin renseigné : CT3"),
                 list(col154(cles154[[k]]), col154(NULL)), list(list(character(0), NA_character_), list("CT3", NA_character_)))
 }
+# (c) identifiant de garantie souscrite manquant ou vide (provisions_collectives(), filtre
+# cle_renseignee() sur garanties_souscrites.id_garantie_souscrite, seul site qui ne change ni la
+# liste des contrats ni les montants) : base b_87u (CT3 collectif, sa ligne de contrats sous
+# D03g) à laquelle s'ajoute CT4 (GS4, une cotisation, date_saisie_fin renseignée) ; GS3 et ses
+# cotisations de clé `cle` dans la vue. GS3 n'est d'aucune population, ses cotisations ne
+# s'apparient à rien : CT4 seul au champ, et CT3, qui n'a plus de garantie souscrite retenue, ne
+# figure pas dans l'attribut `hypothese` ; sans le filtre, GS3 reste dans `gs` et CT3 y figure.
+# Témoin renseigné : CT3 et CT4 au champ, hypothèse D03g sur CT3 seul (CT4 a sa date de saisie)
+gs154 <- function(cle) {
+  b <- b_87u
+  b$contrats <- rbind(b$contrats, transform(b$contrats[b$contrats$id_contrat == "CT3", ], id_contrat = "CT4",
+                                            date_fin = as.Date(NA), motif_fin = NA, date_saisie_fin = D("2025-06-01")))
+  b$garanties_souscrites <- rbind(b$garanties_souscrites,
+                                  transform(b$garanties_souscrites[b$garanties_souscrites$id_contrat == "CT3", ],
+                                            id_garantie_souscrite = "GS4", id_contrat = "CT4"))
+  b$parametres <- rbind(b$parametres, transform(b$parametres[b$parametres$id_garantie_souscrite == "GS3", ],
+                                                id_garantie_souscrite = "GS4"))
+  b$cotisations <- rbind(b$cotisations, transform(b$cotisations, id_cotisation = "CO9", id_garantie_souscrite = "GS4"))
+  q <- plan_87co()
+  v <- vue154(b, q)
+  if (!is.null(cle)) {
+    v$ctx$base$garanties_souscrites$id_garantie_souscrite[v$ctx$base$garanties_souscrites$id_garantie_souscrite %in% "GS3"] <- cle
+    v$ctx$base$cotisations$id_garantie_souscrite[v$ctx$base$cotisations$id_garantie_souscrite %in% "GS3"] <- cle
+  }
+  r <- ns$provisions_collectives(v, q)
+  list(r$id_contrat, attr(r, "hypothese"))
+}
+for (k in names(cles154)) {
+  verifier_egal(paste0("#154 provisions_collectives(), GS3 et ses cotisations de clé ", k,
+                       " : CT4 seul au champ, hypothèse vide (CT3 hors de l'attribut)"),
+                list(gs154(cles154[[k]]), gs154(NULL)), list(list("CT4", character(0)), list(c("CT3", "CT4"), "CT3")))
+}
