@@ -2406,11 +2406,24 @@ lire_declarations <- function(declarations, dico) {
     cle <- eclater_champ(dico$tables$cle_primaire[dico$tables$table == table])
     lit <- paste(table, cle, sep = ".")
     # lignes de l'écart : les k - 1 occurrences de chaque clé qui suivent l'original dans l'ordre
-    # canonique (.ordre_canonique()), et non dans l'ordre des lignes (#131)
+    # canonique (.ordre_canonique()), et non dans l'ordre des lignes (#131) ; une ligne dont une
+    # composante est vide, ou manque alors que son absence est un refus (colonne O sans défaut
+    # de manquant, comme la règle manquant_obligatoire), n'entre pas dans la détection : elle
+    # n'est en double d'aucune ligne et aucune ligne n'est en double d'elle (spécification
+    # `donnees` v1.8, § 2.2, B.4, « Clé primaire à composante manquante (D01a) », #143) ; une
+    # composante dont l'absence est une valeur (colonne C ou F, ou O à défaut de manquant : D03g
+    # de famille.date_saisie) n'égale que l'absence
+    col <- .colonnes_dico(ctx, table)
+    refusee <- vapply(cle, function(c1) {
+      k <- match(c1, col$colonne)
+      col$obligatoire[k] == "O" && !any(eclater_champ(col$defauts[k]) %in% .DEFAUTS_MANQUANT)
+    }, NA)
     .regle(ctx, "D01a", table, cle[1L], lit, "R", "exacte", function() {
       o <- .ordre_canonique(ctx, table)
+      x <- lapply(cle, function(c1) .valeurs(ctx, table, c1)[o])
+      hors <- Reduce(`|`, Map(function(v, refusee1) .chaine_vide(v) | (refusee1 & is.na(v)), x, refusee))
       r <- logical(length(o))
-      r[o] <- duplicated(as.data.frame(lapply(cle, function(c1) .valeurs(ctx, table, c1)[o]), stringsAsFactors = FALSE))
+      r[o[!hors]] <- duplicated(as.data.frame(lapply(x, `[`, !hors), stringsAsFactors = FALSE))
       r
     })
   }
@@ -2432,7 +2445,7 @@ lire_declarations <- function(declarations, dico) {
     groupe <- list(list(valeurs = v("code_garantie"), inconnu = u("code_garantie"),
                         domaine = .domaine3(ctx, "garanties_souscrites", "code_garantie")),
                    list(valeurs = v("college"), inconnu = u("college"), domaine = NULL))
-    r <- .chevauchements3(.code_groupe(list(v("id_contrat")), cles = 1L), groupe,
+    r <- .chevauchements3(.code_groupe(list(.cle_manquante(v("id_contrat"))), cles = 1L), groupe,
                           d_min = ifelse(u("date_effet"), plage_debut[1L], debut),
                           d_max = ifelse(u("date_effet"), plage_debut[2L], debut),
                           f_min = ifelse(u("date_fin"), plage_fin[1L], fin), f_max = ifelse(u("date_fin"), Inf, fin),
@@ -2452,10 +2465,16 @@ lire_declarations <- function(declarations, dico) {
     inconnu <- .inconnu(ctx, "parametres", "age_max") & !sans_palier
     debut <- ifelse(sans_palier, 0, as.numeric(v("age_min")))
     fin <- ifelse(sans_palier, 120, as.numeric(v("age_max")))
-    # clé du groupe : garantie et paramètre (une absence met la ligne hors du contrôle) ;
-    # l'absence de catégorie est une valeur du groupe (#121)
-    r <- .chevauchements3(.code_groupe(list(v("id_garantie_souscrite"), v("parametre"), v("categorie_invalidite")),
-                                       cles = 1:2),
+    # clé du groupe : garantie et paramètre (une absence, ou une chaîne vide, met la ligne hors du
+    # contrôle, .cle_manquante(), v1.8, #143) ; l'absence de catégorie est une valeur du groupe
+    # (#121), mais une catégorie vide met la ligne hors du contrôle (v1.8, #143 : apparier deux
+    # chaînes vides inventerait un lien ; .cle_manquante() ne s'applique pas à la composante, il
+    # confondrait la chaîne vide avec l'absence)
+    categorie <- v("categorie_invalidite")
+    groupe <- .code_groupe(list(.cle_manquante(v("id_garantie_souscrite")), .cle_manquante(v("parametre")), categorie),
+                           cles = 1:2)
+    groupe[.chaine_vide(categorie)] <- NA_integer_
+    r <- .chevauchements3(groupe,
                           list(), d_min = debut, d_max = debut, f_min = ifelse(inconnu, 0, fin),
                           f_max = ifelse(inconnu, 120, fin), absente_possible = inconnu, inconnue = inconnu)
     attr(r, "index") <- list(parametres.age_max = attr(r, "index"))
@@ -6806,7 +6825,8 @@ parties_ligne <- function() lapply(.PARTIES_LIGNE, function(p) list(table = p$ta
 # écart D01a, porte des valeurs différentes de `colonne` entre ses lignes en double (D10) ;
 # integer(0) si toutes concordent (doublons à l'identique : chiffrés). Identifiants regroupés
 # à l'égalité exacte de chaque colonne de clé, comme D01a (.code_groupe(), sans paste() : un
-# « NA » littéral ne se confond pas avec l'absence, #121).
+# « NA » littéral ne se confond pas avec l'absence, #121) ; une ligne de composante vide ou
+# manquante par refus n'est pas de l'écart D01a (#143) : l'écart ne la donne jamais dans `lignes`.
 .divergences_d01a <- function(ctx, table, lignes, colonne) {
   cle <- eclater_champ(ctx$dico$tables$cle_primaire[ctx$dico$tables$table == table])
   if (colonne %in% cle) return(integer(0))

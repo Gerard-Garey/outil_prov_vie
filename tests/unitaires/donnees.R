@@ -632,6 +632,78 @@ verifier_egal("#121 : .code_groupe() : une absence n'égale que l'absence, jamai
               list(ns$.code_groupe(list(c("a", NA, "NA", NA, "a"))),
                    ns$.code_groupe(list(c("g", "g", NA, "g"), c(NA, "NA", NA, NA)), cles = 1L)),
               list(c(1L, 2L, 3L, 2L, 1L), c(1L, 2L, NA, 1L)))
+# #143 (spécification v1.8, § 2.2, B.4, « Clé primaire à composante manquante (D01a) ») : une
+# composante de clé primaire vide, ou manquante alors que son absence est un refus, met la ligne
+# hors de D01a (elle garde son seul refus de portée table) ; une absence légitime (categorie_invalidite,
+# age_min, famille.date_saisie) reste une valeur
+r <- cb(avec(function(b) { b$parametres$id_garantie_souscrite[c(2L, 8L)] <- NA; b }))
+verifier_egal("#143, C143-1 : deux lignes age_fin_garantie sans id_garantie_souscrite (T4) : manquant_obligatoire sans D01a",
+              list(nrow(refus(r, "D01a", NULL)), refus(r, "manquant_obligatoire", "parametres", "id_garantie_souscrite")$nombre),
+              list(0L, 2L))
+r <- cb(avec(function(b) { b$parametres$parametre[1:2] <- NA; b }))
+verifier_egal("#143, C143-1 : deux lignes de GS1 sans parametre : manquant_obligatoire sans D01a",
+              list(nrow(refus(r, "D01a", NULL)), refus(r, "manquant_obligatoire", "parametres", "parametre")$nombre),
+              list(0L, 2L))
+r <- cb(avec(function(b) { b$contrats$id_contrat <- NA_character_; b }))
+verifier_egal("#143, C143-2 : deux contrats sans id_contrat (clé simple) : manquant_obligatoire sans D01a",
+              list(nrow(refus(r, "D01a", "contrats")), refus(r, "manquant_obligatoire", "contrats", "id_contrat")$nombre),
+              list(0L, 2L))
+r <- cb(avec(function(b) { b$contrats$id_contrat <- ""; b }))
+verifier_egal("#143, C143-3 : deux contrats d'id_contrat \"\" (clé simple) : chaine_vide sans D01a",
+              list(nrow(refus(r, "D01a", "contrats")), refus(r, "chaine_vide", "contrats", "id_contrat")$nombre),
+              list(0L, 2L))
+r <- cb(avec(function(b) { b$parametres$id_garantie_souscrite[c(2L, 8L)] <- ""; b }))
+verifier_egal("#143, C143-3 : deux lignes age_fin_garantie d'id_garantie_souscrite \"\" (composante d'une clé composite) : chaine_vide sans D01a",
+              list(nrow(refus(r, "D01a", NULL)), refus(r, "chaine_vide", "parametres", "id_garantie_souscrite")$nombre),
+              list(0L, 2L))
+# (garantie, paramètre) = (GS1, taux_capital) : la ligne 1 et sa copie (une ligne d'écart), puis deux
+# copies de catégorie "" (la ligne de catégorie "" précède, dans l'ordre canonique, les lignes de
+# catégorie absente : elle n'est ni l'original de l'autre ni son double) ; avant #143 : deux lignes
+# d'écart (la seconde copie de catégorie "" s'y ajoutait)
+r <- cb(avec(function(b) { p <- b$parametres; b$parametres <- rbind(p, p[1L, ], p[1L, ], p[1L, ])
+                           b$parametres$categorie_invalidite[nrow(p) + 2:3] <- ""; b }))
+verifier_egal("#143 : une ligne de composante vide n'est le doublon d'aucune ligne et aucune ligne n'est son doublon : la copie de la ligne 1 reste seule en écart D01a (les deux copies de catégorie \"\" : chaine_vide, hors D01a)",
+              list(refus(r, "D01a", "parametres")$identifiants, refus(r, "D01a", "parametres")$nombre,
+                   refus(r, "chaine_vide", "parametres", "categorie_invalidite")$nombre),
+              list("GS1|taux_capital|\\N|NA", 1L, 2L))
+# même cas, composante manquante par refus : deux copies de la ligne 2 (GS1, age_fin_garantie) sans id_garantie_souscrite
+r <- cb(avec(function(b) { p <- b$parametres; b$parametres <- rbind(p, p[1L, ], p[2L, ], p[2L, ])
+                           b$parametres$id_garantie_souscrite[nrow(p) + 2:3] <- NA; b }))
+verifier_egal("#143 : une ligne de composante manquante par refus n'est le doublon d'aucune ligne : la copie de la ligne 1 reste seule en écart D01a (les deux copies sans id_garantie_souscrite : manquant_obligatoire, hors D01a)",
+              list(refus(r, "D01a", "parametres")$identifiants, refus(r, "D01a", "parametres")$nombre,
+                   refus(r, "manquant_obligatoire", "parametres", "id_garantie_souscrite")$nombre),
+              list("GS1|taux_capital|\\N|NA", 1L, 2L))
+r <- cb(avec(function(b) { p <- b$parametres; b$parametres <- rbind(p, p[3L, ]); b }))
+verifier_egal("#143, C143-4, témoin : deux paliers sans categorie_invalidite d'un même (garantie, paramètre) et sans age_min : D01a inchangé",
+              refus(r, "D01a", "parametres")$identifiants, "GS2|franchise_jours|\\N|NA")
+r <- cb(avec(function(b) { b$famille <- rbind(b$famille, b$famille); b$famille$date_saisie <- as.Date(NA); b }))
+verifier_egal("#143, C143-4, témoin : deux lignes (ME1, sans date de saisie) : D01a inchangé (le manquant de famille.date_saisie est le défaut D03g, une valeur de la clé)",
+              refus(r, "D01a", "famille")$identifiants, "ME1|NA")
+r <- cb(avec(function(b) { b$parametres$id_garantie_souscrite[c(2L, 8L)] <- ""; b }))
+verifier_egal("#143, C143-8, site 41 : deux lignes age_fin_garantie d'id_garantie_souscrite \"\" : chaine_vide sans chevauchement",
+              list(nrow(refus(r, "chevauchement", NULL)), refus(r, "chaine_vide", "parametres", "id_garantie_souscrite")$nombre),
+              list(0L, 2L))
+# C143-8 bis (décision du mainteneur du 16 novembre 2026, lecture A) : une catégorie vide met la
+# ligne hors du contrôle (apparier deux chaînes vides inventerait un lien, M396) ; une catégorie
+# absente reste une valeur du groupe
+r <- cb(avec(function(b) { b$parametres$age_min[5L] <- 17L; b$parametres$categorie_invalidite[4:5] <- ""; b }))
+verifier_egal("#143, C143-8 bis, site 41 : deux paliers de même (garantie, paramètre), de catégorie \"\", qui se recouvrent : chaine_vide sans chevauchement",
+              list(nrow(refus(r, "chevauchement", NULL)), refus(r, "chaine_vide", "parametres", "categorie_invalidite")$nombre),
+              list(0L, 2L))
+r <- cb(avec(function(b) { b$parametres$age_min[5L] <- 17L; b$parametres$categorie_invalidite[4L] <- ""; b }))
+verifier_egal("#143, C143-8 bis, site 41 : deux paliers qui se recouvrent, l'un de catégorie \"\", l'autre sans catégorie : pas du même groupe, aucun chevauchement",
+              nrow(refus(r, "chevauchement", NULL)), 0L)
+r <- cb(avec(function(b) { b$parametres$age_min[5L] <- 17L; stopifnot(all(is.na(b$parametres$categorie_invalidite[4:5]))); b }))
+verifier_egal("#143, C143-8 bis, témoin : deux paliers de même (garantie, paramètre), sans catégorie, qui se recouvrent : chevauchement (l'absence de catégorie reste une valeur du groupe)",
+              list(refus(r, "chevauchement", "parametres")$identifiants, nrow(refus(r, "chaine_vide", NULL))),
+              list("GS3|taux_rente|\\N|0;GS3|taux_rente|\\N|17", 0L))
+verifier_egal("#143, C143-8, site 40 : GS1 et sa copie GSX, toutes deux d'id_contrat \"\", de même code et collège, aux dates qui se recouvrent : chaine_vide sans chevauchement",
+              list(nrow(refus(cb(gsx("")), "chevauchement", NULL)), refus(cb(gsx("")), "chaine_vide", "garanties_souscrites", "id_contrat")$identifiants),
+              list(0L, "GS1;GSX"))
+verifier_egal("#143, C143-8, témoin : GS1 d'id_contrat \"\" et GSX sans id_contrat : bilan sans chevauchement, comme pour deux clés NA",
+              nrow(refus(cb(gsx(c("", NA))), "chevauchement", NULL)), 0L)
+verifier_egal("#143, C143-8, témoin NA : GS1 et GSX sans id_contrat : aucun chevauchement (inchangé, #121)",
+              nrow(refus(cb(gsx(NA)), "chevauchement", NULL)), 0L)
 # #35 : .chevauchements, comparée à une énumération des paires sur des intervalles tirés
 # (groupes, bornes manquantes, fin infinie, intervalles renversés, bornes égales : intervalle
 # fermé) ; puis complexité, mesurée sans horloge (une durée dépend de la charge de la
@@ -2122,18 +2194,25 @@ ordre_montants <- function(m) {
 verifier_egal("#131, ordre canonique : montants (NA, NaN, 1) et (1, NaN, NA) rangés dans le même ordre (1, NA, NaN)",
               list(ordre_montants(c(NA, NaN, 1)), ordre_montants(c(1, NaN, NA))), list(c(1, NA, NaN), c(1, NA, NaN)))
 # lignes de l'écart D01a dont les doubles divergent (.divergences_d01a()) : identifiants
-# regroupés à l'égalité exacte, un « NA » littéral distinct de l'absence (#121 (iii)) ; DO3 et sa
-# copie (sur GS1) sous un identifiant manquant, DO1 renommé « NA »
-divergences_131 <- function(id1) {
-  b <- avec(function(b) { b$dossiers <- rbind(b$dossiers, transform(b$dossiers[3L, ], id_garantie_souscrite = "GS1"))
-                          b$dossiers$id_dossier[c(1L, 3L, 4L)] <- c(id1, NA, NA); b })
-  list(lignes = ns$.divergences_d01a(ns$.contexte(b, d, list(date_extraction = A), A), "dossiers", 4L, "id_garantie_souscrite"),
-       non_executes = grep("^[a-z_]+ dossiers [a-z_]+ D01a$", cles_131(cb(b)$controles_non_executes), value = TRUE))
+# regroupés à l'égalité exacte de chaque composante de clé, un « NA » littéral distinct de
+# l'absence (#121 (iii)). Cas sur une composante dont l'absence est une valeur (#143, v1.8 :
+# parametres.categorie_invalidite ; une absence d'identifiant n'entre plus dans l'écart D01a) :
+# la ligne 1 de parametres (GS1, taux_capital, sans catégorie), sa copie (ligne 9, sans catégorie)
+# et une seconde copie (ligne 10), de catégorie absente ou littérale « NA », ces lignes portant
+# les valeurs `valeurs` ; lignes de l'écart lues dans le placement de la vue (celles du bilan)
+divergences_131 <- function(valeurs, categorie) {
+  b <- avec(function(b) { p <- b$parametres; b$parametres <- rbind(p, p[1L, ], p[1L, ])
+                          n <- nrow(b$parametres); b$parametres$valeur[c(1L, n - 1L, n)] <- valeurs
+                          b$parametres$categorie_invalidite[n] <- categorie; b })
+  v <- ns$vue_a_date(b, A, NULL, NULL)
+  ecart <- Filter(function(e) e$table == "parametres" && e$motif == "D01a", v$ctx$placement$ecarts)
+  list(ecart = ecart[[1L]]$lignes, divergentes = ns$.divergences_d01a(v$ctx, "parametres", ecart[[1L]]$lignes, "valeur"))
 }
-verifier_egal("#131, lignes de l'écart D01a divergentes : un identifiant « NA » littéral (DO1) n'est pas regroupé avec les identifiants manquants (lignes 3 et 4) : seule id_garantie_souscrite diverge (composantes 2 à 4 publiées sur elle) ; témoin DOZ (avant : lignes 1, 3 et 4 sous « NA », ij_en_vigueur publiée sur dossiers.id_sinistre et paiements_cumules sur dossiers.date_ouverture)",
-              list(divergences_131("NA"), divergences_131("DOZ")),
-              rep(list(list(lignes = 3:4, non_executes = paste(c("capital_fixe", "ij_en_vigueur", "rente_annuelle_en_vigueur"),
-                                                                "dossiers id_garantie_souscrite D01a"))), 2L))
+verifier_egal("#131, #143 : .divergences_d01a() sur l'écart D01a de parametres : la copie de catégorie littérale « NA » (ligne 10) n'est pas regroupée avec les lignes de catégorie absente (1 et 9) : valeurs concordantes (2, 2) : aucune divergence ; valeur divergente (2, 5) : lignes 1 et 9 seulement",
+              list(divergences_131(c(2, 2, 3), "NA"), divergences_131(c(2, 5, 3), "NA")),
+              list(list(ecart = 9L, divergentes = integer(0)), list(ecart = 9L, divergentes = c(1L, 9L))))
+verifier_egal("#131, #143 : .divergences_d01a(), témoin : la copie de catégorie absente (ligne 10) est regroupée avec les lignes 1 et 9 : deux lignes d'écart, divergence (2, 2, 3) sur les trois",
+              divergences_131(c(2, 2, 3), NA_character_), list(ecart = 9:10, divergentes = c(1L, 9L, 10L)))
 # rattachement d'une affiliation par une garantie souscrite en double (#131, Q3 d'`actuary`) :
 # lecture existentielle sur les occurrences ; une copie de GS1 (ou GS2) sur CT2 rend le
 # rattachement des dossiers non déterminé (nombre_dossiers NA de l'écart d'affiliations), dans les
