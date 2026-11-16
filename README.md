@@ -34,6 +34,7 @@ Rscript tests/test_unitaires.R                       # batterie unitaire (à cr�
 Rscript tests/test_reproductibilite.R                # références de non-régression (à créer ; références produites par la CI seule)
 Rscript tests/concordance_doc_moteur.R --strict      # concordance documentation ↔ code (à créer)
 Rscript -e 'shiny::runApp("app")'                    # application Shiny locale (à créer)
+Rscript tests/controles/invariance_bilan.R --complet  # invariance du bilan de controler_base() sous inversion et permutation des lignes (#149, C131-1) ; contrôle long (d'un quart d'heure), hors des batteries, job séparé de la CI
 bash .claude/outils/fiches_jumelles.sh               # régénère les fiches -approfondi après modification d'une fiche de base
 bash .claude/outils/fiches_jumelles.sh --verifier    # contrôle des fiches (aussi en CI)
 bash .claude/outils/bilan_journal.sh                 # modèle d'IA servi par agent (journal local)
