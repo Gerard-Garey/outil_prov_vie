@@ -1977,7 +1977,7 @@ règle~P.
   «~Clé vide~», erratum du 15~novembre~2026\fsp; décision du mainteneur du
   15~novembre~2026, M396\fsp; issue~123\fsp; jugement d'expert\fsp;
   version~1.8, «~Sites résiduels de la règle de la clé manquante~»,
-  issue~152). Une
+  issues~152 et~153). Une
   chaîne vide dans une colonne de clé, primaire ou étrangère, suit la
   règle de la clé manquante (point «~Clé manquante~» ci-dessous)~: elle
   ne s'apparie à aucune ligne, d'un côté comme de l'autre, dans toute
@@ -2024,10 +2024,34 @@ règle~P.
   source du contrat en cause, le contrat de la garantie de chaque dossier,
   lu par \code{.verdict\_d11()}, où une clé vide se lit comme une clé
   manquante dès sa lecture (issue~152\fsp; point~D11 du paragraphe «~Contrôles écrits à la
-  fermeture partielle de l'issue~34~» ci-dessous). Restent hors de la règle, renvoyés à des issues~:
-  les clés composites
-  mises bout à bout en texte (\code{.garantie\_en\_vigueur3()},
-  regroupement des lignes distinctes de l'enjeu\fsp; issue~153)\fsp;
+  fermeture partielle de l'issue~34~» ci-dessous). La règle vaut aussi
+  pour les clés composites, qui ne sont plus mises bout à bout en texte
+  (issue~153\fsp; décision du mainteneur du 15~novembre~2026, M613)~: la
+  garantie en vigueur à la survenance, commune à D10~(c), D10~(d) et D14
+  (\code{.garantie\_en\_vigueur3()}), apparie sa clé (contrat, collège)
+  composante par composante (\code{.code\_groupe()}), de sorte qu'un
+  contrat ou un collège manquant ou vide ne s'apparie à rien et qu'un
+  «~NA~» littéral est un code distinct de l'absence\fsp; le regroupement des
+  lignes distinctes d'un dossier, dans les composantes
+  \code{paiements\_cumules} et \code{rente\_annuelle\_en\_vigueur} de
+  l'enjeu, ne regroupe jamais un identifiant manquant ou vide (chaque
+  ligne compte une fois), et tient un «~NA~» littéral pour un identifiant
+  distinct. Ces sites sont latents~: aucune base ne les atteint, une clé
+  manquante ou vide, ou un collège refusé de
+  \code{garanties\_souscrites}, refusant sa table ou bloquant la
+  règle~V qui la lirait (M169)\fsp; la batterie unitaire les vérifie par
+  des appels internes. Un collège de \code{garanties\_souscrites} lu avec
+  une cause de lecture, quelle qu'elle soit, est une erreur interne de
+  \code{.garantie\_en\_vigueur3()}, sans verdict rendu (lecture large,
+  retenue par le mainteneur le 16~novembre~2026, M626, qui équivaut à la
+  lecture restreinte aux refus sur tous les états atteignables)\fsp; la
+  lecture à trois valeurs d'un collège refusé, écrite par la
+  spécification (version~1.8, «~Collège refusé~»), sera mise en œuvre
+  avec l'issue~105, si la règle~V cesse d'être bloquée, et la garde
+  restreinte alors aux causes autres que les refus de valeur. Une
+  composante de la clé absente, ou de longueur différente de celle des
+  survenances, est aussi une erreur interne, sans recyclage. Reste hors
+  de la règle, renvoyée à une issue~:
   l'appartenance aux garanties de couverture exclue
   (\code{garanties\_couverture\_exclue()} et ses appelants), où le contrat
   et la garantie souscrite s'apparient par un test d'appartenance
