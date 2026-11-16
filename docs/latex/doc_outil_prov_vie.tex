@@ -1667,7 +1667,7 @@ calcul. Il ne peut appeler que \code{dictionnaire} et
 
 \code{controler\_base(donnees, arrete, declarations, conventions)}
 applique la spécification du module \code{donnees}
-(\code{docs/specifications/module-donnees-v1.md}, version~1.7\fsp;
+(\code{docs/specifications/module-donnees-v1.md}, version~1.8\fsp;
 versions~1.1, 1.3, 1.4 et~1.5 visées par le mainteneur, la version~1.5
 le 10~novembre~2026 avec ses précisions P1 à~P5, M222\fsp; errata~1.5.1
 et~1.5.2 et précisions~1.5.3 et~1.5.4 sur ses décisions du même jour, M223
@@ -1679,7 +1679,11 @@ sans changement de version, ceux des issues~131 et~123 visés par lui le
 même jour, M391, celui de l'issue~122 visé par lui le même jour, M395,
 et celui de la reprise de fin de branche visé par lui le même jour, M396~:
 regroupement exact des doubles de l'écart D01a, issue~131\fsp; clé vide
-tenue pour une clé manquante, issue~123), sous le dictionnaire de la base en version~1.5. La date d'arrêté est obligatoire,
+tenue pour une clé manquante, issue~123\fsp; version~1.8 visée en bloc le
+15~novembre~2026, M610, avec ses options M611 à M615~: clé primaire à
+composante manquante, issue~143, sites résiduels de la règle de la clé
+manquante, issues~152, 153 et~154\fsp; erratum de rédaction du
+16~novembre~2026, sans changement de version, issue~152), sous le dictionnaire de la base en version~1.5. La date d'arrêté est obligatoire,
 sans valeur par défaut. \code{declarations} est le sous-schéma
 \code{donnees} du plan (rubriques \code{exclusions}, \code{hypotheses},
 \code{seuils}, \code{evaluations\_gestion})\fsp; \code{conventions} est la
@@ -1971,7 +1975,9 @@ règle~P.
   du dictionnaire.
 \item \textbf{Clé vide} (spécification, §~2.2, B.4, «~Chaîne vide~», point
   «~Clé vide~», erratum du 15~novembre~2026\fsp; décision du mainteneur du
-  15~novembre~2026, M396\fsp; issue~123\fsp; jugement d'expert). Une
+  15~novembre~2026, M396\fsp; issue~123\fsp; jugement d'expert\fsp;
+  version~1.8, «~Sites résiduels de la règle de la clé manquante~»,
+  issue~152). Une
   chaîne vide dans une colonne de clé, primaire ou étrangère, suit la
   règle de la clé manquante (point «~Clé manquante~» ci-dessous)~: elle
   ne s'apparie à aucune ligne, d'un côté comme de l'autre, dans toute
@@ -2012,10 +2018,14 @@ règle~P.
   vue, \code{etats\_a\_date()} (garantie souscrite et sinistre du
   dossier) et \code{segments\_vue()} (garantie souscrite du dossier,
   contrat des unités contrat, sinistre de l'année de survenance, nature
-  du contrat). Restent hors de la règle, renvoyés à des issues~:
-  \code{.maintien\_d11()}, où l'assuré et le contrat s'apparient par un
-  test d'appartenance qui apparie une clé manquante à une clé manquante,
-  et une clé vide à une clé vide (issue~152)\fsp; les clés composites
+  du contrat)\fsp; le sous-cas du maintien de D11
+  (\code{.maintien\_d11()}~: assuré des couvertures, contrat en cause,
+  assuré des sinistres d'arrêt de travail, sinistre des sorties) et, à la
+  source du contrat en cause, le contrat de la garantie de chaque dossier,
+  lu par \code{.verdict\_d11()}, où une clé vide se lit comme une clé
+  manquante dès sa lecture (issue~152\fsp; point~D11 du paragraphe «~Contrôles écrits à la
+  fermeture partielle de l'issue~34~» ci-dessous). Restent hors de la règle, renvoyés à des issues~:
+  les clés composites
   mises bout à bout en texte (\code{.garantie\_en\_vigueur3()},
   regroupement des lignes distinctes de l'enjeu\fsp; issue~153)\fsp;
   l'appartenance aux garanties de couverture exclue
@@ -3227,7 +3237,23 @@ simulés est renvoyée à l'issue~117.
   illisible, départagée comme toute cause (décision du mainteneur du
   13~novembre~2026)\fsp; aucune ligne \code{non\_lisible} n'est alors
   écrite, car, sans la clôture, aucun sinistre ne relève certainement du
-  sous-cas. Limite renvoyée à l'issue~128~: une rechute
+  sous-cas. Dans ce sous-cas, l'assuré des couvertures, le contrat en
+  cause, l'assuré des sinistres d'arrêt de travail et le sinistre des
+  sorties suivent la règle de la clé manquante~: une clé manquante ou
+  vide ne s'apparie à rien, et le contrat de la garantie du dossier, d'où
+  vient le contrat en cause, se lit comme manquant s'il est vide
+  (spécification, version~1.8, §~2.2, B.4, et erratum de rédaction du
+  16~novembre~2026\fsp; issue~152\fsp; point «~Clé vide~» ci-dessus). Le cas
+  est latent~: une telle clé refuse sa table en portée table, ce qui
+  bloque D11\fsp; la batterie unitaire le vérifie par des appels internes,
+  où une clé vide et une clé manquante donnent le même verdict. Limite
+  renvoyée à l'issue~157~: un dossier dont la garantie n'a pas de contrat
+  (manquant ou vide) est tenu pour couvert par l'atome «~le contrat ne
+  couvre pas la survenance~», alors qu'un assuré manquant conduit à
+  «~aucune couverture~»\fsp; le mainteneur a retenu le 16~novembre~2026
+  (M628) la lecture selon laquelle ce contrat absent ne s'apparie à
+  aucune couverture, ce qui ferait détecter D11, à mettre en œuvre dans
+  une branche suivante. Limite renvoyée à l'issue~128~: une rechute
   postérieure à la sortie et antérieure à la fin de couverture n'est pas
   lue. Traitement signalement et exclusion par famille (deux constats de
   même clé), détection exacte, constat sur
