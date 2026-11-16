@@ -4001,7 +4001,7 @@ parties_ligne <- function() lapply(.PARTIES_LIGNE, function(p) list(table = p$ta
     code <- joindre_gs("code_garantie", gs)
     sinistre <- vv("dossiers", "id_sinistre")
     survenance <- as.numeric(.joindre(ctx, "sinistres", "id_sinistre", "date_survenance", sinistre))
-    cle_dossier <- paste(joindre_gs("id_contrat", gs), joindre_gs("college", gs), sep = "\r")
+    cle_dossier <- list(contrat = joindre_gs("id_contrat", gs), college = joindre_gs("college", gs))
     avec_deces <- sinistre[code %in% "deces"]
     # décès souscrit et en vigueur à la survenance (.garantie_en_vigueur3(), seule implémentation)
     vise <- code %in% c("rente_conjoint", "rente_education", "double_effet")
@@ -4047,13 +4047,13 @@ parties_ligne <- function() lapply(.PARTIES_LIGNE, function(p) list(table = p$ta
     sinistre <- as.character(.valeurs(ctx, "evenements", "id_sinistre"))
     survenance <- as.numeric(.joindre(ctx, "sinistres", "id_sinistre", "date_survenance", sinistre))
     gs <- .valeurs(ctx, "dossiers", "id_garantie_souscrite")
-    cle_d <- paste(joindre_gs("id_contrat", gs), joindre_gs("college", gs), sep = "\r")
+    cle_d <- list(contrat = joindre_gs("id_contrat", gs), college = joindre_gs("college", gs))
     # paires (passage, dossier de son sinistre), dossiers retenus ou non déterminés
     p <- .paires(ifelse(pa, sinistre, NA), .valeurs(ctx, "dossiers", "id_sinistre"))
     ret <- ctx$retenu$dossiers[p$j]
     p <- p[ret | .nd_vue(ctx, "dossiers")[p$j], , drop = FALSE]
     ret <- ctx$retenu$dossiers[p$j]
-    inv <- .k3_entree(.garantie_en_vigueur3(ctx, "invalidite", cle_d[p$j], survenance[p$i]))
+    inv <- .k3_entree(.garantie_en_vigueur3(ctx, "invalidite", lapply(cle_d, `[`, p$j), survenance[p$i]))
     couvert <- .k3_par(p$i[ret], .k3_sous(inv, ret), ne, "un")
     avec <- tabulate(p$i[ret], ne) > 0L
     sans <- which(pa & !avec)
@@ -4062,9 +4062,8 @@ parties_ligne <- function() lapply(.PARTIES_LIGNE, function(p) list(table = p$ta
       # affiliation : clé (id_contrat, college) ; contrat individuel : contrat seul
       aff <- cv$affiliation
       s_cv <- survenance[sans][cv$i]
-      cle_a <- ifelse(is.na(cv$contrat), NA_character_, paste(cv$contrat, cv$college, sep = "\r"))
-      g <- .garantie_en_vigueur3(ctx, "invalidite", cle_a, s_cv, aff)
-      g_c <- .garantie_en_vigueur3(ctx, "invalidite", cv$contrat, s_cv, !aff, college = FALSE)
+      g <- .garantie_en_vigueur3(ctx, "invalidite", list(contrat = cv$contrat, college = cv$college), s_cv, aff)
+      g_c <- .garantie_en_vigueur3(ctx, "invalidite", list(contrat = cv$contrat), s_cv, !aff, college = FALSE)
       g$valeurs[!aff] <- g_c$valeurs[!aff]
       g$index[!aff] <- g_c$index[!aff]
       g$inconnu <- lengths(g$index) > 0L
@@ -4110,42 +4109,64 @@ parties_ligne <- function() lapply(.PARTIES_LIGNE, function(p) list(table = p$ta
 
 # Garantie souscrite de code `code` en vigueur à la survenance (spécification `donnees` v1.6,
 # § 8.0 bis, point 4 ; règle de « décès souscrit » de D10 (c), seule implémentation, lue par
-# D10 (c) et D10 (d)) : pour chaque élément, il existe une version de garanties_souscrites de code
-# `code`, de même (id_contrat, college) que `cle` (contrat et collège joints par "\r" ;
-# `college` faux : contrat seul, tout collège), dont [date_effet ; date_fin] contient
-# `survenance` (nombre ; manquante : faux). Vrai si une version retenue dans la vue (code de la
-# vue) le satisfait ; inconnu sinon, sur les éléments de `lignes`, si une version de visibilité
-# non déterminée (.nd_vue()) le satisfait (index : ces versions) ; faux sinon. Appariement par
-# clé avant le test des dates (m7). Rend une entrée de .verdict3(), et, par élément, `versions` :
-# lignes des versions retenues qui le satisfont, `versions_nd` : lignes des versions non
-# déterminées qui le satisfont, sur les éléments de `lignes`, que l'élément soit vrai ou non
-# (lues par D14 : conjoint visé et limite d'âge de la version).
-.garantie_en_vigueur3 <- function(ctx, code, cle, survenance, lignes = rep(TRUE, length(cle)), college = TRUE) {
+# D10 (c), D10 (d) et D14) : pour chaque élément, il existe une version de garanties_souscrites de
+# code `code`, de même (id_contrat, college) que `cle` (liste de deux vecteurs de la longueur de
+# `survenance` : `contrat` et `college` ; `college` faux : `contrat` seul, tout collège), dont
+# [date_effet ; date_fin] contient `survenance` (nombre ; manquante : faux). Vrai si une version
+# retenue dans la vue (code de la vue) le satisfait ; inconnu sinon, sur les éléments de `lignes`,
+# si une version de visibilité non déterminée (.nd_vue()) le satisfait (index : ces versions) ;
+# faux sinon. Appariement par clé avant le test des dates (m7). Clé sans paste() (spécification
+# `donnees` v1.8, #153 ; M613) : une composante manquante ou vide (.cle_manquante()) met l'élément
+# ou la version hors de tout appariement, elle ne s'apparie ni à une autre composante manquante,
+# ni au « NA » littéral. Un collège refusé de garanties_souscrites n'est pas lu (état inatteignable
+# tant que M169 tient : la règle V qui lit le collège est alors bloquée avant) : erreur interne,
+# aucun verdict rendu ; la lecture existentielle de la v1.8 est codée avec #105. Une composante de
+# `cle` absente ou de longueur différente de `survenance` : erreur interne (aucun recyclage). Rend une entrée
+# de .verdict3(), et, par élément, `versions` : lignes des versions retenues qui le satisfont,
+# `versions_nd` : lignes des versions non déterminées qui le satisfont, sur les éléments de
+# `lignes`, que l'élément soit vrai ou non (lues par D14 : conjoint visé et limite d'âge de la
+# version).
+.garantie_en_vigueur3 <- function(ctx, code, cle, survenance, lignes = rep(TRUE, length(survenance)), college = TRUE) {
+  if (length(cle$contrat) != length(survenance) ||
+      (college && (is.null(cle$college) || length(cle$college) != length(survenance)))) {
+    stop("erreur interne de provie : .garantie_en_vigueur3() : cl\u00e9 (contrat", if (college) ", coll\u00e8ge",
+         ") de longueur diff\u00e9rente de celle de la survenance (aucun recyclage)", call. = FALSE)
+  }
+  if (college && !is.null(.cause_lecture(ctx, "garanties_souscrites.college"))) {
+    stop("erreur interne de provie : .garantie_en_vigueur3() lit garanties_souscrites.college, colonne refus\u00e9e ",
+         "(la r\u00e8gle V qui la lit est bloqu\u00e9e avant, M169 ; lecture existentielle : #105)", call. = FALSE)
+  }
   v <- function(c1) .valeurs(ctx, "garanties_souscrites", c1)
-  cle_de <- function(k) if (college) paste(v("id_contrat")[k], v("college")[k], sep = "\r") else as.character(v("id_contrat")[k])
+  # code entier du groupe (contrat[, collège]) des versions puis des éléments ; NA : composante
+  # manquante ou vide, hors de tout appariement
+  composantes <- list(c(as.character(v("id_contrat")), as.character(cle$contrat)))
+  if (college) composantes <- c(composantes, list(c(as.character(v("college")), as.character(cle$college))))
+  groupe <- .code_groupe(lapply(composantes, .cle_manquante), cles = seq_along(composantes))
+  ng <- length(v("id_contrat"))
+  groupe_v <- groupe[seq_len(ng)]
+  groupe_e <- groupe[ng + seq_along(survenance)]
   versions <- which(.valeurs_vue(ctx, "garanties_souscrites", "code_garantie") %in% code)
-  cle_v <- cle_de(versions)
+  cle_v <- groupe_v[versions]
   effet <- as.numeric(v("date_effet"))[versions]
   fin <- as.numeric(v("date_fin"))[versions]
   par_cle <- split(seq_along(cle_v), factor(cle_v, levels = unique(cle_v)))
-  trouvees <- lapply(seq_along(cle), function(i) {
-    j <- if (is.na(cle[i])) NULL else par_cle[[cle[i]]]
+  trouvees <- lapply(seq_along(survenance), function(i) {
+    j <- if (is.na(groupe_e[i])) NULL else par_cle[[as.character(groupe_e[i])]]
     if (is.na(survenance[i]) || length(j) == 0L) return(integer(0))
     versions[j[!is.na(effet[j]) & effet[j] <= survenance[i] & (is.na(fin[j]) | fin[j] >= survenance[i])]]
   })
   valeurs <- lengths(trouvees) > 0L
   nd <- .nd_vue(ctx, "garanties_souscrites")
-  index <- vector("list", length(cle))
-  trouvees_nd <- vector("list", length(cle))
+  index <- vector("list", length(survenance))
+  trouvees_nd <- vector("list", length(survenance))
   if (any(nd)) {
     versions_nd <- which(nd & v("code_garantie") %in% code)
-    cle_nd <- cle_de(versions_nd)
     effet_nd <- as.numeric(v("date_effet"))[versions_nd]
     fin_nd <- as.numeric(v("date_fin"))[versions_nd]
     # paires (élément, version non déterminée) de même clé (.paires() : coût proportionnel au
     # nombre de paires), puis test des dates sur les seules paires
     el <- which(lignes & !is.na(survenance))
-    p <- .paires(cle[el], cle_nd)
+    p <- .paires(groupe_e[el], groupe_v[versions_nd])
     e <- el[p$i]
     s <- survenance[e]
     garde <- !is.na(effet_nd[p$j]) & effet_nd[p$j] <= s & (is.na(fin_nd[p$j]) | fin_nd[p$j] >= s)
@@ -5638,7 +5659,7 @@ parties_ligne <- function() lapply(.PARTIES_LIGNE, function(p) list(table = p$ta
   nd_d <- .nd_vue(ctx, "dossiers")
   p <- .paires(ifelse(base_ok, id_s, NA),
                ifelse((ctx$retenu$dossiers | nd_d) & code_d %in% "deces", as.character(v("dossiers", "id_sinistre")), NA))
-  cle_d <- paste(joindre_gs("id_contrat", gs_d), joindre_gs("college", gs_d), sep = "\r")[p$j]
+  cle_d <- list(contrat = joindre_gs("id_contrat", gs_d)[p$j], college = joindre_gs("college", gs_d)[p$j])
   g <- .garantie_en_vigueur3(ctx, "double_effet", cle_d, surv[p$i])
   nv <- lengths(g$versions)
   nn <- lengths(g$versions_nd)
@@ -6191,10 +6212,11 @@ parties_ligne <- function() lapply(.PARTIES_LIGNE, function(p) list(table = p$ta
   # valeur (.divergences_d01a()) ; un identifiant manquant n'est pas regroupé
   distinctes <- function(table, l, p) {
     cle <- eclater_champ(ctx$dico$tables$cle_primaire[ctx$dico$tables$table == table])
-    vc <- lapply(cle, function(c1) as.character(.valeurs(ctx, table, c1))[l][p$i])
-    id <- do.call(paste, c(vc, list(p$j), sep = "\r"))
-    manque <- Reduce(`|`, lapply(vc, is.na))
-    p[manque | !duplicated(id), , drop = FALSE]
+    vc <- lapply(cle, function(c1) .cle_manquante(as.character(.valeurs(ctx, table, c1))[l][p$i]))
+    # code du groupe sans paste() (#153) : un identifiant manquant ou vide a le code NA, il n'est
+    # pas regroupé, et un « NA » littéral reste distinct de lui
+    id <- .code_groupe(c(vc, list(p$j)), cles = seq_along(vc))
+    p[is.na(id) | !duplicated(id), , drop = FALSE]
   }
   dossiers_de <- function(cle, cle_dossier) unique(.paires(cle, v("dossiers", cle_dossier))$j)
   if (is.null(forme$paiements_cumules)) {

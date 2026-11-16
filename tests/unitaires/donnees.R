@@ -5426,7 +5426,13 @@ verifier_egal("(3.8) postes_a_arreter(), règle (iii) (#33, critère 1) : P1 et 
 # sur toutes les versions non déterminées (coût éléments x versions non déterminées) ; la sortie
 # doit lui être identique, sur un banc aléatoire (graine fixée : clés multiples, versions non
 # déterminées multiples par clé, dates manquantes, éléments hors `lignes`, éléments déjà vrais).
-gev3_ancien <- function(ctx, code, cle, survenance, lignes = rep(TRUE, length(cle)), college = TRUE) {
+# Depuis #153 (M613), la clé de .garantie_en_vigueur3() est une liste (contrat, collège) sans
+# paste() ; l'oracle garde la clé composite de l'ancienne forme, égale sur le banc, où aucun
+# collège ni aucun contrat de version n'est manquant (le traitement des composantes manquantes
+# a ses tests propres, #153).
+cle_ancienne <- function(cle, college) if (college) paste(cle$contrat, cle$college, sep = "\r") else as.character(cle$contrat)
+gev3_ancien <- function(ctx, code, cle, survenance, lignes = rep(TRUE, length(survenance)), college = TRUE) {
+  cle <- cle_ancienne(cle, college)
   v <- function(c1) ns$.valeurs(ctx, "garanties_souscrites", c1)
   cle_de <- function(k) if (college) paste(v("id_contrat")[k], v("college")[k], sep = "\r") else as.character(v("id_contrat")[k])
   versions <- which(ns$.valeurs_vue(ctx, "garanties_souscrites", "code_garantie") %in% code)
@@ -5463,7 +5469,7 @@ gev3_ancien <- function(ctx, code, cle, survenance, lignes = rep(TRUE, length(cl
 # version non déterminée), `n_v` versions de garanties_souscrites, `n_c` contrats, 3 collèges
 gev3_ctx <- function(n_v, n_c, n_e) {
   gs <- data.frame(id_contrat = sprintf("K%03d", sample.int(n_c, n_v, TRUE)),
-                   college = sample(c("C1", "C2", "C3", NA), n_v, TRUE),
+                   college = sample(c("C1", "C2", "C3"), n_v, TRUE),
                    code_garantie = sample(c("deces", "invalidite"), n_v, TRUE, c(0.7, 0.3)),
                    date_effet = as.Date("2020-01-01") + sample(c(0:2000, NA), n_v, TRUE),
                    date_fin = as.Date("2020-01-01") + sample(c(0:3000, NA, NA), n_v, TRUE), stringsAsFactors = FALSE)
@@ -5482,9 +5488,8 @@ ecarts_gev3 <- vapply(seq_len(200L), function(k) {
   n_e <- sample(1:40, 1L)
   college <- sample(c(TRUE, FALSE), 1L)
   gs <- ctx$base$garanties_souscrites
-  cle <- if (college) paste(sprintf("K%03d", sample.int(n_c + 1L, n_e, TRUE)), sample(c("C1", "C2", "C3", NA), n_e, TRUE), sep = "\r")
-         else sprintf("K%03d", sample.int(n_c + 1L, n_e, TRUE))
-  cle[sample.int(n_e, 1L)] <- NA
+  cle <- list(contrat = sprintf("K%03d", sample.int(n_c + 1L, n_e, TRUE)), college = sample(c("C1", "C2", "C3", NA), n_e, TRUE))
+  cle$contrat[sample.int(n_e, 1L)] <- NA
   surv <- as.numeric(as.Date("2020-01-01") + sample(c(-200:3200, NA), n_e, TRUE))
   lignes <- sample(c(TRUE, FALSE), n_e, TRUE, c(0.8, 0.2))
   code <- sample(list("deces", "invalidite", c("deces", "invalidite")), 1L)[[1L]]
@@ -5496,7 +5501,7 @@ verifier("garantie_en_vigueur3 : le banc contient des versions non déterminées
          {
            set.seed(35)
            ctx <- gev3_ctx(60L, 3L, 0L)
-           cle <- paste(sprintf("K%03d", sample.int(3L, 40L, TRUE)), sample(c("C1", "C2", "C3"), 40L, TRUE), sep = "\r")
+           cle <- list(contrat = sprintf("K%03d", sample.int(3L, 40L, TRUE)), college = sample(c("C1", "C2", "C3"), 40L, TRUE))
            r <- ns$.garantie_en_vigueur3(ctx, "deces", cle, as.numeric(as.Date("2020-01-01")) + sample(0:3000, 40L, TRUE))
            any(r$inconnu) && any(r$valeurs & lengths(r$versions_nd) > 0L)
          })
@@ -5510,7 +5515,7 @@ travail_gev3 <- function(f, n, sous = character(0)) {
   ctx <- gev3_ctx(n, n, 0L)
   ctx$retenu$garanties_souscrites[] <- FALSE; ctx$visibilite_vue$statut$garanties_souscrites[] <- NA
   ctx$base$garanties_souscrites$code_garantie <- "deces"
-  cle <- paste(sprintf("K%03d", sample.int(n, n, TRUE)), sample(c("C1", "C2", "C3"), n, TRUE), sep = "\r")
+  cle <- list(contrat = sprintf("K%03d", sample.int(n, n, TRUE)), college = sample(c("C1", "C2", "C3"), n, TRUE))
   travail_de(f, ctx, "deces", cle, as.numeric(as.Date("2020-01-01")) + sample(0:3000, n, TRUE), ops = OPS_GEV3, sous = sous)
 }
 travail_gev3_nouveau <- vapply(c(500L, 2000L), function(n) travail_gev3(ns$.garantie_en_vigueur3, n, sous = ".paires"), 0)
@@ -5519,3 +5524,92 @@ verifier("performance : travail de .garantie_en_vigueur3 de 500 à 2 000 éléme
          travail_gev3_nouveau[2L] / travail_gev3_nouveau[1L] < 6)
 verifier("performance : la mesure détecte l'ancienne forme (travail de la boucle par élément multiplié par plus de 10 sur les mêmes tailles)",
          travail_gev3_ancien[2L] / travail_gev3_ancien[1L] > 10)
+
+# #153 (spécification `donnees` v1.8, M613 ; critères C153-1 à C153-5) : clés composites sans
+# paste(). Une composante manquante ou vide ne s'apparie à rien, ni à une autre composante
+# manquante, ni au « NA » littéral. Cas latents (aucune base ne les amène aux sites, M169) :
+# appels internes de .garantie_en_vigueur3() et de .composantes_dossiers().
+# Contexte minimal de .garantie_en_vigueur3() : versions de garanties_souscrites données, `retenu`
+# (TRUE : retenue ; FALSE : de visibilité non déterminée, à un arrêté antérieur à l'extraction)
+gev3_ctx_gs <- function(contrat, college, retenu = rep(TRUE, length(contrat))) {
+  n <- length(contrat)
+  ctx <- new.env()
+  ctx$base <- list(garanties_souscrites = data.frame(id_contrat = contrat, college = college, code_garantie = "deces",
+                                                     date_effet = D("2020-01-01"), date_fin = D(NA), stringsAsFactors = FALSE))
+  ctx$retenu <- list(garanties_souscrites = retenu)
+  ctx$date_extraction <- D("2026-12-31"); ctx$arrete <- D("2025-12-31")
+  ctx$visibilite_vue <- list(statut = list(garanties_souscrites = ifelse(retenu, TRUE, NA)))
+  ctx
+}
+surv153 <- as.numeric(D("2024-06-01"))
+gev153 <- function(ctx, contrat, college = rep("C1", length(contrat)), ...)
+  ns$.garantie_en_vigueur3(ctx, "deces", list(contrat = contrat, college = college), rep(surv153, length(contrat)), ...)
+# C153-1 : contrat manquant ou vide des deux côtés (versions retenues, puis non déterminées)
+for (retenu in c(TRUE, FALSE)) {
+  r <- gev153(gev3_ctx_gs(c(NA, "", "K1"), "C1", rep(retenu, 3L)), c(NA, "", "K1", "K2"))
+  verifier_egal(paste0("#153, C153-1 : contrat manquant ou vide des deux côtés (versions ", if (retenu) "retenues" else "non déterminées",
+                       ") : aucune version appariée ; K1 apparié ; K2 sans version (avant #153 : NA et \"\" appariés à eux-mêmes par paste())"),
+                list(r$valeurs, r$inconnu, lengths(r$versions), lengths(r$versions_nd)),
+                if (retenu) list(c(FALSE, FALSE, TRUE, FALSE), c(FALSE, FALSE, FALSE, FALSE), c(0L, 0L, 1L, 0L), c(0L, 0L, 0L, 0L))
+                else list(c(FALSE, FALSE, FALSE, FALSE), c(FALSE, FALSE, TRUE, FALSE), c(0L, 0L, 0L, 0L), c(0L, 0L, 1L, 0L)))
+}
+# C153-4 : témoin, collège « NA » littéral des deux côtés apparié, et lui seul ; collège manquant
+# d'un élément (affiliation d'un contrat individuel, colonne `college` NA) apparié à rien
+for (retenu in c(TRUE, FALSE)) {
+  r <- gev153(gev3_ctx_gs(c("K1", "K1"), c("NA", "C2"), rep(retenu, 2L)), rep("K1", 5L), c("NA", NA, "", "C2", "C3"))
+  verifier_egal(paste0("#153, C153-4 : collège « NA » littéral apparié au « NA » littéral seul (versions ", if (retenu) "retenues" else "non déterminées",
+                       ") ; collège manquant ou vide de l'élément : aucun appariement ; autre collège : le sien (avant #153 : NA apparié au « NA » littéral)"),
+                if (retenu) r$valeurs else r$inconnu, c(TRUE, FALSE, FALSE, TRUE, FALSE))
+}
+# C153-2 : collège refusé de garanties_souscrites lu : erreur interne, aucun verdict (Q-B3 (ii)) ;
+# contexte réel, après les règles B et P (le refus est lu par .cause_lecture(), comme par .regle_vue())
+gev153_refus <- function(college_refuse) {
+  b <- base_ref
+  b$garanties_souscrites$college[1L] <- college_refuse
+  ctx <- ns$.contexte(b, d, list(date_extraction = A), A)
+  ctx$declarations <- ns$lire_declarations(NULL, d)
+  ctx$conventions <- ns$.lire_conventions(NULL)
+  ns$.regle_forme(ctx); ns$.regle_domaine(ctx); ns$.regle_cles(ctx); ns$.refus_induits(ctx); ns$.refus_regle_b(ctx)
+  ns$.regle_p(ctx); ns$.construire_vue(ctx)
+  ctx
+}
+message153 <- function(expr) tryCatch({ expr; "aucune erreur" }, error = function(e) conditionMessage(e))
+for (refuse in list(NA_character_, "")) {
+  ctx <- gev153_refus(refuse)
+  for (college_el in c("NA", "ensemble", NA)) {
+    verifier(paste0("#153, C153-2 : garanties_souscrites.college ", if (is.na(refuse)) "manquant" else "vide", " lu face au collège ",
+                    if (is.na(college_el)) "manquant" else paste0("« ", college_el, " »"), " : erreur interne, aucun verdict"),
+             grepl("^erreur interne de provie : \\.garantie_en_vigueur3\\(\\) lit garanties_souscrites\\.college", message153(gev153(ctx, "CT1", college_el))))
+  }
+  verifier(paste0("#153, C153-2 : la même lecture sans le collège (college = FALSE) ne lit pas la colonne refusée : aucune erreur, contrat CT1 en vigueur"),
+           identical(ns$.garantie_en_vigueur3(ctx, "deces", list(contrat = "CT1"), surv153, college = FALSE)$valeurs, TRUE))
+}
+verifier("#153, C153-2 : témoin, collège renseigné partout : aucune erreur, garantie decès de CT1, collège « ensemble », en vigueur",
+         identical(gev153(gev153_refus("ensemble"), "CT1", "ensemble")$valeurs, TRUE))
+# Clé mal formée : aucun recyclage silencieux de la clé (composante absente ou de longueur différente de survenance)
+ctx153_cle <- gev3_ctx_gs("K1", "C1")
+for (cas in list(list(nom = "collège absent", cle = list(contrat = c("K1", "K1")), college = TRUE),
+                 list(nom = "collège plus court", cle = list(contrat = c("K1", "K1"), college = "C1"), college = TRUE),
+                 list(nom = "contrat plus court", cle = list(contrat = "K1", college = c("C1", "C1")), college = TRUE),
+                 list(nom = "contrat absent (college = FALSE)", cle = list(), college = FALSE))) {
+  verifier(paste0("#153 : clé de .garantie_en_vigueur3() mal formée (", cas$nom, ") : erreur interne, aucun recyclage"),
+           grepl("^erreur interne de provie : \\.garantie_en_vigueur3\\(\\) : cl", message153(
+             ns$.garantie_en_vigueur3(ctx153_cle, "deces", cas$cle, rep(surv153, 2L), college = cas$college))))
+}
+verifier("#153 : clé de longueur égale à celle de survenance : aucune erreur",
+         identical(ns$.garantie_en_vigueur3(ctx153_cle, "deces", list(contrat = c("K1", "K1"), college = c("C1", "C1")), rep(surv153, 2L))$valeurs, c(TRUE, TRUE)))
+# C153-3 : distinctes() de .composantes_dossiers(), paiements cumulés par dossier, un identifiant
+# (clé primaire) compté une fois par dossier ; ids de prestations altérés après la construction
+# de la vue (un identifiant manquant ou vide refuse la table, aucune base n'amène à ce site)
+paie153 <- function(id, montant = c(100, 10, 1)[seq_along(id)]) {
+  ctx <- ns$.contexte(base_ref, d, list(date_extraction = A), A)
+  ns$.refus_regle_b(ctx); ns$.initialiser_visibilite(ctx); ns$.regle_prealable(ctx); ns$.construire_vue(ctx)
+  ctx$base$prestations$id_prestation <- c(id, rep("PRZ", 3L - length(id)))
+  ctx$base$prestations$id_dossier <- "DO1"
+  ctx$base$prestations$montant <- c(montant, rep(0, 3L - length(montant)))
+  ns$.composantes_dossiers(ctx)$valeurs$paiements_cumules[1L]
+}
+verifier_egal("#153, C153-3 : distinctes() : identifiants NA puis « NA » littéral d'un même dossier, les deux ordres : les deux lignes comptées (100 + 10) ; deux « NA » littéraux identiques : une fois ; deux manquants : deux fois ; deux vides : deux fois ; deux « PR » identiques : une fois (avant #153 : « NA » littéral et \"\" regroupés par paste())",
+              list(paie153(c(NA, "NA")), paie153(c("NA", NA)), paie153(c("NA", "NA")), paie153(c(NA, NA)), paie153(c("", "")), paie153(c("PR", "PR")),
+                   paie153(c("PR", NA, "NA"))),
+              list(110, 110, 100, 110, 110, 100, 111))
