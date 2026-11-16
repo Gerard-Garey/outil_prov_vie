@@ -5098,6 +5098,20 @@ verifier("#152, id_contrat \"\" à AF1 et aux garanties GS1 et GS3 (contrat des 
 verifier_egal("#152, id_contrat vide ou manquant : valeur commune figée, SI1 non détecté, aucun non_lisible (traitement de NA à l'atome nc : #157)",
               list(cle_d11_vide, cle_d11_na),
               rep(list(c(detecte = FALSE, non_lisible = FALSE)), 2L))
+# Clé « NA » littéral et clé manquante (revue finale de #149) : l'appariement (sinistre, contrat) de
+# .verdict_d11() ne passe plus par paste() ; sur base_ref (SI1 décès couvert par AF1, contrat des
+# dossiers de SI1 à GS1 et GS3), un contrat « NA » littéral aux garanties ne s'apparie pas à la
+# couverture de contrat manquant (avant : « 1\rNA » des deux côtés, SI1 lu couvert, non détecté) ;
+# témoins : « NA » littéral des deux côtés (couvert), manquant des deux côtés (atome nc FALSE, figé :
+# #157), contrat CT1 des deux côtés (couvert).
+cas_d11_na <- function(aff, gs) d11_ctx34(base_ref, function(ctx) {
+  ctx$base$affiliations$id_contrat <- aff; ctx$base$garanties_souscrites$id_contrat <- gs
+})
+verifier_egal("#152, id_contrat \"NA\" littéral aux garanties, manquant à AF1 : SI1 détecté (aucun appariement) ; \"NA\" des deux côtés, manquant des deux côtés, CT1 des deux côtés : SI1 non détecté",
+              list(cas_d11_na(NA_character_, "NA"), cas_d11_na("NA", "NA"), cas_d11_na(NA_character_, NA_character_),
+                   cas_d11_na("CT1", "CT1")),
+              list(c(detecte = TRUE, non_lisible = FALSE), c(detecte = FALSE, non_lisible = FALSE),
+                   c(detecte = FALSE, non_lisible = FALSE), c(detecte = FALSE, non_lisible = FALSE)))
 for (vide in list(NA_character_, "")) {
   etiq <- if (is.na(vide)) "manquant" else "vide"
   verifier_egal(paste0("#152, id_sinistre ", etiq, " à SI2 et à la sortie EV3 (effet 2024-09-01, avant la fin de AF1) : la sortie ne clôt pas SI2, SI1 non détecté, non_lisible (avant #152 : NA ou \"\" apparié à lui-même, SI2 clos, SI1 détecté)"),

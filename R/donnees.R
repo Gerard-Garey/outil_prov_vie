@@ -1866,6 +1866,15 @@ lire_declarations <- function(declarations, dico) {
   invisible(NULL)
 }
 
+# Absence refusée d'une colonne : obligatoire (O) sans défaut de manquant (.DEFAUTS_MANQUANT) ;
+# une absence qui est une valeur (colonne C ou F, ou O à défaut de manquant) ne l'est pas.
+# `.manquant_refuse()` : les valeurs manquantes d'une colonne dont l'absence est refusée (NA, pas
+# NaN : un NaN est hors domaine, règle hors_domaine). Lues par manquant_obligatoire et D01a.
+.absence_refusee <- function(obligatoire, defauts) {
+  obligatoire == "O" && !any(eclater_champ(defauts) %in% .DEFAUTS_MANQUANT)
+}
+.manquant_refuse <- function(x) is.na(x) & !is.nan(x)
+
 .regles_generiques <- function(ctx) {
   borne_basse <- as.numeric(as.Date("1901-01-01"))
   extraction <- as.numeric(ctx$date_extraction)
@@ -1906,9 +1915,9 @@ lire_declarations <- function(declarations, dico) {
         .regle(ctx, "hors_domaine", table, colonne, character(0), "R", "exacte",
                function() is.nan(x) | is.infinite(x))
       }
-      if (col$obligatoire == "O" && !any(eclater_champ(col$defauts) %in% .DEFAUTS_MANQUANT)) {
+      if (.absence_refusee(col$obligatoire, col$defauts)) {
         .regle(ctx, "manquant_obligatoire", table, colonne, character(0), "R", "exacte",
-               function() is.na(x) & !is.nan(x))
+               function() .manquant_refuse(x))
       }
     }
   }
@@ -2432,12 +2441,12 @@ apparier_cles <- function(x, table) {
     col <- .colonnes_dico(ctx, table)
     refusee <- vapply(cle, function(c1) {
       k <- match(c1, col$colonne)
-      col$obligatoire[k] == "O" && !any(eclater_champ(col$defauts[k]) %in% .DEFAUTS_MANQUANT)
+      .absence_refusee(col$obligatoire[k], col$defauts[k])
     }, NA)
     .regle(ctx, "D01a", table, cle[1L], lit, "R", "exacte", function() {
       o <- .ordre_canonique(ctx, table)
       x <- lapply(cle, function(c1) .valeurs(ctx, table, c1)[o])
-      hors <- Reduce(`|`, Map(function(v, refusee1) .chaine_vide(v) | (refusee1 & is.na(v)), x, refusee))
+      hors <- Reduce(`|`, Map(function(v, refusee1) .chaine_vide(v) | (refusee1 & .manquant_refuse(v)), x, refusee))
       r <- logical(length(o))
       r[o[!hors]] <- duplicated(as.data.frame(lapply(x, `[`, !hors), stringsAsFactors = FALSE))
       r
@@ -5292,9 +5301,13 @@ parties_ligne <- function() lapply(.PARTIES_LIGNE, function(p) list(table = p$ta
                                                     v("dossiers", "id_garantie_souscrite")))[p$j])
   # couverture de la survenance : certaine, ou possible (index : ligne ou partie non déterminée)
   cv <- .couverture3(ctx, assure, surv)
-  kc <- paste(cv$i, cv$contrat, sep = "\r")
+  # paire (sinistre, contrat) : code entier composante par composante (.code_groupe(), sans paste() :
+  # un contrat « NA » littéral ne se confond pas avec un contrat manquant) ; le contrat de la
+  # couverture est lu comme celui du dossier (.cle_manquante(), #152)
+  k <- .code_groupe(list(c(cv$i, p$i), c(.cle_manquante(as.character(cv$contrat)), contrat_d)))
+  kc <- k[seq_along(cv$i)]
   # atome « le contrat ne couvre pas la survenance », par paire (sinistre, dossier)
-  kd <- paste(p$i, contrat_d, sep = "\r")
+  kd <- k[length(cv$i) + seq_along(p$i)]
   nc <- .k3(ifelse(is.na(contrat_d), FALSE, ifelse(kd %in% kc[cv$certain], FALSE, ifelse(kd %in% kc[!cv$certain], NA, TRUE))))
   for (m in which(is.na(nc$v))) {
     q <- which(kc == kd[m] & !cv$certain)
@@ -5385,10 +5398,10 @@ parties_ligne <- function() lapply(.PARTIES_LIGNE, function(p) list(table = p$ta
   ns <- nrow(ctx$base$sinistres)
   m3 <- .k3(rep(FALSE, ns))
   # clés appariées : une clé manquante ou vide ne s'apparie à rien, pas même à une clé manquante
-  # ou vide (.cle_manquante(), #152 ; `dans()` : garde sur le côté gauche)
-  cle <- function(x) .cle_manquante(as.character(x))
-  dans <- function(x, y) !is.na(x) & x %in% y
-  assure <- cle(v("sinistres", "id_assure"))
+  # ou vide (apparier_cles(), #152 : la seule implémentation de la règle, qui normalise les deux
+  # côtés ; `dans()` : appartenance)
+  dans <- function(x, y) !is.na(apparier_cles(x, y))
+  assure <- as.character(v("sinistres", "id_assure"))
   surv <- as.numeric(v("sinistres", "date_survenance"))
   deces <- which(v("sinistres", "nature_sinistre") %in% "deces" & !(r$v %in% FALSE))
   if (length(deces) == 0L) return(m3)
@@ -5410,7 +5423,7 @@ parties_ligne <- function() lapply(.PARTIES_LIGNE, function(p) list(table = p$ta
       admis <- vt("nature_contrat") %in% "individuel"
     }
     l <- which(ctx$retenu[[t]] & admis & !is.na(debut) & !is.na(fin))
-    cvt[[t]] <- data.frame(assure = cle(vt("id_assure"))[l], contrat = cle(vt("id_contrat"))[l],
+    cvt[[t]] <- data.frame(assure = as.character(vt("id_assure"))[l], contrat = as.character(vt("id_contrat"))[l],
                            debut = debut[l], fin = fin[l], stringsAsFactors = FALSE)
   }
   cvt <- do.call(rbind, unname(cvt))
@@ -5433,8 +5446,8 @@ parties_ligne <- function() lapply(.PARTIES_LIGNE, function(p) list(table = p$ta
   type <- v("evenements", "type_evenement")
   effet <- .date_connue(ctx, "evenements", "date_effet")
   sortie <- type %in% "sortie"
-  sin_e <- cle(v("evenements", "id_sinistre"))
-  id_s <- cle(v("sinistres", "id_sinistre"))
+  sin_e <- as.character(v("evenements", "id_sinistre"))
+  id_s <- as.character(v("sinistres", "id_sinistre"))
   nd_e <- .nd_vue(ctx, "evenements")
   for (i in deces) {
     c_i <- cvt[dans(cvt$assure, assure[i]) & cvt$fin < surv[i], , drop = FALSE]
