@@ -1683,7 +1683,9 @@ tenue pour une clé manquante, issue~123\fsp; version~1.8 visée en bloc le
 15~novembre~2026, M610, avec ses options M611 à M615~: clé primaire à
 composante manquante, issue~143, sites résiduels de la règle de la clé
 manquante, issues~152, 153 et~154\fsp; erratum de rédaction du
-16~novembre~2026, sans changement de version, issue~152), sous le dictionnaire de la base en version~1.5. La date d'arrêté est obligatoire,
+16~novembre~2026, sans changement de version, issue~152\fsp; erratum du
+16~novembre~2026 sur sa décision du même jour, M629~: catégorie
+d'invalidité vide hors du contrôle de chevauchement, issue~143), sous le dictionnaire de la base en version~1.5. La date d'arrêté est obligatoire,
 sans valeur par défaut. \code{declarations} est le sous-schéma
 \code{donnees} du plan (rubriques \code{exclusions}, \code{hypotheses},
 \code{seuils}, \code{evaluations\_gestion})\fsp; \code{conventions} est la
@@ -1960,9 +1962,10 @@ règle~P.
   lisent une colonne non clé vide depuis une autre colonne la tiennent
   pour une valeur inconnue, comme tout refus de valeur\fsp; une clé vide
   suit la règle de la clé manquante (point suivant). La règle des clés n'est pas une règle de
-  domaine~: deux clés vides d'une même table sont en double (D01a) en plus
-  de leur \code{chaine\_vide}, deux anomalies distinctes (mesure
-  exécutée). Motif~: le dictionnaire dit qu'une chaîne vide est hors
+  domaine~; une clé primaire dont une composante est vide n'entre pas
+  dans la détection D01a et garde son seul \code{chaine\_vide} (point
+  «~Clé primaire à composante manquante ou vide~» ci-dessous\fsp;
+  version~1.8, M612\fsp; issue~143). Motif~: le dictionnaire dit qu'une chaîne vide est hors
   domaine, sous le code \code{chaine\_vide}, et n'est pas un
   manquant (§~1.6), et que chaque anomalie s'enregistre sous l'un des
   codes (§~1.10)\fsp; la coder aussi \code{hors\_domaine} l'enregistrerait
@@ -1985,9 +1988,9 @@ règle~P.
   ligne et dans les rattachements de la visibilité et de l'enjeu\fsp; une
   règle qui lit par cette clé y lit une valeur absente et connue, comme
   pour une clé manquante, sans écarter la ligne. La cellule garde son seul
-  code \code{chaine\_vide}, et la détection D01a lit la cellule telle
-  quelle~: deux clés vides d'une même table restent en double (point
-  précédent). Deux fonctions internes portent la règle~:
+  code \code{chaine\_vide}~; une clé primaire vide n'entre pas dans la
+  détection D01a (point «~Clé primaire à composante manquante ou vide~»
+  ci-dessous). Deux fonctions internes portent la règle~:
   \code{.cle\_manquante()}, qui tient une chaîne vide de clé pour une
   valeur manquante, et \code{.cle3()}, la même règle sur une entrée à
   trois valeurs (valeurs et domaines). Sites~: la jointure par
@@ -2167,7 +2170,7 @@ règle~P.
 Colonne conditionnelle (colonne requise, interdite ou libre selon d'autres colonnes) & Exigence inconnue si deux valeurs du domaine des colonnes lues donnent deux exigences différentes. \code{manquant\_obligatoire} (requise et absente) est faux si la colonne est présente, \code{hors\_domaine} (interdite et présente) est faux si elle est absente\fsp; «~libre~» n'est pas «~inconnu~»~: les deux verdicts y sont faux. Une chaîne vide n'est ni présente ni absente~: elle ne reçoit que \code{chaine\_vide} (point «~Chaîne vide~» ci-dessus). \\
 Borne qui dépend d'une autre colonne (date d'effet d'un événement, jour d'échéance, taux technique, signe d'un montant) & Pour D02c sur \code{evenements.date\_effet}~: (date antérieure au 1er~janvier~1901) ou (type non programmable et date postérieure à l'extraction)\fsp; vrai si la date précède 1901, faux si elle est au plus l'extraction, sinon inconnu si le type, ou le motif quand le type est programmable selon le motif, est inconnu. \\
 Jointure ou appartenance («~il existe une ligne jointe telle que\ldots~», par exemple une garantie décès du contrat) & Vrai si une ligne jointe satisfait la condition quelle que soit la valeur de ses inconnues\fsp; faux si aucune ligne jointe ne le peut\fsp; inconnu sinon. Une clé manquante ne s'apparie à aucune ligne (point ci-dessous), une clé vide non plus (point «~Clé vide~» ci-dessus). \\
-Chevauchement (versions de \code{garanties\_souscrites} par contrat, garantie et collège\fsp; paliers d'âge de \code{parametres}) & Vrai si, pour toute affectation des valeurs inconnues, la ligne recouvre une autre ligne de même groupe\fsp; faux si aucune affectation ne la fait recouvrir une autre ligne\fsp; inconnu sinon. Une ligne dont une composante de clé du groupe manque est hors du contrôle (point ci-dessous). \\
+Chevauchement (versions de \code{garanties\_souscrites} par contrat, garantie et collège\fsp; paliers d'âge de \code{parametres}) & Vrai si, pour toute affectation des valeurs inconnues, la ligne recouvre une autre ligne de même groupe\fsp; faux si aucune affectation ne la fait recouvrir une autre ligne\fsp; inconnu sinon. Une ligne dont une composante de clé du groupe manque ou est vide, ou dont la catégorie d'invalidité est vide, est hors du contrôle (point ci-dessous). \\
 \end{tabular}
 \end{center}
 
@@ -2216,16 +2219,13 @@ Chevauchement (versions de \code{garanties\_souscrites} par contrat, garantie et
   bilans où une clé manque des deux côtés d'une jointure, sur des tables
   déjà refusées en portée table~; aucune provision ne change. Le
   chevauchement, qui n'est pas une jointure, applique la même règle à ses
-  colonnes de clé (point suivant). Seul D01a apparie encore deux clés
-  primaires dont une composante obligatoire manque (deux lignes de
-  \code{parametres} sans \code{id\_garantie\_souscrite} reçoivent D01a en
-  plus de \code{manquant\_obligatoire}, mesure exécutée)\fsp; cet écart au
-  principe, sur une table déjà refusée en portée table, est renvoyé à
-  l'issue~143 (décision du mainteneur du 14~novembre~2026, M382). Une
+  colonnes de clé (point suivant), et, depuis l'issue~143, la détection
+  D01a n'apparie plus deux clés primaires dont une composante refusée
+  manque (point «~Clé primaire à composante manquante ou vide~»
+  ci-dessous). Une
   clé vide, primaire ou étrangère, suit la même règle (point «~Clé
   vide~» ci-dessus, qui en donne les sites, dont le sinistre payé, et les
-  exceptions), et D01a apparie de même
-  deux clés primaires vides.
+  exceptions).
 \item \textbf{Calcul du chevauchement.} Les bornes de chaque ligne sont
   prises au pire (début au plus tard, fin au plus tôt, absence d'une borne
   qui retirerait la ligne du contrôle exclue)\fsp; ce pire ne dépend pas de
@@ -2236,21 +2236,34 @@ Chevauchement (versions de \code{garanties\_souscrites} par contrat, garantie et
   de ce groupe, connu, la recouvre au pire\fsp; un collège inconnu, code
   opaque, peut prendre une valeur nouvelle et n'est donc jamais recouvert
   sous toute affectation. Une ligne dont une composante de clé du groupe
-  manque (\code{garanties\_souscrites.id\_contrat}\fsp;
+  manque ou est vide (\code{garanties\_souscrites.id\_contrat}\fsp;
   \code{parametres.id\_garantie\_souscrite} ou \code{parametres.parametre})
   est hors du contrôle~: elle n'est ni détectée ni écartée, et ne recouvre
-  aucune ligne (spécification, §~2.2, B.4, version~1.7\fsp; issue~121\fsp;
-  jugement d'expert). L'absence de \code{parametres.categorie\_invalidite},
+  aucune ligne (spécification, §~2.2, B.4, version~1.7, issue~121, et,
+  pour une composante vide, version~1.8, M615, issue~143\fsp; jugement
+  d'expert)~; elle garde son seul refus de portée table. L'absence de \code{parametres.categorie\_invalidite},
   composante de la clé primaire légitimement absente hors des paramètres à
   dimension catégorie, reste une valeur du groupe~: deux paliers sans
-  catégorie d'un même (garantie, paramètre) sont du même groupe. Deux
+  catégorie d'un même (garantie, paramètre) sont du même groupe. Une
+  catégorie vide, au contraire, met la ligne hors du contrôle et lui
+  laisse son seul \code{chaine\_vide}~: deux paliers de catégorie vide ne
+  sont pas du même groupe, ni un palier de catégorie vide et un palier
+  sans catégorie (décision du mainteneur du 16~novembre~2026, M629\fsp;
+  issue~143). Motif~: apparier deux chaînes vides inventerait un lien
+  (M396), alors que l'absence de catégorie est une valeur légitime. Le
+  code de groupe de cette composante est mis à \code{NA} pour une chaîne
+  vide seulement (\code{.chaine\_vide()}), et non par
+  \code{.cle\_manquante()}, qui confondrait la chaîne vide avec l'absence
+  légitime. Deux
   lignes ne sont du même groupe que si chaque composante est égale, une
   absence n'égalant que l'absence, jamais une chaîne («~NA~» littéral
   compris)~: le groupe est codé composante par composante
   (\code{.code\_groupe()}, \code{.egal\_valeur()}), sans mise bout à bout
   des valeurs en texte. Les colonnes de groupe qui ne sont pas des clés
   (code de garantie, collège) restent dans la lecture à trois valeurs~:
-  une valeur manquante y est refusée, donc inconnue. Motif~: celui de la
+  une valeur manquante ou vide y est refusée (\code{manquant\_obligatoire}
+  ou \code{chaine\_vide}), donc inconnue, et ne met pas la ligne hors du
+  contrôle (lecture inchangée par l'issue~143). Motif~: celui de la
   forme «~jointure ou appartenance~»\fsp; une ligne sans clé n'appartient
   à aucun contrat ni à aucune garantie connus, et porte déjà un refus de
   portée table. Alternatives écartées~: (a)~garder l'appariement des
@@ -2265,6 +2278,54 @@ Chevauchement (versions de \code{garanties\_souscrites} par contrat, garantie et
   verdict vrai (recouvrement d'une ligne de groupe et d'intervalle
   connus)~: c'est la définition ci-dessus, plus large, que le code
   applique.
+\item \textbf{Clé primaire à composante manquante ou vide} (spécification,
+  §~2.2, B.4, version~1.8, «~Clé primaire à composante manquante
+  (D01a)~»\fsp; décisions du mainteneur du 15~novembre~2026, M611 et
+  M612\fsp; issue~143\fsp; jugement d'expert). Une ligne dont une composante
+  de la clé primaire manque alors que son absence est un refus (colonne
+  obligatoire sans défaut de manquant dans la liste du dictionnaire~:
+  \code{manquant\_obligatoire}), ou est vide (\code{chaine\_vide}),
+  n'entre pas dans la détection D01a~: elle n'est le doublon d'aucune
+  ligne, aucune ligne n'est son doublon, et elle garde son seul refus de
+  portée table. Une composante dont l'absence est une valeur reste une
+  valeur, l'absence n'égalant que l'absence de la même composante~:
+  \code{parametres.categorie\_invalidite} (absente hors des paramètres à
+  dimension catégorie), \code{parametres.age\_min} (absent~: sans palier)
+  et \code{famille.date\_saisie} (manquant traité par le défaut D03g, et
+  non refusé)\fsp; deux versions d'un membre sans date de saisie restent
+  en double. Les lignes de l'écart D01a, leur ordre canonique et la
+  lecture des doubles divergents (points suivants) sont inchangés.
+  Lecture du dictionnaire (§~1.3~: «~Dans une clé composite, un manquant
+  compte comme une valeur~: deux lignes qui ne diffèrent que par deux
+  manquants sont en double~»)~: la phrase admet deux lectures. Le
+  mainteneur a retenu la lecture par l'objet (M611)~: elle règle les
+  composantes dont l'absence est une valeur, et une composante dont
+  l'absence est refusée n'identifie rien\fsp; pour une clé simple, le §~1.3
+  ne dit rien du manquant. Cette lecture n'amende pas le dictionnaire~;
+  une phrase de clarification est retenue pour sa version~1.6. Motif~:
+  apparier deux absences, ou deux chaînes vides, inventerait un doublon,
+  et la ligne porte déjà un refus de portée table sur la même colonne~;
+  c'est le principe du chevauchement et des jointures. Alternatives
+  écartées~: (a)~garder D01a (lecture littérale du §~1.3, comportement
+  antérieur)~: deux codes pour une seule anomalie
+  d'identification\fsp; (a')~sortir de D01a la seule clé manquante et
+  garder en double les clés vides (M612), contre la règle de la clé
+  vide\fsp; (b)~tenir la composante manquante pour une valeur inconnue,
+  écartée comme pour le chevauchement~: une clé n'a pas de
+  domaine\fsp; (c)~sortir aussi \code{famille.date\_saisie}, qui
+  supprimerait le constat D01a de deux versions d'un membre sans date de
+  saisie, qu'aucun autre refus ne signale. Mesures exécutées (batterie
+  unitaire, bases construites, résultat exact)~: deux lignes de
+  \code{parametres} sans \code{id\_garantie\_souscrite}, ou sans
+  \code{parametre}, et deux contrats sans identifiant reçoivent
+  \code{manquant\_obligatoire} sans D01a\fsp; deux contrats d'identifiant
+  vide, et deux lignes de \code{parametres} d'\code{id\_garantie\_souscrite}
+  vide, reçoivent \code{chaine\_vide} sans D01a\fsp; deux paliers sans
+  catégorie ni âge minimal d'un même (garantie, paramètre), et deux
+  versions d'un membre sans date de saisie, gardent D01a. Seuls changent
+  des bilans de tables déjà refusées en portée table~; aucune provision
+  ni aucun verdict ne change (message du commit de l'issue, non remesuré
+  ici).
 \item \textbf{Clé primaire en double} (spécification, §~2.2, B.4,
   version~1.7\fsp; décision du mainteneur du 14~novembre~2026, M381,
   option~(b)\fsp; issue~131\fsp; jugement d'expert). Une jointure lit «~la~»
@@ -2310,14 +2371,15 @@ Chevauchement (versions de \code{garanties\_souscrites} par contrat, garantie et
   détection D01a, par \code{.code\_groupe()} comme le chevauchement, sans
   mise bout à bout des valeurs en texte~: un identifiant «~NA~» littéral
   n'est pas regroupé avec un identifiant manquant (erratum du
-  15~novembre~2026, M396\fsp; issue~131). Mesure exécutée (batterie
-  unitaire)~: deux dossiers d'identifiant manquant, rattachés à deux
-  garanties différentes, en présence d'un dossier d'identifiant
-  «~NA~», ne divergent que sur \code{id\_garantie\_souscrite} (lignes~3 et~4), seule
-  colonne où se publient les composantes empêchées de cause D01a, comme
-  sous un identifiant ordinaire (témoin \code{DOZ})~; la mise bout à bout
-  antérieure écrivait «~NA~» pour les deux identifiants et regroupait les
-  trois lignes. Dans l'enjeu, la garantie d'un
+  15~novembre~2026, M396\fsp; issue~131). Depuis l'issue~143, une
+  composante refusée manquante n'entre plus dans l'écart D01a (point
+  précédent)~: la règle se mesure sur une composante dont l'absence est
+  une valeur. Mesure exécutée (batterie unitaire)~: un palier de
+  \code{parametres} sans catégorie d'invalidité, sa copie sans catégorie
+  et une seconde copie de catégorie «~NA~» littérale~: la seconde copie
+  n'est pas regroupée avec les deux premières, qui seules forment l'écart
+  et ne divergent que si leurs valeurs diffèrent\fsp; témoin, seconde copie
+  sans catégorie~: les trois lignes sont regroupées. Dans l'enjeu, la garantie d'un
   dossier dont les doubles divergent sur \code{id\_garantie\_souscrite},
   ou dont la garantie souscrite est en double avec des codes de garantie
   divergents, est \code{non\_rattache} (lien non déterminé, comme la
