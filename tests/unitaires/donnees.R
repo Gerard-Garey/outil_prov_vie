@@ -2329,6 +2329,36 @@ verifier("#146, .verdict3(), clé injective sous LC_ALL=C et LC_ALL=C.UTF-8 (deu
            identical(v_c[6:17], v_abc) && identical(v_u[6:17], v_abc) &&
            identical(v_c[18:21], c("TRUE", "NA", "NA", "TRUE")) && identical(v_u[18:21], rep("NA", 4L)) &&
            identical(v_c[22:25], rep("NA", 4L)) && identical(v_u[22:25], rep("NA", 4L)))
+# conversion des chaînes latin1 en UTF-8 dans la clé de découpage (code_valeurs() de .verdict3()) :
+# le « é » latin1 et le « é » UTF-8 de deux domaines égaux sous LC_ALL=C.UTF-8 reçoivent la même
+# clé (lignes essayées ensemble) : 2 appels du prédicat ; sans la conversion, deux clés distinctes :
+# 3 appels (mesuré sur le mutant sans la ligne `x[lat] <- enc2utf8(x[lat])`). Le verdict est NA NA
+# dans les deux cas, seul le nombre d'appels distingue le mutant. Sous-processus R forcé sous
+# LC_ALL=C.UTF-8, sur le package installé par la batterie.
+appels_146 <- function(locale) {
+  script <- tempfile(fileext = ".R")
+  writeLines(c(
+    sprintf(".libPaths(c(%s, .libPaths()))", deparse(dirname(find.package("provie")))),
+    'ns <- asNamespace("provie")',
+    'ent <- function(doms) list(tc = "t.x", valeurs = c(NA, NA), inconnu = c(TRUE, TRUE), index = NULL, domaine = NULL,',
+    '                           domaines = doms, d01a = c(TRUE, TRUE))',
+    'appels <- 0L',
+    'p <- function(x) { appels <<- appels + 1L; !is.na(x$assure) & x$assure != x$local }',
+    'l1 <- iconv("\\u00e9", "UTF-8", "latin1")',
+    'u1 <- "\\u00e9"',
+    'r <- ns$.verdict3(list(assure = ent(list(c(l1, "b"), c(u1, "b"))), local = ns$.connue3("famille.id_assure", c("b", "b"))), p)',
+    'cat(Sys.getlocale("LC_CTYPE"), Encoding(l1), Encoding(u1), l1 == u1, as.vector(r), appels, sep = "|")'),
+    script)
+  sortie <- suppressWarnings(system2(file.path(R.home("bin"), "Rscript"), c("--vanilla", shQuote(script)),
+                                     stdout = TRUE, stderr = FALSE, env = paste0("LC_ALL=", locale)))
+  unlink(script)
+  if (length(sortie) == 0L) return(character(0))
+  strsplit(utils::tail(sortie, 1L), "|", fixed = TRUE)[[1L]]
+}
+a_u <- appels_146("C.UTF-8")
+verifier("#146, .verdict3(), conversion latin1 vers UTF-8 de la clé de découpage : « é » latin1 et « é » UTF-8 dans deux domaines égaux (sous LC_ALL=C.UTF-8, `==` TRUE), verdict NA NA, 2 appels du prédicat (3 sans la conversion)",
+         length(a_u) == 7L && grepl("utf-?8", a_u[1L], ignore.case = TRUE) && identical(a_u[2:4], c("latin1", "UTF-8", "TRUE")) &&
+           identical(a_u[5:6], c("NA", "NA")) && identical(a_u[7L], "2"))
 # bout en bout (locale de la batterie) : SI1 et SI2 en double avec ces domaines, assuré « b » en
 # famille ; bilan identique dans les deux ordres, latin1 comme UTF-8
 b_enc <- function(latin1) avec(function(b) {
@@ -5277,7 +5307,7 @@ sm158 <- function(z, hors_vue = FALSE) {
   e$env$.verdict3 <- local({ cible <- e$env; function(entrees, g, ...) { assign("enfant", entrees$e$valeurs[1L], envir = cible); ns$.verdict3(entrees, g, ...) } })
   list(constats158(ctx, e$fn, "D07"), e$env$enfant)
 }
-verifier_egal("#158 (8d) D07 (c) sans_m (appel interne) : id_membre de RE1 \"\" et de la candidate (normalisée NA) : non apparié, enfant FALSE, RE1 non détectée (déjà avant) ; NA des deux côtés : enfant FALSE, RE1 non détectée (avant : NA apparié à NA, enfant NA) ; témoin ME1, ligne hors vue : enfant TRUE, RE1 détectée",
+verifier_egal("#158 (8d) D07 (c) sans_m (appel interne) : id_membre de RE1 \"\" et de la candidate (normalisée NA) : non apparié, enfant FALSE, RE1 non détectée (déjà avant) ; NA des deux côtés : enfant FALSE, RE1 non détectée (avant, sous la vue masquée : NA apparié à NA, enfant NA ; sans effet sur la vue réelle) ; témoin ME1, ligne hors vue : enfant TRUE, RE1 détectée",
               list(sm158(""), sm158(NA_character_), sm158("ME1", TRUE)),
               list(list(integer(0), FALSE), list(integer(0), FALSE), list(1L, TRUE)))
 # .parametre_garantie() : paramètres d'id "GS1" et z, valeurs 1 et 2, garanties "GS1", "" et NA

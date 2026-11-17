@@ -25,10 +25,14 @@
 # entree de la liste sans appel correspondant (liste perimee).
 # Limites : ne voient pas les egalites `==` et `!=` entre vecteurs, l'indexation par nom, split(),
 # intersect(), setdiff() et union() (qui apparient par match() sans passer par ces deux formes) ni
-# les fonctions passees en argument (`Map(match, ...)`) ; une garantie de non-appariement
-# d'une cle n'est donc pas une preuve : voir l'issue 163 ("deux lectures de parametre de
-# garantie souscrite", titre de l'issue ouverte le 17 novembre 2026) pour les lectures de
-# parametres de garantie souscrite par split().
+# les fonctions passees en argument (`Map(match, ...)`) ni rowsum() (regroupement par cle) ; une
+# variable locale qui porte le nom d'une constante du package est prise pour cette constante
+# (aucun appel recense) ; la forme prefixe de l'operateur, `%in%`(x, table), n'est pas vue (mesure :
+# une fonction d'essai ajoutee a R/donnees.R n'est pas inventoriee) ; une
+# garantie de non-appariement d'une cle n'est donc pas une preuve : voir l'issue 163 ("deux
+# lectures de parametre de garantie souscrite", titre de l'issue ouverte le 17 novembre 2026)
+# pour les lectures de parametres de garantie souscrite par split(), et l'issue 164 pour
+# rowsum(), la variable locale homonyme et la forme prefixe.
 # Usage, depuis la racine du depot : Rscript tests/controles/appariements_cles.R
 # Un argument facultatif designe une autre racine ; l'option --inventaire imprime les cles des
 # appels recenses (une par ligne) sans controler. Sortie : lignes [OK] / [RELEVE] / [ECHEC] ;
