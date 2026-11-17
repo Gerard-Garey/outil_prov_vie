@@ -2274,6 +2274,80 @@ b <- avec(function(b) {
 })
 verifier("#131, .verdict3(), domaines propres à séparateurs : bilan identique dans les deux ordres",
          identical(controler_base(b, A), controler_base(inverser_lignes(b), A)))
+# #146 : clé injective des domaines propres quels que soient la locale et le marquage des chaînes
+# (octets de chaque texte ; seules les chaînes marquées latin1 sont converties en UTF-8 ; marque
+# U / S / B selon l'encodage déclaré, sans lire la locale) :
+# (a) « ééé S4: » marqué latin1 et « b » contre « ééé » et « S1:b » (sous une locale UTF-8, paste0()
+# traduit le latin1 et la longueur annoncée ne couvre plus le texte inscrit) ; (b) « é » en octets
+# UTF-8 sans marque contre le texte « <c3><a9> » (sous une locale non UTF-8, enc2utf8() réécrirait
+# la première en échappements identiques à la seconde) ; (c) « é » marqué bytes contre « é » unknown
+# de mêmes octets (R les tient pour différentes, `==` FALSE : clés distinctes, marques B et U) ;
+# (d) mêmes octets, « é » unknown contre « é » marqué UTF-8 : R les tient pour différentes sous
+# LC_ALL=C (`==` FALSE, marques U et S, clés distinctes, verdicts TRUE NA ; NA TRUE) et pour égales
+# sous LC_ALL=C.UTF-8 (`==` TRUE : le verdict est celui de deux domaines égaux, NA NA, que donne le
+# cas (e), « é » UTF-8 dans les deux domaines ; les deux clés distinctes ne font que découper
+# les lignes en deux groupes essayés séparément). Chaque cas dans un sous-processus R, sous
+# LC_ALL=C et sous LC_ALL=C.UTF-8, sur le package installé par la batterie : verdicts de .verdict3()
+# dans les deux ordres des domaines, avec un prédicat où chaque domaine a un verdict distinct
+# (A : NA, B : TRUE).
+verdicts_146 <- function(locale) {
+  script <- tempfile(fileext = ".R")
+  writeLines(c(
+    sprintf(".libPaths(c(%s, .libPaths()))", deparse(dirname(find.package("provie")))),
+    'ns <- asNamespace("provie")',
+    'ent <- function(doms) list(tc = "t.x", valeurs = c(NA, NA), inconnu = c(TRUE, TRUE), index = NULL, domaine = NULL,',
+    '                           domaines = doms, d01a = c(TRUE, TRUE))',
+    'p <- function(x) !is.na(x$assure) & x$assure != x$local',
+    'v <- function(a, b, loc) {',
+    '  l <- ns$.connue3("famille.id_assure", c(loc, loc))',
+    '  c(as.vector(ns$.verdict3(list(assure = ent(list(a, b)), local = l), p)),',
+    '    as.vector(ns$.verdict3(list(assure = ent(list(b, a)), local = l), p)))',
+    '}',
+    'lat <- iconv("\\u00e9\\u00e9\\u00e9S4:", "UTF-8", "latin1")',
+    'o <- rawToChar(as.raw(c(0xc3, 0xa9)))',
+    'u <- o; Encoding(u) <- "UTF-8"',
+    'by <- o; Encoding(by) <- "bytes"',
+    'cat(Sys.getlocale("LC_CTYPE"), Encoding(lat), Encoding(o), Encoding(u), o == u,',
+    '    v(c(lat, "b"), c("\\u00e9\\u00e9\\u00e9", "S1:b"), "b"), v(c(o, "b"), c("<c3><a9>", "b"), o),',
+    '    v(c(by, "b"), c(o, "b"), o), v(c(o, "b"), c(u, "b"), u), v(c(u, "b"), c(u, "b"), u), sep = "|")'),
+    script)
+  sortie <- suppressWarnings(system2(file.path(R.home("bin"), "Rscript"), c("--vanilla", shQuote(script)),
+                                     stdout = TRUE, stderr = FALSE, env = paste0("LC_ALL=", locale)))
+  unlink(script)
+  if (length(sortie) == 0L) return(character(0))
+  strsplit(utils::tail(sortie, 1L), "|", fixed = TRUE)[[1L]]
+}
+v_c <- verdicts_146("C")
+v_u <- verdicts_146("C.UTF-8")
+# cas (a) à (c) et témoin (e) : mêmes verdicts sous les deux locales ; cas (d) : TRUE NA ; NA TRUE
+# sous C (o != u), NA NA ; NA NA sous C.UTF-8 (o == u, comme le cas (e))
+v_abc <- c("NA", "TRUE", "TRUE", "NA", "NA", "TRUE", "TRUE", "NA", "TRUE", "NA", "NA", "TRUE")
+verifier("#146, .verdict3(), clé injective sous LC_ALL=C et LC_ALL=C.UTF-8 (deux processus R) : latin1 contre UTF-8, octets sans marque contre échappements littéraux, bytes contre unknown, unknown contre UTF-8 (égales pour R sous C.UTF-8, différentes sous C), dans les deux ordres des domaines ; chaînes bien marquées latin1, unknown et UTF-8",
+         length(v_c) == 25L && length(v_u) == 25L && v_c[1L] == "C" && grepl("utf-?8", v_u[1L], ignore.case = TRUE) &&
+           identical(v_c[2:4], c("latin1", "unknown", "UTF-8")) && identical(v_u[2:4], c("latin1", "unknown", "UTF-8")) &&
+           identical(v_c[5L], "FALSE") && identical(v_u[5L], "TRUE") &&
+           identical(v_c[6:17], v_abc) && identical(v_u[6:17], v_abc) &&
+           identical(v_c[18:21], c("TRUE", "NA", "NA", "TRUE")) && identical(v_u[18:21], rep("NA", 4L)) &&
+           identical(v_c[22:25], rep("NA", 4L)) && identical(v_u[22:25], rep("NA", 4L)))
+# bout en bout (locale de la batterie) : SI1 et SI2 en double avec ces domaines, assuré « b » en
+# famille ; bilan identique dans les deux ordres, latin1 comme UTF-8
+b_enc <- function(latin1) avec(function(b) {
+  s <- b$sinistres
+  a1 <- "\u00e9\u00e9\u00e9S4:"
+  if (latin1) a1 <- iconv(a1, "UTF-8", "latin1")
+  b$sinistres <- rbind(transform(s[1L, ], id_assure = a1), transform(s[1L, ], id_assure = "b"),
+                       transform(s[2L, ], id_assure = "\u00e9\u00e9\u00e9"), transform(s[2L, ], id_assure = "S1:b"))
+  f <- b$famille[c(1L, 1L), ]
+  f$id_sinistre <- c("SI1", "SI2")
+  f$id_assure <- "b"
+  b$famille <- f
+  b
+})
+verifier_egal("#146, bout en bout : la colonne porte bien la marque latin1 (témoin), bilan identique dans les deux ordres, latin1 comme UTF-8",
+              list(Encoding(b_enc(TRUE)$sinistres$id_assure[1L]),
+                   identical(controler_base(b_enc(TRUE), A), controler_base(inverser_lignes(b_enc(TRUE)), A)),
+                   identical(controler_base(b_enc(FALSE), A), controler_base(inverser_lignes(b_enc(FALSE)), A))),
+              list("latin1", TRUE, TRUE))
 # règle écrite sur dossiers à A0 (aucune règle V ne lit dossiers.date_ouverture comme valeur :
 # .regle() appelée directement) : colonne lue comme valeur, cause directe ; lue pour la vue
 # seulement (dans la table ou dans la parente), refus de portée table

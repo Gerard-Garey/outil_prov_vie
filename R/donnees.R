@@ -1637,14 +1637,30 @@ lire_declarations <- function(declarations, dico) {
     for (e in entrees) if (!is.null(e$domaines)) propre <- propre | lengths(e$domaines) > 0L
     # clé injective des domaines propres d'une ligne sur les entrées `s` : chaque valeur a un
     # code auto-délimité (N : NA, M : NaN, D<hexadécimal>; : nombre ou date, L1 / L0 : logique,
-    # S<octets>:<texte> : chaîne, longueur en préfixe), chaque domaine son nombre de valeurs en
-    # préfixe, Z pour une entrée sans domaine propre ; deux lignes de même clé ont les mêmes
-    # domaines, les lignes de même clé sont essayées ensemble (travail par domaine distinct)
+    # <marque><longueur>:<octets en hexadécimal> : chaîne, longueur en octets en préfixe, marque
+    # U / S / B selon l'encodage déclaré de la chaîne, unknown / UTF-8 / bytes), chaque domaine son
+    # nombre de valeurs en préfixe, Z pour une entrée sans domaine propre ; deux lignes de même clé
+    # ont les mêmes domaines, les lignes de même clé sont essayées ensemble (travail par domaine
+    # distinct)
     code_valeurs <- function(x) {
       num <- is.numeric(x) || inherits(x, "Date")
       code <- if (num) paste0("D", sprintf("%a", as.numeric(x)), ";") else if (is.logical(x)) ifelse(x, "L1", "L0") else {
+        # octets du texte, en hexadécimal : la clé ne dépend ni de la locale ni du marquage (paste0()
+        # traduit une chaîne marquée latin1 sous une locale UTF-8, enc2utf8() réécrit en échappements
+        # une chaîne non marquée sous une locale non UTF-8, #146) ; seules les chaînes marquées latin1
+        # sont converties en UTF-8, pour que le même texte donne la même clé. La marque suit
+        # l'encodage déclaré après cette conversion, sans lire la locale : R tient pour différentes
+        # deux chaînes de mêmes octets d'encodage déclaré différent (`==` FALSE sous une locale non
+        # UTF-8) ; même clé, mêmes octets et même marque, donc chaînes égales pour R. Une chaîne
+        # ASCII est toujours unknown (même clé) ; un même texte non ASCII unknown et UTF-8 reçoit
+        # deux clés : découpage plus fin, sans effet sur le verdict (domaines égaux, essais identiques)
         x <- as.character(x)
-        paste0("S", nchar(x, type = "bytes"), ":", x)
+        lat <- !is.na(x) & Encoding(x) == "latin1"
+        x[lat] <- enc2utf8(x[lat])
+        marque <- c(unknown = "U", "UTF-8" = "S", bytes = "B")[Encoding(x)]
+        octets <- vapply(x, function(z) if (is.na(z)) "" else paste(as.character(charToRaw(z)), collapse = ""), "",
+                         USE.NAMES = FALSE)
+        paste0(marque, nchar(octets) %/% 2L, ":", octets)
       }
       code[is.na(x)] <- "N"
       if (num) code[is.nan(as.numeric(x))] <- "M"
