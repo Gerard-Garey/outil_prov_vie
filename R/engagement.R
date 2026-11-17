@@ -238,14 +238,15 @@ valeur_actuelle_probable <- function(echeancier, actualisation, conventions) {
 # `risque_en_cours` (famille « risque_en_cours ») ; non exportée.
 parametre_vue <- function(vue, nom, gs, famille = NULL) {
   id <- valeurs_vue(vue, "parametres", "id_garantie_souscrite")
-  k <- which(valeurs_vue(vue, "parametres", "parametre") %in% nom & !is.na(id))
+  # une clé manquante ou vide ne s'apparie à rien, d'un côté comme de l'autre (apparier_cles(), #158)
+  k <- which(valeurs_vue(vue, "parametres", "parametre") %in% nom & cle_renseignee(id))
   z <- lapply(split(valeurs_vue(vue, "parametres", "valeur")[k], as.character(id[k])), unique)
-  i <- match(as.character(gs), names(z))
+  i <- apparier_cles(gs, names(z))
   n <- lengths(z, use.names = FALSE)[i]
   valeur <- vapply(z, function(x) if (length(x) == 1L) as.numeric(x) else NA_real_, 0, USE.NAMES = FALSE)[i]
   res <- list(valeur = valeur, ambigu = !is.na(i) & n > 1L)
   if (!is.null(famille)) {
-    res$exclu <- as.character(gs) %in% as.character(id[k][vue$exclu[[famille]]$parametres[k]])
+    res$exclu <- !is.na(apparier_cles(gs, id[k][vue$exclu[[famille]]$parametres[k]]))
   }
   res
 }
@@ -297,7 +298,9 @@ hypotheses_vue_unites <- function(vue, referentiel, poste, famille, n, lectures)
       placees <- placees[!exclu[placees] & (if (is.null(l$admises)) TRUE else l$admises[placees])]
       if (length(placees) == 0L || length(l$cles) == 0L) next
       k <- lapply(l$colonnes, function(c1) as.character(cles_lignes_hypothese(vue, l$table, placees, c1)))
-      connue <- Reduce(`&`, lapply(k, function(x) !is.na(x)))
+      # une composante manquante ou vide ne rattache rien (cle_renseignee(), #158) : la clé composée
+      # est jointe après ce filtre, la jointure par « \r » rendant une composante vide non détectable
+      connue <- Reduce(`&`, lapply(k, cle_renseignee))
       cle <- do.call(paste, c(k, sep = "\r"))[connue]
       j <- unlist(par_cle[cle], use.names = FALSE)
       unite <- c(unite, l$unite[j])
@@ -328,11 +331,13 @@ joindre_codes <- function(...) {
 # dictionnaire, ou deux pour une clé composée), `cles` (clé lue, colonnes jointes par un retour
 # chariot, une par couple), `unite` (indice de l'unité de chaque couple ; par défaut, une clé
 # par unité), `garde` (couples retenus : l'unité lit la table), `admises` (NULL, ou logique sur
-# les lignes de la table : lignes que le poste peut lire). Une clé NA ne rattache rien. Rend un
-# élément de `lectures` de hypotheses_vue_unites(). Sans point : lue aussi par `risque_en_cours`
-# (P3) ; non exportée.
+# les lignes de la table : lignes que le poste peut lire). Une clé manquante ou vide ne rattache
+# rien (cle_renseignee(), #158) ; pour une clé composée, l'appelant donne NA dès qu'une composante
+# est manquante ou vide (la clé jointe par « \r » n'est jamais vide). Rend un élément de
+# `lectures` de hypotheses_vue_unites(). Sans point : lue aussi par `risque_en_cours` (P3) ; non
+# exportée.
 lecture_unites <- function(table, colonnes, cles, unite = seq_along(cles), garde = TRUE, admises = NULL) {
-  g <- rep_len(garde, length(cles)) & !is.na(cles)
+  g <- rep_len(garde, length(cles)) & cle_renseignee(cles)
   list(table = table, colonnes = colonnes, cles = as.character(cles[g]), unite = unite[g], admises = admises)
 }
 
@@ -348,11 +353,14 @@ lecture_unites <- function(table, colonnes, cles, unite = seq_along(cles), garde
   vv <- function(t, c1) as.character(valeurs_vue(vue, t, c1))
   d <- etats$id_dossier
   s <- as.character(etats$id_sinistre)
-  gs <- vv("dossiers", "id_garantie_souscrite")[match(d, vv("dossiers", "id_dossier"), incomparables = NA)]
-  contrat <- vv("garanties_souscrites", "id_contrat")[match(gs, vv("garanties_souscrites", "id_garantie_souscrite"),
-                                                            incomparables = NA)]
-  assure <- vv("sinistres", "id_assure")[match(s, vv("sinistres", "id_sinistre"), incomparables = NA)]
-  cle_af <- ifelse(is.na(assure) | is.na(contrat), NA_character_, paste(assure, contrat, sep = "\r"))
+  # clés appariées : une clé manquante ou vide ne s'apparie à rien (apparier_cles(), #158) ; clé
+  # d'affiliation composée seulement si l'assuré et le contrat sont renseignés
+  gs <- vv("dossiers", "id_garantie_souscrite")[apparier_cles(d, vv("dossiers", "id_dossier"))]
+  contrat <- vv("garanties_souscrites", "id_contrat")[apparier_cles(gs, vv("garanties_souscrites", "id_garantie_souscrite"))]
+  assure <- vv("sinistres", "id_assure")[apparier_cles(s, vv("sinistres", "id_sinistre"))]
+  cle_af <- rep(NA_character_, length(d))
+  ok_af <- cle_renseignee(assure) & cle_renseignee(contrat)
+  cle_af[ok_af] <- paste(assure[ok_af], contrat[ok_af], sep = "\r")
   list(lecture_unites("dossiers", "id_dossier", d),
        lecture_unites("sinistres", "id_sinistre", s),
        lecture_unites("evenements", "id_sinistre", s),
@@ -428,13 +436,13 @@ lecture_unites <- function(table, colonnes, cles, unite = seq_along(cles), garde
                     d03c = rep(FALSE, n), reconstitue = rep(FALSE, n), stringsAsFactors = FALSE)
   if (n == 0L) return(res)
   vv <- function(t, c1) valeurs_vue(vue, t, c1)
-  i_dos <- match(etats$id_dossier, vv("dossiers", "id_dossier"), incomparables = NA)
+  # clés appariées : une clé manquante ou vide ne s'apparie à rien (apparier_cles(), #158)
+  i_dos <- apparier_cles(etats$id_dossier, vv("dossiers", "id_dossier"))
   gs <- vv("dossiers", "id_garantie_souscrite")[i_dos]
-  i_sin <- match(etats$id_sinistre, vv("sinistres", "id_sinistre"), incomparables = NA)
+  i_sin <- apparier_cles(etats$id_sinistre, vv("sinistres", "id_sinistre"))
   assure <- vv("sinistres", "id_assure")[i_sin]
   survenance <- as.numeric(etats$date_entree_etat)
-  contrat <- vv("garanties_souscrites", "id_contrat")[match(gs, vv("garanties_souscrites", "id_garantie_souscrite"),
-                                                            incomparables = NA)]
+  contrat <- vv("garanties_souscrites", "id_contrat")[apparier_cles(gs, vv("garanties_souscrites", "id_garantie_souscrite"))]
   forfait <- parametre_vue(vue, "capital_forfaitaire", gs, "engagement")
   taux <- parametre_vue(vue, "taux_capital", gs, "engagement")
   mc <- parametre_vue(vue, "majoration_conjoint", gs, "engagement")
@@ -454,8 +462,7 @@ lecture_unites <- function(table, colonnes, cles, unite = seq_along(cles), garde
   # jointure par clé (assuré, contrat), sans produit croisé, puis filtre sur le collège.
   # Lecture de Kleene : un collège inconnu de la garantie souscrite, ou d'une affiliation de
   # l'assuré au contrat couvrant la survenance, rend l'affiliation non déterminée.
-  college <- vv("garanties_souscrites", "college")[match(gs, vv("garanties_souscrites", "id_garantie_souscrite"),
-                                                         incomparables = NA)]
+  college <- vv("garanties_souscrites", "college")[apparier_cles(gs, vv("garanties_souscrites", "id_garantie_souscrite"))]
   af_assure <- as.character(vv("affiliations", "id_assure"))
   af_contrat <- as.character(vv("affiliations", "id_contrat"))
   af_college <- as.character(vv("affiliations", "college"))
@@ -463,10 +470,15 @@ lecture_unites <- function(table, colonnes, cles, unite = seq_along(cles), garde
   af_fin <- as.numeric(vv("affiliations", "date_fin"))
   af_fin[is.na(af_fin)] <- Inf
   salaire <- vv("affiliations", "salaire_reference")
-  af_ok <- which(!is.na(af_assure) & !is.na(af_contrat) & !is.na(af_debut) & !vue$exclu$engagement$affiliations)
+  # clé (assuré, contrat) composée seulement si ses deux composantes sont renseignées (#158)
+  af_ok <- which(cle_renseignee(af_assure) & cle_renseignee(af_contrat) & !is.na(af_debut) &
+                   !vue$exclu$engagement$affiliations)
   par_cle <- split(af_ok, paste(af_assure[af_ok], af_contrat[af_ok], sep = "\r"))
-  cand <- par_cle[paste(as.character(assure[a_calculer]), as.character(contrat[a_calculer]), sep = "\r")]
-  cand[vapply(cand, is.null, NA) | is.na(assure[a_calculer]) | is.na(contrat[a_calculer])] <- list(integer(0))
+  cle_dossier <- rep(NA_character_, length(a_calculer))
+  ok_cle <- cle_renseignee(assure[a_calculer]) & cle_renseignee(contrat[a_calculer])
+  cle_dossier[ok_cle] <- paste(as.character(assure[a_calculer][ok_cle]), as.character(contrat[a_calculer][ok_cle]), sep = "\r")
+  cand <- par_cle[cle_dossier]
+  cand[vapply(cand, is.null, NA)] <- list(integer(0))
   ii <- rep(seq_along(a_calculer), lengths(cand))
   kk <- unlist(cand, use.names = FALSE)
   couvre <- af_debut[kk] <= survenance[a_calculer][ii] & af_fin[kk] >= survenance[a_calculer][ii]
@@ -601,7 +613,7 @@ capital_deces_dossier <- function(vue, plan, etats, methode, parametres, prestat
   if (length(k)) {
     pm <- valeurs_vue(vue, "prestations", "montant")[k]
     pr <- valeurs_vue(vue, "prestations", "date_reglement")[k]
-    j <- match(as.character(valeurs_vue(vue, "prestations", "id_dossier")[k]), etats$id_dossier[ok])
+    j <- apparier_cles(valeurs_vue(vue, "prestations", "id_dossier")[k], etats$id_dossier[ok])
     garde <- !is.na(j)
     if (any(garde)) {
       paye <- pm[garde] * f(pr[garde], a)
@@ -614,9 +626,8 @@ capital_deces_dossier <- function(vue, plan, etats, methode, parametres, prestat
     arrete = rep(as.numeric(a), length(ok)),
     reglement = rep(as.numeric(a) + parametres$delai_reglement_jours, length(ok)),
     depot = {
-      decl <- valeurs_vue(vue, "sinistres", "date_declaration")[match(etats$id_sinistre[ok],
-                                                                      valeurs_vue(vue, "sinistres", "id_sinistre"),
-                                                                      incomparables = NA)]
+      decl <- valeurs_vue(vue, "sinistres", "date_declaration")[apparier_cles(etats$id_sinistre[ok],
+                                                                              valeurs_vue(vue, "sinistres", "id_sinistre"))]
       legal <- as.numeric(etats$date_entree_etat[ok]) >= as.numeric(.DEBUT_DEPOT_LEGAL)
       h <- as.numeric(date_atteinte_age(rep(a, length(ok)), rv$duree_sans_depot_annees, "revolu"))
       h[legal] <- as.numeric(date_atteinte_age(decl[legal], .ANNEES_DEPOT_CDC, "revolu"))
@@ -756,9 +767,9 @@ calculer_engagement <- function(vue, plan, tables, catalogue, garantie, poste) {
   exclu <- vue$exclu$engagement
   # couverture exclue (erratum v1.0.13) : dossier d'une garantie souscrite, ou d'un contrat, exclu
   # pour engagement hors de la population (garanties_couverture_exclue(), seule implémentation ;
-  # identifiants rendus jamais NA ni "", comparaison exacte, #154)
-  couverture_exclue <- as.character(valeurs_vue(vue, "dossiers", "id_garantie_souscrite"))[i_dos] %in%
-    garanties_couverture_exclue(vue, "engagement")
+  # identifiants rendus jamais NA ni "", appariement par apparier_cles(), #154)
+  couverture_exclue <- !is.na(apparier_cles(valeurs_vue(vue, "dossiers", "id_garantie_souscrite")[i_dos],
+                                            garanties_couverture_exclue(vue, "engagement")))
   # population avant le filtre des dossiers clos (§ 5.8, erratum v1.0.17 : un dossier clos sous
   # une hypothèse de la vue est une unité restituée à 0, au poste de la partition du § 5.4)
   garde <- !exclu$dossiers[i_dos] & !couverture_exclue
@@ -769,16 +780,16 @@ calculer_engagement <- function(vue, plan, tables, catalogue, garantie, poste) {
   if ("beneficiaire_non_identifie" %in% p2$critere) {
     b <- which(vue$retenu$beneficiaires & !exclu$beneficiaires)
     ni <- valeurs_vue(vue, "beneficiaires", "id_dossier")[b][valeurs_vue(vue, "beneficiaires", "qualite")[b] %in% "non_identifie"]
-    non_reclame <- non_reclame | etats$id_dossier %in% as.character(ni)
+    non_reclame <- non_reclame | !is.na(apparier_cles(etats$id_dossier, ni))
   }
   if ("sans_evenement" %in% p2$critere) {
     seuil <- ajouter_mois(a, -as.integer(p2$mois_sans_evenement))
     e <- which(vue$retenu$evenements & !exclu$evenements)
     recent <- as.numeric(valeurs_vue(vue, "evenements", "date_effet")[e]) > seuil
-    actifs <- as.character(valeurs_vue(vue, "evenements", "id_dossier")[e][recent %in% TRUE])
-    ouverture <- as.numeric(valeurs_vue(vue, "dossiers", "date_ouverture"))[match(etats$id_dossier,
-                                                                                    valeurs_vue(vue, "dossiers", "id_dossier"))]
-    non_reclame <- non_reclame | (!(etats$id_dossier %in% actifs) & (ouverture <= seuil) %in% TRUE)
+    actifs <- valeurs_vue(vue, "evenements", "id_dossier")[e][recent %in% TRUE]
+    ouverture <- as.numeric(valeurs_vue(vue, "dossiers", "date_ouverture"))[apparier_cles(etats$id_dossier,
+                                                                                         valeurs_vue(vue, "dossiers", "id_dossier"))]
+    non_reclame <- non_reclame | (is.na(apparier_cles(etats$id_dossier, actifs)) & (ouverture <= seuil) %in% TRUE)
   }
   etats <- etats[if (poste == "capitaux_non_reclames") non_reclame else !non_reclame, , drop = FALSE]
   # dossiers clos du poste : hors du calcul ; restitués à 0 sous une hypothèse de la vue (S2)
@@ -851,7 +862,7 @@ calculer_engagement <- function(vue, plan, tables, catalogue, garantie, poste) {
                     flux = c(as.vector(rbind(cc$montant, frais * cc$montant)), rep(0, 2L * nc)),
                     probabilite = c(rep(cc$issue, each = 2L), rep(1, 2L * nc)), stringsAsFactors = FALSE)
   vap <- valeur_actuelle_probable(ech, list(type = "aucune"), plan$conventions)
-  montant <- vap$valeurs$valeur_actuelle[match(cc$id_dossier, vap$valeurs$cle)]
+  montant <- vap$valeurs$valeur_actuelle[apparier_cles(cc$id_dossier, vap$valeurs$cle)]
   reglement <- .HORIZONS[[methode]] != "arrete"
   # jugement_expert : méthode « règlement », structure familiale du plan, facteur d'issue, ou
   # valeur des sources S1 (salaire déclaré sous D03c, § 5.9) et S2 (hypothèse de la vue, #87)
@@ -923,7 +934,7 @@ calculer_engagement <- function(vue, plan, tables, catalogue, garantie, poste) {
   debuts <- c(as.numeric(etats$date_entree_etat))
   fins <- rep(as.numeric(a), nrow(etats))
   k <- prestations[valeurs_vue(vue, "prestations", "type_prestation")[prestations] %in% "capital" &
-                     as.character(valeurs_vue(vue, "prestations", "id_dossier")[prestations]) %in% etats$id_dossier]
+                     !is.na(apparier_cles(valeurs_vue(vue, "prestations", "id_dossier")[prestations], etats$id_dossier))]
   if (length(k)) {
     debuts <- c(debuts, as.numeric(valeurs_vue(vue, "prestations", "date_reglement")[k]))
     fins <- c(fins, rep(as.numeric(a), length(k)))

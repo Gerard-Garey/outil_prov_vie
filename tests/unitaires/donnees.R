@@ -5134,6 +5134,193 @@ verifier_egal("D10 (f) : signalement déclaré par référentiel : placé, aucun
               list(paste(ligne(r$signalements, "D10f")$table, ligne(r$signalements, "D10f")$identifiants), rq34(r, "D10f")),
               list("evenements EV9", character(0)))
 
+# --- Clé manquante ou vide : apparier_cles() partout (#158, sites 7 et 8a, 8c ; spécification v1.8, § 2.2, B.4, « Clé vide », M396)
+# Appels internes sur une copie du contexte de la vue, mutée après sa construction : une clé "" ou
+# NA refuse sa table en portée table, aucun de ces sites n'est atteint par une base (sonde de #158).
+# Chaque état pour "" et pour le témoin NA, contre un témoin à clés renseignées.
+ctx158 <- function(b, arrete, decl, conv, mut = NULL) {
+  ctx <- copie40(ns$vue_a_date(b, arrete, decl, conv)$ctx)
+  if (!is.null(mut)) mut(ctx)
+  ctx
+}
+constats158 <- function(ctx, regle, code) {
+  n0 <- length(ctx$constats)
+  regle(ctx)
+  k <- ctx$constats[seq_len(length(ctx$constats) - n0) + n0]
+  as.integer(unlist(lapply(k, function(x) if (x$code == code) x$lignes)))
+}
+# 8a, D07 (c) : rente d'éducation RE1 (enfant ME1, 26 ans révolus à A, limite atteinte), détectée
+# (ligne 1 de rentes) ; id_membre de RE1 et de ME1 de clé "" : non appariés, non détectée (avant :
+# "" apparié à "", détectée) ; clé NA : non détectée, avant et après
+d07_158 <- function(z) {
+  ctx <- ctx158(nais("2000-03-01"), A, NULL, cv("atteinte"), function(ctx) {
+    if (!is.null(z)) { ctx$base$rentes$id_membre[1L] <- z; ctx$base$famille$id_membre[1L] <- z }
+  })
+  constats158(ctx, ns$.regle_v_limite_age, "D07")
+}
+verifier_egal("#158 (8a) D07 (c) (appel interne) : id_membre de RE1 et de ME1 \"\" : non apparié, RE1 non détectée (avant : détectée) ; NA : non détectée ; témoin renseigné : RE1 (ligne 1) détectée",
+              list(d07_158(""), d07_158(NA_character_), d07_158(NULL)), list(integer(0), integer(0), 1L))
+# 8a, D10 (f) : fin_service EV10 (ligne 8 de evenements) de la rente de conjoint RE3, sans second_deces,
+# détecté ; id_rente de EV10 et de RE3 de clé "" : non appariés, non détecté (avant : détecté)
+d10f_158 <- function(z) {
+  ctx <- ctx158(fs34(sans_sd34(de34("DO6"))), A, s34(1000), cv34, function(ctx) {
+    if (!is.null(z)) {
+      ctx$base$evenements$id_rente[ctx$base$evenements$id_evenement == "EV10"] <- z
+      ctx$base$rentes$id_rente[ctx$base$rentes$id_rente == "RE3"] <- z
+    }
+  })
+  constats158(ctx, ns$.regle_v_deces_conjoint, "D10f")
+}
+verifier_egal("#158 (8a) D10 (f) (appel interne) : id_rente de EV10 et de RE3 \"\" : non apparié, EV10 non détecté (avant : détecté) ; NA : non détecté ; témoin renseigné : EV10 (ligne 8) détecté",
+              list(d10f_158(""), d10f_158(NA_character_), d10f_158(NULL)), list(integer(0), integer(0), 8L))
+# 8c, .index_jointure() : "" et NA ne s'apparient à rien, des deux côtés, y compris parmi des clés
+# primaires "" en double (`doubles` exclut "" et NA ; les lignes i et j passent par apparier_cles())
+ij158 <- function(mut = NULL) {
+  r <- ns$.index_jointure(ctx158(base_ref, A, NULL, NULL, mut), "dossiers", "id_dossier", c("DO1", "", NA, "DO2"))
+  list(as.integer(r), is.null(attr(r, "occurrences")))
+}
+verifier_egal("#158 (8c) .index_jointure() : témoin DO1, DO2 aux lignes 1 et 2 ; dossiers 2 et 3 de clé \"\" ou NA : DO2 non apparié, \"\" et NA jamais (avant et après) ; DO1 en double : lignes 1, 2 et 3 en occurrences",
+              list(ij158(), ij158(function(ctx) ctx$base$dossiers$id_dossier[2:3] <- ""),
+                   ij158(function(ctx) ctx$base$dossiers$id_dossier[2:3] <- NA_character_),
+                   ij158(function(ctx) ctx$base$dossiers$id_dossier[2:3] <- "DO1")),
+              list(list(c(1L, NA, NA, 2L), TRUE), list(c(1L, NA, NA, NA), TRUE), list(c(1L, NA, NA, NA), TRUE),
+                   list(c(1L, NA, NA, NA), FALSE)))
+# site 7, .existe_kleene() et .date_parente() : clés "" et NA appariées à rien (apparier_cles()) ;
+# témoin A (vrai : ligne `vrai` de clé A ; inconnu : ligne `possible` de clé B)
+verifier_egal("#158 (7) .existe_kleene() : clés A, \"\", NA face à des lignes de clés A, \"\", NA : vrai pour A seule ; B face à une ligne `possible` : inconnu",
+              ns$.existe_kleene(c("A", "", NA, "B"), c("A", "", NA, "B"), c(TRUE, TRUE, TRUE, FALSE), c(FALSE, FALSE, FALSE, TRUE))[c("valeurs", "inconnu")],
+              list(valeurs = c(TRUE, FALSE, FALSE, FALSE), inconnu = c(FALSE, FALSE, FALSE, TRUE)))
+# Site 8d (#158) : appariements bruts de clés des règles V et des lectures de paramètres, passés à
+# apparier_cles(). Appels internes ; les règles sont lues dans un environnement qui masque une
+# fonction de lecture (`env158`) quand le site n'a pas d'effet visible autrement.
+env158 <- function(fn, ...) { e <- list2env(list(...), parent = environment(fn)); environment(fn) <- e; list(fn = fn, env = e) }
+# D13 (.regle_v_clotures) : SI1 décès sans instruction, dossier décès à prestation capital ; sinistre
+# SI1 de clé "" aux sinistres et aux dossiers : non apparié, SI1 non détecté (avant : détecté) ; NA :
+# non détecté (avant et après, le filtre [!is.na(.)] écartait déjà NA)
+ib158 <- avec(function(b) { b$sinistres$date_instruction[1L] <- NA; b })
+d13_158 <- function(z) {
+  ctx <- ctx158(ib158, A, NULL, NULL, function(ctx) {
+    if (!is.null(z)) {
+      ctx$base$sinistres$id_sinistre[1L] <- z
+      ctx$base$dossiers$id_sinistre[ctx$base$dossiers$id_sinistre == "SI1"] <- z
+    }
+  })
+  constats158(ctx, ns$.regle_v_clotures, "D13")
+}
+verifier_egal("#158 (8d) D13 (appel interne) : id_sinistre de SI1 \"\" aux sinistres et aux dossiers : non apparié, SI1 non détecté (avant : détecté) ; NA : non détecté ; témoin renseigné : SI1 (ligne 1) détecté",
+              list(d13_158(""), d13_158(NA_character_), d13_158(NULL)), list(integer(0), integer(0), 1L))
+# D10 (d) (.regle_v_garanties) : un passage en invalidité dont le sinistre n'a aucun dossier fait lire
+# les colonnes de couverture (contrats.id_contrat) ; `.cause_lecture()` masquée (le type
+# passage_invalidite est hors du domaine de la base : la lecture serait toujours refusée) ; id_sinistre de
+# l'événement et des dossiers de clé "" ou NA : aucun dossier apparié, colonnes de couverture lues (avant
+# : "" et NA appariés, colonnes non lues) ; témoin renseigné : dossier trouvé, colonnes non lues
+b10d158 <- avec(function(b) {
+  b$evenements <- rbind(b$evenements, tab("evenements", id_evenement = "EV90", id_sinistre = "SI1", id_dossier = "DO1",
+                                          type_evenement = "passage_invalidite", date_effet = D("2025-03-01"), date_saisie = D("2025-03-02")))
+  b })
+d10d_158 <- function(z) {
+  ctx <- ctx158(b10d158, A, NULL, NULL, function(ctx) {
+    if (!is.null(z)) {
+      ctx$base$evenements$id_sinistre[ctx$base$evenements$id_evenement == "EV90"] <- z
+      ctx$base$dossiers$id_sinistre[] <- z
+    }
+  })
+  e <- env158(ns$.regle_v_garanties, .cause_lecture = function(...) NULL)
+  e$env$.regle_vue <- local({ cible <- e$env; function(ctx, code, table, colonne, lit, ...) if (code == "D10d") assign("lit", lit, envir = cible) })
+  e$fn(ctx)
+  "contrats.id_contrat" %in% e$env$lit
+}
+verifier_egal("#158 (8d) D10 (d) (appel interne) : id_sinistre du passage et des dossiers \"\" ou NA : aucun dossier apparié, colonnes de couverture lues (avant : non lues) ; témoin renseigné : non lues",
+              list(d10d_158(""), d10d_158(NA_character_), d10d_158(NULL)), list(TRUE, TRUE, FALSE))
+# D07 (c), double effet (.regle_v_limite_age) : DO4 non candidat s'il est clos ; DO4 clos par EV9 ; id_dossier
+# de DO4 et de EV9 de clé "" ou NA : non apparié, DO4 non clos donc candidat, détecté (avant : clos,
+# non détecté) ; témoin renseigné : clos, seule la rente RE1 est détectée
+cl158 <- function(z) {
+  ctx <- ctx158(de("1999-03-01", clos = TRUE), A, s34(1000), cv34, function(ctx) {
+    if (!is.null(z)) {
+      ctx$base$dossiers$id_dossier[ctx$base$dossiers$id_dossier == "DO4"] <- z
+      ctx$base$evenements$id_dossier[ctx$base$evenements$id_evenement == "EV9"] <- z
+    }
+  })
+  n0 <- length(ctx$constats)
+  ns$.regle_v_limite_age(ctx)
+  k <- ctx$constats[seq_len(length(ctx$constats) - n0) + n0]
+  unlist(lapply(k, function(x) if (x$code == "D07") paste(x$table, paste(x$lignes, collapse = ","))))
+}
+verifier_egal("#158 (8d) D07 (c) double effet (appel interne) : id_dossier de DO4 et de sa clôture \"\" ou NA : non apparié, DO4 détecté (avant : clos, non détecté) ; témoin renseigné : DO4 clos, RE1 seule",
+              list(cl158(""), cl158(NA_character_), cl158(NULL)),
+              list(c("rentes 1", "dossiers 4"), c("rentes 1", "dossiers 4"), "rentes 1"))
+# D07 (c), sans_m : rente d'éducation RE1 d'id_membre `z` et version de famille de clé `z` candidate.
+# `.visibilite_a()` est masquée : candidate pour la ligne 1, `membre` lu dans la base mutée et normalisé
+# par `.cle_manquante()` (le "" devient NA), comme à la construction de la vue, avant le marquage
+# « \r<ligne> » que `.visibilite_a()` donne à un membre manquant (ce marquage rend la conversion
+# sans effet sur la vue réelle : la conversion est une garde) ; la mémoire de la vue est vidée après la
+# mutation. `.verdict3()` est masqué pour lire `enfant`. "" : ne s'apparie pas, ni avant (le "" de la
+# rente ne vaut pas le NA du membre normalisé) ni après : enfant FALSE, RE1 non détectée. NA des deux
+# côtés : seul cas où la conversion change le résultat (avant : NA %in% NA, RE1 dans sans_m, enfant NA,
+# inconnu ; après : enfant FALSE). Témoin ME1, ligne de famille hors de la vue : passe par sans_m
+# (enfant de la candidate), RE1 détectée
+sm158 <- function(z, hors_vue = FALSE) {
+  ctx <- ctx158(nais("2000-03-01"), A, NULL, cv("atteinte"), function(ctx) {
+    ctx$base$rentes$id_membre[1L] <- z
+    ctx$base$famille$id_membre[1L] <- z
+    if (hors_vue) ctx$retenu$famille[1L] <- FALSE
+    ctx$visibilite_vue <- NULL
+  })
+  e <- env158(ns$.regle_v_limite_age,
+              .visibilite_a = function(ctx, mode = "vue") {
+                v <- ns$.visibilite_a(ctx, mode)
+                v$candidate <- rep(FALSE, nrow(ctx$base$famille)); v$candidate[1L] <- TRUE
+                v$membre <- ns$.cle_manquante(as.character(ctx$base$famille$id_membre))
+                v
+              })
+  e$env$.verdict3 <- local({ cible <- e$env; function(entrees, g, ...) { assign("enfant", entrees$e$valeurs[1L], envir = cible); ns$.verdict3(entrees, g, ...) } })
+  list(constats158(ctx, e$fn, "D07"), e$env$enfant)
+}
+verifier_egal("#158 (8d) D07 (c) sans_m (appel interne) : id_membre de RE1 \"\" et de la candidate (normalisée NA) : non apparié, enfant FALSE, RE1 non détectée (déjà avant) ; NA des deux côtés : enfant FALSE, RE1 non détectée (avant : NA apparié à NA, enfant NA) ; témoin ME1, ligne hors vue : enfant TRUE, RE1 détectée",
+              list(sm158(""), sm158(NA_character_), sm158("ME1", TRUE)),
+              list(list(integer(0), FALSE), list(integer(0), FALSE), list(1L, TRUE)))
+# .parametre_garantie() : paramètres d'id "GS1" et z, valeurs 1 et 2, garanties "GS1", "" et NA
+pg158 <- function(z) {
+  ctx <- ctx158(base_ref, A, NULL, NULL, function(ctx) {
+    ctx$base$parametres <- tab("parametres", id_garantie_souscrite = c("GS1", z), parametre = "age_limite", valeur = c(1, 2))
+    ctx$retenu$parametres <- c(TRUE, TRUE)
+  })
+  r <- ns$.parametre_garantie(ctx, "age_limite", c("GS1", "", NA))
+  r$valeur
+}
+verifier_egal("#158 (8d) .parametre_garantie() : paramètre de clé \"\" non apparié à la garantie \"\" (valeurs 1, NA, NA ; avant : 1, 2, NA) ; NA : 1, NA, NA ; témoin renseigné GS2 : 1, NA, NA",
+              list(pg158(""), pg158(NA_character_), pg158("GS2")), list(c(1, NA, NA), c(1, NA, NA), c(1, NA, NA)))
+# .cause_nd() : ligne d'evenements inscrite sous parente_non_determinee (ligne 1), parente d'un dossier non
+# déterminé (ligne 1) ; clé de lien "" des deux côtés : la parente "" n'est pas rattachée, aucun élément qui explique
+# l'écart, erreur interne (avant : cause hors_domaine de la parente "") ; NA : erreur interne ; témoin
+# renseigné DO1 : cause hors_domaine (`.visibilite_a()` masquée : statut non déterminé pour toutes les lignes)
+cnd158 <- function(z) {
+  ctx <- ctx158(base_ref, A, NULL, NULL, function(ctx) {
+    ctx$base$evenements$id_dossier[1L] <- z
+    ctx$base$dossiers$id_dossier[1L] <- z
+    ctx$lignes_nd <- list(list(table = "evenements", colonne = NA_character_, motif = "parente_non_determinee", lignes = 1L,
+                               origine = NA_character_),
+                          list(table = "dossiers", colonne = NA_character_, motif = "hors_domaine", lignes = 1L, origine = NA_character_))
+  })
+  e <- env158(ns$.cause_nd, .visibilite_a = function(ctx, mode = "vue") list(statut = lapply(ctx$base, function(x) rep(NA, NROW(x)))))
+  tryCatch(e$fn(ctx, list(evenements = list(1L)), 1L, "X", "evenements"),
+           error = function(err) if (grepl("^erreur interne de provie", conditionMessage(err))) "erreur interne" else conditionMessage(err))
+}
+verifier_egal("#158 (8d) .cause_nd() (appel interne) : clé de lien \"\" de l'événement et du dossier : parente non rattachée, erreur interne (avant : cause hors_domaine) ; NA : erreur interne ; témoin DO1 : hors_domaine",
+              list(cnd158(""), cnd158(NA_character_), cnd158("DO1")), list("erreur interne", "erreur interne", "hors_domaine"))
+# apparier_cles() et cle_renseignee() : seule implémentation de la règle, définie une fois dans R/donnees.R
+verifier_egal("#158 apparier_cles() : \"a\", \"\", NA, \"b\" face à \"\", \"b\", NA, \"a\" : 4, NA, NA, 2 (première occurrence, \"\" et NA jamais appariés) ; cle_renseignee() : vrai, faux, faux",
+              list(ns$apparier_cles(c("a", "", NA, "b"), c("", "b", NA, "a")), ns$cle_renseignee(c("a", "", NA))),
+              list(c(4L, NA, NA, 2L), c(TRUE, FALSE, FALSE)))
+verifier("#158 apparier_cles() et cle_renseignee() : définies une fois, dans R/donnees.R ; une seule ligne de R/ écrit match() sur des clés passées par .cle_manquante() (la définition d'apparier_cles() : aucune écriture locale de la règle)",
+         { src <- unlist(lapply(list.files(file.path(racine, "R"), "\\.R$", full.names = TRUE), readLines, encoding = "UTF-8"))
+           code <- sub("#.*$", "", src)
+           sum(grepl("^apparier_cles <- function", src)) == 1L && sum(grepl("^cle_renseignee <- function", src)) == 1L &&
+             any(grepl("^apparier_cles <- function", readLines(file.path(racine, "R", "donnees.R"), encoding = "UTF-8"))) &&
+             sum(grepl("match\\(.*\\.cle_manquante\\(", code)) == 1L &&
+             grepl("match\\(.*\\.cle_manquante\\(", code[which(grepl("^apparier_cles <- function", src)) + 1L]) })
+
 # --- D11 : sinistre hors période de couverture (§ 8.7 ; C11-1 à C11-8)
 aff34 <- function(b, ...) { x <- list(...); for (n in names(x)) b$affiliations[[n]] <- x[[n]]; b }
 fin_aff34 <- function(b, fin, saisie, motif = "depart_entreprise") aff34(b, date_fin = D(fin), motif_fin = motif, date_saisie_fin = D(saisie))
