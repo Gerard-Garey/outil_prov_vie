@@ -222,6 +222,13 @@ dictionnaire <- function() {
       echec("colonnes.csv", i, "colonne_saisie : date de saisie (S) de la m\u00eame table attendue")
     }
     if (col$modalites[i] != "" && col$type[i] != "character") echec("colonnes.csv", i, "modalit\u00e9s d'une colonne non character")
+    # Une modalit\u00e9 d\u00e9clar\u00e9e deux fois fausse tout contr\u00f4le qui lit le domaine de la colonne
+    # (un domaine (A, A) n'a qu'une valeur, mais sa longueur est 2 : #145) ; la premi\u00e8re est nomm\u00e9e.
+    mod_i <- .eclater(col$modalites[i])
+    if (anyDuplicated(mod_i)) {
+      echec("colonnes.csv", i, sprintf("modalit\u00e9 en double dans %s.%s : %s", col$table[i],
+                                       col$colonne[i], mod_i[anyDuplicated(mod_i)]))
+    }
     if (col$futur_admis[i] != "FALSE" && col$type[i] != "Date") echec("colonnes.csv", i, "futur admis pour une colonne non Date")
     if (col$futur_admis[i] == "programmable" && col$table[i] != "evenements") {
       echec("colonnes.csv", i, "futur admis programmable hors de la table evenements")
