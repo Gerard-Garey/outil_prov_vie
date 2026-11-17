@@ -651,6 +651,27 @@ for (k in names(cles154)) {
                      unites154(v154(mut_seg, NULL)), unites154(v154(mut_id, NULL))),
                 list(c("CTC1", "CTI3"), "CTC1", c("CTC1", "CTI1", "CTI3"), c("CTC1", "CTI3")))
 }
+# segments_vue(), codes de garantie d'un contrat (ligne_activite ; #158, site 4) : le code d'une
+# garantie souscrite d'id_contrat manquant ou vide n'est jamais attribué à un contrat (comparaison
+# par apparier_cles(), non par ==, qui laissait un NA au vecteur des codes) ; résultat identique
+# avant et après. GSI1.id_contrat de clé `cle` : CTI1 n'est plus une unité, les autres gardent
+# leur ligne d'activité
+mut_seg_ct <- function(v, cle) {
+  if (!is.null(cle)) v$ctx$base$garanties_souscrites$id_contrat[2L] <- cle
+  v
+}
+la154 <- function(cle) {
+  s <- ns$segments_vue(v154(mut_seg_ct, cle), list(la = list(regle = "ligne_activite", correspondance = list(deces = "ldec"))),
+                       "deces")
+  s <- s[is.na(s$id_dossier), , drop = FALSE]
+  list(s$id_contrat, s$segment)
+}
+for (k in names(cles154)) {
+  verifier_egal(paste0("#158 segments_vue(), ligne_activite : GSI1.id_contrat de clé ", k, " : unités contrat CTC1 et CTI3, ligne ldec ; ",
+                       "témoin renseigné : CTC1, CTI1, CTI3"),
+                list(la154(cles154[[k]]), la154(NULL)),
+                list(list(c("CTC1", "CTI3"), c("ldec", "ldec")), list(c("CTC1", "CTI1", "CTI3"), rep("ldec", 3L))))
+}
 # engagement : contrat de la garantie souscrite des dossiers (couverture_exclue) et ligne du
 # dossier de l'état (i_dos)
 cat154 <- catalogue_garanties()

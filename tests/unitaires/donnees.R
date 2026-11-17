@@ -2274,6 +2274,110 @@ b <- avec(function(b) {
 })
 verifier("#131, .verdict3(), domaines propres à séparateurs : bilan identique dans les deux ordres",
          identical(controler_base(b, A), controler_base(inverser_lignes(b), A)))
+# #146 : clé injective des domaines propres quels que soient la locale et le marquage des chaînes
+# (octets de chaque texte ; seules les chaînes marquées latin1 sont converties en UTF-8 ; marque
+# U / S / B selon l'encodage déclaré, sans lire la locale) :
+# (a) « ééé S4: » marqué latin1 et « b » contre « ééé » et « S1:b » (sous une locale UTF-8, paste0()
+# traduit le latin1 et la longueur annoncée ne couvre plus le texte inscrit) ; (b) « é » en octets
+# UTF-8 sans marque contre le texte « <c3><a9> » (sous une locale non UTF-8, enc2utf8() réécrirait
+# la première en échappements identiques à la seconde) ; (c) « é » marqué bytes contre « é » unknown
+# de mêmes octets (R les tient pour différentes, `==` FALSE : clés distinctes, marques B et U) ;
+# (d) mêmes octets, « é » unknown contre « é » marqué UTF-8 : R les tient pour différentes sous
+# LC_ALL=C (`==` FALSE, marques U et S, clés distinctes, verdicts TRUE NA ; NA TRUE) et pour égales
+# sous LC_ALL=C.UTF-8 (`==` TRUE : le verdict est celui de deux domaines égaux, NA NA, que donne le
+# cas (e), « é » UTF-8 dans les deux domaines ; les deux clés distinctes ne font que découper
+# les lignes en deux groupes essayés séparément). Chaque cas dans un sous-processus R, sous
+# LC_ALL=C et sous LC_ALL=C.UTF-8, sur le package installé par la batterie : verdicts de .verdict3()
+# dans les deux ordres des domaines, avec un prédicat où chaque domaine a un verdict distinct
+# (A : NA, B : TRUE).
+verdicts_146 <- function(locale) {
+  script <- tempfile(fileext = ".R")
+  writeLines(c(
+    sprintf(".libPaths(c(%s, .libPaths()))", deparse(dirname(find.package("provie")))),
+    'ns <- asNamespace("provie")',
+    'ent <- function(doms) list(tc = "t.x", valeurs = c(NA, NA), inconnu = c(TRUE, TRUE), index = NULL, domaine = NULL,',
+    '                           domaines = doms, d01a = c(TRUE, TRUE))',
+    'p <- function(x) !is.na(x$assure) & x$assure != x$local',
+    'v <- function(a, b, loc) {',
+    '  l <- ns$.connue3("famille.id_assure", c(loc, loc))',
+    '  c(as.vector(ns$.verdict3(list(assure = ent(list(a, b)), local = l), p)),',
+    '    as.vector(ns$.verdict3(list(assure = ent(list(b, a)), local = l), p)))',
+    '}',
+    'lat <- iconv("\\u00e9\\u00e9\\u00e9S4:", "UTF-8", "latin1")',
+    'o <- rawToChar(as.raw(c(0xc3, 0xa9)))',
+    'u <- o; Encoding(u) <- "UTF-8"',
+    'by <- o; Encoding(by) <- "bytes"',
+    'cat(Sys.getlocale("LC_CTYPE"), Encoding(lat), Encoding(o), Encoding(u), o == u,',
+    '    v(c(lat, "b"), c("\\u00e9\\u00e9\\u00e9", "S1:b"), "b"), v(c(o, "b"), c("<c3><a9>", "b"), o),',
+    '    v(c(by, "b"), c(o, "b"), o), v(c(o, "b"), c(u, "b"), u), v(c(u, "b"), c(u, "b"), u), sep = "|")'),
+    script)
+  sortie <- suppressWarnings(system2(file.path(R.home("bin"), "Rscript"), c("--vanilla", shQuote(script)),
+                                     stdout = TRUE, stderr = FALSE, env = paste0("LC_ALL=", locale)))
+  unlink(script)
+  if (length(sortie) == 0L) return(character(0))
+  strsplit(utils::tail(sortie, 1L), "|", fixed = TRUE)[[1L]]
+}
+v_c <- verdicts_146("C")
+v_u <- verdicts_146("C.UTF-8")
+# cas (a) à (c) et témoin (e) : mêmes verdicts sous les deux locales ; cas (d) : TRUE NA ; NA TRUE
+# sous C (o != u), NA NA ; NA NA sous C.UTF-8 (o == u, comme le cas (e))
+v_abc <- c("NA", "TRUE", "TRUE", "NA", "NA", "TRUE", "TRUE", "NA", "TRUE", "NA", "NA", "TRUE")
+verifier("#146, .verdict3(), clé injective sous LC_ALL=C et LC_ALL=C.UTF-8 (deux processus R) : latin1 contre UTF-8, octets sans marque contre échappements littéraux, bytes contre unknown, unknown contre UTF-8 (égales pour R sous C.UTF-8, différentes sous C), dans les deux ordres des domaines ; chaînes bien marquées latin1, unknown et UTF-8",
+         length(v_c) == 25L && length(v_u) == 25L && v_c[1L] == "C" && grepl("utf-?8", v_u[1L], ignore.case = TRUE) &&
+           identical(v_c[2:4], c("latin1", "unknown", "UTF-8")) && identical(v_u[2:4], c("latin1", "unknown", "UTF-8")) &&
+           identical(v_c[5L], "FALSE") && identical(v_u[5L], "TRUE") &&
+           identical(v_c[6:17], v_abc) && identical(v_u[6:17], v_abc) &&
+           identical(v_c[18:21], c("TRUE", "NA", "NA", "TRUE")) && identical(v_u[18:21], rep("NA", 4L)) &&
+           identical(v_c[22:25], rep("NA", 4L)) && identical(v_u[22:25], rep("NA", 4L)))
+# conversion des chaînes latin1 en UTF-8 dans la clé de découpage (code_valeurs() de .verdict3()) :
+# le « é » latin1 et le « é » UTF-8 de deux domaines égaux sous LC_ALL=C.UTF-8 reçoivent la même
+# clé (lignes essayées ensemble) : 2 appels du prédicat ; sans la conversion, deux clés distinctes :
+# 3 appels (mesuré sur le mutant sans la ligne `x[lat] <- enc2utf8(x[lat])`). Le verdict est NA NA
+# dans les deux cas, seul le nombre d'appels distingue le mutant. Sous-processus R forcé sous
+# LC_ALL=C.UTF-8, sur le package installé par la batterie.
+appels_146 <- function(locale) {
+  script <- tempfile(fileext = ".R")
+  writeLines(c(
+    sprintf(".libPaths(c(%s, .libPaths()))", deparse(dirname(find.package("provie")))),
+    'ns <- asNamespace("provie")',
+    'ent <- function(doms) list(tc = "t.x", valeurs = c(NA, NA), inconnu = c(TRUE, TRUE), index = NULL, domaine = NULL,',
+    '                           domaines = doms, d01a = c(TRUE, TRUE))',
+    'appels <- 0L',
+    'p <- function(x) { appels <<- appels + 1L; !is.na(x$assure) & x$assure != x$local }',
+    'l1 <- iconv("\\u00e9", "UTF-8", "latin1")',
+    'u1 <- "\\u00e9"',
+    'r <- ns$.verdict3(list(assure = ent(list(c(l1, "b"), c(u1, "b"))), local = ns$.connue3("famille.id_assure", c("b", "b"))), p)',
+    'cat(Sys.getlocale("LC_CTYPE"), Encoding(l1), Encoding(u1), l1 == u1, as.vector(r), appels, sep = "|")'),
+    script)
+  sortie <- suppressWarnings(system2(file.path(R.home("bin"), "Rscript"), c("--vanilla", shQuote(script)),
+                                     stdout = TRUE, stderr = FALSE, env = paste0("LC_ALL=", locale)))
+  unlink(script)
+  if (length(sortie) == 0L) return(character(0))
+  strsplit(utils::tail(sortie, 1L), "|", fixed = TRUE)[[1L]]
+}
+a_u <- appels_146("C.UTF-8")
+verifier("#146, .verdict3(), conversion latin1 vers UTF-8 de la clé de découpage : « é » latin1 et « é » UTF-8 dans deux domaines égaux (sous LC_ALL=C.UTF-8, `==` TRUE), verdict NA NA, 2 appels du prédicat (3 sans la conversion)",
+         length(a_u) == 7L && grepl("utf-?8", a_u[1L], ignore.case = TRUE) && identical(a_u[2:4], c("latin1", "UTF-8", "TRUE")) &&
+           identical(a_u[5:6], c("NA", "NA")) && identical(a_u[7L], "2"))
+# bout en bout (locale de la batterie) : SI1 et SI2 en double avec ces domaines, assuré « b » en
+# famille ; bilan identique dans les deux ordres, latin1 comme UTF-8
+b_enc <- function(latin1) avec(function(b) {
+  s <- b$sinistres
+  a1 <- "\u00e9\u00e9\u00e9S4:"
+  if (latin1) a1 <- iconv(a1, "UTF-8", "latin1")
+  b$sinistres <- rbind(transform(s[1L, ], id_assure = a1), transform(s[1L, ], id_assure = "b"),
+                       transform(s[2L, ], id_assure = "\u00e9\u00e9\u00e9"), transform(s[2L, ], id_assure = "S1:b"))
+  f <- b$famille[c(1L, 1L), ]
+  f$id_sinistre <- c("SI1", "SI2")
+  f$id_assure <- "b"
+  b$famille <- f
+  b
+})
+verifier_egal("#146, bout en bout : la colonne porte bien la marque latin1 (témoin), bilan identique dans les deux ordres, latin1 comme UTF-8",
+              list(Encoding(b_enc(TRUE)$sinistres$id_assure[1L]),
+                   identical(controler_base(b_enc(TRUE), A), controler_base(inverser_lignes(b_enc(TRUE)), A)),
+                   identical(controler_base(b_enc(FALSE), A), controler_base(inverser_lignes(b_enc(FALSE)), A))),
+              list("latin1", TRUE, TRUE))
 # règle écrite sur dossiers à A0 (aucune règle V ne lit dossiers.date_ouverture comme valeur :
 # .regle() appelée directement) : colonne lue comme valeur, cause directe ; lue pour la vue
 # seulement (dans la table ou dans la parente), refus de portée table
@@ -3280,6 +3384,27 @@ ctx40 <- function(b, arrete, declarations = NULL, conventions = NULL) {
   ctx
 }
 copie40 <- function(ctx) list2env(as.list(ctx, all.names = TRUE), new.env(parent = emptyenv()))
+# Appariement des règles non exécutées (#156) : une règle non exécutée est identifiée par (code,
+# table, colonne), la colonne de sa ligne de controles_non_executes (colonne_ne : NA pour l'âge
+# de D02c) ; sans la colonne, deux non-exécutions d'une même règle sur deux colonnes d'une table
+# se confondaient. La clé est un code entier commun à toutes les listes comparées, calculé par
+# .code_groupe() (sans paste(), #153) : une colonne NA n'égale que NA, jamais « NA » littéral.
+# `impl` : non-exécutions de l'implémentation ; `etats` : liste de celles de chaque état forcé ;
+# `varie` : règles dont une détection varie d'un état à l'autre (code, table, colonne) ; toutes
+# en data.frame (code, table, colonne, cause ; `varie` sans cause). Rend les causes des
+# non-exécutions propres à l'implémentation (absentes de tout état) et si ces règles sont
+# exactement celles qui varient.
+ne_df40 <- function(k) data.frame(code = vapply(k, `[[`, "", "code"), table = vapply(k, `[[`, "", "table"),
+                                  colonne = vapply(k, function(x) x$colonne, NA_character_),
+                                  cause = vapply(k, `[[`, "", "cause"), stringsAsFactors = FALSE)
+ne_apparie40 <- function(impl, etats, varie) {
+  listes <- c(list(impl, varie), etats)
+  tout <- do.call(rbind, lapply(listes, `[`, c("code", "table", "colonne")))
+  k <- split(ns$.code_groupe(unname(as.list(tout))),
+             factor(rep(seq_along(listes), vapply(listes, nrow, 1L)), levels = seq_along(listes)))
+  propres <- !(k[[1L]] %in% unlist(k[-(1:2)]))
+  list(causes = impl$cause[propres], egal = setequal(k[[2L]], k[[1L]][propres]))
+}
 batterie_c40 <- function(b, arrete, declarations = NULL, conventions = NULL) {
   ctx0 <- ctx40(b, arrete, declarations, conventions)
   ev <- ns$.visibilite_a(ctx0, "vue")
@@ -3302,24 +3427,28 @@ batterie_c40 <- function(b, arrete, declarations = NULL, conventions = NULL) {
     if (t == "famille" && !is.null(ev$candidate)) x <- x | (ev$candidate & ev$statut$famille %in% TRUE)
     x
   })
+  # colonne de la ligne non exécutée de la règle d'une détection : colonne_ne, NA pour l'âge de
+  # D02c (détecté sous S ou X ; sa règle de domaine sous R garde la colonne)
+  meta <- new.env()
   detections <- function(ctx) {
     k <- if (length(ctx$constats) > n0) ctx$constats[(n0 + 1L):length(ctx$constats)] else list()
     res <- list()
     for (x in k) {
       u <- vapply(x$lignes[pop[[x$table]][x$lignes]], function(i) unite(x$table, i), "")
       cle <- paste(x$code, x$table, x$colonne, x$traitement, sep = "|")
+      meta[[cle]] <- c(x$code, x$table, if (x$code == "D02c" && x$traitement %in% c("S", "X")) NA_character_ else x$colonne)
       res[[cle]] <- sort(unique(c(res[[cle]], u)))
     }
     res
   }
   cles_ne <- function(ctx) {
     k <- if (length(ctx$non_executes) > ne0) ctx$non_executes[(ne0 + 1L):length(ctx$non_executes)] else list()
-    unique(vapply(k, function(x) paste(x$code, x$table, sep = "|"), ""))
+    ne_df40(k)
   }
   ci <- copie40(ctx0)
   ns$.regle_v(ci)
   d_impl <- detections(ci)
-  ne_impl <- ci$non_executes[if (length(ci$non_executes) > ne0) (ne0 + 1L):length(ci$non_executes) else integer(0)]
+  ne_impl <- ne_df40(ci$non_executes[if (length(ci$non_executes) > ne0) (ne0 + 1L):length(ci$non_executes) else integer(0)])
   grille <- expand.grid(c(rep(list(c(FALSE, TRUE)), length(lignes) + length(parties)), lapply(membres, seq_along)))
   etats <- lapply(seq_len(max(1L, nrow(grille))), function(g) {
     ctx <- copie40(ctx0)
@@ -3359,18 +3488,20 @@ batterie_c40 <- function(b, arrete, declarations = NULL, conventions = NULL) {
     list(d = detections(ctx), ne = cles_ne(ctx))
   })
   cles <- unique(c(names(d_impl), unlist(lapply(etats, function(e) names(e$d)))))
-  varie <- character(0)
+  varie <- list()
   ok <- TRUE
   for (cle in cles) {
     u <- unique(c(d_impl[[cle]], unlist(lapply(etats, function(e) e$d[[cle]]))))
     toujours <- u[vapply(u, function(x) all(vapply(etats, function(e) x %in% e$d[[cle]], NA)), NA)]
     ok <- ok && setequal(toujours, d_impl[[cle]])
-    if (!setequal(toujours, unique(unlist(lapply(etats, function(e) e$d[[cle]]))))) varie <- c(varie, sub("\\|[^|]*\\|[^|]*$", "", cle))
+    if (!setequal(toujours, unique(unlist(lapply(etats, function(e) e$d[[cle]]))))) varie[[length(varie) + 1L]] <- meta[[cle]]
   }
-  propres <- setdiff(vapply(ne_impl, function(x) paste(x$code, x$table, sep = "|"), ""), unlist(lapply(etats, `[[`, "ne")))
+  varie <- data.frame(code = vapply(varie, `[`, "", 1L), table = vapply(varie, `[`, "", 2L),
+                      colonne = vapply(varie, `[`, NA_character_, 3L), stringsAsFactors = FALSE)
+  ne <- ne_apparie40(ne_impl, lapply(etats, `[[`, "ne"), varie)
   requises <- vapply(ctx0$nd_p, function(k) k$motif, "")
-  causes <- vapply(Filter(function(x) paste(x$code, x$table, sep = "|") %in% propres, ne_impl), `[[`, "", "cause")
-  ok && setequal(unique(varie), propres) &&
+  causes <- ne$causes
+  ok && ne$egal &&
     (!any(causes == "declaration_absente") || any(c(requises, unlist(lapply(ctx0$lignes_nd, `[[`, "motif"))) %in% c("D02b", "D03g")))
 }
 w9 <- list(list(w40$W1, A0), list(w40$W2(D(NA)), A0), list(w40$W2(D("2025-03-01")), A0), list(v43$V11, A0),
@@ -3382,6 +3513,35 @@ w9 <- list(list(w40$W1, A0), list(w40$W2(D(NA)), A0), list(w40$W2(D("2025-03-01"
            list(w40$W1, A))
 verifier("W9 (#40, critère 6 (c)) : batterie de substitution des règles V (éléments non déterminés forcés dans la vue puis hors de la vue, candidates de famille tour à tour valables) : détection ssi dans tous les états, ligne de controles_non_executes ssi le verdict varie ; cause declaration_absente avec ses déclarations requises (bases W1 à W6, formes, extraction)",
          all(vapply(w9, function(k) batterie_c40(k[[1L]], k[[2L]], if (length(k) > 2L) k[[3L]], if (length(k) > 3L) k[[4L]]), NA)))
+# #156, témoins de l'appariement des règles non exécutées : la clé comprend la colonne. Une même
+# règle X1 non exécutée sur deux colonnes (a, b) d'une table t, la non-exécution sur a figurant
+# aussi dans un état forcé, celle sur b propre à l'implémentation (cause c2) : (i) la règle varie
+# sur b : l'appariement est exact (ancienne clé (code, table) : propres vides, verdict faux) ;
+# (ii) rien ne varie : la non-exécution propre sur b est un défaut de l'implémentation (ancienne
+# clé : propres vides = varie vide, verdict vrai à tort) ; (iii) colonne NA (âge de D02c) et
+# colonne littérale « NA » : deux règles distinctes
+ne_ancienne40 <- function(impl, etats, varie) {
+  cle <- function(x) paste(x$code, x$table, sep = "|")
+  propres <- setdiff(cle(impl), unlist(lapply(etats, cle)))
+  list(causes = impl$cause[cle(impl) %in% propres], egal = setequal(unique(cle(varie)), propres))
+}
+ne_t40 <- function(code, table, colonne, cause = NA_character_)
+  data.frame(code = code, table = table, colonne = colonne, cause = cause, stringsAsFactors = FALSE)
+ne_impl40 <- ne_t40("X1", "t", c("a", "b"), c("c1", "c2"))
+ne_etat40 <- list(ne_t40("X1", "t", "a", "c1"), ne_t40("X1", "t", "a")[0L, ])
+ne_varie_b40 <- ne_t40("X1", "t", "b")
+ne_varie_0 <- ne_t40("X1", "t", "a")[0L, ]
+ne_na_impl40 <- ne_t40("D02c", "t", NA_character_, "c3")
+ne_na_etat40 <- list(ne_t40("D02c", "t", "NA", "c3"))
+verifier_egal("#156 : appariement des règles non exécutées par (code, table, colonne) : (i) règle sur a et b, b propre et variable : exact, cause c2 (ancienne clé : propres vides, verdict faux) ; (ii) rien ne varie : défaut (ancienne clé : vrai à tort) ; (iii) colonne NA contre « NA » littéral : propre",
+              list(ne_apparie40(ne_impl40, ne_etat40, ne_varie_b40), ne_ancienne40(ne_impl40, ne_etat40, ne_varie_b40),
+                   ne_apparie40(ne_impl40, ne_etat40, ne_varie_0)$egal, ne_ancienne40(ne_impl40, ne_etat40, ne_varie_0)$egal,
+                   ne_apparie40(ne_na_impl40, ne_na_etat40, ne_t40("D02c", "t", NA_character_)),
+                   ne_apparie40(ne_na_impl40, list(ne_t40("D02c", "t", NA_character_, "c3")), ne_t40("D02c", "t", "a")[0L, ])),
+              list(list(causes = "c2", egal = TRUE), list(causes = character(0), egal = FALSE),
+                   FALSE, TRUE,
+                   list(causes = "c3", egal = TRUE),
+                   list(causes = character(0), egal = TRUE)))
 
 section("donnees : départage à rang égal des causes, indépendant de l'ordre d'exécution (#59 ; spécification `donnees` v1.6, § 3.1 et § 2.2, B.5 et (b) ; critères C59-1 à C59-6)")
 
@@ -5004,6 +5164,193 @@ verifier_egal("D10 (f) : signalement déclaré par référentiel : placé, aucun
               list(paste(ligne(r$signalements, "D10f")$table, ligne(r$signalements, "D10f")$identifiants), rq34(r, "D10f")),
               list("evenements EV9", character(0)))
 
+# --- Clé manquante ou vide : apparier_cles() partout (#158, sites 7 et 8a, 8c ; spécification v1.8, § 2.2, B.4, « Clé vide », M396)
+# Appels internes sur une copie du contexte de la vue, mutée après sa construction : une clé "" ou
+# NA refuse sa table en portée table, aucun de ces sites n'est atteint par une base (sonde de #158).
+# Chaque état pour "" et pour le témoin NA, contre un témoin à clés renseignées.
+ctx158 <- function(b, arrete, decl, conv, mut = NULL) {
+  ctx <- copie40(ns$vue_a_date(b, arrete, decl, conv)$ctx)
+  if (!is.null(mut)) mut(ctx)
+  ctx
+}
+constats158 <- function(ctx, regle, code) {
+  n0 <- length(ctx$constats)
+  regle(ctx)
+  k <- ctx$constats[seq_len(length(ctx$constats) - n0) + n0]
+  as.integer(unlist(lapply(k, function(x) if (x$code == code) x$lignes)))
+}
+# 8a, D07 (c) : rente d'éducation RE1 (enfant ME1, 26 ans révolus à A, limite atteinte), détectée
+# (ligne 1 de rentes) ; id_membre de RE1 et de ME1 de clé "" : non appariés, non détectée (avant :
+# "" apparié à "", détectée) ; clé NA : non détectée, avant et après
+d07_158 <- function(z) {
+  ctx <- ctx158(nais("2000-03-01"), A, NULL, cv("atteinte"), function(ctx) {
+    if (!is.null(z)) { ctx$base$rentes$id_membre[1L] <- z; ctx$base$famille$id_membre[1L] <- z }
+  })
+  constats158(ctx, ns$.regle_v_limite_age, "D07")
+}
+verifier_egal("#158 (8a) D07 (c) (appel interne) : id_membre de RE1 et de ME1 \"\" : non apparié, RE1 non détectée (avant : détectée) ; NA : non détectée ; témoin renseigné : RE1 (ligne 1) détectée",
+              list(d07_158(""), d07_158(NA_character_), d07_158(NULL)), list(integer(0), integer(0), 1L))
+# 8a, D10 (f) : fin_service EV10 (ligne 8 de evenements) de la rente de conjoint RE3, sans second_deces,
+# détecté ; id_rente de EV10 et de RE3 de clé "" : non appariés, non détecté (avant : détecté)
+d10f_158 <- function(z) {
+  ctx <- ctx158(fs34(sans_sd34(de34("DO6"))), A, s34(1000), cv34, function(ctx) {
+    if (!is.null(z)) {
+      ctx$base$evenements$id_rente[ctx$base$evenements$id_evenement == "EV10"] <- z
+      ctx$base$rentes$id_rente[ctx$base$rentes$id_rente == "RE3"] <- z
+    }
+  })
+  constats158(ctx, ns$.regle_v_deces_conjoint, "D10f")
+}
+verifier_egal("#158 (8a) D10 (f) (appel interne) : id_rente de EV10 et de RE3 \"\" : non apparié, EV10 non détecté (avant : détecté) ; NA : non détecté ; témoin renseigné : EV10 (ligne 8) détecté",
+              list(d10f_158(""), d10f_158(NA_character_), d10f_158(NULL)), list(integer(0), integer(0), 8L))
+# 8c, .index_jointure() : "" et NA ne s'apparient à rien, des deux côtés, y compris parmi des clés
+# primaires "" en double (`doubles` exclut "" et NA ; les lignes i et j passent par apparier_cles())
+ij158 <- function(mut = NULL) {
+  r <- ns$.index_jointure(ctx158(base_ref, A, NULL, NULL, mut), "dossiers", "id_dossier", c("DO1", "", NA, "DO2"))
+  list(as.integer(r), is.null(attr(r, "occurrences")))
+}
+verifier_egal("#158 (8c) .index_jointure() : témoin DO1, DO2 aux lignes 1 et 2 ; dossiers 2 et 3 de clé \"\" ou NA : DO2 non apparié, \"\" et NA jamais (avant et après) ; DO1 en double : lignes 1, 2 et 3 en occurrences",
+              list(ij158(), ij158(function(ctx) ctx$base$dossiers$id_dossier[2:3] <- ""),
+                   ij158(function(ctx) ctx$base$dossiers$id_dossier[2:3] <- NA_character_),
+                   ij158(function(ctx) ctx$base$dossiers$id_dossier[2:3] <- "DO1")),
+              list(list(c(1L, NA, NA, 2L), TRUE), list(c(1L, NA, NA, NA), TRUE), list(c(1L, NA, NA, NA), TRUE),
+                   list(c(1L, NA, NA, NA), FALSE)))
+# site 7, .existe_kleene() et .date_parente() : clés "" et NA appariées à rien (apparier_cles()) ;
+# témoin A (vrai : ligne `vrai` de clé A ; inconnu : ligne `possible` de clé B)
+verifier_egal("#158 (7) .existe_kleene() : clés A, \"\", NA face à des lignes de clés A, \"\", NA : vrai pour A seule ; B face à une ligne `possible` : inconnu",
+              ns$.existe_kleene(c("A", "", NA, "B"), c("A", "", NA, "B"), c(TRUE, TRUE, TRUE, FALSE), c(FALSE, FALSE, FALSE, TRUE))[c("valeurs", "inconnu")],
+              list(valeurs = c(TRUE, FALSE, FALSE, FALSE), inconnu = c(FALSE, FALSE, FALSE, TRUE)))
+# Site 8d (#158) : appariements bruts de clés des règles V et des lectures de paramètres, passés à
+# apparier_cles(). Appels internes ; les règles sont lues dans un environnement qui masque une
+# fonction de lecture (`env158`) quand le site n'a pas d'effet visible autrement.
+env158 <- function(fn, ...) { e <- list2env(list(...), parent = environment(fn)); environment(fn) <- e; list(fn = fn, env = e) }
+# D13 (.regle_v_clotures) : SI1 décès sans instruction, dossier décès à prestation capital ; sinistre
+# SI1 de clé "" aux sinistres et aux dossiers : non apparié, SI1 non détecté (avant : détecté) ; NA :
+# non détecté (avant et après, le filtre [!is.na(.)] écartait déjà NA)
+ib158 <- avec(function(b) { b$sinistres$date_instruction[1L] <- NA; b })
+d13_158 <- function(z) {
+  ctx <- ctx158(ib158, A, NULL, NULL, function(ctx) {
+    if (!is.null(z)) {
+      ctx$base$sinistres$id_sinistre[1L] <- z
+      ctx$base$dossiers$id_sinistre[ctx$base$dossiers$id_sinistre == "SI1"] <- z
+    }
+  })
+  constats158(ctx, ns$.regle_v_clotures, "D13")
+}
+verifier_egal("#158 (8d) D13 (appel interne) : id_sinistre de SI1 \"\" aux sinistres et aux dossiers : non apparié, SI1 non détecté (avant : détecté) ; NA : non détecté ; témoin renseigné : SI1 (ligne 1) détecté",
+              list(d13_158(""), d13_158(NA_character_), d13_158(NULL)), list(integer(0), integer(0), 1L))
+# D10 (d) (.regle_v_garanties) : un passage en invalidité dont le sinistre n'a aucun dossier fait lire
+# les colonnes de couverture (contrats.id_contrat) ; `.cause_lecture()` masquée (le type
+# passage_invalidite est hors du domaine de la base : la lecture serait toujours refusée) ; id_sinistre de
+# l'événement et des dossiers de clé "" ou NA : aucun dossier apparié, colonnes de couverture lues (avant
+# : "" et NA appariés, colonnes non lues) ; témoin renseigné : dossier trouvé, colonnes non lues
+b10d158 <- avec(function(b) {
+  b$evenements <- rbind(b$evenements, tab("evenements", id_evenement = "EV90", id_sinistre = "SI1", id_dossier = "DO1",
+                                          type_evenement = "passage_invalidite", date_effet = D("2025-03-01"), date_saisie = D("2025-03-02")))
+  b })
+d10d_158 <- function(z) {
+  ctx <- ctx158(b10d158, A, NULL, NULL, function(ctx) {
+    if (!is.null(z)) {
+      ctx$base$evenements$id_sinistre[ctx$base$evenements$id_evenement == "EV90"] <- z
+      ctx$base$dossiers$id_sinistre[] <- z
+    }
+  })
+  e <- env158(ns$.regle_v_garanties, .cause_lecture = function(...) NULL)
+  e$env$.regle_vue <- local({ cible <- e$env; function(ctx, code, table, colonne, lit, ...) if (code == "D10d") assign("lit", lit, envir = cible) })
+  e$fn(ctx)
+  "contrats.id_contrat" %in% e$env$lit
+}
+verifier_egal("#158 (8d) D10 (d) (appel interne) : id_sinistre du passage et des dossiers \"\" ou NA : aucun dossier apparié, colonnes de couverture lues (avant : non lues) ; témoin renseigné : non lues",
+              list(d10d_158(""), d10d_158(NA_character_), d10d_158(NULL)), list(TRUE, TRUE, FALSE))
+# D07 (c), double effet (.regle_v_limite_age) : DO4 non candidat s'il est clos ; DO4 clos par EV9 ; id_dossier
+# de DO4 et de EV9 de clé "" ou NA : non apparié, DO4 non clos donc candidat, détecté (avant : clos,
+# non détecté) ; témoin renseigné : clos, seule la rente RE1 est détectée
+cl158 <- function(z) {
+  ctx <- ctx158(de("1999-03-01", clos = TRUE), A, s34(1000), cv34, function(ctx) {
+    if (!is.null(z)) {
+      ctx$base$dossiers$id_dossier[ctx$base$dossiers$id_dossier == "DO4"] <- z
+      ctx$base$evenements$id_dossier[ctx$base$evenements$id_evenement == "EV9"] <- z
+    }
+  })
+  n0 <- length(ctx$constats)
+  ns$.regle_v_limite_age(ctx)
+  k <- ctx$constats[seq_len(length(ctx$constats) - n0) + n0]
+  unlist(lapply(k, function(x) if (x$code == "D07") paste(x$table, paste(x$lignes, collapse = ","))))
+}
+verifier_egal("#158 (8d) D07 (c) double effet (appel interne) : id_dossier de DO4 et de sa clôture \"\" ou NA : non apparié, DO4 détecté (avant : clos, non détecté) ; témoin renseigné : DO4 clos, RE1 seule",
+              list(cl158(""), cl158(NA_character_), cl158(NULL)),
+              list(c("rentes 1", "dossiers 4"), c("rentes 1", "dossiers 4"), "rentes 1"))
+# D07 (c), sans_m : rente d'éducation RE1 d'id_membre `z` et version de famille de clé `z` candidate.
+# `.visibilite_a()` est masquée : candidate pour la ligne 1, `membre` lu dans la base mutée et normalisé
+# par `.cle_manquante()` (le "" devient NA), comme à la construction de la vue, avant le marquage
+# « \r<ligne> » que `.visibilite_a()` donne à un membre manquant (ce marquage rend la conversion
+# sans effet sur la vue réelle : la conversion est une garde) ; la mémoire de la vue est vidée après la
+# mutation. `.verdict3()` est masqué pour lire `enfant`. "" : ne s'apparie pas, ni avant (le "" de la
+# rente ne vaut pas le NA du membre normalisé) ni après : enfant FALSE, RE1 non détectée. NA des deux
+# côtés : seul cas où la conversion change le résultat (avant : NA %in% NA, RE1 dans sans_m, enfant NA,
+# inconnu ; après : enfant FALSE). Témoin ME1, ligne de famille hors de la vue : passe par sans_m
+# (enfant de la candidate), RE1 détectée
+sm158 <- function(z, hors_vue = FALSE) {
+  ctx <- ctx158(nais("2000-03-01"), A, NULL, cv("atteinte"), function(ctx) {
+    ctx$base$rentes$id_membre[1L] <- z
+    ctx$base$famille$id_membre[1L] <- z
+    if (hors_vue) ctx$retenu$famille[1L] <- FALSE
+    ctx$visibilite_vue <- NULL
+  })
+  e <- env158(ns$.regle_v_limite_age,
+              .visibilite_a = function(ctx, mode = "vue") {
+                v <- ns$.visibilite_a(ctx, mode)
+                v$candidate <- rep(FALSE, nrow(ctx$base$famille)); v$candidate[1L] <- TRUE
+                v$membre <- ns$.cle_manquante(as.character(ctx$base$famille$id_membre))
+                v
+              })
+  e$env$.verdict3 <- local({ cible <- e$env; function(entrees, g, ...) { assign("enfant", entrees$e$valeurs[1L], envir = cible); ns$.verdict3(entrees, g, ...) } })
+  list(constats158(ctx, e$fn, "D07"), e$env$enfant)
+}
+verifier_egal("#158 (8d) D07 (c) sans_m (appel interne) : id_membre de RE1 \"\" et de la candidate (normalisée NA) : non apparié, enfant FALSE, RE1 non détectée (déjà avant) ; NA des deux côtés : enfant FALSE, RE1 non détectée (avant, sous la vue masquée : NA apparié à NA, enfant NA ; sans effet sur la vue réelle) ; témoin ME1, ligne hors vue : enfant TRUE, RE1 détectée",
+              list(sm158(""), sm158(NA_character_), sm158("ME1", TRUE)),
+              list(list(integer(0), FALSE), list(integer(0), FALSE), list(1L, TRUE)))
+# .parametre_garantie() : paramètres d'id "GS1" et z, valeurs 1 et 2, garanties "GS1", "" et NA
+pg158 <- function(z) {
+  ctx <- ctx158(base_ref, A, NULL, NULL, function(ctx) {
+    ctx$base$parametres <- tab("parametres", id_garantie_souscrite = c("GS1", z), parametre = "age_limite", valeur = c(1, 2))
+    ctx$retenu$parametres <- c(TRUE, TRUE)
+  })
+  r <- ns$.parametre_garantie(ctx, "age_limite", c("GS1", "", NA))
+  r$valeur
+}
+verifier_egal("#158 (8d) .parametre_garantie() : paramètre de clé \"\" non apparié à la garantie \"\" (valeurs 1, NA, NA ; avant : 1, 2, NA) ; NA : 1, NA, NA ; témoin renseigné GS2 : 1, NA, NA",
+              list(pg158(""), pg158(NA_character_), pg158("GS2")), list(c(1, NA, NA), c(1, NA, NA), c(1, NA, NA)))
+# .cause_nd() : ligne d'evenements inscrite sous parente_non_determinee (ligne 1), parente d'un dossier non
+# déterminé (ligne 1) ; clé de lien "" des deux côtés : la parente "" n'est pas rattachée, aucun élément qui explique
+# l'écart, erreur interne (avant : cause hors_domaine de la parente "") ; NA : erreur interne ; témoin
+# renseigné DO1 : cause hors_domaine (`.visibilite_a()` masquée : statut non déterminé pour toutes les lignes)
+cnd158 <- function(z) {
+  ctx <- ctx158(base_ref, A, NULL, NULL, function(ctx) {
+    ctx$base$evenements$id_dossier[1L] <- z
+    ctx$base$dossiers$id_dossier[1L] <- z
+    ctx$lignes_nd <- list(list(table = "evenements", colonne = NA_character_, motif = "parente_non_determinee", lignes = 1L,
+                               origine = NA_character_),
+                          list(table = "dossiers", colonne = NA_character_, motif = "hors_domaine", lignes = 1L, origine = NA_character_))
+  })
+  e <- env158(ns$.cause_nd, .visibilite_a = function(ctx, mode = "vue") list(statut = lapply(ctx$base, function(x) rep(NA, NROW(x)))))
+  tryCatch(e$fn(ctx, list(evenements = list(1L)), 1L, "X", "evenements"),
+           error = function(err) if (grepl("^erreur interne de provie", conditionMessage(err))) "erreur interne" else conditionMessage(err))
+}
+verifier_egal("#158 (8d) .cause_nd() (appel interne) : clé de lien \"\" de l'événement et du dossier : parente non rattachée, erreur interne (avant : cause hors_domaine) ; NA : erreur interne ; témoin DO1 : hors_domaine",
+              list(cnd158(""), cnd158(NA_character_), cnd158("DO1")), list("erreur interne", "erreur interne", "hors_domaine"))
+# apparier_cles() et cle_renseignee() : seule implémentation de la règle, définie une fois dans R/donnees.R
+verifier_egal("#158 apparier_cles() : \"a\", \"\", NA, \"b\" face à \"\", \"b\", NA, \"a\" : 4, NA, NA, 2 (première occurrence, \"\" et NA jamais appariés) ; cle_renseignee() : vrai, faux, faux",
+              list(ns$apparier_cles(c("a", "", NA, "b"), c("", "b", NA, "a")), ns$cle_renseignee(c("a", "", NA))),
+              list(c(4L, NA, NA, 2L), c(TRUE, FALSE, FALSE)))
+verifier("#158 apparier_cles() et cle_renseignee() : définies une fois, dans R/donnees.R ; une seule ligne de R/ écrit match() sur des clés passées par .cle_manquante() (la définition d'apparier_cles() : aucune écriture locale de la règle)",
+         { src <- unlist(lapply(list.files(file.path(racine, "R"), "\\.R$", full.names = TRUE), readLines, encoding = "UTF-8"))
+           code <- sub("#.*$", "", src)
+           sum(grepl("^apparier_cles <- function", src)) == 1L && sum(grepl("^cle_renseignee <- function", src)) == 1L &&
+             any(grepl("^apparier_cles <- function", readLines(file.path(racine, "R", "donnees.R"), encoding = "UTF-8"))) &&
+             sum(grepl("match\\(.*\\.cle_manquante\\(", code)) == 1L &&
+             grepl("match\\(.*\\.cle_manquante\\(", code[which(grepl("^apparier_cles <- function", src)) + 1L]) })
+
 # --- D11 : sinistre hors période de couverture (§ 8.7 ; C11-1 à C11-8)
 aff34 <- function(b, ...) { x <- list(...); for (n in names(x)) b$affiliations[[n]] <- x[[n]]; b }
 fin_aff34 <- function(b, fin, saisie, motif = "depart_entreprise") aff34(b, date_fin = D(fin), motif_fin = motif, date_saisie_fin = D(saisie))
@@ -5088,30 +5435,47 @@ for (vide in list(NA_character_, "")) {
                 c(detecte = TRUE, non_lisible = FALSE))
 }
 # id_contrat vide ou manquant (M396, « Clé vide » : "" se lit comme NA) : même verdict, par
-# l'identité des deux sorties ; valeur commune (SI1 non détecté, aucun non_lisible), figée : le
-# traitement de NA à l'atome « le contrat ne couvre pas la survenance » (NA : faux) est en attente de
-# la décision du mainteneur (#157), un changement de cette valeur y est lié.
+# l'identité des deux sorties ; valeur commune (SI1 détecté, aucun non_lisible) : le contrat
+# manquant ne s'apparie à aucune couverture, l'atome « le contrat ne couvre pas la survenance » vaut
+# vrai (#157, M628 ; avant #157 : faux, SI1 non détecté).
 cle_d11_vide <- d11_ctx34(maint34(), function(ctx) { ctx$base$affiliations$id_contrat <- ""; ctx$base$garanties_souscrites$id_contrat <- "" })
 cle_d11_na <- d11_ctx34(maint34(), function(ctx) { ctx$base$affiliations$id_contrat <- NA_character_; ctx$base$garanties_souscrites$id_contrat <- NA_character_ })
 verifier("#152, id_contrat \"\" à AF1 et aux garanties GS1 et GS3 (contrat des dossiers de SI1) : même sortie que id_contrat manquant, identical() (avant #152 : \"\" donnait SI1 détecté, NA non détecté)",
          identical(cle_d11_vide, cle_d11_na))
-verifier_egal("#152, id_contrat vide ou manquant : valeur commune figée, SI1 non détecté, aucun non_lisible (traitement de NA à l'atome nc : #157)",
+verifier_egal("#157, id_contrat vide ou manquant : valeur commune, SI1 détecté (aucun appariement), aucun non_lisible (avant #157 : non détecté)",
               list(cle_d11_vide, cle_d11_na),
-              rep(list(c(detecte = FALSE, non_lisible = FALSE)), 2L))
+              rep(list(c(detecte = TRUE, non_lisible = FALSE)), 2L))
 # Clé « NA » littéral et clé manquante (revue finale de #149) : l'appariement (sinistre, contrat) de
 # .verdict_d11() ne passe plus par paste() ; sur base_ref (SI1 décès couvert par AF1, contrat des
 # dossiers de SI1 à GS1 et GS3), un contrat « NA » littéral aux garanties ne s'apparie pas à la
 # couverture de contrat manquant (avant : « 1\rNA » des deux côtés, SI1 lu couvert, non détecté) ;
-# témoins : « NA » littéral des deux côtés (couvert), manquant des deux côtés (atome nc FALSE, figé :
-# #157), contrat CT1 des deux côtés (couvert).
+# témoins : « NA » littéral des deux côtés (couvert), manquant des deux côtés (atome nc vrai, SI1
+# détecté : #157 ; avant #157, non détecté), contrat CT1 des deux côtés (couvert).
 cas_d11_na <- function(aff, gs) d11_ctx34(base_ref, function(ctx) {
   ctx$base$affiliations$id_contrat <- aff; ctx$base$garanties_souscrites$id_contrat <- gs
 })
-verifier_egal("#152, id_contrat \"NA\" littéral aux garanties, manquant à AF1 : SI1 détecté (aucun appariement) ; \"NA\" des deux côtés, manquant des deux côtés, CT1 des deux côtés : SI1 non détecté",
+verifier_egal("#152, id_contrat \"NA\" littéral aux garanties, manquant à AF1 : SI1 détecté (aucun appariement) ; \"NA\" des deux côtés, CT1 des deux côtés : SI1 non détecté ; manquant des deux côtés : SI1 détecté (avant #157 : non détecté)",
               list(cas_d11_na(NA_character_, "NA"), cas_d11_na("NA", "NA"), cas_d11_na(NA_character_, NA_character_),
                    cas_d11_na("CT1", "CT1")),
               list(c(detecte = TRUE, non_lisible = FALSE), c(detecte = FALSE, non_lisible = FALSE),
-                   c(detecte = FALSE, non_lisible = FALSE), c(detecte = FALSE, non_lisible = FALSE)))
+                   c(detecte = TRUE, non_lisible = FALSE), c(detecte = FALSE, non_lisible = FALSE)))
+# #157, contrat du dossier manquant ou vide à une seule garantie (GS3, garantie du dossier de SI1) :
+# aucun appariement, SI1 détecté, NA et "" au même verdict (identical()) ; sur maint34(), la
+# couverture AF1 est celle de CT1 et le sous-cas du maintien reste lu par les contrats renseignés
+# (non détecté, non_lisible : inchangé, un contrat manquant n'ouvre pas le sous-cas).
+gs3_d11 <- function(b, val) d11_ctx34(b, function(ctx) {
+  ctx$base$garanties_souscrites$id_contrat[ctx$base$garanties_souscrites$id_garantie_souscrite %in% "GS3"] <- val
+})
+gs3_na <- gs3_d11(base_ref, NA_character_)
+gs3_vide <- gs3_d11(base_ref, "")
+verifier_egal("#157, base_ref, id_contrat de GS3 seule manquante ou vide : SI1 détecté, aucun non_lisible (avant #157 : non détecté)",
+              list(gs3_na, gs3_vide),
+              rep(list(c(detecte = TRUE, non_lisible = FALSE)), 2L))
+verifier("#157, base_ref, id_contrat de GS3 seule : manquant et \"\" donnent la même sortie, identical()",
+         identical(gs3_na, gs3_vide))
+verifier_egal("#157, maint34(), id_contrat de GS3 seule manquante (AF1 à CT1) : SI1 non détecté, non_lisible, inchangé (le sous-cas est lu par le contrat CT1 de GS1)",
+              list(gs3_d11(maint34(), NA_character_)),
+              list(c(detecte = FALSE, non_lisible = TRUE)))
 for (vide in list(NA_character_, "")) {
   etiq <- if (is.na(vide)) "manquant" else "vide"
   verifier_egal(paste0("#152, id_sinistre ", etiq, " à SI2 et à la sortie EV3 (effet 2024-09-01, avant la fin de AF1) : la sortie ne clôt pas SI2, SI1 non détecté, non_lisible (avant #152 : NA ou \"\" apparié à lui-même, SI2 clos, SI1 détecté)"),

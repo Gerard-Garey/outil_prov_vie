@@ -979,3 +979,173 @@ verifier_egal("(4.7) (u) sinistre à deux dossiers, DO1 clos par une clôture sa
                 d <- r$dossiers
                 list(d$id_dossier, d$montant, d$statut_resultat, d$hypotheses_defaut, cel_87(r)) },
               list("DO2", 0, "jugement_expert", "D03g", list(0, 1L, "jugement_expert")))
+
+section("engagement : clé manquante ou vide dans les lectures S2 et la reconstitution du capital (#158 ; spécification donnees v1.8, § 2.2, B.4, « Clé vide », M396)")
+# Appels internes sur une vue mutée (ctx$base, rétablie ou reconstruite à chaque cas) : aucun site
+# n'est atteint par une base (sonde de #158 : une clé manquante ou vide refuse sa table en portée
+# table, les postes sont arrêtés avant ces lectures). Chaque état pour "" et pour le témoin NA,
+# contre un témoin à clés renseignées.
+cles158 <- list(vide = "", manquante = NA_character_)
+# Vue de la base `b` (b2_base_capital() par défaut) dont la base de la vue est mutée par `mut(base, cle)`
+vue158 <- function(mut = NULL, cle = NULL, b = b2_base_capital()) {
+  v <- b2_vue(b, A)
+  if (!is.null(mut)) v$ctx$base <- mut(v$ctx$base, cle)
+  v
+}
+# (1) lecture_unites() : une clé manquante ou vide ne rattache rien
+verifier_egal("#158 (1) lecture_unites() : clés \"ASI1\", \"\" et NA : seule ASI1 est lue, rattachée à l'unité 1 ; \"\" et NA ne rattachent rien",
+              ns$lecture_unites("sinistres", "id_assure", c("ASI1", "", NA))[c("cles", "unite")],
+              list(cles = "ASI1", unite = 1L))
+# (2) et (3) .lectures_dossiers() : clés des lectures de dossiers, contrats, sinistres et
+# affiliations (clé composée assuré, contrat) du dossier DO1 / SI1 / GS1 / CT1 / AS1
+lect158 <- function(mut = NULL, cle = NULL, d = "DO1", s = "SI1") {
+  v <- vue158(mut, cle)
+  e <- data.frame(id_dossier = d, id_sinistre = s, instruit = TRUE, stringsAsFactors = FALSE)
+  l <- ns$.lectures_dossiers(v, e, TRUE)
+  list(dossiers = l[[1L]]$cles, sinistres = l[[2L]]$cles, contrats = l[[7L]]$cles, affiliations = l[[8L]]$cles)
+}
+verifier_egal("#158 (2) témoin renseigné : DO1, SI1, CT1 et la clé d'affiliation AS1 / CT1",
+              lect158(),
+              list(dossiers = "DO1", sinistres = "SI1", contrats = "CT1", affiliations = "AS1\rCT1"))
+for (k in names(cles158)) {
+  cle <- cles158[[k]]
+  verifier_egal(paste0("#158 (2) assuré du sinistre de clé ", k, " : aucune clé d'affiliation (jamais une clé composée à composante vide)"),
+                lect158(function(b, c1) { b$sinistres$id_assure <- c1; b }, cle),
+                list(dossiers = "DO1", sinistres = "SI1", contrats = "CT1", affiliations = character(0)))
+  verifier_egal(paste0("#158 (2) contrat de la garantie souscrite de clé ", k, " : ni ligne de contrats ni clé d'affiliation"),
+                lect158(function(b, c1) { b$garanties_souscrites$id_contrat <- c1; b }, cle),
+                list(dossiers = "DO1", sinistres = "SI1", contrats = character(0), affiliations = character(0)))
+  verifier_egal(paste0("#158 (3) dossier de clé ", k, " dans l'état et dans dossiers : aucun appariement (ni garantie souscrite, ni contrat, ni affiliation), aucune lecture de dossiers"),
+                lect158(function(b, c1) { b$dossiers$id_dossier <- c1; b }, cle, d = cle),
+                list(dossiers = character(0), sinistres = "SI1", contrats = character(0), affiliations = character(0)))
+  verifier_egal(paste0("#158 (3) sinistre de clé ", k, " dans l'état et dans sinistres : aucun assuré, aucune clé d'affiliation, aucune lecture de sinistres"),
+                lect158(function(b, c1) { b$sinistres$id_sinistre <- c1; b }, cle, s = cle),
+                list(dossiers = "DO1", sinistres = character(0), contrats = "CT1", affiliations = character(0)))
+  verifier_egal(paste0("#158 (3) garantie souscrite du dossier de clé ", k, " : aucun contrat, aucune clé d'affiliation"),
+                lect158(function(b, c1) { b$garanties_souscrites$id_garantie_souscrite <- c1; b$dossiers$id_garantie_souscrite <- c1; b }, cle),
+                list(dossiers = "DO1", sinistres = "SI1", contrats = character(0), affiliations = character(0)))
+}
+# (3) .reconstituer_capital() : DO1 ouvert (capital non fixé), taux_capital 2 x salaire 30 000
+# + majorations de la famille (instruit : conjoint, deux enfants, § 7.4 R1), reconstitué
+# (60 000 + 15 000 + 7 500 = 82 500 à A = 2025-12-31, avant revalorisation)
+rec158 <- function(mut = NULL, cle = NULL, e_mut = NULL) {
+  v <- vue158(b = b2_base_capital(capital = NA))
+  e <- ns$etats_a_date(v, "deces", "engagement")   # état calculé avant la mutation de la vue
+  if (!is.null(mut)) v$ctx$base <- mut(v$ctx$base, cle)
+  if (!is.null(e_mut)) e <- e_mut(e, cle)
+  r <- ns$.reconstituer_capital(v, e[e$etat_dossier == "ouvert", , drop = FALSE],
+                                p$postes$deces$sinistres_declares_non_regles$parametres, p$conventions, P1)
+  list(capital = r$capital, arret = r$arret)
+}
+verifier_egal("#158 (3) .reconstituer_capital() témoin renseigné : capital reconstitué 82 500, aucun arrêt",
+              rec158(), list(capital = 82500, arret = NA_character_), tolerance = TOL)
+for (k in names(cles158)) {
+  cle <- cles158[[k]]
+  verifier_egal(paste0("#158 (3) .reconstituer_capital(), dossier de clé ", k, " (état et dossiers) : aucune garantie souscrite ni paramètre, arrêt parametre_non_determine"),
+                rec158(function(b, c1) { b$dossiers$id_dossier <- c1; b }, cle, function(e, c1) { e$id_dossier <- c1; e }),
+                list(capital = NA_real_, arret = "parametre_non_determine"))
+  verifier_egal(paste0("#158 (3) .reconstituer_capital(), garantie souscrite de clé ", k, " (dossiers, garanties_souscrites et parametres) : aucun paramètre lu, arrêt parametre_non_determine"),
+                rec158(function(b, c1) { b$dossiers$id_garantie_souscrite <- c1; b$garanties_souscrites$id_garantie_souscrite <- c1
+                                         b$parametres$id_garantie_souscrite <- c1; b }, cle),
+                list(capital = NA_real_, arret = "parametre_non_determine"))
+  verifier_egal(paste0("#158 (3) .reconstituer_capital(), contrat de clé ", k, " à la garantie souscrite et à l'affiliation : aucune affiliation, arrêt affiliation_non_determinee"),
+                rec158(function(b, c1) { b$garanties_souscrites$id_contrat <- c1; b$affiliations$id_contrat <- c1; b }, cle),
+                list(capital = NA_real_, arret = "affiliation_non_determinee"))
+  verifier_egal(paste0("#158 (3) .reconstituer_capital(), assuré de clé ", k, " au sinistre et à l'affiliation : aucune affiliation, arrêt affiliation_non_determinee"),
+                rec158(function(b, c1) { b$sinistres$id_assure <- c1; b$affiliations$id_assure <- c1; b }, cle),
+                list(capital = NA_real_, arret = "affiliation_non_determinee"))
+  verifier_egal(paste0("#158 (3) .reconstituer_capital(), sinistre de clé ", k, " (état et sinistres) : aucun assuré, arrêt affiliation_non_determinee"),
+                rec158(function(b, c1) { b$sinistres$id_sinistre <- c1; b }, cle, function(e, c1) { e$id_sinistre <- c1; e }),
+                list(capital = NA_real_, arret = "affiliation_non_determinee"))
+}
+# parametre_vue() : un paramètre de garantie souscrite de clé "" ou NA n'est apparié à aucune
+# garantie souscrite, "" et NA compris (garanties "GS1", "" et NA ; exclusion du paramètre pour
+# engagement : seule une ligne appariée est exclue). Avant #158 : une garantie "" prenait la valeur
+# et l'exclusion d'un paramètre de clé ""
+pv158 <- function(z) {
+  v <- vue158()
+  if (!is.null(z)) v$ctx$base$parametres$id_garantie_souscrite <- z
+  v$exclu$engagement$parametres[] <- TRUE
+  r <- ns$parametre_vue(v, "taux_capital", c("GS1", "", NA), "engagement")
+  list(valeur = r$valeur, exclu = r$exclu)
+}
+verifier_egal("#158 (3) parametre_vue() : taux_capital de GS1, exclu pour engagement : valeur 2 et exclu pour GS1 seule ; paramètres de clé \"\" ou NA : aucune valeur, aucune exclusion, pour GS1, \"\" et NA",
+              list(pv158(NULL), pv158(""), pv158(NA_character_)),
+              list(list(valeur = c(2, NA, NA), exclu = c(TRUE, FALSE, FALSE)),
+                   list(valeur = rep(NA_real_, 3L), exclu = rep(FALSE, 3L)),
+                   list(valeur = rep(NA_real_, 3L), exclu = rep(FALSE, 3L))))
+# (5) hypotheses_vue_unites() : base R1 de (4.7) (b_87, date_saisie de EV1 manquante), D03g en H, délai
+# 0 : la ligne EV1 de evenements est placée ; la vue est construite une fois, la ligne est altérée
+# après la construction (ctx est un environnement : la base est rétablie après chaque cas) et la
+# lecture est passée à la main, sans lecture_unites(). Chaque unité porte D03g si la ligne lui est
+# rattachée par ses clés.
+v_158h <- local({ cp <- ns$canoniser_plan(plan_87(list(evenements = 0))); ns$vue_a_date(b_87, cp$arrete, cp$donnees, cp$conventions) })
+s2_158 <- function(colonnes, cles, id_sinistre = "SI1", id_dossier = "DO1") {
+  ctx <- v_158h$ctx
+  base0 <- ctx$base
+  on.exit(ctx$base <- base0)
+  b <- base0
+  b$evenements$id_sinistre[1L] <- id_sinistre
+  b$evenements$id_dossier[1L] <- id_dossier
+  ctx$base <- b
+  ns$hypotheses_vue_unites(v_158h, "comptes_sociaux", P1, "engagement", length(cles),
+                           list(list(table = "evenements", colonnes = colonnes, cles = cles, unite = seq_along(cles), admises = NULL)))
+}
+verifier_egal("#158 (5) hypotheses_vue_unites(), clé simple id_sinistre, unités \"SI1\" et \"\", ligne SI1 : D03g à l'unité \"SI1\" seule",
+              s2_158("id_sinistre", c("SI1", "")), c("D03g", ""))
+for (k in names(cles158)) {
+  verifier_egal(paste0("#158 (5) hypotheses_vue_unites(), clé simple, ligne de clé ", k, " : aucune unité rattachée (la clé \"\" de l'unité 2 n'est pas appariée)"),
+                s2_158("id_sinistre", c("SI1", ""), id_sinistre = cles158[[k]]), c("", ""))
+}
+verifier_egal("#158 (5) hypotheses_vue_unites(), clé composée (id_sinistre, id_dossier), unités \"SI1\\rDO1\" et \"SI1\\r\", ligne (SI1, DO1) : D03g à l'unité 1 seule",
+              s2_158(c("id_sinistre", "id_dossier"), c("SI1\rDO1", "SI1\r")), c("D03g", ""))
+verifier_egal("#158 (5) hypotheses_vue_unites(), clé composée, id_dossier de la ligne manquant : aucune unité rattachée (témoin NA, avant et après)",
+              s2_158(c("id_sinistre", "id_dossier"), c("SI1\rDO1", "SI1\r"), id_dossier = NA_character_), c("", ""))
+verifier_egal("#158 (5) hypotheses_vue_unites(), clé composée, id_dossier de la ligne \"\" : aucune unité rattachée, la composante vide de l'unité 2 n'est pas appariée (avant : D03g à l'unité 2)",
+              s2_158(c("id_sinistre", "id_dossier"), c("SI1\rDO1", "SI1\r"), id_dossier = ""), c("", ""))
+
+# (6) et (8b) calculer_engagement() : critères de P2, prestations capital et ligne de sinistres du
+# dossier, appariés par apparier_cles() ; résultats inchangés (ces sites sont corrects tant que
+# la population garantit des clés renseignées, M630). Clé "" ou NA du côté de la table lue :
+# aucun appariement
+c158 <- function(b, plan, poste, mut = NULL, cle = NULL) {
+  v <- b2_vue(b, A)
+  if (!is.null(mut)) v$ctx$base <- mut(v$ctx$base, cle)
+  r <- ns$calculer_engagement(v, plan, tb, cat_g, "deces", poste)
+  list(montant = r$cellules$montant, nombre_dossiers = r$cellules$nombre_dossiers)
+}
+# critère beneficiaire_non_identifie : DO1 de bénéficiaire non identifié est de P2, hors de P1 ;
+# bénéficiaire de clé "" ou NA : non rattaché à DO1, DO1 reste de P1
+verifier_egal("#158 (6) critère beneficiaire_non_identifie, témoin renseigné : DO1 de P2 (103 936), P1 vide",
+              list(c158(non_reclame, p, P2), c158(non_reclame, p, P1)),
+              list(list(montant = 103936, nombre_dossiers = 1L), list(montant = 0, nombre_dossiers = 0L)), tolerance = TOL)
+for (k in names(cles158)) {
+  verifier_egal(paste0("#158 (6) critère beneficiaire_non_identifie, id_dossier du bénéficiaire ", k, " : DO1 non rattaché, hors de P2, de P1 (103 936)"),
+                list(c158(non_reclame, p, P2, function(b, c1) { b$beneficiaires$id_dossier <- c1; b }, cles158[[k]]),
+                     c158(non_reclame, p, P1, function(b, c1) { b$beneficiaires$id_dossier <- c1; b }, cles158[[k]])),
+                list(list(montant = 0, nombre_dossiers = 0L), list(montant = 103936, nombre_dossiers = 1L)), tolerance = TOL)
+}
+# critère sans_evenement (12 mois) : un événement récent du dossier l'écarte de P2 ; événement
+# récent de clé de dossier "" ou NA : non rattaché, DO1 reste de P2
+b158ev <- b2_base_capital()
+b158ev$evenements <- rbind(b158ev$evenements, b2_tab("evenements", id_evenement = "EV2", id_sinistre = "SI1", id_dossier = "DO1",
+                                                    type_evenement = "demande_mise_a_jour", date_effet = D("2025-06-01"),
+                                                    date_saisie = D("2025-06-02")))
+verifier_egal("#158 (6) critère sans_evenement, témoin renseigné : événement récent (2025-06-01) de DO1, DO1 hors de P2",
+              c158(b158ev, p_sans_ev, P2), list(montant = 0, nombre_dossiers = 0L))
+for (k in names(cles158)) {
+  verifier_egal(paste0("#158 (6) critère sans_evenement, id_dossier de l'événement récent ", k, " : non rattaché à DO1, DO1 de P2 (103 936)"),
+                c158(b158ev, p_sans_ev, P2, function(b, c1) { b$evenements$id_dossier[2L] <- c1; b }, cles158[[k]]),
+                list(montant = 103936, nombre_dossiers = 1L), tolerance = TOL)
+}
+# prestations capital (capital_deces_dossier(), .annees_employees()) : un paiement de clé de dossier
+# "" ou NA n'est imputé à aucun dossier ; témoin : paiement imputé à DO1
+b158pa <- b2_base_capital(paiements = data.frame(date = D("2025-03-01"), montant = 40000))
+verifier_egal("#158 (8b) prestations capital, témoin renseigné : paiement de 40 000 imputé à DO1 (63 133,8082191781, R3) ; sans paiement 103 936",
+              list(c158(b158pa, p, P1)$montant, c158(b2_base_capital(), p, P1)$montant),
+              list(63133.8082191781, 103936), tolerance = TOL)
+for (k in names(cles158)) {
+  verifier_egal(paste0("#158 (8b) prestations capital, id_dossier du paiement ", k, " : paiement imputé à aucun dossier, montant 103 936 comme sans paiement"),
+                c158(b158pa, p, P1, function(b, c1) { b$prestations$id_dossier <- c1; b }, cles158[[k]])$montant,
+                103936, tolerance = TOL)
+}

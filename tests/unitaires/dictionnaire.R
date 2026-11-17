@@ -214,6 +214,22 @@ x <- copie_alteree("colonnes.csv", function(df) { df$futur_admis[df$table == "co
 verifier_refus("futur_admis programmable hors de la table evenements", lire_dictionnaire(x), "dictionnaire_invalide")
 x <- copie_alteree("colonnes.csv", function(df) { df$futur_admis[df$colonne == "id_contrat"][1L] <- "TRUE"; df })
 verifier_refus("futur_admis TRUE sur une colonne non Date", lire_dictionnaire(x), "dictionnaire_invalide")
+motif_modalites <- function(modalites) {
+  e <- refus_de(lire_dictionnaire(copie_alteree("colonnes.csv", function(df) {
+    df$modalites[df$table == "assures" & df$colonne == "sexe"] <- modalites
+    df
+  })))
+  if (is.null(e)) "aucun" else paste(e$motif, conditionMessage(e))
+}
+colonnes_source <- lire_csv_test(file.path(source_dico, "colonnes.csv"))
+ligne_sexe <- which(colonnes_source$table == "assures" & colonnes_source$colonne == "sexe") + 1L  # + l'en-tête
+verifier("modalité en double (assures.sexe, « F;M;M ») : refus nommant table, colonne et modalité",
+         grepl(paste0("^dictionnaire_invalide .*colonnes\\.csv, ligne ", ligne_sexe,
+                      " : .*en double dans assures\\.sexe : M$"),
+               motif_modalites("F;M;M")))
+verifier("modalité en double (assures.sexe, « A;A ») : refus nommant la modalité",
+         grepl("^dictionnaire_invalide .*en double dans assures\\.sexe : A$", motif_modalites("A;A")))
+verifier_egal("modalités distinctes (assures.sexe, « F;M ») : forme admise", motif_modalites("F;M"), "aucun")
 x <- copie_alteree("tables.csv", function(df) { df$en_trop <- ""; df })
 verifier_refus("colonne en trop dans un CSV", lire_dictionnaire(x), "dictionnaire_invalide")
 x <- copie_alteree("types_evenements.csv", function(df) { df$colonnes_requises[2L] <- "inconnue"; df })

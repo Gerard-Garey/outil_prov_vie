@@ -145,8 +145,8 @@ provisions_individuelles <- function(vue, plan, tables, temoin) {
   # manquante ou vide ne s'apparie à rien (cle_renseignee(), apparier_cles(), #154, règles (ii) et (iii))
   gs <- which(vue$retenu$garanties_souscrites & vv("garanties_souscrites", "code_garantie") %in% "deces" &
                 cle_renseignee(vv("garanties_souscrites", "id_garantie_souscrite")))
-  gs <- gs[!(as.character(vv("garanties_souscrites", "id_garantie_souscrite"))[gs] %in%
-               garanties_couverture_exclue(vue, "risque_en_cours"))]
+  gs <- gs[is.na(apparier_cles(vv("garanties_souscrites", "id_garantie_souscrite")[gs],
+                               garanties_couverture_exclue(vue, "risque_en_cours")))]
   g_effet <- as.numeric(vv("garanties_souscrites", "date_effet"))[gs]
   g_fin <- as.numeric(vv("garanties_souscrites", "date_fin"))[gs]
   gs <- gs[g_effet <= a & (is.na(g_fin) | g_fin > a)]
@@ -419,8 +419,8 @@ provisions_collectives <- function(vue, plan) {
   # manquante ou vide ne s'apparie à rien (cle_renseignee(), apparier_cles(), #154, règles (ii) et (iii))
   gs <- which(vue$retenu$garanties_souscrites & vv("garanties_souscrites", "code_garantie") %in% "deces" &
                 cle_renseignee(vv("garanties_souscrites", "id_garantie_souscrite")))
-  gs <- gs[!(as.character(vv("garanties_souscrites", "id_garantie_souscrite"))[gs] %in%
-               garanties_couverture_exclue(vue, "risque_en_cours"))]
+  gs <- gs[is.na(apparier_cles(vv("garanties_souscrites", "id_garantie_souscrite")[gs],
+                               garanties_couverture_exclue(vue, "risque_en_cours")))]
   ct <- which(vue$retenu$contrats & !is.na(apparier_cles(vv("contrats", "id_contrat"),
                                                          vv("garanties_souscrites", "id_contrat")[gs])))
   ct <- ct[!(vv("contrats", "nature_contrat")[ct] %in% "individuel")]
@@ -467,9 +467,9 @@ provisions_collectives <- function(vue, plan) {
   s2 <- hypotheses_vue_unites(vue, .REFERENTIEL_P3, .POSTE_P3, "risque_en_cours", length(id_champ), list(
     lecture_unites("contrats", "id_contrat", id_champ),
     lecture_unites("cotisations", "id_garantie_souscrite", id_gs,
-                   unite = match(as.character(vv("garanties_souscrites", "id_contrat"))[gs], id_champ),
+                   unite = apparier_cles(vv("garanties_souscrites", "id_contrat")[gs], id_champ),
                    admises = !(!is.na(c_nature) & !(c_nature %in% .NATURES_PRORATA)) & !(!is.na(c_fin) & c_fin <= a))))
-  hypothese <- id_champ[nzchar(joindre_codes(c("", "D03f")[1L + id_champ %in% contrat[sous_h]], s2))]
+  hypothese <- id_champ[nzchar(joindre_codes(c("", "D03f")[1L + !is.na(apparier_cles(id_champ, contrat[sous_h]))], s2))]
   # (4) prorata des cotisations de fin postérieure à A (bornes connues, ou par la règle H)
   garde <- fin > a
   part <- vv("cotisations", "montant")[co[garde]] * (1 - taux_c) *
@@ -585,7 +585,7 @@ calculer_risque_en_cours <- function(vue, plan, tables, catalogue, garantie, pos
   # statut d'un contrat collectif : jugement_expert sous une valeur S1 (D03f, erratum v1.0.15) ou
   # S2 (hypothèse de la vue, #87) du § 5.8 (codes réunis par joindre_codes() dans
   # provisions_collectives())
-  statut_col <- ifelse(col$id_contrat %in% attr(col, "hypothese"), "jugement_expert", "approximation_numerique")
+  statut_col <- ifelse(!is.na(apparier_cles(col$id_contrat, attr(col, "hypothese"))), "jugement_expert", "approximation_numerique")
   # statut d'un contrat individuel (règle unique du § 5.8, erratum v1.0.16) : jugement_expert si
   # une valeur fournie par le plan entre dans son montant, hypothèse D03h (S1), hypothèse de la
   # vue (S2, #87 ; codes réunis par joindre_codes()) ou point de mortalite_tarif lu hors des axes
