@@ -636,9 +636,12 @@ segments_vue <- function(vue, segmentations, garanties) {
   u_dossier <- c(as.character(vv("dossiers", "id_dossier"))[k], rep(NA_character_, length(contrats_u)))
   u_sinistre <- c(as.character(vv("dossiers", "id_sinistre"))[k], rep(NA_character_, length(contrats_u)))
   u_contrat <- c(gs_contrat[i_gs], contrats_u)
-  codes_contrat <- vapply(contrats_u, function(c1) {
-    paste(sort(unique(gs_code[!exclue_rec & !is.na(apparier_cles(gs_contrat, c1))]), method = "radix"), collapse = ";")
-  }, "", USE.NAMES = FALSE)
+  # codes de garantie par contrat : un seul appariement de gs_contrat aux contrats d'unité (rang dans
+  # contrats_u, NA hors unité), puis regroupement par rang ; un contrat sans garantie retenue rend ""
+  j_contrat <- apparier_cles(gs_contrat, contrats_u)
+  retenue <- !exclue_rec & !is.na(j_contrat)
+  codes_contrat <- vapply(split(gs_code[retenue], factor(j_contrat[retenue], levels = seq_along(contrats_u))),
+                          function(g) paste(sort(unique(g), method = "radix"), collapse = ";"), "", USE.NAMES = FALSE)
   u_codes <- c(gs_code[i_gs], codes_contrat)
   si_survenance <- vv("sinistres", "date_survenance")
   u_annee <- c(as.character(as.POSIXlt(si_survenance[apparier_cles(u_sinistre[seq_along(k)],
