@@ -3280,6 +3280,27 @@ ctx40 <- function(b, arrete, declarations = NULL, conventions = NULL) {
   ctx
 }
 copie40 <- function(ctx) list2env(as.list(ctx, all.names = TRUE), new.env(parent = emptyenv()))
+# Appariement des règles non exécutées (#156) : une règle non exécutée est identifiée par (code,
+# table, colonne), la colonne de sa ligne de controles_non_executes (colonne_ne : NA pour l'âge
+# de D02c) ; sans la colonne, deux non-exécutions d'une même règle sur deux colonnes d'une table
+# se confondaient. La clé est un code entier commun à toutes les listes comparées, calculé par
+# .code_groupe() (sans paste(), #153) : une colonne NA n'égale que NA, jamais « NA » littéral.
+# `impl` : non-exécutions de l'implémentation ; `etats` : liste de celles de chaque état forcé ;
+# `varie` : règles dont une détection varie d'un état à l'autre (code, table, colonne) ; toutes
+# en data.frame (code, table, colonne, cause ; `varie` sans cause). Rend les causes des
+# non-exécutions propres à l'implémentation (absentes de tout état) et si ces règles sont
+# exactement celles qui varient.
+ne_df40 <- function(k) data.frame(code = vapply(k, `[[`, "", "code"), table = vapply(k, `[[`, "", "table"),
+                                  colonne = vapply(k, function(x) x$colonne, NA_character_),
+                                  cause = vapply(k, `[[`, "", "cause"), stringsAsFactors = FALSE)
+ne_apparie40 <- function(impl, etats, varie) {
+  listes <- c(list(impl, varie), etats)
+  tout <- do.call(rbind, lapply(listes, `[`, c("code", "table", "colonne")))
+  k <- split(ns$.code_groupe(unname(as.list(tout))),
+             factor(rep(seq_along(listes), vapply(listes, nrow, 1L)), levels = seq_along(listes)))
+  propres <- !(k[[1L]] %in% unlist(k[-(1:2)]))
+  list(causes = impl$cause[propres], egal = setequal(k[[2L]], k[[1L]][propres]))
+}
 batterie_c40 <- function(b, arrete, declarations = NULL, conventions = NULL) {
   ctx0 <- ctx40(b, arrete, declarations, conventions)
   ev <- ns$.visibilite_a(ctx0, "vue")
@@ -3302,24 +3323,28 @@ batterie_c40 <- function(b, arrete, declarations = NULL, conventions = NULL) {
     if (t == "famille" && !is.null(ev$candidate)) x <- x | (ev$candidate & ev$statut$famille %in% TRUE)
     x
   })
+  # colonne de la ligne non exécutée de la règle d'une détection : colonne_ne, NA pour l'âge de
+  # D02c (détecté sous S ou X ; sa règle de domaine sous R garde la colonne)
+  meta <- new.env()
   detections <- function(ctx) {
     k <- if (length(ctx$constats) > n0) ctx$constats[(n0 + 1L):length(ctx$constats)] else list()
     res <- list()
     for (x in k) {
       u <- vapply(x$lignes[pop[[x$table]][x$lignes]], function(i) unite(x$table, i), "")
       cle <- paste(x$code, x$table, x$colonne, x$traitement, sep = "|")
+      meta[[cle]] <- c(x$code, x$table, if (x$code == "D02c" && x$traitement %in% c("S", "X")) NA_character_ else x$colonne)
       res[[cle]] <- sort(unique(c(res[[cle]], u)))
     }
     res
   }
   cles_ne <- function(ctx) {
     k <- if (length(ctx$non_executes) > ne0) ctx$non_executes[(ne0 + 1L):length(ctx$non_executes)] else list()
-    unique(vapply(k, function(x) paste(x$code, x$table, sep = "|"), ""))
+    ne_df40(k)
   }
   ci <- copie40(ctx0)
   ns$.regle_v(ci)
   d_impl <- detections(ci)
-  ne_impl <- ci$non_executes[if (length(ci$non_executes) > ne0) (ne0 + 1L):length(ci$non_executes) else integer(0)]
+  ne_impl <- ne_df40(ci$non_executes[if (length(ci$non_executes) > ne0) (ne0 + 1L):length(ci$non_executes) else integer(0)])
   grille <- expand.grid(c(rep(list(c(FALSE, TRUE)), length(lignes) + length(parties)), lapply(membres, seq_along)))
   etats <- lapply(seq_len(max(1L, nrow(grille))), function(g) {
     ctx <- copie40(ctx0)
@@ -3359,18 +3384,20 @@ batterie_c40 <- function(b, arrete, declarations = NULL, conventions = NULL) {
     list(d = detections(ctx), ne = cles_ne(ctx))
   })
   cles <- unique(c(names(d_impl), unlist(lapply(etats, function(e) names(e$d)))))
-  varie <- character(0)
+  varie <- list()
   ok <- TRUE
   for (cle in cles) {
     u <- unique(c(d_impl[[cle]], unlist(lapply(etats, function(e) e$d[[cle]]))))
     toujours <- u[vapply(u, function(x) all(vapply(etats, function(e) x %in% e$d[[cle]], NA)), NA)]
     ok <- ok && setequal(toujours, d_impl[[cle]])
-    if (!setequal(toujours, unique(unlist(lapply(etats, function(e) e$d[[cle]]))))) varie <- c(varie, sub("\\|[^|]*\\|[^|]*$", "", cle))
+    if (!setequal(toujours, unique(unlist(lapply(etats, function(e) e$d[[cle]]))))) varie[[length(varie) + 1L]] <- meta[[cle]]
   }
-  propres <- setdiff(vapply(ne_impl, function(x) paste(x$code, x$table, sep = "|"), ""), unlist(lapply(etats, `[[`, "ne")))
+  varie <- data.frame(code = vapply(varie, `[`, "", 1L), table = vapply(varie, `[`, "", 2L),
+                      colonne = vapply(varie, `[`, NA_character_, 3L), stringsAsFactors = FALSE)
+  ne <- ne_apparie40(ne_impl, lapply(etats, `[[`, "ne"), varie)
   requises <- vapply(ctx0$nd_p, function(k) k$motif, "")
-  causes <- vapply(Filter(function(x) paste(x$code, x$table, sep = "|") %in% propres, ne_impl), `[[`, "", "cause")
-  ok && setequal(unique(varie), propres) &&
+  causes <- ne$causes
+  ok && ne$egal &&
     (!any(causes == "declaration_absente") || any(c(requises, unlist(lapply(ctx0$lignes_nd, `[[`, "motif"))) %in% c("D02b", "D03g")))
 }
 w9 <- list(list(w40$W1, A0), list(w40$W2(D(NA)), A0), list(w40$W2(D("2025-03-01")), A0), list(v43$V11, A0),
@@ -3382,6 +3409,35 @@ w9 <- list(list(w40$W1, A0), list(w40$W2(D(NA)), A0), list(w40$W2(D("2025-03-01"
            list(w40$W1, A))
 verifier("W9 (#40, critère 6 (c)) : batterie de substitution des règles V (éléments non déterminés forcés dans la vue puis hors de la vue, candidates de famille tour à tour valables) : détection ssi dans tous les états, ligne de controles_non_executes ssi le verdict varie ; cause declaration_absente avec ses déclarations requises (bases W1 à W6, formes, extraction)",
          all(vapply(w9, function(k) batterie_c40(k[[1L]], k[[2L]], if (length(k) > 2L) k[[3L]], if (length(k) > 3L) k[[4L]]), NA)))
+# #156, témoins de l'appariement des règles non exécutées : la clé comprend la colonne. Une même
+# règle X1 non exécutée sur deux colonnes (a, b) d'une table t, la non-exécution sur a figurant
+# aussi dans un état forcé, celle sur b propre à l'implémentation (cause c2) : (i) la règle varie
+# sur b : l'appariement est exact (ancienne clé (code, table) : propres vides, verdict faux) ;
+# (ii) rien ne varie : la non-exécution propre sur b est un défaut de l'implémentation (ancienne
+# clé : propres vides = varie vide, verdict vrai à tort) ; (iii) colonne NA (âge de D02c) et
+# colonne littérale « NA » : deux règles distinctes
+ne_ancienne40 <- function(impl, etats, varie) {
+  cle <- function(x) paste(x$code, x$table, sep = "|")
+  propres <- setdiff(cle(impl), unlist(lapply(etats, cle)))
+  list(causes = impl$cause[cle(impl) %in% propres], egal = setequal(unique(cle(varie)), propres))
+}
+ne_t40 <- function(code, table, colonne, cause = NA_character_)
+  data.frame(code = code, table = table, colonne = colonne, cause = cause, stringsAsFactors = FALSE)
+ne_impl40 <- ne_t40("X1", "t", c("a", "b"), c("c1", "c2"))
+ne_etat40 <- list(ne_t40("X1", "t", "a", "c1"), ne_t40("X1", "t", "a")[0L, ])
+ne_varie_b40 <- ne_t40("X1", "t", "b")
+ne_varie_0 <- ne_t40("X1", "t", "a")[0L, ]
+ne_na_impl40 <- ne_t40("D02c", "t", NA_character_, "c3")
+ne_na_etat40 <- list(ne_t40("D02c", "t", "NA", "c3"))
+verifier_egal("#156 : appariement des règles non exécutées par (code, table, colonne) : (i) règle sur a et b, b propre et variable : exact, cause c2 (ancienne clé : propres vides, verdict faux) ; (ii) rien ne varie : défaut (ancienne clé : vrai à tort) ; (iii) colonne NA contre « NA » littéral : propre",
+              list(ne_apparie40(ne_impl40, ne_etat40, ne_varie_b40), ne_ancienne40(ne_impl40, ne_etat40, ne_varie_b40),
+                   ne_apparie40(ne_impl40, ne_etat40, ne_varie_0)$egal, ne_ancienne40(ne_impl40, ne_etat40, ne_varie_0)$egal,
+                   ne_apparie40(ne_na_impl40, ne_na_etat40, ne_t40("D02c", "t", NA_character_)),
+                   ne_apparie40(ne_na_impl40, list(ne_t40("D02c", "t", NA_character_, "c3")), ne_t40("D02c", "t", "a")[0L, ])),
+              list(list(causes = "c2", egal = TRUE), list(causes = character(0), egal = FALSE),
+                   FALSE, TRUE,
+                   list(causes = "c3", egal = TRUE),
+                   list(causes = character(0), egal = TRUE)))
 
 section("donnees : départage à rang égal des causes, indépendant de l'ordre d'exécution (#59 ; spécification `donnees` v1.6, § 3.1 et § 2.2, B.5 et (b) ; critères C59-1 à C59-6)")
 
