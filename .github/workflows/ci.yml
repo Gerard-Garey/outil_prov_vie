@@ -1,13 +1,14 @@
 name: CI
 
-# Trois contrôles requis par le ruleset de main (README, « Sécurité du dépôt » ;
-# .github/ruleset-main.json ; M90 et M91) :
+# Quatre contrôles requis par le ruleset de main (README, « Sécurité du dépôt » ;
+# .github/ruleset-main.json ; M90, M91 et M603) :
 #   - « Contrôles du dépôt » : réglages Claude Code, fiches d'agents, fichiers sensibles ;
 #   - « Tests (R 4.3.3) » : les trois batteries de CLAUDE.md dans le conteneur
 #     rocker/r-ver:4.3.3 épinglé par digest (plateforme de référence, ADR 0010, point 27 ;
 #     CONTEXT.md, « Plateforme de référence »), sans package CRAN ;
 #   - « Documents LaTeX » : pdfLaTeX (trois passes) sur la charte et la documentation de
-#     fond, puis le contrôle du préambule (issue #7).
+#     fond, puis le contrôle du préambule (issue #7) ;
+#   - « Invariance du bilan (R 4.3.3) » : contrôle long du bilan de controler_base() (#149).
 # Le workflow de régénération des références de non-régression est
 # regenerer-references.yml (même image, lancé à la main, hors du ruleset ; ADR 0011) ; le
 # job « Contrôles du dépôt » contrôle les commits de référence (commit_reference.sh) et le
@@ -124,6 +125,23 @@ jobs:
         run: Rscript tests/test_reproductibilite.R
       - name: Concordance documentation et moteur
         run: Rscript tests/concordance_doc_moteur.R --strict
+
+  # Invariance du bilan de controler_base() sous inversion et permutation des lignes (#149,
+  # critère C131-1 ; M603) : contrôle long, hors des batteries de CLAUDE.md, donc job séparé,
+  # en parallèle des autres. Même image que « Tests (R 4.3.3) ». Il figure parmi les contrôles
+  # requis de .github/ruleset-main.json ; l'application du ruleset (gh api ou réglages du
+  # dépôt) reste un acte du mainteneur, hors du dépôt.
+  invariance:
+    name: Invariance du bilan (R 4.3.3)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    container: rocker/r-ver:4.3.3@sha256:732d15020af326da9e919c07f70ca32bf5d3e409220af32e0a4b6d0a89437309
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - name: Invariance du bilan sous inversion et permutation des lignes
+        run: Rscript tests/controles/invariance_bilan.R --complet
 
   latex:
     name: Documents LaTeX

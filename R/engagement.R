@@ -744,10 +744,19 @@ calculer_engagement <- function(vue, plan, tables, catalogue, garantie, poste) {
 
   a <- vue$bilan$vue$date_arrete
   etats <- etats_a_date(vue, garantie, "engagement")
-  i_dos <- match(etats$id_dossier, valeurs_vue(vue, "dossiers", "id_dossier"), incomparables = NA)
+  # ligne de dossiers de l'état : un identifiant de dossier manquant ou vide ne s'apparie à rien
+  # (apparier_cles(), #154, règle (iii)) ; un tel état est inatteignable par une base (refus de
+  # portée table de dossiers, postes arrêtés avant etats_a_date(), M239) : erreur interne,
+  # jamais un retrait silencieux de la population (décision du mainteneur du 16 novembre 2026)
+  i_dos <- apparier_cles(etats$id_dossier, valeurs_vue(vue, "dossiers", "id_dossier"))
+  if (anyNA(i_dos)) {
+    stop("erreur interne de provie : calculer_engagement() : dossier de l'\u00e9tat sans identifiant (manquant ou vide), ",
+         "aucune ligne de dossiers appari\u00e9e", call. = FALSE)
+  }
   exclu <- vue$exclu$engagement
   # couverture exclue (erratum v1.0.13) : dossier d'une garantie souscrite, ou d'un contrat, exclu
-  # pour engagement hors de la population (garanties_couverture_exclue(), seule implémentation)
+  # pour engagement hors de la population (garanties_couverture_exclue(), seule implémentation ;
+  # identifiants rendus jamais NA ni "", comparaison exacte, #154)
   couverture_exclue <- as.character(valeurs_vue(vue, "dossiers", "id_garantie_souscrite"))[i_dos] %in%
     garanties_couverture_exclue(vue, "engagement")
   # population avant le filtre des dossiers clos (§ 5.8, erratum v1.0.17 : un dossier clos sous

@@ -1650,10 +1650,12 @@ calcul. Il ne peut appeler que \code{dictionnaire} et
 \code{vue\_a\_date()} & \code{donnees}, \code{arrete}, \code{declarations}, \code{conventions} & Construit une fois la vue à l'arrêté (classe \code{vue\_provie}), seule lecture de la base par les familles de calcul~: bilan de \code{controler\_base()}, lignes retenues, parties de ligne connues, lignes exclues par famille de calcul, hypothèses par défaut appliquées\fsp; mêmes refus d'appel que \code{controler\_base()}. Non exportée. \\
 \code{valeurs\_vue()} & \code{vue}, \code{table}, \code{colonne} & Rend les valeurs d'une colonne dans la vue\fsp; \code{NA} signifie «~hors de la vue~», jamais «~absente~». Non exportée. \\
 \code{cles\_lignes\_hypothese()} & \code{vue}, \code{table}, \code{lignes}, \code{colonne} & Rend la valeur de la base d'une colonne d'identifiant (\code{id\_*}, clé primaire ou clé étrangère) pour des lignes placées sous une hypothèse de la vue, visibles ou non à l'arrêté, désignées par \code{lignes}, vecteur numérique d'indices entiers, finis et positifs\fsp; tout autre appel (dont un \code{lignes} logique, \code{TRUE} par exemple) est une erreur interne\fsp; seul rattachement d'une ligne cachée à son unité, pour un statut, jamais lu pour un montant. Non exportée, appelée par \code{engagement}. \\
-\code{etats\_a\_date()} & \code{vue}, \code{garanties}, \code{famille} & Rend l'état à l'arrêté de chaque dossier des garanties demandées (B2~: \code{deces}), pour une famille de calcul exigée~: état, montant en vigueur, état du dossier (\code{ouvert}, \code{capital\_du}, \code{clos}) par l'automate du dossier, instruction\fsp; les dossiers exclus pour la famille sont rendus, et l'appelant les filtre. Non exportée. \\
-\code{garanties\_couverture\_exclue()} & \code{vue}, \code{famille} & Rend les identifiants des garanties souscrites retenues dont la ligne, ou celle de leur contrat, est exclue pour la famille de calcul\fsp; seule implémentation de la règle de population sous couverture exclue, appelée par les familles \code{engagement} et \code{risque\_en\_cours}. Non exportée. \\
+\code{etats\_a\_date()} & \code{vue}, \code{garanties}, \code{famille} & Rend l'état à l'arrêté de chaque dossier des garanties demandées (B2~: \code{deces}), pour une famille de calcul exigée~: état, montant en vigueur, état du dossier (\code{ouvert}, \code{capital\_du}, \code{clos}) par l'automate du dossier, instruction\fsp; les dossiers exclus pour la famille sont rendus, et l'appelant les filtre\fsp; la garantie souscrite et le sinistre du dossier s'apparient par \code{apparier\_cles()} (une clé manquante ou vide ne s'apparie à rien). Non exportée. \\
+\code{garanties\_couverture\_exclue()} & \code{vue}, \code{famille} & Rend les identifiants des garanties souscrites retenues dont la ligne, ou celle de leur contrat, est exclue pour la famille de calcul, triés, jamais manquants ni vides (un tel identifiant est retiré, sans erreur)\fsp; le contrat exclu s'apparie par \code{apparier\_cles()}\fsp; seule implémentation de la règle de population sous couverture exclue, appelée par les familles \code{engagement} et \code{risque\_en\_cours}. Non exportée. \\
+\code{cle\_renseignee()} & \code{x} & Rend, pour chaque valeur de clé de \code{x}, vrai si elle n'est ni manquante ni une chaîne vide (\code{.cle\_manquante()}, point «~Clé vide~» de la section~\ref{sec:donnees-bilan})\fsp; une garantie souscrite d'identifiant manquant ou vide n'appartient à aucune population (issue~154). Non exportée, appelée par \code{garanties\_couverture\_exclue()}, \code{segments\_vue()} et la famille \code{risque\_en\_cours}. \\
+\code{apparier\_cles()} & \code{x}, \code{table} & Rend la position de chaque clé de \code{x} dans \code{table} (première occurrence, comme \code{match()}), \code{NA} pour une clé manquante ou vide de l'un ou l'autre côté~: une clé manquante ou vide ne s'apparie à rien (point «~Clé vide~» de la section~\ref{sec:donnees-bilan}, issue~154)\fsp; une appartenance s'écrit \code{!is.na(apparier\_cles())}. Non exportée, appelée par \code{garanties\_couverture\_exclue()}, \code{etats\_a\_date()}, \code{segments\_vue()} et les familles \code{engagement} et \code{risque\_en\_cours}. \\
 \code{periode\_cotisation\_regle()} & \code{date\_mouvement}, \code{periodicite} & Rend la période couverte d'une cotisation sous l'hypothèse par défaut de D03f (dictionnaire de la base, §~9)~: du premier jour du mois du mouvement à ce jour plus $p$~mois moins un jour, $p = 12$, 6, 3 ou 1 pour une périodicité annuelle, semestrielle, trimestrielle ou mensuelle\fsp; \code{NA} pour la périodicité \code{unique}, une valeur illisible ou un mouvement manquant\fsp; seule implémentation de la règle, appelée par la famille \code{risque\_en\_cours} (section~\ref{sec:risque-en-cours-p3}). Non exportée. \\
-\code{segments\_vue()} & \code{vue}, \code{segmentations}, \code{garanties} & Rend les segments des unités de calcul de la vue (dossiers et contrats des garanties demandées) pour les segmentations déclarées du plan\fsp; règles admises en B2, contrôlées par \code{valider\_plan()}~: \code{contrat}, \code{nature\_contrat}, \code{annee\_survenance}, \code{ligne\_activite}. Non exportée. \\
+\code{segments\_vue()} & \code{vue}, \code{segmentations}, \code{garanties} & Rend les segments des unités de calcul de la vue (dossiers et contrats des garanties demandées) pour les segmentations déclarées du plan\fsp; règles admises en B2, contrôlées par \code{valider\_plan()}~: \code{contrat}, \code{nature\_contrat}, \code{annee\_survenance}, \code{ligne\_activite}\fsp; une garantie souscrite d'identifiant manquant ou vide ne porte aucune unité. Non exportée. \\
 \code{parties\_ligne()} & Aucun & Rend les parties de ligne (table, colonnes)\fsp; une colonne d'une partie vaut pour toute la partie. Non exportée, passée par les familles de calcul à \code{postes\_a\_arreter()}. \\
 \end{longtable}
 }
@@ -1665,7 +1667,7 @@ calcul. Il ne peut appeler que \code{dictionnaire} et
 
 \code{controler\_base(donnees, arrete, declarations, conventions)}
 applique la spécification du module \code{donnees}
-(\code{docs/specifications/module-donnees-v1.md}, version~1.7\fsp;
+(\code{docs/specifications/module-donnees-v1.md}, version~1.8\fsp;
 versions~1.1, 1.3, 1.4 et~1.5 visées par le mainteneur, la version~1.5
 le 10~novembre~2026 avec ses précisions P1 à~P5, M222\fsp; errata~1.5.1
 et~1.5.2 et précisions~1.5.3 et~1.5.4 sur ses décisions du même jour, M223
@@ -1677,7 +1679,15 @@ sans changement de version, ceux des issues~131 et~123 visés par lui le
 même jour, M391, celui de l'issue~122 visé par lui le même jour, M395,
 et celui de la reprise de fin de branche visé par lui le même jour, M396~:
 regroupement exact des doubles de l'écart D01a, issue~131\fsp; clé vide
-tenue pour une clé manquante, issue~123), sous le dictionnaire de la base en version~1.5. La date d'arrêté est obligatoire,
+tenue pour une clé manquante, issue~123\fsp; version~1.8 visée en bloc le
+15~novembre~2026, M610, avec ses options M611 à M615~: clé primaire à
+composante manquante, issue~143, sites résiduels de la règle de la clé
+manquante, issues~152, 153 et~154\fsp; erratum de rédaction du
+16~novembre~2026, sans changement de version, issue~152\fsp; erratum du
+16~novembre~2026 sur sa décision du même jour, M629~: catégorie
+d'invalidité vide hors du contrôle de chevauchement, issue~143\fsp; errata
+de la validation de l'issue~154 visés par lui le même jour, M630~:
+population de couverture exclue), sous le dictionnaire de la base en version~1.5. La date d'arrêté est obligatoire,
 sans valeur par défaut. \code{declarations} est le sous-schéma
 \code{donnees} du plan (rubriques \code{exclusions}, \code{hypotheses},
 \code{seuils}, \code{evaluations\_gestion})\fsp; \code{conventions} est la
@@ -1954,9 +1964,10 @@ règle~P.
   lisent une colonne non clé vide depuis une autre colonne la tiennent
   pour une valeur inconnue, comme tout refus de valeur\fsp; une clé vide
   suit la règle de la clé manquante (point suivant). La règle des clés n'est pas une règle de
-  domaine~: deux clés vides d'une même table sont en double (D01a) en plus
-  de leur \code{chaine\_vide}, deux anomalies distinctes (mesure
-  exécutée). Motif~: le dictionnaire dit qu'une chaîne vide est hors
+  domaine~; une clé primaire dont une composante est vide n'entre pas
+  dans la détection D01a et garde son seul \code{chaine\_vide} (point
+  «~Clé primaire à composante manquante ou vide~» ci-dessous\fsp;
+  version~1.8, M612\fsp; issue~143). Motif~: le dictionnaire dit qu'une chaîne vide est hors
   domaine, sous le code \code{chaine\_vide}, et n'est pas un
   manquant (§~1.6), et que chaque anomalie s'enregistre sous l'un des
   codes (§~1.10)\fsp; la coder aussi \code{hors\_domaine} l'enregistrerait
@@ -1969,7 +1980,9 @@ règle~P.
   du dictionnaire.
 \item \textbf{Clé vide} (spécification, §~2.2, B.4, «~Chaîne vide~», point
   «~Clé vide~», erratum du 15~novembre~2026\fsp; décision du mainteneur du
-  15~novembre~2026, M396\fsp; issue~123\fsp; jugement d'expert). Une
+  15~novembre~2026, M396\fsp; issue~123\fsp; jugement d'expert\fsp;
+  version~1.8, «~Sites résiduels de la règle de la clé manquante~»,
+  issues~152 à~154). Une
   chaîne vide dans une colonne de clé, primaire ou étrangère, suit la
   règle de la clé manquante (point «~Clé manquante~» ci-dessous)~: elle
   ne s'apparie à aucune ligne, d'un côté comme de l'autre, dans toute
@@ -1977,9 +1990,9 @@ règle~P.
   ligne et dans les rattachements de la visibilité et de l'enjeu\fsp; une
   règle qui lit par cette clé y lit une valeur absente et connue, comme
   pour une clé manquante, sans écarter la ligne. La cellule garde son seul
-  code \code{chaine\_vide}, et la détection D01a lit la cellule telle
-  quelle~: deux clés vides d'une même table restent en double (point
-  précédent). Deux fonctions internes portent la règle~:
+  code \code{chaine\_vide}~; une clé primaire vide n'entre pas dans la
+  détection D01a (point «~Clé primaire à composante manquante ou vide~»
+  ci-dessous). Deux fonctions internes portent la règle~:
   \code{.cle\_manquante()}, qui tient une chaîne vide de clé pour une
   valeur manquante, et \code{.cle3()}, la même règle sur une entrée à
   trois valeurs (valeurs et domaines). Sites~: la jointure par
@@ -2010,16 +2023,58 @@ règle~P.
   vue, \code{etats\_a\_date()} (garantie souscrite et sinistre du
   dossier) et \code{segments\_vue()} (garantie souscrite du dossier,
   contrat des unités contrat, sinistre de l'année de survenance, nature
-  du contrat). Restent hors de la règle, renvoyés à des issues~:
-  \code{.maintien\_d11()}, où l'assuré et le contrat s'apparient par un
-  test d'appartenance qui apparie une clé manquante à une clé manquante,
-  et une clé vide à une clé vide (issue~152)\fsp; les clés composites
-  mises bout à bout en texte (\code{.garantie\_en\_vigueur3()},
-  regroupement des lignes distinctes de l'enjeu\fsp; issue~153)\fsp;
-  l'appartenance aux garanties de couverture exclue
-  (\code{garanties\_couverture\_exclue()} et ses appelants), où le contrat
-  et la garantie souscrite s'apparient par un test d'appartenance
-  (issue~154\fsp; accessibilité par une base non mesurée). Mesures
+  du contrat)\fsp; le sous-cas du maintien de D11
+  (\code{.maintien\_d11()}~: assuré des couvertures, contrat en cause,
+  assuré des sinistres d'arrêt de travail, sinistre des sorties) et, à la
+  source du contrat en cause, le contrat de la garantie de chaque dossier,
+  lu par \code{.verdict\_d11()}, où une clé vide se lit comme une clé
+  manquante dès sa lecture (issue~152\fsp; point~D11 du paragraphe «~Contrôles écrits à la
+  fermeture partielle de l'issue~34~» ci-dessous). La règle vaut aussi
+  pour les clés composites, qui ne sont plus mises bout à bout en texte
+  (issue~153\fsp; décision du mainteneur du 15~novembre~2026, M613)~: la
+  garantie en vigueur à la survenance, commune à D10~(c), D10~(d) et D14
+  (\code{.garantie\_en\_vigueur3()}), apparie sa clé (contrat, collège)
+  composante par composante (\code{.code\_groupe()}), de sorte qu'un
+  contrat ou un collège manquant ou vide ne s'apparie à rien et qu'un
+  «~NA~» littéral est un code distinct de l'absence\fsp; le regroupement des
+  lignes distinctes d'un dossier, dans les composantes
+  \code{paiements\_cumules} et \code{rente\_annuelle\_en\_vigueur} de
+  l'enjeu, ne regroupe jamais un identifiant manquant ou vide (chaque
+  ligne compte une fois), et tient un «~NA~» littéral pour un identifiant
+  distinct. Ces sites sont latents~: aucune base ne les atteint, une clé
+  manquante ou vide, ou un collège refusé de
+  \code{garanties\_souscrites}, refusant sa table ou bloquant la
+  règle~V qui la lirait (M169)\fsp; la batterie unitaire les vérifie par
+  des appels internes. Un collège de \code{garanties\_souscrites} lu avec
+  une cause de lecture, quelle qu'elle soit, est une erreur interne de
+  \code{.garantie\_en\_vigueur3()}, sans verdict rendu (lecture large,
+  retenue par le mainteneur le 16~novembre~2026, M626, qui équivaut à la
+  lecture restreinte aux refus sur tous les états atteignables)\fsp; la
+  lecture à trois valeurs d'un collège refusé, écrite par la
+  spécification (version~1.8, «~Collège refusé~»), sera mise en œuvre
+  avec l'issue~105, si la règle~V cesse d'être bloquée, et la garde
+  restreinte alors aux causes autres que les refus de valeur. Une
+  composante de la clé absente, ou de longueur différente de celle des
+  survenances, est aussi une erreur interne, sans recyclage. Le chemin
+  de la population de couverture exclue suit enfin la même règle
+  (issue~154\fsp; section~\ref{sec:donnees-etats})~: l'appartenance d'une
+  garantie souscrite au contrat exclu, dans
+  \code{garanties\_couverture\_exclue()}\fsp; le dossier de l'état et sa
+  ligne de \code{dossiers}, dans \code{calculer\_engagement()}\fsp; dans la provision
+  mathématique de la temporaire décès, garantie et contrat, contrat et
+  assuré, assuré et sinistres (champ individuel), contrat et garantie,
+  cotisation et garantie (champ collectif). Une garantie souscrite
+  d'identifiant manquant ou vide n'appartient à aucune population. Ces
+  sites appliquent la règle par deux fonctions sans point du module,
+  \code{cle\_renseignee()} et \code{apparier\_cles()}, qu'emploient aussi
+  les familles. Restent hors de la règle, renvoyés à
+  l'issue~158 (créée le 16~novembre~2026, M631)~: dans la famille
+  «~engagement~», les lectures des hypothèses de la vue et la
+  reconstitution du capital, qui apparient encore une clé vide à une clé
+  vide, sans atteinte par une base attendue (à établir par une sonde),
+  des sites dont le résultat n'est juste que par accident, et des
+  écritures locales de la règle, à remplacer par \code{apparier\_cles()}
+  (une méthode, une implémentation). Mesures
   exécutées sur des bases construites de la batterie unitaire (résultat
   exact)~: une clé étrangère vide face à une clé primaire vide
   (\code{evenements.id\_dossier}, \code{famille.id\_sinistre},
@@ -2042,7 +2097,9 @@ règle~P.
   retient les lignes d'une table refusée, un dossier de garantie
   souscrite vide n'a ni état ni unité de calcul, un dossier de sinistre
   vide n'a ni état du sinistre ni année de survenance, et un contrat vide
-  ne forme aucune unité de calcul. D05 n'est pas atteignable par une
+  ne forme aucune unité de calcul~; une garantie souscrite d'identifiant
+  manquant ou vide n'en porte aucune, avec ou sans exclusion d'elle-même
+  ou de son contrat (issue~154). D05 n'est pas atteignable par une
   base (une clé vide de \code{evenements.id\_sinistre} ou de
   \code{dossiers.id\_sinistre} refuse sa table en portée table, et D05,
   qui les lit, est bloquée)~: un appel interne la vérifie. L'état
@@ -2131,7 +2188,7 @@ règle~P.
 Colonne conditionnelle (colonne requise, interdite ou libre selon d'autres colonnes) & Exigence inconnue si deux valeurs du domaine des colonnes lues donnent deux exigences différentes. \code{manquant\_obligatoire} (requise et absente) est faux si la colonne est présente, \code{hors\_domaine} (interdite et présente) est faux si elle est absente\fsp; «~libre~» n'est pas «~inconnu~»~: les deux verdicts y sont faux. Une chaîne vide n'est ni présente ni absente~: elle ne reçoit que \code{chaine\_vide} (point «~Chaîne vide~» ci-dessus). \\
 Borne qui dépend d'une autre colonne (date d'effet d'un événement, jour d'échéance, taux technique, signe d'un montant) & Pour D02c sur \code{evenements.date\_effet}~: (date antérieure au 1er~janvier~1901) ou (type non programmable et date postérieure à l'extraction)\fsp; vrai si la date précède 1901, faux si elle est au plus l'extraction, sinon inconnu si le type, ou le motif quand le type est programmable selon le motif, est inconnu. \\
 Jointure ou appartenance («~il existe une ligne jointe telle que\ldots~», par exemple une garantie décès du contrat) & Vrai si une ligne jointe satisfait la condition quelle que soit la valeur de ses inconnues\fsp; faux si aucune ligne jointe ne le peut\fsp; inconnu sinon. Une clé manquante ne s'apparie à aucune ligne (point ci-dessous), une clé vide non plus (point «~Clé vide~» ci-dessus). \\
-Chevauchement (versions de \code{garanties\_souscrites} par contrat, garantie et collège\fsp; paliers d'âge de \code{parametres}) & Vrai si, pour toute affectation des valeurs inconnues, la ligne recouvre une autre ligne de même groupe\fsp; faux si aucune affectation ne la fait recouvrir une autre ligne\fsp; inconnu sinon. Une ligne dont une composante de clé du groupe manque est hors du contrôle (point ci-dessous). \\
+Chevauchement (versions de \code{garanties\_souscrites} par contrat, garantie et collège\fsp; paliers d'âge de \code{parametres}) & Vrai si, pour toute affectation des valeurs inconnues, la ligne recouvre une autre ligne de même groupe\fsp; faux si aucune affectation ne la fait recouvrir une autre ligne\fsp; inconnu sinon. Une ligne dont une composante de clé du groupe manque ou est vide, ou dont la catégorie d'invalidité est vide, est hors du contrôle (point ci-dessous). \\
 \end{tabular}
 \end{center}
 
@@ -2180,16 +2237,13 @@ Chevauchement (versions de \code{garanties\_souscrites} par contrat, garantie et
   bilans où une clé manque des deux côtés d'une jointure, sur des tables
   déjà refusées en portée table~; aucune provision ne change. Le
   chevauchement, qui n'est pas une jointure, applique la même règle à ses
-  colonnes de clé (point suivant). Seul D01a apparie encore deux clés
-  primaires dont une composante obligatoire manque (deux lignes de
-  \code{parametres} sans \code{id\_garantie\_souscrite} reçoivent D01a en
-  plus de \code{manquant\_obligatoire}, mesure exécutée)\fsp; cet écart au
-  principe, sur une table déjà refusée en portée table, est renvoyé à
-  l'issue~143 (décision du mainteneur du 14~novembre~2026, M382). Une
+  colonnes de clé (point suivant), et, depuis l'issue~143, la détection
+  D01a n'apparie plus deux clés primaires dont une composante refusée
+  manque (point «~Clé primaire à composante manquante ou vide~»
+  ci-dessous). Une
   clé vide, primaire ou étrangère, suit la même règle (point «~Clé
   vide~» ci-dessus, qui en donne les sites, dont le sinistre payé, et les
-  exceptions), et D01a apparie de même
-  deux clés primaires vides.
+  exceptions).
 \item \textbf{Calcul du chevauchement.} Les bornes de chaque ligne sont
   prises au pire (début au plus tard, fin au plus tôt, absence d'une borne
   qui retirerait la ligne du contrôle exclue)\fsp; ce pire ne dépend pas de
@@ -2200,21 +2254,34 @@ Chevauchement (versions de \code{garanties\_souscrites} par contrat, garantie et
   de ce groupe, connu, la recouvre au pire\fsp; un collège inconnu, code
   opaque, peut prendre une valeur nouvelle et n'est donc jamais recouvert
   sous toute affectation. Une ligne dont une composante de clé du groupe
-  manque (\code{garanties\_souscrites.id\_contrat}\fsp;
+  manque ou est vide (\code{garanties\_souscrites.id\_contrat}\fsp;
   \code{parametres.id\_garantie\_souscrite} ou \code{parametres.parametre})
   est hors du contrôle~: elle n'est ni détectée ni écartée, et ne recouvre
-  aucune ligne (spécification, §~2.2, B.4, version~1.7\fsp; issue~121\fsp;
-  jugement d'expert). L'absence de \code{parametres.categorie\_invalidite},
+  aucune ligne (spécification, §~2.2, B.4, version~1.7, issue~121, et,
+  pour une composante vide, version~1.8, M615, issue~143\fsp; jugement
+  d'expert)~; elle garde son seul refus de portée table. L'absence de \code{parametres.categorie\_invalidite},
   composante de la clé primaire légitimement absente hors des paramètres à
   dimension catégorie, reste une valeur du groupe~: deux paliers sans
-  catégorie d'un même (garantie, paramètre) sont du même groupe. Deux
+  catégorie d'un même (garantie, paramètre) sont du même groupe. Une
+  catégorie vide, au contraire, met la ligne hors du contrôle et lui
+  laisse son seul \code{chaine\_vide}~: deux paliers de catégorie vide ne
+  sont pas du même groupe, ni un palier de catégorie vide et un palier
+  sans catégorie (décision du mainteneur du 16~novembre~2026, M629\fsp;
+  issue~143). Motif~: apparier deux chaînes vides inventerait un lien
+  (M396), alors que l'absence de catégorie est une valeur légitime. Le
+  code de groupe de cette composante est mis à \code{NA} pour une chaîne
+  vide seulement (\code{.chaine\_vide()}), et non par
+  \code{.cle\_manquante()}, qui confondrait la chaîne vide avec l'absence
+  légitime. Deux
   lignes ne sont du même groupe que si chaque composante est égale, une
   absence n'égalant que l'absence, jamais une chaîne («~NA~» littéral
   compris)~: le groupe est codé composante par composante
   (\code{.code\_groupe()}, \code{.egal\_valeur()}), sans mise bout à bout
   des valeurs en texte. Les colonnes de groupe qui ne sont pas des clés
   (code de garantie, collège) restent dans la lecture à trois valeurs~:
-  une valeur manquante y est refusée, donc inconnue. Motif~: celui de la
+  une valeur manquante ou vide y est refusée (\code{manquant\_obligatoire}
+  ou \code{chaine\_vide}), donc inconnue, et ne met pas la ligne hors du
+  contrôle (lecture inchangée par l'issue~143). Motif~: celui de la
   forme «~jointure ou appartenance~»\fsp; une ligne sans clé n'appartient
   à aucun contrat ni à aucune garantie connus, et porte déjà un refus de
   portée table. Alternatives écartées~: (a)~garder l'appariement des
@@ -2229,6 +2296,54 @@ Chevauchement (versions de \code{garanties\_souscrites} par contrat, garantie et
   verdict vrai (recouvrement d'une ligne de groupe et d'intervalle
   connus)~: c'est la définition ci-dessus, plus large, que le code
   applique.
+\item \textbf{Clé primaire à composante manquante ou vide} (spécification,
+  §~2.2, B.4, version~1.8, «~Clé primaire à composante manquante
+  (D01a)~»\fsp; décisions du mainteneur du 15~novembre~2026, M611 et
+  M612\fsp; issue~143\fsp; jugement d'expert). Une ligne dont une composante
+  de la clé primaire manque alors que son absence est un refus (colonne
+  obligatoire sans défaut de manquant dans la liste du dictionnaire~:
+  \code{manquant\_obligatoire}), ou est vide (\code{chaine\_vide}),
+  n'entre pas dans la détection D01a~: elle n'est le doublon d'aucune
+  ligne, aucune ligne n'est son doublon, et elle garde son seul refus de
+  portée table. Une composante dont l'absence est une valeur reste une
+  valeur, l'absence n'égalant que l'absence de la même composante~:
+  \code{parametres.categorie\_invalidite} (absente hors des paramètres à
+  dimension catégorie), \code{parametres.age\_min} (absent~: sans palier)
+  et \code{famille.date\_saisie} (manquant traité par le défaut D03g, et
+  non refusé)\fsp; deux versions d'un membre sans date de saisie restent
+  en double. Les lignes de l'écart D01a, leur ordre canonique et la
+  lecture des doubles divergents (points suivants) sont inchangés.
+  Lecture du dictionnaire (§~1.3~: «~Dans une clé composite, un manquant
+  compte comme une valeur~: deux lignes qui ne diffèrent que par deux
+  manquants sont en double~»)~: la phrase admet deux lectures. Le
+  mainteneur a retenu la lecture par l'objet (M611)~: elle règle les
+  composantes dont l'absence est une valeur, et une composante dont
+  l'absence est refusée n'identifie rien\fsp; pour une clé simple, le §~1.3
+  ne dit rien du manquant. Cette lecture n'amende pas le dictionnaire~;
+  une phrase de clarification est retenue pour sa version~1.6. Motif~:
+  apparier deux absences, ou deux chaînes vides, inventerait un doublon,
+  et la ligne porte déjà un refus de portée table sur la même colonne~;
+  c'est le principe du chevauchement et des jointures. Alternatives
+  écartées~: (a)~garder D01a (lecture littérale du §~1.3, comportement
+  antérieur)~: deux codes pour une seule anomalie
+  d'identification\fsp; (a')~sortir de D01a la seule clé manquante et
+  garder en double les clés vides (M612), contre la règle de la clé
+  vide\fsp; (b)~tenir la composante manquante pour une valeur inconnue,
+  écartée comme pour le chevauchement~: une clé n'a pas de
+  domaine\fsp; (c)~sortir aussi \code{famille.date\_saisie}, qui
+  supprimerait le constat D01a de deux versions d'un membre sans date de
+  saisie, qu'aucun autre refus ne signale. Mesures exécutées (batterie
+  unitaire, bases construites, résultat exact)~: deux lignes de
+  \code{parametres} sans \code{id\_garantie\_souscrite}, ou sans
+  \code{parametre}, et deux contrats sans identifiant reçoivent
+  \code{manquant\_obligatoire} sans D01a\fsp; deux contrats d'identifiant
+  vide, et deux lignes de \code{parametres} d'\code{id\_garantie\_souscrite}
+  vide, reçoivent \code{chaine\_vide} sans D01a\fsp; deux paliers sans
+  catégorie ni âge minimal d'un même (garantie, paramètre), et deux
+  versions d'un membre sans date de saisie, gardent D01a. Seuls changent
+  des bilans de tables déjà refusées en portée table~; aucune provision
+  ni aucun verdict ne change (message du commit de l'issue, non remesuré
+  ici).
 \item \textbf{Clé primaire en double} (spécification, §~2.2, B.4,
   version~1.7\fsp; décision du mainteneur du 14~novembre~2026, M381,
   option~(b)\fsp; issue~131\fsp; jugement d'expert). Une jointure lit «~la~»
@@ -2274,14 +2389,15 @@ Chevauchement (versions de \code{garanties\_souscrites} par contrat, garantie et
   détection D01a, par \code{.code\_groupe()} comme le chevauchement, sans
   mise bout à bout des valeurs en texte~: un identifiant «~NA~» littéral
   n'est pas regroupé avec un identifiant manquant (erratum du
-  15~novembre~2026, M396\fsp; issue~131). Mesure exécutée (batterie
-  unitaire)~: deux dossiers d'identifiant manquant, rattachés à deux
-  garanties différentes, en présence d'un dossier d'identifiant
-  «~NA~», ne divergent que sur \code{id\_garantie\_souscrite} (lignes~3 et~4), seule
-  colonne où se publient les composantes empêchées de cause D01a, comme
-  sous un identifiant ordinaire (témoin \code{DOZ})~; la mise bout à bout
-  antérieure écrivait «~NA~» pour les deux identifiants et regroupait les
-  trois lignes. Dans l'enjeu, la garantie d'un
+  15~novembre~2026, M396\fsp; issue~131). Depuis l'issue~143, une
+  composante refusée manquante n'entre plus dans l'écart D01a (point
+  précédent)~: la règle se mesure sur une composante dont l'absence est
+  une valeur. Mesure exécutée (batterie unitaire)~: un palier de
+  \code{parametres} sans catégorie d'invalidité, sa copie sans catégorie
+  et une seconde copie de catégorie «~NA~» littérale~: la seconde copie
+  n'est pas regroupée avec les deux premières, qui seules forment l'écart
+  et ne divergent que si leurs valeurs diffèrent\fsp; témoin, seconde copie
+  sans catégorie~: les trois lignes sont regroupées. Dans l'enjeu, la garantie d'un
   dossier dont les doubles divergent sur \code{id\_garantie\_souscrite},
   ou dont la garantie souscrite est en double avec des codes de garantie
   divergents, est \code{non\_rattache} (lien non déterminé, comme la
@@ -2292,7 +2408,13 @@ Chevauchement (versions de \code{garanties\_souscrites} par contrat, garantie et
   inversion des lignes de chaque table et, pour un dossier en double sur
   deux garanties, après une permutation tirée sous graine locale
   explicite, et qu'un dossier en double à l'identique n'écarte aucune
-  ligne~: vérification sur un corpus fini de cas, non preuve.
+  ligne~: vérification sur un corpus fini de cas, non preuve. Le contrôle
+  d'invariance \code{invariance\_bilan.R} étend la vérification à chaque
+  appel de \code{controler\_base()} de l'espace de noms du package fait
+  par les tests du module, hors des appels sans arrêté et des copies de
+  l'espace de noms (\code{copie\_ns()}), sous inversion et
+  sous permutation des lignes (critère C131-1, issue~149\fsp;
+  section~\ref{sec:controles}), toujours sur un corpus fini.
 \item \textbf{Exécution.} Une passe par strate du graphe dérivé, de~0 à~3, puis une passe
   des règles de portée \code{table}\fsp; dans une passe, les règles
   s'exécutent dans l'ordre du code. Les refus de valeur d'une colonne sont
@@ -3221,7 +3343,23 @@ simulés est renvoyée à l'issue~117.
   illisible, départagée comme toute cause (décision du mainteneur du
   13~novembre~2026)\fsp; aucune ligne \code{non\_lisible} n'est alors
   écrite, car, sans la clôture, aucun sinistre ne relève certainement du
-  sous-cas. Limite renvoyée à l'issue~128~: une rechute
+  sous-cas. Dans ce sous-cas, l'assuré des couvertures, le contrat en
+  cause, l'assuré des sinistres d'arrêt de travail et le sinistre des
+  sorties suivent la règle de la clé manquante~: une clé manquante ou
+  vide ne s'apparie à rien, et le contrat de la garantie du dossier, d'où
+  vient le contrat en cause, se lit comme manquant s'il est vide
+  (spécification, version~1.8, §~2.2, B.4, et erratum de rédaction du
+  16~novembre~2026\fsp; issue~152\fsp; point «~Clé vide~» ci-dessus). Le cas
+  est latent~: une telle clé refuse sa table en portée table, ce qui
+  bloque D11\fsp; la batterie unitaire le vérifie par des appels internes,
+  où une clé vide et une clé manquante donnent le même verdict. Limite
+  renvoyée à l'issue~157~: un dossier dont la garantie n'a pas de contrat
+  (manquant ou vide) est tenu pour couvert par l'atome «~le contrat ne
+  couvre pas la survenance~», alors qu'un assuré manquant conduit à
+  «~aucune couverture~»\fsp; le mainteneur a retenu le 16~novembre~2026
+  (M628) la lecture selon laquelle ce contrat absent ne s'apparie à
+  aucune couverture, ce qui ferait détecter D11, à mettre en œuvre dans
+  une branche suivante. Limite renvoyée à l'issue~128~: une rechute
   postérieure à la sortie et antérieure à la fin de couverture n'est pas
   lue. Traitement signalement et exclusion par famille (deux constats de
   même clé), détection exacte, constat sur
@@ -3349,7 +3487,15 @@ M317 et M322~; section~\ref{sec:statut-unite}).
 rend une ligne par dossier retenu à l'arrêté dont la garantie souscrite a
 un code de \code{garanties} (dans l'état du code, \code{deces} seule), pour
 une famille de calcul exigée, sans valeur par défaut. Les dossiers exclus
-pour la famille restent dans la sortie~: l'appelant les écarte. Chaque
+pour la famille restent dans la sortie~: l'appelant les écarte. La
+garantie souscrite et le sinistre du dossier s'apparient selon la règle
+de la clé manquante (section~\ref{sec:donnees-bilan}, points «~Clé
+manquante~» et «~Clé vide~»)~: une clé manquante ou vide ne s'apparie à
+rien, si bien qu'un dossier de garantie souscrite manquante ou vide n'est
+pas rendu, et qu'un dossier de sinistre manquant ou vide n'a pas d'état du
+sinistre. Une telle clé refuse sa table en portée table~; le cas n'est
+atteint qu'à l'arrêté égal à la date d'extraction, où la vue retient les
+lignes d'une table refusée. Chaque
 ligne porte l'état du sinistre (\code{deces} ou \code{iad}) et sa date
 d'entrée (date de survenance), le montant en vigueur (dernier
 \code{fixation\_capital} retenu et non exclu pour la famille), l'état du
@@ -3393,12 +3539,44 @@ exclusion écarte la ligne en laissant le calcul continuer. Une exclusion
 pour une autre famille est sans effet, et le dictionnaire n'est pas
 étendu~: les lignes exclues des autres tables sont inchangées.
 
+\textbf{Couverture exclue et clé manquante} (spécification du module
+\code{donnees}, version~1.8, §~2.2, B.4, «~Sites résiduels de la règle de
+la clé manquante~», règles~(i) à~(iv), et erratum du 16~novembre~2026\fsp;
+décisions du mainteneur du 15~novembre~2026, M614, et du
+16~novembre~2026, M630\fsp; issue~154\fsp; jugement d'expert).
+L'appartenance d'une garantie souscrite au contrat exclu suit la règle
+de la clé manquante~: un contrat manquant ou vide, d'un côté ou de
+l'autre, ne s'apparie à rien. Une garantie souscrite dont l'identifiant
+manque ou est vide n'appartient à aucune population~: aucun dossier ne
+s'y rattache et aucune unité contrat ne la porte. La population exclue
+est transmise par identifiants (forme inchangée, M614)~: les identifiants
+rendus sont triés et ne sont jamais manquants ni vides, et une garantie
+souscrite retenue et exclue dont l'identifiant manque ou est vide n'est
+pas rendue, sans arrêt ni erreur. Une garde d'erreur interne avait
+d'abord été retenue sur cet état, réputé inatteignable. Il l'est pour une
+exclusion de la ligne de \code{garanties\_souscrites}, dont le refus de
+portée table empêche les exclusions, mais non pour une exclusion par le
+contrat~: à l'arrêté égal à la date d'extraction, la vue garde la ligne de
+la table refusée, et D02a peut exclure le contrat (mesure exécutée, sonde
+de l'issue)\fsp; la garde aurait fait échouer \code{calculer\_provisions()}
+sur une base dégradée. Alternative écartée~: une garde restreinte à
+l'exclusion de la ligne, sans gain, puisque le sort de la garantie est
+fixé quelle que soit la voie de l'exclusion. Chaque appariement du chemin
+de population chez les appelants suit la même règle (sections~\ref{sec:engagement-capital}
+et~\ref{sec:risque-en-cours-p3}).
+
 \textbf{Segments.} \code{segments\_vue(vue, segmentations, garanties)}
 rend le segment de chaque unité de calcul pour chaque segmentation déclarée
 par le plan. Les unités sont les dossiers retenus d'une garantie souscrite
 retenue des garanties demandées, hors couverture exclue pour la famille
 «~engagement~», et les contrats retenus qui portent une telle garantie, hors
-couverture exclue pour la famille «~risque en cours~». La clé de chaque
+couverture exclue pour la famille «~risque en cours~». Une garantie
+souscrite d'identifiant manquant ou vide ne porte aucune unité (issue~154).
+Les clés des unités (garantie souscrite du dossier, contrat des unités
+contrat, sinistre de l'année de survenance, nature du contrat) s'apparient
+selon la règle de la clé manquante~: une clé manquante ou vide ne
+s'apparie à rien (section~\ref{sec:donnees-bilan}, point «~Clé
+vide~»). La clé de chaque
 règle admise (\code{REGLES\_SEGMENTATION\_B2}) est~:
 
 \begin{itemize}[itemsep=2pt]
@@ -3850,7 +4028,23 @@ la garantie souscrite du dossier, ou son contrat, a sa ligne exclue), et non
 clos. L'exposition ainsi écartée est restituée par l'enjeu, qui mesure les
 dossiers rattachés au contrat ou à la garantie souscrite, par leur nombre
 et par les composantes de l'enjeu (paiements cumulés, capital fixé), non
-par la provision qu'ils auraient portée (section~\ref{sec:enjeu}). Les capitaux non réclamés sont les dossiers qui
+par la provision qu'ils auraient portée (section~\ref{sec:enjeu}). Chaque
+dossier de l'état est apparié à sa ligne de \code{dossiers} selon la règle
+de la clé manquante\fsp; un dossier de l'état dont l'identifiant manque ou
+est vide est une erreur interne (spécification du module \code{donnees},
+version~1.8, §~2.2, B.4, issue~154, règle~(iii), erratum du
+16~novembre~2026\fsp; décision du mainteneur du même jour, M630). Cet
+état est inatteignable par une base~: une clé primaire de \code{dossiers}
+manquante ou vide refuse sa table en portée table, et l'arrêt des postes
+lu sur le bilan précède la lecture des états (mesure de la validation
+de l'issue, non remesurée ici~: sur la base construite
+\code{construite-deces-01}, chacun de ses dossiers privé de son
+identifiant ou d'identifiant vide, à deux arrêtés, sous D04a et D04b
+conservés ou exclus, les deux postes sont arrêtés\fsp; la batterie unitaire
+le vérifie sur un cas, et la garde par un appel interne). Motif~: atteindre ce
+point révélerait une incohérence de l'arrêt des postes, et un retrait
+silencieux du dossier minorerait la provision sans trace. Alternative
+écartée~: le dossier sort de la population sans arrêt. Les capitaux non réclamés sont les dossiers qui
 remplissent le critère déclaré par le plan, réunion de
 \code{beneficiaire\_non\_identifie} (au moins un bénéficiaire retenu du
 dossier de qualité \code{non\_identifie}) et de \code{sans\_evenement}
@@ -4327,6 +4521,28 @@ prime déclarée pour un contrat à primes périodiques,
 couverture indéterminée arrêtent le poste
 (\code{parametre\_non\_determine}, premier contrat en cause).
 
+\textbf{Champ individuel~: clé manquante} (spécification du module
+\code{donnees}, version~1.8, §~2.2, B.4, «~Sites résiduels de la règle de
+la clé manquante~», issue~154, règles~(ii) et~(iii), et erratum du
+16~novembre~2026). Une garantie souscrite d'identifiant manquant ou vide
+n'appartient pas à la population. La garantie et son contrat, le contrat
+et son assuré, l'assuré et ses sinistres (sinistre qui fait sortir le
+contrat, sinistre exclu qui rend la sortie inconnue, sinistre qui la
+décide sans hypothèse) s'apparient selon la règle de la clé manquante~:
+une clé manquante ou vide ne s'apparie à rien
+(section~\ref{sec:donnees-bilan}, point «~Clé vide~»). Ainsi, un contrat
+et un sinistre dont l'assuré manque ou est vide ne s'apparient pas, et il
+n'y a pas de sortie de la population par un décès qui n'est pas celui de
+l'assuré. Pour un contrat en vigueur, la date de naissance de l'assuré du
+contrat est inconnue et le poste est arrêté
+(\code{parametre\_non\_determine})\fsp; pour un contrat déjà sorti par sa
+date de fin, la sortie n'est pas observée par le sinistre et le contrat est
+restitué parmi les sortis, sans arrêt du poste (erratum du 16~novembre~2026,
+précision de forme). Ces cas ne sont pas atteints
+par une base (une telle clé refuse sa table en portée table, et le poste
+est arrêté avant le calcul)\fsp; la batterie unitaire les vérifie par des
+appels internes, contre un témoin à clés renseignées.
+
 \textbf{Champ individuel~: paramètres exclus.} Les paramètres lus sont ceux
 de la méthode déclarée, pour chaque contrat de la population, quel que soit
 le chemin des données~: \code{capital\_forfaitaire} et
@@ -4450,7 +4666,11 @@ risque est uniforme sur la période et la prime pure), restituée au statut
 \code{approximation\_numerique} faute d'un statut plus juste dans la liste
 fermée~; un contrat sous l'hypothèse D03f ou dont une ligne lue (contrat,
 cotisations du champ) est placée sous une hypothèse de la vue est
-\code{jugement\_expert} (section~\ref{sec:statut-unite}).
+\code{jugement\_expert} (section~\ref{sec:statut-unite}). Une garantie
+souscrite d'identifiant manquant ou vide n'entre pas dans le champ, et le
+contrat et ses garanties, la cotisation et sa garantie s'apparient selon
+la règle de la clé manquante (issue~154\fsp; même cas latent, vérifié par
+des appels internes).
 
 \textbf{Champ collectif~: ordre d'évaluation d'une cotisation.} Chaque
 cotisation retenue du champ est lue dans cet ordre (issue~92 du dépôt~;
@@ -5422,6 +5642,9 @@ Trois batteries se lancent depuis la racine du dépôt, dans cet ordre~:
   contrôle du dépôt (section~\ref{sec:controles}), chacun dans un processus
   \code{Rscript} distinct~: un script compte en échec si son statut de
   sortie n'est pas nul ou si sa sortie contient une ligne \code{[ECHEC]}.
+  Le contrôle d'invariance du bilan (\code{invariance\_bilan.R}) y est
+  appelé sans l'option \code{-{}-complet}, et n'y vérifie donc rien~: il
+  tourne dans son propre job de l'intégration continue (ci-dessous).
   Elle installe ensuite le package dans une bibliothèque temporaire, le
   charge, puis exécute les fichiers de \code{tests/unitaires/}, un par
   module, plus ceux qui testent le harnais, la batterie de concordance, les
@@ -5486,7 +5709,15 @@ les scripts \code{commit\_reference.sh}, sur les commits de la pull
 request, et \code{couloir.sh}, sur les fichiers qu'elle touche
 (section~\ref{sec:controles}). Avant les
 batteries, le job imprime au journal \code{sessionInfo()},
-\code{extSoftVersion()} et \code{La\_version()}. Le job «~Documents LaTeX~» compile la
+\code{extSoftVersion()} et \code{La\_version()}. Le job «~Invariance du
+bilan (R~4.3.3)~», dans la même image épinglée, en parallèle des autres
+jobs, exécute le contrôle long \code{invariance\_bilan.R -{}-complet}
+(section~\ref{sec:controles}\fsp; issue~149, décision du mainteneur du
+15~novembre~2026, M603)~: ce contrôle n'est pas l'une des trois
+batteries\fsp; il est l'un des quatre contrôles requis de la branche
+principale, consignés dans \code{.github/\allowbreak ruleset-main.json}
+(ADR~0010, point~27) et appliqués sur GitHub par le mainteneur le
+16~novembre~2026 (M603, M624). Le job «~Documents LaTeX~» compile la
 charte graphique et le présent document par pdfLaTeX, en trois passes, et
 échoue sur une erreur, une référence indéfinie ou une ligne trop longue
 (\textit{Overfull})\fsp; il exécute ensuite le script de contrôle du
@@ -5500,9 +5731,15 @@ avant et après l'installation de TeX~Live et de R, et le script
 \label{sec:controles}
 % =============================================================================
 
-Huit scripts R de \code{tests/controles/}, exécutés par la batterie
+Neuf scripts R de \code{tests/controles/}, appelés par la batterie
 unitaire, et trois scripts shell, hors de la batterie unitaire,
-vérifient des règles du dépôt qui ne sont pas des tests du package~: le
+vérifient des règles du dépôt qui ne sont pas des tests du package.
+L'un des scripts R, \code{invariance\_bilan.R}, n'agit qu'avec l'option
+\code{-{}-complet}~: appelé sans elle par la batterie unitaire, il
+imprime une ligne \code{[INFO]} et sort avec un statut nul, sans rien
+vérifier (témoin dans \code{tests/unitaires/controles.R})\fsp; il
+s'exécute avec l'option dans le job «~Invariance du bilan
+(R~4.3.3)~» de l'intégration continue (section~\ref{sec:batteries}). Le
 job «~Contrôles du dépôt~» de l'intégration continue exécute
 \code{commit\_reference.sh} et \code{couloir.sh}, chacun après ses
 témoins (mode \code{-{}-temoins}), et le job «~Documents LaTeX~», comme le
@@ -5510,11 +5747,12 @@ hook d'installation de pdfLaTeX des sessions de Claude Code, exécute
 \code{paquets\_java.sh}\fsp; le répertoire contient en outre le fichier
 de motifs de ce dernier. Les témoins de \code{paquets\_java.sh} et de
 \code{couloir.sh} sont aussi joués par la batterie unitaire
-(\code{tests/unitaires/controles.R}), quand \code{bash} est présent. Chaque script R s'exécute seul, depuis la racine du
-dépôt (\code{Rscript tests/controles/<script>.R}), n'emploie que R de base,
+(\code{tests/\allowbreak unitaires/\allowbreak controles.R}), quand \code{bash} est présent. Chaque script R s'exécute seul, depuis la racine du
+dépôt (\code{Rscript tests/\allowbreak controles/\allowbreak <script>.R}), n'emploie que R de base,
 imprime une ligne par constat (\code{[OK]}, \code{[ECHEC]},
 \code{[AVERT]} pour le contrôle de Java, \code{[INFO]} pour le
-recensement des tolérances), avec le fichier et la ligne en
+recensement des tolérances et pour les informations du contrôle
+d'invariance), avec le fichier et la ligne en
 cause, et sort avec un statut non nul au moindre échec. Un argument
 facultatif désigne une autre racine, ce qui permet de démontrer qu'un
 script refuse une copie du dépôt délibérément fautive (témoin négatif).
@@ -5534,26 +5772,32 @@ script refuse une copie du dépôt délibérément fautive (témoin négatif).
 \code{graphe\_modules.R}, limites & Seule la cible d'une affectation n'est pas une référence~: un nom local homonyme d'une définition d'un autre module produit une fausse arête (limite du côté sûr, écrite dans le script). Cinq autres limites sont écrites dans le script~: une chaîne égale au nom d'une fonction sans point d'un autre module ne compte pas comme une arête (des noms de colonnes égalent des noms de fonctions)\fsp; un nom de fonction interdite écrit en chaîne hors position d'appel (\code{lapply(1, "sys.call")}) n'est pas une référence vue, seul \code{do.call()} sur une chaîne étant refusé\fsp; du côté sûr, un nom local ou un argument formel homonyme d'une fonction interdite, lu (\code{function(get) get}), est signalé comme une référence, et se lève en renommant le nom local\fsp; à l'inverse, dans la fonction d'une exception déclarée, une variable locale qui porte le nom de l'exception est couverte par elle (\code{globalenv <- f} suivi de \code{globalenv()} ou de \code{do.call(globalenv, list())} passe dans \code{avec\_graine()})\fsp; enfin, \code{dynGet()} et \code{.GlobalEnv} ne sont pas dans la liste \code{APPELS\_DYNAMIQUES} et passent, et la forme appel de la fonction de remplacement d'\code{environment()}, \code{\textasciigrave environment<-\textasciigrave(f, e)}, avec ou sans \code{base::}, n'est pas vue, alors que la forme affectation \code{environment(f) <- e} l'est. \\
 \code{frontiere\_calcul\_affichage.R} & Aucun élément de Shiny dans \code{R/} (\code{input\$}, \code{session\$} et \code{output\$} hors nom local, fonctions réactives, de rendu et de mise à jour, \code{shiny::})\fsp; aucun réglage du générateur pseudo-aléatoire (\code{set.seed()}, \code{RNGkind()}, \code{RNGversion()}, appelés ou seulement référencés, \code{.Random.seed}) hors de \code{R/outils.R}\fsp; aucun appel ni aucune référence à \code{warning()}, \code{message()}, \code{cat()}, \code{print()}, \code{print.default()}, \code{str()}, \code{show()}, \code{sink()}, \code{writeLines()}, \code{writeChar()} ni \code{packageStartupMessage()}, aucun appel direct d'une méthode \code{print.*}, et aucune écriture vers la console par \code{write()}, \code{write.table()}, \code{write.csv()}, \code{write.csv2()} ou \code{write.dcf()}, hors du corps des fonctions de premier niveau nommées \code{print.*} et \code{format.*} (décisions du mainteneur du 12~novembre~2026, M401 et M411), un champ homonyme (\code{x\$print}) n'étant ni un appel ni une référence~; la destination d'une écriture se lit sur l'argument \code{file}~: chaîne vide, \code{stdout()} ou \code{stderr()}, ou argument absent ou laissé vide (\code{write.table(x, , ...)}) pour les quatre dernières fonctions, dont la console est la destination par défaut\fsp; une destination désignée par une variable, ou un appel qui transmet \code{...}, ne se décide pas sur le source et est admis\fsp; aucune lecture de l'horloge (\code{Sys.time()}, \code{Sys.Date()}, \code{date()}) nulle part, méthodes \code{print.*} et \code{format.*} comprises, car un rendu qui lit l'horloge n'est pas reproductible (M402 et M410)\fsp; un nom écrit entre accents graves ou entre guillemets en position d'appel vaut le nom nu\fsp; jetons de code ASCII, les commentaires accentués étant admis (décision du mainteneur du 10~novembre~2026, M236)\fsp; si \code{app/} existe, aucun appel aux fonctions internes du package ni à une liste de fonctions de calcul. Un symbole homonyme d'une fonction interdite n'en est pas une référence s'il est la cible d'une affectation, un argument formel d'une fonction qui le contient, ou s'il est lu après une affectation du même nom, faite plus haut dans le source, dans une fonction qui le contient, hors des définitions de premier niveau, toujours comptées~: une affectation (ou une variable de \code{for}) hors de toute fonction, au premier niveau du fichier ou dans un \code{if} ou une boucle de ce niveau, ne masque rien et sa cible est comptée\fsp; une lecture qui précède l'affectation est comptée, et l'argument de \code{local()} est une portée à part (M400). Limites écrites dans le script~: une affectation conditionnelle masque les lectures qui la suivent, \code{<<-} est traité comme \code{<-}, \code{assign()} et \code{->} ne masquent rien, et \code{with()}, \code{within()}, \code{eval()} et \code{evalq()} ne sont pas des portées. \\
 \code{concordance\_dictionnaire.R} & Le dictionnaire lisible par machine (section~\ref{sec:dictionnaire-csv}) concorde avec le texte visé \code{docs/specifications/dictionnaire-base-v1.md}, qui fait foi~: le dossier contient exactement les sept CSV et \code{dictionnaire.txt}\fsp; la version de \code{dictionnaire.txt} est celle du texte et \code{VERSION\_DICTIONNAIRE\_ATTENDUE}, sa date de visa celle de l'historique du texte, ses empreintes celles des CSV\fsp; chaque CSV est égal, ligne à ligne, champ à champ et dans le même ordre, au tableau correspondant du texte\fsp; les codes de contrôle sont disjoints des codes de défaut, et ceux qui sont des motifs de refus d'appel sont exactement \code{colonne\_absente}, \code{colonne\_inconnue} et \code{type\_incompatible}. Les limites de détection sont écrites en tête du script. \\
-\code{image\_reference.R} & L'image du conteneur du job «~Tests (R~4.3.3)~» et celle du workflow de régénération des références sont la même, épinglée par digest, et ce digest est celui que \code{CONTEXT.md} consigne à l'entrée «~Plateforme de référence~» (section~\ref{sec:references}). \\
+\code{image\_reference.R} & Les images de conteneur de \code{ci.yml} (jobs «~Tests (R~4.3.3)~» et «~Invariance du bilan (R~4.3.3)~», toutes épinglées par digest et identiques) et celle du workflow de régénération des références, unique, sont la même, et ce digest est celui que \code{CONTEXT.md} consigne à l'entrée «~Plateforme de référence~» (section~\ref{sec:references}). \\
 \code{commit\_reference.sh} & Script shell, hors de la batterie unitaire (\code{git} peut manquer dans l'image du job de tests)~: tout commit de la plage contrôlée qui touche \code{tests/reference/} ne touche rien d'autre, porte les lignes exigées du message (run, commit calculé, image, plateforme, empreinte, visa), remplies, a pour unique parent le commit calculé, et cite l'empreinte de l'arbre à ce commit. \\
 \code{paquets\_java.sh} & Script shell, hors de la batterie unitaire, appelé par le job «~Documents LaTeX~» (étapes «~Paquets installés avant le job~» et «~Aucun paquet Java installé par le job~») et par le hook \code{.claude/hooks/installer\_latex.sh} (issue~120)~: avec \code{-{}-lister}, il relève les paquets système à l'état installé (\code{dpkg-query})\fsp; avec deux listes relevées avant et après une installation, il refuse tout paquet de la différence dont le nom répond à l'un des motifs du fichier \code{paquets\_java\_motifs.sh} (noms terminés par \code{-java} ou \code{-jni}, commençant par \code{java-} ou contenant \code{-java-}, \code{default-jre} et \code{default-jdk}, OpenJDK, OpenJFX, Temurin, Zulu, \code{jarwrapper}, \code{gcj-*}\fsp; \code{openjade}, qui n'est pas un paquet Java, passe), la différence seule étant en cause, car l'image d'un exécutant de l'intégration continue contient déjà des JDK\fsp; une liste relevée vide, une liste «~après~» vide, un fichier illisible ou un fichier de motifs absent sont refusés (statut~2). Un échec fait échouer le job\fsp; dans le hook, qui ne bloque jamais la session, il imprime un avertissement. Deux limites sont écrites dans le script~: le contrôle se fait par nom de paquet\fsp; un paquet Java d'un autre nom passe au travers, comme ce qui s'installe hors de \code{dpkg} (\code{tlmgr}, \code{pip}, R, archive décompressée) et ce qui était déjà installé avant~; le fichier de motifs est chargé par \code{source}, donc exécuté et non seulement lu~: une commande qui y serait placée s'exécuterait au lancement du script, sans être vue ni par \code{absence\_java.R}, qui l'exclut de son balayage, ni par le script, qui ne compare que des noms de paquets\fsp; seule la revue du fichier de motifs, qui ne doit contenir que des motifs, en tient lieu. \\
 \code{couloir.sh} & Script shell, hors de la batterie unitaire, exécuté par le job «~Contrôles du dépôt~» (étape «~Couloir de la branche~»), après ses témoins (issue~94\fsp; ADR~0012, points~5, 6 et~23\fsp; forme visée par le mainteneur le 14~novembre~2026, M359)~: le couloir d'une branche parallèle est un bloc de code délimité de sa fiche, dans \code{docs/feuille-de-route.md}, de chaîne d'information \code{couloir <branche>}, dont chaque ligne inclut des fichiers (\code{+ <motif>}), en exclut (\code{- <motif>}, qui prime) ou déclare un point de contact (\code{= <chemin> : <Mnnn>}, fichier exact et décision du mainteneur qui l'accorde, à porter dans les deux fiches)\fsp; un motif est un chemin relatif à la racine, où \code{*} vaut tout caractère sauf \code{/}, \code{**} tout caractère, et un \code{/} final tout le sous-arbre. En mode couloir, le mode par défaut, tout fichier du diff de la branche contre sa base (\code{origin/main} par défaut) qui n'est ni dans le couloir, ni un recouvrement maîtrisé (liste fermée de l'ADR~0012, point~6, écrite dans le script), ni un point de contact déclaré est un échec\fsp; une branche sans bloc (branche unique) rend \code{[INFO]} et le statut~0\fsp; un bloc mal formé, ou deux blocs pour une même branche, est un échec. Le mode \code{-{}-autre=<branche>}, lancé en local avant chaque poussée et non par l'intégration continue, échoue si les fichiers touchés par les deux branches se recoupent hors des recouvrements maîtrisés et des points de contact déclarés dans les deux fiches\fsp; le mode \code{-{}-temoins} joue, sans \code{git}, des cas construits, dont le témoin négatif d'un fichier hors couloir. Limites écrites dans le script~: un recouvrement maîtrisé est admis au niveau du fichier (pour \code{DESCRIPTION}, le script ne vérifie pas que seule la version change\fsp; pour \code{NAMESPACE} et \code{README.md}, qu'il n'y a que des ajouts\fsp; pour la feuille de route, que la branche n'écrit que sa fiche et son bloc de décisions), et un point de contact par son chemin, sans lecture des lignes ni de la décision citée\fsp; le script signale une sortie de couloir sans la trancher\fsp; la fiche de l'autre branche est lue dans le fichier de la branche courante, et une version plus récente n'est pas vue\fsp; l'intersection est un contrôle local, non de l'intégration continue, parce qu'elle dépend de l'état de l'autre branche au moment de la poussée, que seule la session connaît\fsp; une coquille dans la chaîne d'information (\code{couloirs <branche>}) fait voir la branche sans bloc\fsp; un chemin qui porte un guillemet, une barre oblique inverse ou un caractère de contrôle, cité par \code{git}, ne correspond à aucun motif\fsp; un bloc mal formé n'est signalé que pour la branche contrôlée (et pour l'autre en mode intersection), une chaîne d'information «~couloir~» mal formée l'étant quelle que soit la branche. \\
 \code{preambule\_latex.R} & Le préambule de chaque document LaTeX suivi du dépôt (fichier \code{.tex} ou \code{.TEX} qui porte un \code{\textbackslash documentclass}, où qu'il soit), autre que la charte, est identique à celui de la charte graphique, hors des blocs bornés par «~À ADAPTER~», dont le nombre, l'ordre et l'objet doivent être ceux de la charte\fsp; un fichier sans \code{\textbackslash documentclass} est un fragment, ignoré. \\
 \code{recensement\_tolerances.R} & Recensement informatif, qui n'échoue sur aucun de ses signalements (issue~79)~: il liste les appels de \code{verifier\_egal()} à tolérance non nulle et les appels directs de \code{all.equal()} à tolérance déclarée des fichiers R de \code{tests/} (hors \code{tests/reference/}), et signale ceux dont la valeur attendue rassemble au moins deux valeurs numériques finies non nulles dont le rapport du plus grand au plus petit atteint~10. Il porte en outre la mention «~PETITES VALEURS~» sur chaque appel de \code{verifier\_egal()} dont la valeur attendue, même réduite à une seule valeur, compte une valeur numérique finie non nulle de valeur absolue inférieure à $\min\bigl(1, \varepsilon / (1{,}5 \cdot 10^{-7})\bigr)$, $\varepsilon$ étant la tolérance lue de l'appel (environ $6{,}7 \cdot 10^{-4}$ pour $\varepsilon = 10^{-10}$\fsp; borné à~1, au-delà duquel la tolérance mixte est relative\fsp; paragraphe «~Petites valeurs attendues~» de la section~\ref{sec:harnais}). Quatre rubriques suivent les zéros attendus de \code{verifier\_egal()} (issue~111), selon la consigne du zéro attendu du même paragraphe~: «~\code{ZEROS ATTENDUS A TOLERANCE > 0}~» liste chaque appel à tolérance positive ou non résolue dont la valeur attendue contient un zéro réel (un zéro entier, \code{0L}, est exact par son type), soit une feuille numérique nulle de la valeur évaluée, soit, si la valeur attendue n'est pas évaluable, une constante littérale~0 de l'expression, hors des arguments qui ne sont pas des valeurs (indices de \code{[} et de \code{[[}, longueurs et répétitions de \code{rep()}, nombre de chiffres de \code{round()} et de \code{signif()}), critère syntaxique qui n'est pas exhaustif, une expression non évaluable pouvant cacher d'autres zéros\fsp; un zéro obtenu par compensation, qui reste à tolérance absolue déclarée dans son propre appel, se déclare par la marque \code{\#~zero\_compense~:~<motif>}, en commentaire sur la ligne qui précède l'appel~: l'appel est alors compté sous «~\code{ZERO DE COMPENSATION DECLARE}~», hors de la rubrique précédente, et sous «~\code{ZERO DE COMPENSATION DECLARE A PLUSIEURS ZEROS}~» s'il porte plus d'un zéro réel, les autres zéros se comparant à part\fsp; une marque que ne suit pas, à la ligne suivante, un appel de \code{verifier\_egal()} qui porte un zéro est listée sous «~\code{MARQUES zero\_compense ORPHELINES}~». Le motif de la marque est une convention que le script ne contrôle pas~: une marque \code{\#~zero\_compense} sans motif compte comme une marque. Ces rubriques sont informatives, comme les autres. Un appel est reconnu sous sa forme nue, entre accents graves ou préfixée par \code{::} ou \code{:::}\fsp; un champ (\code{x\$verifier\_egal()}) n'est pas un appel. La valeur attendue est évaluée sans effet de bord, dans un environnement qui ne contient que les constantes numériques littérales du fichier et une liste blanche de fonctions pures~; une expression qui demande les données des tests ou une autre fonction est classée «~indéterminée~» et listée, sans être exécutée, comme un appel dont les arguments ne s'apparient pas sans exécution (\code{...} transmis, argument en trop). Le script imprime des lignes \code{[INFO]}, et \code{[ECHEC]} seulement si un fichier n'est pas analysable ou si les deux décomptes des appels (arbre syntaxique et analyse du source) diffèrent («~recensement incohérent~»), ce que produit un nom écrit en chaîne en position d'appel, compté par l'arbre seul. \\
+\code{invariance\_bilan.R} & Contrôle long, actif avec l'option \code{-{}-complet} seulement (issue~149\fsp; critère C131-1 de la spécification du module \code{donnees}, version~1.7)~: le bilan de \code{controler\_base()} ne dépend pas de l'ordre des lignes. Le script installe et charge le package, enregistre chaque appel de \code{controler\_base()} de l'espace de noms du package fait par \code{tests/unitaires/donnees.R}, hors des appels sans arrêté et des copies de l'espace de noms (\code{copie\_ns()}) (arguments, et issue~: bilan ou refus), ces tests devant s'exécuter sans vérification en échec, puis rejoue chaque appel sur ses tables aux lignes inversées, puis aux lignes permutées (une permutation par table, tirée par \code{avec\_graine()} sous la graine locale 20261115 augmentée du numéro d'appel, l'état du générateur global rétabli)\fsp; l'issue rejouée doit être identique (\code{identical()}) à l'issue d'origine, un refus se comparant par sa classe, son message et ses champs\fsp; échec au premier écart de chaque passe. Vérification sur le corpus fini des appels des tests, non preuve. Une régression qui rend le bilan dépendant de l'ordre des lignes fait échouer le rejeu (témoin~: identifiants non triés)\fsp; une régression qui n'en dépend pas n'est vue que par la collecte, où les tests échouent (décision du mainteneur du 16~novembre~2026, M627). Durée de l'ordre d'un quart d'heure~: hors des trois batteries, job propre de l'intégration continue (M603). \\
 \end{longtable}
 }
 
-Ces scripts sont des \textbf{contrôles statiques}~: ils analysent le texte
+Hors du contrôle d'invariance, qui exécute le package et les tests du
+module \code{donnees}, ces scripts sont des \textbf{contrôles statiques}~: ils analysent le texte
 des fichiers, sans exécuter le package (le recensement des tolérances
 n'évalue que des expressions littérales, sans effet de bord). Ils ne prouvent pas l'absence de
 toute violation. Les faux négatifs et faux positifs relevés par l'audit de
 leur première version ont été corrigés par l'issue~27 du dépôt, avec des
 témoins négatifs versionnés dans \code{tests/unitaires/controles.R}, que la
 batterie unitaire exécute sur des copies minimales et fautives du dépôt\fsp; les limites
-connues qui demeurent sont écrites en tête du script qu'elles concernent.
+connues qui demeurent sont écrites en tête du script qu'elles concernent,
+sauf celles d'\code{invariance\_bilan.R}, écrites dans le corps du
+script, au-dessus de l'enregistreur des appels (appels hors de l'espace de
+noms du package et appels sans arrêté non collectés).
 L'en-tête de quatre scripts n'en écrit aucune
 (\code{liste\_blanche\_description.R}, \code{image\_reference.R},
-\code{commit\_reference.sh} et \code{preambule\_latex.R}), ce qui ne
+\code{commit\_reference.sh} et
+\code{preambule\_latex.R}), ce qui ne
 prouve pas qu'ils n'en ont pas. Les cas laissés hors
 de l'issue~27 faute de décision du mainteneur ont été traités par
 l'issue~62, sur ses décisions du 12~novembre~2026 (M400 à M403, M409 à

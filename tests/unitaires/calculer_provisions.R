@@ -575,6 +575,216 @@ verifier("(4.1) (e) témoins : sans exclusion, les cellules de la base construit
          egal_mixte(vapply(c(P1, P2, P3, "total"), function(po) cel_x(r_c1, po)$montant, 0),
                     c(337225.9591013698, 103936, 4275.9860504871, 445437.9451518568)))
 
+section("clé manquante ou vide dans la population de couverture exclue (#154 ; spécification donnees v1.8, § 2.2, B.4, « Sites résiduels »)")
+# Appels internes sur la vue de la base construite à A1, mutée (ctx$base, vue$exclu) : aucun site
+# n'est atteint par une base à l'arrêté A1 (sonde de #154 : la clé défectueuse refuse sa table en
+# portée table, les postes sont arrêtés avant l'appel). Chaque état est mesuré pour "" et pour le
+# témoin NA (C123-8), contre le témoin à clés renseignées (règles (i) à (iii) de #154, Q-B4 (T1)).
+v154 <- function(f, cle) {   # f : mutation, rend la vue (vue$exclu est une copie, ctx un environnement)
+  f(b2_vue(base, A1, p_c1$donnees, p_c1$conventions), cle)
+}
+ligne154 <- function(v, t, col, id) which(as.character(ns$valeurs_vue(v, t, col)) == id)
+cles154 <- list(vide = "", manquante = NA_character_)
+gce154 <- ns$garanties_couverture_exclue
+# (i) contrat exclu : CTI1 exclu pour risque_en_cours ; GSI3 rattachée au contrat de clé `cle`
+mut_ct <- function(v, cle) {
+  if (!is.null(cle)) v$ctx$base$contrats$id_contrat[ligne154(v, "contrats", "id_contrat", "CTI1")] <- cle
+  v$exclu$risque_en_cours$contrats[2L] <- TRUE
+  if (!is.null(cle)) v$ctx$base$garanties_souscrites$id_contrat[3L] <- cle
+  v
+}
+# (ii) identifiants rendus : GSI1 et GSI3 d'identifiant `cle`, GSI1 seule exclue (deux familles)
+mut_id <- function(v, cle) {
+  if (!is.null(cle)) v$ctx$base$garanties_souscrites$id_garantie_souscrite[c(2L, 3L)] <- cle
+  v$exclu$engagement$garanties_souscrites[2L] <- TRUE
+  v$exclu$risque_en_cours$garanties_souscrites[2L] <- TRUE
+  v
+}
+for (k in names(cles154)) {
+  cle <- cles154[[k]]
+  verifier_egal(paste0("#154 garanties_couverture_exclue(), contrat exclu de clé ", k, " : GSI3, de contrat de clé ", k,
+                       ", n'est pas exclue (aucun appariement) ; témoin renseigné : GSI1"),
+                list(gce154(v154(mut_ct, cle), "risque_en_cours"), gce154(v154(mut_ct, NULL), "risque_en_cours")),
+                list(character(0), "GSI1"))
+  verifier_egal(paste0("#154 garanties_couverture_exclue(), GSI1 exclue d'identifiant ", k,
+                       " : aucun identifiant NA ni \"\" rendu, aucune erreur ; témoin renseigné : GSI1"),
+                list(gce154(v154(mut_id, cle), "engagement"), gce154(v154(mut_id, cle), "risque_en_cours"),
+                     gce154(v154(mut_id, NULL), "engagement")),
+                list(character(0), character(0), "GSI1"))
+}
+# même état atteint par une base, à l'arrêté égal à l'extraction (vue totale) : GSC1 d'identifiant
+# manquant ou vide (table refusée en portée table), contrat CTC1 exclu pour risque_en_cours (D02a) ;
+# témoin renseigné : GSC1 rendue
+b154 <- base
+b154$contrats$date_fin[1L] <- D("2019-06-01")
+b154$contrats$date_saisie_fin[1L] <- D("2025-06-02")
+b154$contrats$motif_fin[1L] <- "resiliation_adherent"
+d154 <- p_c1$donnees
+d154$exclusions <- do.call(rbind, lapply("D02a", function(m) data.frame(
+  motif = m, famille = ns$FAMILLES_CALCUL, action = ifelse(ns$FAMILLES_CALCUL == "risque_en_cours", "exclure", "conserver"),
+  stringsAsFactors = FALSE)))
+AX154 <- D("2026-03-31")
+for (k in names(cles154)) {
+  b <- b154
+  b$garanties_souscrites$id_garantie_souscrite[1L] <- cles154[[k]]
+  verifier_egal(paste0("#154 base, arrêté à l'extraction : GSC1 d'identifiant ", k, ", CTC1 exclu (D02a, risque_en_cours) : ",
+                       "aucun identifiant rendu ; témoin renseigné : GSC1"),
+                list(gce154(b2_vue(b, AX154, d154, p_c1$conventions), "risque_en_cours"),
+                     gce154(b2_vue(b154, AX154, d154, p_c1$conventions), "risque_en_cours")),
+                list(character(0), "GSC1"))
+}
+# segments_vue() (exclue_eng, exclue_rec ; règle (ii)) : une garantie souscrite d'identifiant
+# manquant ou vide ne porte aucune unité contrat, exclue ou non
+unites154 <- function(v) {
+  s <- ns$segments_vue(v, list(ct = list(regle = "contrat")), "deces")
+  sort(unique(s$id_contrat[is.na(s$id_dossier)]), method = "radix")
+}
+mut_seg <- function(v, cle) {
+  if (!is.null(cle)) v$ctx$base$garanties_souscrites$id_garantie_souscrite[2L] <- cle
+  v
+}
+for (k in names(cles154)) {
+  cle <- cles154[[k]]
+  verifier_egal(paste0("#154 segments_vue() : GSI1 d'identifiant ", k, " : CTI1 n'est pas une unité ; GSI1 et GSI3 d'identifiant ", k,
+                       ", GSI1 exclue : ni CTI1 ni CTI3 ; témoins renseignés : CTC1, CTI1, CTI3 et CTC1, CTI3"),
+                list(unites154(v154(mut_seg, cle)), unites154(v154(mut_id, cle)),
+                     unites154(v154(mut_seg, NULL)), unites154(v154(mut_id, NULL))),
+                list(c("CTC1", "CTI3"), "CTC1", c("CTC1", "CTI1", "CTI3"), c("CTC1", "CTI3")))
+}
+# engagement : contrat de la garantie souscrite des dossiers (couverture_exclue) et ligne du
+# dossier de l'état (i_dos)
+cat154 <- catalogue_garanties()
+p1_154 <- function(v) {
+  x <- ns$calculer_engagement(v, p_c1, tb, cat154, "deces", "sinistres_declares_non_regles")$cellules
+  x <- x[x$segment == "ensemble", ]
+  list(montant = x$montant, nombre_dossiers = x$nombre_dossiers, motif_arret = x$motif_arret)
+}
+mut_eng_ct <- function(v, cle) {
+  if (!is.null(cle)) {
+    v$ctx$base$contrats$id_contrat[1L] <- cle
+    v$ctx$base$garanties_souscrites$id_contrat[1L] <- cle
+  }
+  v$exclu$engagement$contrats[1L] <- TRUE
+  v
+}
+# DOR1 et DOR3 de clé `cle`, DOR3 seul exclu pour engagement
+mut_eng_dos <- function(v, cle) {
+  if (!is.null(cle)) v$ctx$base$dossiers$id_dossier[c(1L, 2L)] <- cle
+  v$exclu$engagement$dossiers[2L] <- TRUE
+  v
+}
+for (k in names(cles154)) {
+  cle <- cles154[[k]]
+  verifier_egal(paste0("#154 calculer_engagement() : CTC1 exclu pour engagement, CTC1 et GSC1.id_contrat de clé ", k,
+                       " : GSC1 n'est rattachée à aucun contrat, ni exclue par lui (ses dossiers restent dans la population, ",
+                       "affiliation non déterminée) ; témoin renseigné : P1 = 0, 0 dossier"),
+                list(p1_154(v154(mut_eng_ct, cle)), p1_154(v154(mut_eng_ct, NULL))),
+                list(list(montant = NA_real_, nombre_dossiers = NA_integer_, motif_arret = "affiliation_non_determinee"),
+                     list(montant = 0, nombre_dossiers = 0L, motif_arret = NA_character_)))
+  verifier(paste0("#154 calculer_engagement() : DOR1 et DOR3 d'identifiant ", k, ", DOR3 seul exclu (appel interne, état ",
+                  "inatteignable par une base) : erreur interne, jamais un retrait silencieux de la population ; ",
+                  "témoin renseigné : aucune erreur"),
+           local({
+             m <- tryCatch({ p1_154(v154(mut_eng_dos, cle)); "aucune erreur" }, error = function(e) conditionMessage(e))
+             t <- tryCatch({ p1_154(v154(mut_eng_dos, NULL)); "aucune erreur" }, error = function(e) conditionMessage(e))
+             startsWith(m, "erreur interne de provie : calculer_engagement() : dossier") && identical(t, "aucune erreur")
+           }))
+  # sonde par une base : un identifiant de dossier manquant ou vide refuse dossiers en portée
+  # table ; P1 et P2 sont arrêtés avant etats_a_date() (M239), sans erreur
+  b_dos <- base
+  b_dos$dossiers$id_dossier[1L] <- cle
+  p_dos <- p_c1   # déclarations exigées par le bilan de cette base (D07, limite d'âge, D04a, D04b)
+  p_dos$revalorisation$capital_deces$taux_par_annee <- c(`2024` = 0.03, `2025` = 0.024, `2026` = 0.024)
+  p_dos$donnees$seuils$d07b_mois <- 6L
+  p_dos$donnees$conventions <- NULL
+  p_dos$conventions$limite_age <- list(regle = "atteinte", age = "revolu")
+  p_dos$donnees$exclusions <- do.call(rbind, lapply(c("D04a", "D04b"), function(m) data.frame(
+    motif = m, famille = ns$FAMILLES_CALCUL, action = "conserver", stringsAsFactors = FALSE)))
+  verifier_egal(paste0("#154 calculer_provisions(), base : DOR1 d'identifiant ", k, " : P1 et P2 arrêtés, aucune erreur"),
+                local({
+                  r <- tryCatch(calculer_provisions(b_dos, p_dos, tid), error = function(e) e)
+                  if (inherits(r, "error")) conditionMessage(r) else {
+                    x <- r$provisions[r$provisions$segment == "ensemble" & r$provisions$poste %in% c(P1, P2), ]
+                    unique(x$statut_calcul)
+                  }
+                }),
+                "arrete")
+}
+# P3 individuel : garantie souscrite → contrat, contrat → assuré, assuré → sinistre
+ind154 <- function(v) {
+  x <- ns$provisions_individuelles(v, p_c1, tb, FALSE)
+  list(id_contrat = x$contrats$id_contrat, arret = x$arret, identifiant = x$identifiant)
+}
+mut_ind_gs <- function(v, cle) {   # CTI1 et GSI3.id_contrat de clé `cle`, aucune exclusion
+  if (!is.null(cle)) {
+    v$ctx$base$contrats$id_contrat[2L] <- cle
+    v$ctx$base$garanties_souscrites$id_contrat[3L] <- cle
+  }
+  v
+}
+mut_ind_as <- function(v, cle) {   # CTI1.id_assure et la ligne ASI3 de assures de clé `cle`
+  if (!is.null(cle)) {
+    v$ctx$base$contrats$id_assure[2L] <- cle
+    v$ctx$base$assures$id_assure[ligne154(v, "assures", "id_assure", "ASI3")] <- cle
+  }
+  v
+}
+mut_ind_si <- function(v, cle) {   # CTI1.id_assure et SIR1.id_assure (décès survenu avant A1) de clé `cle`
+  v$ctx$base$contrats$id_assure[2L] <- if (is.null(cle)) "ASI1" else cle
+  v$ctx$base$sinistres$id_assure[1L] <- if (is.null(cle)) "ASI1" else cle
+  v
+}
+for (k in names(cles154)) {
+  cle <- cles154[[k]]
+  verifier_egal(paste0("#154 provisions_individuelles() : GSI1 d'identifiant ", k, " hors de la population (CTI3 seul) ; ",
+                       "GSI1 et GSI3 d'identifiant ", k, ", GSI1 exclue : aucun contrat ; témoin renseigné : CTI1, CTI3"),
+                list(ind154(v154(mut_seg, cle)), ind154(v154(mut_id, cle)), ind154(v154(mut_seg, NULL))),
+                list(list(id_contrat = "CTI3", arret = NA_character_, identifiant = NA_character_),
+                     list(id_contrat = NULL, arret = NA_character_, identifiant = NA_character_),
+                     list(id_contrat = c("CTI1", "CTI3"), arret = NA_character_, identifiant = NA_character_)))
+  verifier_egal(paste0("#154 provisions_individuelles() : CTI1 et GSI3.id_contrat de clé ", k, " : aucune garantie appariée à un ",
+                       "contrat (aucun contrat) ; témoin renseigné : CTI1, CTI3"),
+                list(ind154(v154(mut_ind_gs, cle)), ind154(v154(mut_ind_gs, NULL))),
+                list(list(id_contrat = NULL, arret = NA_character_, identifiant = NA_character_),
+                     list(id_contrat = c("CTI1", "CTI3"), arret = NA_character_, identifiant = NA_character_)))
+  verifier_egal(paste0("#154 provisions_individuelles() : CTI1.id_assure et ASI3 de clé ", k, " : assuré de CTI1 non apparié, ",
+                       "naissance inconnue, poste arrêté (parametre_non_determine, CTI1)"),
+                ind154(v154(mut_ind_as, cle)),
+                list(id_contrat = NULL, arret = "parametre_non_determine", identifiant = "CTI1"))
+  verifier_egal(paste0("#154 provisions_individuelles() : CTI1.id_assure et SIR1.id_assure de clé ", k, " : le décès n'est pas ",
+                       "apparié à l'assuré (assuré non apparié, poste arrêté sur CTI1) ; témoin renseigné ASI1 : CTI1 sort, CTI3 seul"),
+                list(ind154(v154(mut_ind_si, cle)), ind154(v154(mut_ind_si, NULL))),
+                list(list(id_contrat = NULL, arret = "parametre_non_determine", identifiant = "CTI1"),
+                     list(id_contrat = "CTI3", arret = NA_character_, identifiant = NA_character_)))
+}
+# P3 collectif : contrat ↔ garantie souscrite, cotisation → garantie souscrite
+col154 <- function(v) {
+  x <- ns$provisions_collectives(v, p_c1)
+  list(id_contrat = x$id_contrat, arret = attr(x, "arret"))
+}
+mut_col_ct <- function(v, cle) {   # CTC1 et GSC1.id_contrat de clé `cle`
+  if (!is.null(cle)) {
+    v$ctx$base$contrats$id_contrat[1L] <- cle
+    v$ctx$base$garanties_souscrites$id_contrat[1L] <- cle
+  }
+  v
+}
+mut_col_gs <- function(v, cle) {   # GSC1 et ses cotisations COC1, COC2 de clé `cle`
+  if (!is.null(cle)) {
+    v$ctx$base$garanties_souscrites$id_garantie_souscrite[1L] <- cle
+    v$ctx$base$cotisations$id_garantie_souscrite[] <- cle
+  }
+  v
+}
+for (k in names(cles154)) {
+  cle <- cles154[[k]]
+  verifier_egal(paste0("#154 provisions_collectives() : CTC1 et GSC1.id_contrat de clé ", k, " : aucun contrat du champ ; ",
+                       "GSC1 et ses cotisations de clé ", k, " : aucun contrat du champ ; témoin renseigné : CTC1"),
+                list(col154(v154(mut_col_ct, cle)), col154(v154(mut_col_gs, cle)), col154(v154(mut_col_ct, NULL))),
+                list(list(id_contrat = character(0), arret = NA_character_), list(id_contrat = character(0), arret = NA_character_),
+                     list(id_contrat = "CTC1", arret = NA_character_)))
+}
+
 section("période couverte manquante d'une cotisation de P3 (critère (4.5), § 5.5, § 5.6, § 6.2, erratum v1.0.15)")
 # Base construite, plan recommandees à A = 2025-12-31 ; D03f déclaré pour risque_en_cours (les
 # trois autres familles en conserver), ou en hypothèse H (deux référentiels, poste tous) ; sans
