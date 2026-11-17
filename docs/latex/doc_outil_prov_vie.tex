@@ -2035,7 +2035,8 @@ règle~P.
   assuré des sinistres d'arrêt de travail, sinistre des sorties) et, à la
   source du contrat en cause, le contrat de la garantie de chaque dossier,
   lu par \code{.verdict\_d11()}, où une clé vide se lit comme une clé
-  manquante dès sa lecture (issue~152\fsp; point~D11 du paragraphe «~Contrôles écrits à la
+  manquante dès sa lecture, et où ce contrat, manquant ou vide, ne
+  s'apparie à aucune couverture (issue~152, puis issue~157\fsp; point~D11 du paragraphe «~Contrôles écrits à la
   fermeture partielle de l'issue~34~» ci-dessous). La règle vaut aussi
   pour les clés composites, qui ne sont plus mises bout à bout en texte
   (issue~153\fsp; décision du mainteneur du 15~novembre~2026, M613)~: la
@@ -3359,14 +3360,25 @@ simulés est renvoyée à l'issue~117.
   16~novembre~2026\fsp; issue~152\fsp; point «~Clé vide~» ci-dessus). Le cas
   est latent~: une telle clé refuse sa table en portée table, ce qui
   bloque D11\fsp; la batterie unitaire le vérifie par des appels internes,
-  où une clé vide et une clé manquante donnent le même verdict. Limite
-  renvoyée à l'issue~157~: un dossier dont la garantie n'a pas de contrat
-  (manquant ou vide) est tenu pour couvert par l'atome «~le contrat ne
-  couvre pas la survenance~», alors qu'un assuré manquant conduit à
-  «~aucune couverture~»\fsp; le mainteneur a retenu le 16~novembre~2026
-  (M628) la lecture selon laquelle ce contrat absent ne s'apparie à
-  aucune couverture, ce qui ferait détecter D11, à mettre en œuvre dans
-  une branche suivante. Limite renvoyée à l'issue~128~: une rechute
+  où une clé vide et une clé manquante donnent le même verdict. Contrat
+  manquant ou vide (issue~157\fsp; lecture~(a) retenue par le mainteneur
+  le 16~novembre~2026, M628\fsp; spécification, §~2.2, B.4, et §~8.7)~:
+  le contrat de la garantie d'un dossier, manquant ou vide, ne s'apparie à
+  aucune couverture, comme un assuré manquant conduit à «~aucune
+  couverture~»~; l'atome «~le contrat ne couvre pas la survenance~» est
+  vrai pour ce dossier, et le sinistre est détecté, sauf si le sous-cas du
+  maintien s'ouvre par un autre contrat en cause, renseigné. Un contrat
+  manquant n'ouvre jamais ce sous-cas~: il ne s'apparie à aucune
+  couverture de l'assuré. Motif~: c'est la règle de la clé
+  manquante, appliquée à l'atome. Alternatives écartées~: (b)~lire le
+  sinistre de ce dossier par la branche «~sans dossier~» (couverture de
+  l'assuré par tout contrat), qui ferait sortir le dossier du premier
+  cas\fsp; (c)~le comportement antérieur à l'issue~157, où l'absence de
+  contrat valait couverture, et qui supposait un lien que la base ne
+  contient pas. Le cas est latent, comme ci-dessus\fsp; la batterie
+  unitaire le vérifie par des appels internes, contrat manquant puis
+  vide, au même verdict, avec un témoin à clés renseignées non
+  détecté. Limite renvoyée à l'issue~128~: une rechute
   postérieure à la sortie et antérieure à la fin de couverture n'est pas
   lue. Traitement signalement et exclusion par famille (deux constats de
   même clé), détection exacte, constat sur
