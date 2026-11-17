@@ -5218,30 +5218,47 @@ for (vide in list(NA_character_, "")) {
                 c(detecte = TRUE, non_lisible = FALSE))
 }
 # id_contrat vide ou manquant (M396, « Clé vide » : "" se lit comme NA) : même verdict, par
-# l'identité des deux sorties ; valeur commune (SI1 non détecté, aucun non_lisible), figée : le
-# traitement de NA à l'atome « le contrat ne couvre pas la survenance » (NA : faux) est en attente de
-# la décision du mainteneur (#157), un changement de cette valeur y est lié.
+# l'identité des deux sorties ; valeur commune (SI1 détecté, aucun non_lisible) : le contrat
+# manquant ne s'apparie à aucune couverture, l'atome « le contrat ne couvre pas la survenance » vaut
+# vrai (#157, M628 ; avant #157 : faux, SI1 non détecté).
 cle_d11_vide <- d11_ctx34(maint34(), function(ctx) { ctx$base$affiliations$id_contrat <- ""; ctx$base$garanties_souscrites$id_contrat <- "" })
 cle_d11_na <- d11_ctx34(maint34(), function(ctx) { ctx$base$affiliations$id_contrat <- NA_character_; ctx$base$garanties_souscrites$id_contrat <- NA_character_ })
 verifier("#152, id_contrat \"\" à AF1 et aux garanties GS1 et GS3 (contrat des dossiers de SI1) : même sortie que id_contrat manquant, identical() (avant #152 : \"\" donnait SI1 détecté, NA non détecté)",
          identical(cle_d11_vide, cle_d11_na))
-verifier_egal("#152, id_contrat vide ou manquant : valeur commune figée, SI1 non détecté, aucun non_lisible (traitement de NA à l'atome nc : #157)",
+verifier_egal("#157, id_contrat vide ou manquant : valeur commune, SI1 détecté (aucun appariement), aucun non_lisible (avant #157 : non détecté)",
               list(cle_d11_vide, cle_d11_na),
-              rep(list(c(detecte = FALSE, non_lisible = FALSE)), 2L))
+              rep(list(c(detecte = TRUE, non_lisible = FALSE)), 2L))
 # Clé « NA » littéral et clé manquante (revue finale de #149) : l'appariement (sinistre, contrat) de
 # .verdict_d11() ne passe plus par paste() ; sur base_ref (SI1 décès couvert par AF1, contrat des
 # dossiers de SI1 à GS1 et GS3), un contrat « NA » littéral aux garanties ne s'apparie pas à la
 # couverture de contrat manquant (avant : « 1\rNA » des deux côtés, SI1 lu couvert, non détecté) ;
-# témoins : « NA » littéral des deux côtés (couvert), manquant des deux côtés (atome nc FALSE, figé :
-# #157), contrat CT1 des deux côtés (couvert).
+# témoins : « NA » littéral des deux côtés (couvert), manquant des deux côtés (atome nc vrai, SI1
+# détecté : #157 ; avant #157, non détecté), contrat CT1 des deux côtés (couvert).
 cas_d11_na <- function(aff, gs) d11_ctx34(base_ref, function(ctx) {
   ctx$base$affiliations$id_contrat <- aff; ctx$base$garanties_souscrites$id_contrat <- gs
 })
-verifier_egal("#152, id_contrat \"NA\" littéral aux garanties, manquant à AF1 : SI1 détecté (aucun appariement) ; \"NA\" des deux côtés, manquant des deux côtés, CT1 des deux côtés : SI1 non détecté",
+verifier_egal("#152, id_contrat \"NA\" littéral aux garanties, manquant à AF1 : SI1 détecté (aucun appariement) ; \"NA\" des deux côtés, CT1 des deux côtés : SI1 non détecté ; manquant des deux côtés : SI1 détecté (avant #157 : non détecté)",
               list(cas_d11_na(NA_character_, "NA"), cas_d11_na("NA", "NA"), cas_d11_na(NA_character_, NA_character_),
                    cas_d11_na("CT1", "CT1")),
               list(c(detecte = TRUE, non_lisible = FALSE), c(detecte = FALSE, non_lisible = FALSE),
-                   c(detecte = FALSE, non_lisible = FALSE), c(detecte = FALSE, non_lisible = FALSE)))
+                   c(detecte = TRUE, non_lisible = FALSE), c(detecte = FALSE, non_lisible = FALSE)))
+# #157, contrat du dossier manquant ou vide à une seule garantie (GS3, garantie du dossier de SI1) :
+# aucun appariement, SI1 détecté, NA et "" au même verdict (identical()) ; sur maint34(), la
+# couverture AF1 est celle de CT1 et le sous-cas du maintien reste lu par les contrats renseignés
+# (non détecté, non_lisible : inchangé, un contrat manquant n'ouvre pas le sous-cas).
+gs3_d11 <- function(b, val) d11_ctx34(b, function(ctx) {
+  ctx$base$garanties_souscrites$id_contrat[ctx$base$garanties_souscrites$id_garantie_souscrite %in% "GS3"] <- val
+})
+gs3_na <- gs3_d11(base_ref, NA_character_)
+gs3_vide <- gs3_d11(base_ref, "")
+verifier_egal("#157, base_ref, id_contrat de GS3 seule manquante ou vide : SI1 détecté, aucun non_lisible (avant #157 : non détecté)",
+              list(gs3_na, gs3_vide),
+              rep(list(c(detecte = TRUE, non_lisible = FALSE)), 2L))
+verifier("#157, base_ref, id_contrat de GS3 seule : manquant et \"\" donnent la même sortie, identical()",
+         identical(gs3_na, gs3_vide))
+verifier_egal("#157, maint34(), id_contrat de GS3 seule manquante (AF1 à CT1) : SI1 non détecté, non_lisible, inchangé (le sous-cas est lu par le contrat CT1 de GS1)",
+              list(gs3_d11(maint34(), NA_character_)),
+              list(c(detecte = FALSE, non_lisible = TRUE)))
 for (vide in list(NA_character_, "")) {
   etiq <- if (is.na(vide)) "manquant" else "vide"
   verifier_egal(paste0("#152, id_sinistre ", etiq, " à SI2 et à la sortie EV3 (effet 2024-09-01, avant la fin de AF1) : la sortie ne clôt pas SI2, SI1 non détecté, non_lisible (avant #152 : NA ou \"\" apparié à lui-même, SI2 clos, SI1 détecté)"),

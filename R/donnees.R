@@ -5256,7 +5256,8 @@ parties_ligne <- function() lapply(.PARTIES_LIGNE, function(p) list(table = p$ta
 # date_survenance, traitement S + X (deux constats de même clé, comme D10 (b)), détection exacte :
 # sinistre dont la survenance n'est couverte par aucun contrat (couverture d'une date par un
 # contrat, .couverture3()) : avec des dossiers dans la vue, pour au moins un dossier, le contrat
-# de la garantie du dossier ne couvre pas la survenance (contrat inconnu : non détecté) ; sans
+# de la garantie du dossier ne couvre pas la survenance (contrat manquant ou vide : aucun
+# appariement, détecté, #157, M628 ; il n'ouvre pas le sous-cas du maintien) ; sans
 # dossier dans la vue, aucun contrat ne la couvre. Sous-cas « maintien de la garantie décès »
 # (`non_lisible`, précédent D03h, M168) : sinistre deces non couvert dont l'assuré a un sinistre
 # arret_travail retenu, survenu pendant une couverture d'un contrat en cause (contrat d'un dossier
@@ -5324,7 +5325,8 @@ parties_ligne <- function() lapply(.PARTIES_LIGNE, function(p) list(table = p$ta
   kc <- k[seq_along(cv$i)]
   # atome « le contrat ne couvre pas la survenance », par paire (sinistre, dossier)
   kd <- k[length(cv$i) + seq_along(p$i)]
-  nc <- .k3(ifelse(is.na(contrat_d), FALSE, ifelse(kd %in% kc[cv$certain], FALSE, ifelse(kd %in% kc[!cv$certain], NA, TRUE))))
+  # contrat du dossier manquant : aucun appariement, la survenance n'est couverte par aucun contrat (#157)
+  nc <- .k3(ifelse(is.na(contrat_d), TRUE, ifelse(kd %in% kc[cv$certain], FALSE, ifelse(kd %in% kc[!cv$certain], NA, TRUE))))
   for (m in which(is.na(nc$v))) {
     q <- which(kc == kd[m] & !cv$certain)
     for (z in q) nc <- .k3_index(nc, cv$tc[z], m, cv$ligne[z], nrow(p))
