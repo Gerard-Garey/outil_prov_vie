@@ -1,13 +1,13 @@
 provie-liste 1
 version_references	integer	1
-commit	character	2e0df99697c483b91345a55903205980600db599
-run	character	43510927354
+commit	character	8cc2c53f61db075429c8fac1cbdf4b02252fd8b6
+run	character	44328788928
 tentative	character	1
 image	character	rocker/r-ver:4.3.3@sha256:732d15020af326da9e919c07f70ca32bf5d3e409220af32e0a4b6d0a89437309
 plateforme/r	character	R version 4.3.3 (2024-02-29)
 plateforme/plateforme	character	x86_64-pc-linux-gnu
 plateforme/systeme	character	Linux
-plateforme/version_systeme	character	7.0.0-1017-azure
+plateforme/version_systeme	character	7.0.0-1014-aws
 plateforme/machine	character	x86_64
 plateforme/boutisme	character	little
 plateforme/blas	character	/usr/lib/x86_64-linux-gnu/openblas-pthread/libblas.so.3
@@ -15,4 +15,4 @@ plateforme/lapack	character	/usr/lib/x86_64-linux-gnu/openblas-pthread/libopenbl
 plateforme/lapack_version	character	3.10.0
 plateforme/pcre	character	10.39 2021-10-29
 plateforme/icu	character	70.1
-couples	character	v1-modeste-01/recommandees/2025-12-31	v1-modeste-01/recommandees/2024-12-31	v1-modeste-02/recommandees/2025-12-31	v1-modeste-02/recommandees/2024-12-31	construite-deces-01/recommandees/2025-12-31	construite-deces-01/recommandees/2025-01-01	construite-deces-01/alternatives/2025-12-31	construite-deces-01/alternatives/2025-01-01	v1-modeste-03/recommandees/2025-12-31	v1-modeste-03/recommandees/2024-12-31
+couples	character	v1-modeste-04/recommandees/2025-12-31	v1-modeste-04/recommandees/2024-12-31	v1-modeste-05/recommandees/2025-12-31	v1-modeste-05/recommandees/2024-12-31	construite-deces-02/recommandees/2025-12-31	construite-deces-02/recommandees/2025-01-01	construite-deces-02/alternatives/2025-12-31	construite-deces-02/alternatives/2025-01-01	v1-modeste-06/recommandees/2025-12-31	v1-modeste-06/recommandees/2024-12-31
