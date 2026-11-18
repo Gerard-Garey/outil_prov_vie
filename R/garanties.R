@@ -224,6 +224,14 @@ methodes_poste <- function(x, poste, colonne) {
 # B2, § 6.2 : ils n'arrêtent rien) ; sous-cas de D10 traités R (dictionnaire, § 9).
 .MOTIFS_ND_SANS_ARRET <- c("D02b", "D03g", "parente_non_determinee")
 .SOUS_CAS_D10_R <- c("D10a", "D10h")
+# Motifs traités X qui arrêtent les postes des familles qui ne les excluent pas (bilan$exclusions :
+# action autre que `exclure`, ou aucune déclaration, M703 ; sous `exclure`, la ligne sort de la
+# famille) : D03i, date d'effet de
+# visibilité manquante. (a) Avant l'extraction, ligne de vue$visibilite_non_determinee de ce
+# motif : règle 3 du § 6 (spécification `donnees`, § 6, annotée v1.9 ; § 9.6 ; S-3 (a), M686) ;
+# (b) à tout arrêté, constat du motif sur (T, c) : postes qui lisent (T, c) (M704 : la date
+# manquante, inconnue, n'est jamais lue par une famille).
+.MOTIFS_ND_ARRET_X <- "D03i"
 
 # Postes arrêtés par le bilan (M239 ; ADR 0010, point 11 (b), annoté ; spécification de B2,
 # § 6.2). `catalogue` : catalogue_garanties() (lectures.csv : colonnes lues par poste) ;
@@ -244,6 +252,10 @@ methodes_poste <- function(x, poste, colonne) {
 #       qui contient `colonne` (§ 4.3 : une partie inconnue n'arrête que ses lecteurs ; la
 #       ligne et ses descendantes restent visibles). La ligne de refus_tables qui porte
 #       postes_arretes est celle de même table, de colonne celle de l'origine et de même motif.
+#       Même règle pour une ligne de motif .MOTIFS_ND_ARRET_X (D03i), pour les seuls postes
+#       des familles qui n'excluent pas le motif (bilan$exclusions, action autre que `exclure`) ;
+#   (iv) constat de motif .MOTIFS_ND_ARRET_X sur (T, c) (bilan$controles), à tout arrêté :
+#       postes des familles qui n'excluent pas le motif et lisent (T, c) (M704, M703).
 # Rend list(postes : data.frame (garantie, poste, motif_arret), une ligne par poste du plan,
 # motif_arret = motif de la première ligne qui l'arrête dans l'ordre du bilan (refus_tables,
 # puis visibilite_non_determinee), NA si le poste n'est pas arrêté ; refus_tables :
@@ -283,6 +295,15 @@ postes_a_arreter <- function(catalogue, bilan, postes, parties) {
   }
   rt <- bilan$refus_tables
   nd <- bilan$vue$visibilite_non_determinee
+  # famille de chaque poste du plan ; postes (parmi `touches`) des familles qui n'excluent pas un
+  # motif traité X (D03i ; sans déclaration, la ligne reste dans la famille, M703)
+  famille_poste <- catalogue$postes$famille[match(cles, paste(catalogue$postes$code_garantie, catalogue$postes$poste,
+                                                              sep = "/"))]
+  ex <- bilan$exclusions
+  hors_exclusion <- function(touches, m) {
+    f <- if (is.null(ex)) character(0) else ex$famille[ex$motif == m & ex$action == "exclure"]
+    touches[!(famille_poste[match(touches, cles)] %in% f)]
+  }
   motif <- stats::setNames(rep(NA_character_, length(cles)), cles)
   porte <- vector("list", nrow(rt))
   arreter <- function(touches, m, ligne_rt) {
@@ -297,12 +318,18 @@ postes_a_arreter <- function(catalogue, bilan, postes, parties) {
     arreter(touches, rt$motif[i], i)
   }
   for (i in seq_len(nrow(nd))) {
-    if (!motif_r(nd$motif[i])) next
+    arret_x <- nd$motif[i] %in% .MOTIFS_ND_ARRET_X
+    if (!motif_r(nd$motif[i]) && !arret_x) next
     t <- nd$table[i]
     touches <- if (is.na(nd$colonne[i])) lit_table(descendance(t)) else lit_colonne(t, nd$colonne[i])
+    if (arret_x) touches <- hors_exclusion(touches, nd$motif[i])
     colonne_origine <- if (is.na(nd$origine[i])) NA_character_ else sub("^[^.]*\\.", "", nd$origine[i])
     j <- which(rt$table == t & rt$colonne %in% colonne_origine & rt$motif == nd$motif[i])[1L]
     arreter(touches, nd$motif[i], j)
+  }
+  co <- bilan$controles
+  for (i in which(co$code %in% .MOTIFS_ND_ARRET_X)) {
+    arreter(hors_exclusion(lit_colonne(co$table[i], co$colonne[i]), co$code[i]), co$code[i], NA_integer_)
   }
   rt$postes_arretes <- vapply(porte, function(x) {
     if (length(x) == 0L) NA_character_ else paste(sort(unique(x), method = "radix"), collapse = ";")

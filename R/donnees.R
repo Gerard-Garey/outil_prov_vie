@@ -128,15 +128,12 @@ CAUSE_NON_LISIBLE <- "non_lisible"
   data.frame(code = code, table = table, colonne = colonne, stringsAsFactors = FALSE)
 }
 # États transitoires du dictionnaire 1.6 (spécification `donnees` v1.9, § 9.8, liste fermée ;
-# M685), chacun retiré par le commit qui l'écrit : T2, D03i (60b) ; T3, D03g sur dossiers,
-# catastrophes et victimes (60b, avec la garde .GARDE_T3) ; T4, parente_posterieure (#83) ; T5,
-# D02b sur prestations (#83) ; T9, D11b et D11c (#81).
+# M685), chacun retiré par le commit qui l'écrit : T4, parente_posterieure (#83) ; T5, D02b sur
+# prestations (#83) ; T9, D11b et D11c (#81). T2 (D03i) et T3 (D03g sur dossiers, catastrophes
+# et victimes, avec sa garde) sont levés au commit 60b de #60.
 CONTROLES_NON_IMPLEMENTES <- rbind(
   .ni("D03d", "assures", "situation_familiale"),
   .ni("D09", c("parametres", "affiliations", "evenements", "prestations", "cotisations")),
-  .ni("D03i", c("contrats", "garanties_souscrites", "prestations", "cotisations"),
-      c("date_effet", "date_effet", "date_reglement", "date_mouvement")),
-  .ni("D03g", c("dossiers", "catastrophes", "victimes"), c("date_ouverture", "date_saisie", "date_saisie")),
   .ni("parente_posterieure", c("affiliations", "garanties_souscrites", "cotisations")),
   .ni("D02b", "prestations"),
   .ni("D11b", "dossiers", "id_garantie_souscrite"),
@@ -202,14 +199,25 @@ CONVENTIONS_LIMITE_AGE <- c("revolu", "millesime")
 # Motifs dont le refus porte sur une clé étrangère (lien) : cette colonne ne bloque pas
 # l'enjeu de son propre écart (.causes_enjeu(), réserve Q4).
 .MOTIFS_LIEN_ECART <- c("D04a", "D04b", "D10a", "D10h")
-# Tables de D03g (date_saisie, ou date_saisie_fin d'un contrat ou d'une affiliation) : noms
-# admis de seuils$d03g_delai_jours.
-.TABLES_D03G <- c("contrats", "affiliations", "famille", "sinistres", "beneficiaires", "rentes", "evenements",
-                  "prestations", "designations", "ayants_droit_sante")
+# Tables de D03g (date de saisie de la ligne, ou date_saisie_fin d'un contrat ou d'une
+# affiliation) : noms admis de seuils$d03g_delai_jours. `.COLONNES_D03G` : colonne de la date de
+# saisie de la ligne entière, par table ; dossiers, catastrophes et victimes depuis le
+# dictionnaire 1.6 (P18 (a), M506 ; spécification `donnees` v1.9, § 9.6), dossiers par la date
+# qui vaut date de saisie (`date_ouverture`).
+.COLONNES_D03G <- c(affiliations = "date_saisie", famille = "date_saisie", sinistres = "date_saisie",
+                    dossiers = "date_ouverture", beneficiaires = "date_saisie", rentes = "date_saisie",
+                    evenements = "date_saisie", prestations = "date_saisie", catastrophes = "date_saisie",
+                    victimes = "date_saisie", designations = "date_saisie", ayants_droit_sante = "date_saisie")
+.TABLES_D03G <- c("contrats", names(.COLONNES_D03G))
+# Colonnes de D03i, « date d'effet de visibilité manquante » (dictionnaire 1.6, P18 (b), M506 ;
+# spécification `donnees` v1.9, § 9.6) : dates de visibilité (.DATES_VISIBILITE) qui sont aussi
+# des valeurs lues par les postes ; X par famille à tout arrêté.
+.COLONNES_D03I <- c(contrats = "date_effet", garanties_souscrites = "date_effet", prestations = "date_reglement",
+                    cotisations = "date_mouvement")
 
 # Codes de défaut dont l'objet est un manquant (dictionnaire, § 9) : un manquant dans une
 # colonne qui porte l'un d'eux relève de ce défaut, non de `manquant_obligatoire`.
-.DEFAUTS_MANQUANT <- c("D03a", "D03b", "D03c", "D03e", "D03f", "D03g", "D03h", "D04a")
+.DEFAUTS_MANQUANT <- c("D03a", "D03b", "D03c", "D03e", "D03f", "D03g", "D03h", "D03i", "D04a")
 
 # Écart admis entre la somme des parts des bénéficiaires d'un dossier et 1 (somme_parts) :
 # erreur d'arrondi d'une somme de fractions en double précision (1/3 + 1/3 + 1/3), non une
@@ -1122,6 +1130,35 @@ lire_declarations <- function(declarations, dico) {
   k$traitement == "R" && !(k$code %in% .CODES_FORME) && .portee_effective(dico, k$code, k$table, k$colonne) == "colonne"
 }
 
+# Valeur inconnue de D03i (M701 ; spécification `donnees` v1.9, § 9.6) : pour toute règle autre
+# que la détection de D03i, une cellule manquante d'une colonne de D03i (.COLONNES_D03I) est une
+# valeur inconnue, par le mécanisme d'une valeur refusée (.refus_valeur_de(), .inconnu(),
+# .cause() : règle B ou P partielle, règle V qui la lit comme valeur bloquée, M169 ; à un arrêté
+# antérieur à l'extraction, ligne de visibilité non déterminée sous D03i, d'origine
+# « table.colonne », .refus_vue()), cause D03i au rang 3, sans ligne de refus_tables (le constat
+# D03i est traité X, non R). Rangée dans `refus_valeur` au début de la règle B (.regle_domaine())
+# et à chaque reconstruction après la règle B (.refus_regle_b()), avant les refus des constats ;
+# une colonne illisible par sa forme n'en reçoit pas (le défaut de forme l'emporte).
+# `.inconnues_d03i()` : liste (table, colonne, lignes) des cellules manquantes.
+.inconnues_d03i <- function(ctx) {
+  res <- list()
+  for (t in intersect(names(.COLONNES_D03I), names(ctx$base))) {
+    c1 <- .COLONNES_D03I[[t]]
+    if (!(c1 %in% names(ctx$base[[t]])) || !is.null(ctx$inutilisable[[t]][[c1]])) next
+    l <- which(is.na(ctx$base[[t]][[c1]]))
+    if (length(l) > 0L) res[[length(res) + 1L]] <- list(table = t, colonne = c1, lignes = l)
+  }
+  res
+}
+.ranger_inconnues_d03i <- function(valeurs, inconnues) {
+  for (x in inconnues) {
+    v1 <- valeurs[[x$table]]
+    v1[[x$colonne]] <- c(list(list(code = "D03i", lignes = x$lignes)), v1[[x$colonne]])
+    valeurs[[x$table]] <- v1
+  }
+  valeurs
+}
+
 .ajouter_non_execute <- function(ctx, code, table, colonne, cause, lu = NA_character_) {
   ctx$non_executes[[length(ctx$non_executes) + 1L]] <- list(code = code, table = table,
                                                             colonne = colonne, cause = cause, lu = lu)
@@ -1914,6 +1951,8 @@ lire_declarations <- function(declarations, dico) {
 # chaque passe, que les colonnes contrôlées par une règle de la passe (`ctx$passe_colonne`,
 # lu par .regles_generiques() ; NULL hors des passes).
 .regle_domaine <- function(ctx) {
+  # valeurs inconnues de D03i (M701), lues par les règles B à trois valeurs dès la strate 0
+  ctx$refus_valeur <- .ranger_inconnues_d03i(ctx$refus_valeur, .inconnues_d03i(ctx))
   registre <- .regles_b(ctx$dico)
   portee <- .portees_registre(ctx$dico, registre)
   strates <- .strates_regle_b(.lectures_regle_b(ctx$dico, registre, portee)$colonne)
@@ -1942,15 +1981,8 @@ lire_declarations <- function(declarations, dico) {
 # une absence qui est une valeur (colonne C ou F, ou O à défaut de manquant) ne l'est pas.
 # `.manquant_refuse()` : les valeurs manquantes d'une colonne dont l'absence est refusée (NA, pas
 # NaN : un NaN est hors domaine, règle hors_domaine). Lues par manquant_obligatoire et D01a.
-# Garde transitoire T3 (spécification `donnees` v1.9, § 9.8 ; S-4 (a), M687), levée à 60b : D03g
-# n'est pas encore écrit sur ces colonnes (CONTROLES_NON_IMPLEMENTES) ; leur manquant reste
-# refusé manquant_obligatoire, comme sous le dictionnaire 1.5, bien que leur cellule `defauts`
-# (1.6 : « D02b;D03g ») porte D03g. `tc` : « table.colonne ».
-.GARDE_T3 <- c("dossiers.date_ouverture", "catastrophes.date_saisie", "victimes.date_saisie")
-.absence_refusee <- function(obligatoire, defauts, tc) {
-  d <- eclater_champ(defauts)
-  if (tc %in% .GARDE_T3) d <- setdiff(d, "D03g")
-  obligatoire == "O" && !any(d %in% .DEFAUTS_MANQUANT)
+.absence_refusee <- function(obligatoire, defauts) {
+  obligatoire == "O" && !any(eclater_champ(defauts) %in% .DEFAUTS_MANQUANT)
 }
 .manquant_refuse <- function(x) is.na(x) & !is.nan(x)
 
@@ -1968,11 +2000,11 @@ lire_declarations <- function(declarations, dico) {
       tc <- paste(table, colonne, sep = ".")
       if (col$type == "character") {
         .regle(ctx, "chaine_vide", table, colonne, character(0), "R", "exacte",
-               function() !is.na(x) & x == "")
+               function() .chaine_vide(x))
         modalites <- eclater_champ(col$modalites)
         if (length(modalites) > 0L) {
           .regle(ctx, "hors_domaine", table, colonne, character(0), "R", "exacte",
-                 function() !is.na(x) & x != "" & !(x %in% modalites))
+                 function() !is.na(x) & !.chaine_vide(x) & !(x %in% modalites))
         }
       }
       if (col$type == "Date") {
@@ -1994,7 +2026,7 @@ lire_declarations <- function(declarations, dico) {
         .regle(ctx, "hors_domaine", table, colonne, character(0), "R", "exacte",
                function() is.nan(x) | is.infinite(x))
       }
-      if (.absence_refusee(col$obligatoire, col$defauts, paste(table, colonne, sep = "."))) {
+      if (.absence_refusee(col$obligatoire, col$defauts)) {
         .regle(ctx, "manquant_obligatoire", table, colonne, character(0), "R", "exacte",
                function() .manquant_refuse(x))
       }
@@ -2059,7 +2091,17 @@ lire_declarations <- function(declarations, dico) {
 # elles ne reçoivent que chaine_vide, la règle ne les tient ni pour présentes ni pour manquantes
 # (spécification `donnees` v1.7, § 2.2, B.4, « Chaîne vide », #123). FAUX hors du type
 # character, sans conversion (une date comparée à "" serait mise en texte à chaque appel).
-.chaine_vide <- function(x) if (is.character(x)) x %in% "" else logical(length(x))
+# Depuis le dictionnaire 1.6 (M655 ; spécification `donnees` v1.9, § 9.6), une chaîne faite
+# seulement de blancs est une chaîne vide : classe fermée `.BLANCS` (U+0020, U+0009 à U+000D),
+# explicite et indépendante de la locale (jamais [[:space:]]), lue octet par octet (caractères
+# ASCII, qu'aucun octet d'un caractère UTF-8 multioctet ne reproduit). Une valeur qui contient un
+# autre caractère est lue telle quelle, blancs compris : aucun blanc n'est retiré.
+.BLANCS <- " \t\n\v\f\r"
+.chaine_vide <- function(x) {
+  if (is.character(x)) !is.na(x) & grepl(paste0("^[", .BLANCS, "]*$"), x, useBytes = TRUE) else logical(length(x))
+}
+# Valeur qui contient un blanc de `.BLANCS` (domaine du collège, M656).
+.contient_blanc <- function(x) !is.na(x) & grepl(paste0("[", .BLANCS, "]"), x, useBytes = TRUE)
 # Valeurs d'une clé lue pour un appariement ou une comparaison de clés : une chaîne vide y suit
 # la règle de la clé manquante (NA : aucun appariement, valeur absente et connue ; spécification
 # `donnees` v1.7, § 2.2, B.4, « Clé manquante » et « Chaîne vide », erratum du 15 novembre
@@ -2178,6 +2220,13 @@ apparier_cles <- function(x, table) {
               function(x) !is.na(x$nature) & x$nature == "individuel" & x$college != "ensemble" &
                 !.chaine_vide(x$college))
   }, partiel = TRUE)
+  # domaine du collège (dictionnaire 1.6, M656, amende M511 ; spécification `donnees` v1.9,
+  # § 9.6) : code opaque sans blanc (.BLANCS), ni « ; », ni « = » ; un collège fait seulement de
+  # blancs ne reçoit que chaine_vide (une anomalie, un code)
+  .regle(ctx, "hors_domaine", "garanties_souscrites", "college", character(0), "R", "exacte", function() {
+    x <- v("garanties_souscrites", "college")
+    !is.na(x) & !.chaine_vide(x) & (.contient_blanc(x) | grepl("[;=]", x, useBytes = TRUE))
+  })
 
   # parametres
   par <- ctx$dico$parametres
@@ -2535,7 +2584,7 @@ apparier_cles <- function(x, table) {
     col <- .colonnes_dico(ctx, table)
     refusee <- vapply(cle, function(c1) {
       k <- match(c1, col$colonne)
-      .absence_refusee(col$obligatoire[k], col$defauts[k], paste(table, c1, sep = "."))
+      .absence_refusee(col$obligatoire[k], col$defauts[k])
     }, NA)
     .regle(ctx, "D01a", table, cle[1L], lit, "R", "exacte", function() {
       o <- .ordre_canonique(ctx, table)
@@ -2655,17 +2704,19 @@ apparier_cles <- function(x, table) {
         connue <- !Reduce(`|`, inconnues)
         # clé composite des colonnes `k` (toutes par défaut), manquante si l'une l'est (une clé
         # manquante ne s'apparie à aucune ligne, .existe_kleene()) ; sans colonne (`k` vide, toutes
-        # les colonnes cibles inconnues), la même pour toutes les lignes (préfixe "\r" : jamais
-        # une chaîne vide, que .existe_kleene() tient pour une clé manquante, #123)
+        # les colonnes cibles inconnues), la même pour toutes les lignes (préfixe "\001" : jamais
+        # une chaîne vide ni faite de blancs, que .existe_kleene() tient pour une clé manquante,
+        # #123, M655 ; le séparateur "\r" est un blanc, le préfixe ne peut pas l'être)
         cle_de <- function(valeurs, k = seq_along(valeurs)) {
-          x <- do.call(paste, c(list(rep("\r", length(valeurs[[1L]]))), valeurs[k], sep = "\r"))
+          x <- do.call(paste, c(list(rep("\001", length(valeurs[[1L]]))), valeurs[k], sep = "\r"))
           if (length(k) > 0L) x[Reduce(`|`, lapply(valeurs[k], is.na))] <- NA
           x
         }
         local <- cle_de(valeurs_locales)
         cible <- cle_de(valeurs_cible)
-        # une chaîne vide est chaine_vide, non une orpheline (une anomalie, un code : m1)
-        vide <- Reduce(`|`, lapply(valeurs_locales, function(x) !is.na(x) & is.character(x) & x == ""))
+        # une chaîne vide, ou faite de blancs (M655), est chaine_vide, non une orpheline (une
+        # anomalie, un code : m1)
+        vide <- Reduce(`|`, lapply(valeurs_locales, .chaine_vide))
         manquant <- Reduce(`|`, lapply(valeurs_locales, is.na))
         existe <- .existe_kleene(local, cible, vrai = connue, possible = rep(FALSE, length(cible)))$valeurs
         r <- !vide & (if (manquant_orphelin) manquant | !existe else !manquant & !existe)
@@ -2800,6 +2851,15 @@ apparier_cles <- function(x, table) {
         valeurs[[k$table]] <- v1
       }
     }
+  }
+  # valeurs inconnues de D03i (M701) : refus de valeur de code D03i, motif de la colonne pour
+  # .cause() (M169), sans ligne de refus_tables
+  inconnues <- .inconnues_d03i(ctx)
+  valeurs <- .ranger_inconnues_d03i(valeurs, inconnues)
+  for (x in inconnues) {
+    c1 <- if (is.null(colonnes[[x$table]])) list() else colonnes[[x$table]]
+    c1[[x$colonne]] <- unique(c("D03i", c1[[x$colonne]]))
+    colonnes[[x$table]] <- c1
   }
   ctx$refus_valeur <- valeurs
   # `directs` : refus de portée table autres qu'un refus induit (code, colonne), dans l'ordre
@@ -3231,26 +3291,51 @@ parties_ligne <- function() lapply(.PARTIES_LIGNE, function(p) list(table = p$ta
                                  v(f[[4L]], f[[5L]]), .date_connue(ctx, f[[4L]], f[[6L]]), .inconnu(ctx, f[[4L]], f[[6L]])),
       parente = c(f[[3L]], f[[4L]], f[[5L]])))
   }
-  # D03g : date de saisie manquante (fin d'un contrat ou d'une affiliation : sous sa condition)
-  for (table in c("affiliations", "famille", "sinistres", "beneficiaires", "rentes", "evenements", "prestations",
-                  "designations", "ayants_droit_sante")) {
-    marquer(table, "D03g", regle_p(ctx, "D03g", table, "date_saisie", character(0), t_g, "exacte",
-                                  function() .manque3(ctx, table, "date_saisie")))
+  # D03g : date de saisie manquante, ou date qui vaut date de saisie (dossiers.date_ouverture ;
+  # dossiers, catastrophes et victimes depuis le dictionnaire 1.6, P18 (a)) ; fin d'un contrat
+  # ou d'une affiliation : sous sa condition
+  for (table in names(.COLONNES_D03G)) {
+    colonne <- .COLONNES_D03G[[table]]
+    marquer(table, "D03g", regle_p(ctx, "D03g", table, colonne, character(0), t_g, "exacte",
+                                  function() .manque3(ctx, table, colonne)))
   }
   # partie de ligne : l'hypothèse seule la résout (D9) ; traitement H à un arrêté antérieur
   for (table in c("contrats", "affiliations")) {
     marquer(table, "D03g", regle_p(ctx, "D03g", table, "date_saisie_fin", paste0(table, ".date_fin"), t_b, "exacte",
       function() .manque3(ctx, table, "date_saisie_fin") & !.manque3(ctx, table, "date_fin")), "date_saisie_fin")
   }
+  # D03i : date d'effet de visibilité manquante (dictionnaire 1.6, P18 (b) ; spécification
+  # `donnees` v1.9, § 9.6 ; S-3 (a), M686), détection exacte sur la base entière, traitement X
+  # par famille à tout arrêté (.placer()). À un arrêté antérieur à l'extraction, la date de
+  # visibilité de la ligne est inconnue : la ligne, de visibilité non déterminée (règle 3 du § 6),
+  # est recensée dans vue$visibilite_non_determinee sous le motif D03i, d'origine
+  # « table.colonne » (.construire_vue() n'inscrit que les lignes de statut non déterminé) ; la
+  # cause (γ) d'une ligne de règle V qu'elle fait écarter est D03i (.cause_nd(), rang 3). À
+  # l'arrêté égal à l'extraction, la ligne est visible, sa date inconnue des postes.
+  # La détection lit le manquant comme manquant (M701) : seuls les autres refus de valeur de la
+  # colonne rendent le verdict inconnu ; la ligne non déterminée sous D03i est inscrite par le
+  # mécanisme du refus de valeur (.inconnues_d03i(), .refus_vue()).
+  manque_d03i <- function(table, colonne) {
+    r <- is.na(.valeurs(ctx, table, colonne))
+    autres <- Filter(function(x) x$code != "D03i", .refus_valeur_de(ctx, table, colonne))
+    r[unlist(lapply(autres, `[[`, "lignes"))] <- NA
+    r
+  }
+  for (table in names(.COLONNES_D03I)) {
+    colonne <- .COLONNES_D03I[[table]]
+    regle_p(ctx, "D03i", table, colonne, character(0), "X", "exacte", function() manque_d03i(table, colonne))
+  }
   .appliquer_h_d03g(ctx, nd)
   invisible(NULL)
 }
 
 # Hypothèse déclarée de D03g appliquée à la vue (décision du mainteneur, D5 ; jugement
-# d'expert) : la date de saisie manquante est remplacée par max(date d'effet + délai,
-# visibilité de la parente), la date d'effet étant celle que compare D02b (evenements :
-# date_effet ; sinistres : date_declaration ; table fille : visibilité de la parente, d'où
-# visibilité de la parente + délai) ; délai de seuils$d03g_delai_jours pour la table. Fin
+# d'expert) : la date de saisie manquante (.COLONNES_D03G) est remplacée par max(date d'effet +
+# délai, visibilité de la parente), la date d'effet étant celle que compare D02b
+# (.EFFET_D03G : evenements, date_effet ; sinistres, date_declaration ; catastrophes,
+# date_evenement, P18 (a) ; table fille : visibilité de la parente, d'où visibilité de la
+# parente + délai ; dossiers et victimes : visibilité du sinistre, ou de la catastrophe, + délai,
+# bornée par la visibilité des parentes, .PARENTE_EFFET_D03G, M702) ; délai de seuils$d03g_delai_jours pour la table. Fin
 # d'un contrat ou d'une affiliation (partie de ligne) : connue à date_fin + délai (erratum
 # de D5, D9). Visibilité d'une parente : max des dates de .DATES_VISIBILITE de la
 # ligne et de ses ascendantes (règle 1), NA si l'une est inconnue ; versions de famille : la
@@ -3260,6 +3345,12 @@ parties_ligne <- function() lapply(.PARTIES_LIGNE, function(p) list(table = p$ta
 # déterminée (motif parente_non_determinee, sans exigence propre, réserve Q2 (b)). Rend
 # `ctx$date_g` (date de saisie retenue, par table) et `ctx$partie_h` (date de connaissance
 # de la fin retenue).
+# Parente dont la visibilité tient lieu de date d'effet de l'hypothèse (M702 ; spécification
+# `donnees` v1.9, § 9.6, P18 (a), « dossier : son sinistre ; victime : sa catastrophe ») : la
+# date de saisie retenue est
+# max(visibilité de cette parente + délai, visibilité des parentes selon la règle 1), au lieu de
+# max(visibilité des parentes) + délai pour les autres filles.
+.PARENTE_EFFET_D03G <- list(dossiers = "sinistres", victimes = "catastrophes")
 .appliquer_h_d03g <- function(ctx, nd) {
   if (length(ctx$h_g) == 0L) return(invisible(NULL))
   liens <- .liens_visibilite(ctx$dico)
@@ -3275,17 +3366,18 @@ parties_ligne <- function() lapply(.PARTIES_LIGNE, function(p) list(table = p$ta
     x <- rep(-Inf, nrow(ctx$base[[t]]))
     for (c1 in .DATES_VISIBILITE[[t]]) {
       d <- lire(t, c1)
-      if (c1 == "date_saisie") d <- ifelse(is.na(ctx$date_g[[t]]), d, ctx$date_g[[t]])
+      if (isTRUE(.COLONNES_D03G[t] == c1)) d <- ifelse(is.na(ctx$date_g[[t]]), d, ctx$date_g[[t]])
       x <- pmax(x, d)
     }
     dh <- ctx$date_h[[t]]
     if (!is.null(dh)) x <- pmax(x, ifelse(is.na(dh), -Inf, dh))
     x
   }
-  # visibilité de la parente de chaque ligne (max sur les liens ; -Inf sans parente)
-  date_parente <- function(vd, t) {
+  # visibilité de la parente de chaque ligne (max sur les liens, ou sur les liens vers les tables
+  # `cibles` ; -Inf sans parente)
+  date_parente <- function(vd, t, cibles = NULL) {
     x <- rep(-Inf, nrow(ctx$base[[t]]))
-    for (i in which(liens$table == t)) {
+    for (i in which(liens$table == t & (is.null(cibles) | liens$table_cible %in% cibles))) {
       u <- liens$table_cible[i]
       if (!lisible(t, liens$colonne[i]) || !lisible(u, liens$colonne_cible[i])) return(rep(NA_real_, length(x)))
       cle <- .cle_manquante(.valeurs(ctx, t, liens$colonne[i]))
@@ -3295,7 +3387,7 @@ parties_ligne <- function() lapply(.PARTIES_LIGNE, function(p) list(table = p$ta
     }
     x
   }
-  effet <- list(evenements = "date_effet", sinistres = "date_declaration")
+  effet <- .EFFET_D03G
   for (iteration in seq_len(length(tables) + 1L)) {
     vd <- lapply(stats::setNames(tables, tables), propre_date)
     repeat {
@@ -3309,6 +3401,8 @@ parties_ligne <- function() lapply(.PARTIES_LIGNE, function(p) list(table = p$ta
       t <- h$table
       parente <- date_parente(vd, t)[h$lignes]
       g <- if (!is.null(effet[[t]])) pmax(lire(t, effet[[t]])[h$lignes] + delai[[t]], parente)
+           else if (!is.null(.PARENTE_EFFET_D03G[[t]])) pmax(date_parente(vd, t, .PARENTE_EFFET_D03G[[t]])[h$lignes] + delai[[t]],
+                                                            parente)
            else parente + delai[[t]]
       g[!is.finite(g)] <- NA_real_
       ancien <- ctx$date_g[[t]][h$lignes]
@@ -5936,7 +6030,9 @@ parties_ligne <- function() lapply(.PARTIES_LIGNE, function(p) list(table = p$ta
 # par .construire_vue() (mode "vue") et par .connus() (modes "comptes" et "d03g"), une fois par
 # appel de controler_base() et par mode. Statut propre (avant la règle 1), conjonction de :
 # - dates de .DATES_VISIBILITE : connue au plus l'arrêté, vrai ; connue après, faux ;
-#   refusée pour sa valeur (.date_connue(), M199, M201), ou illisible par sa forme, inconnu ;
+#   refusée pour sa valeur (.date_connue(), M199, M201), manquante dans une colonne de D03i
+#   (valeur inconnue, .inconnues_d03i(), M701 : ligne inscrite sous D03i, d'origine
+#   « table.colonne »), ou illisible par sa forme, inconnu ;
 # - D02b (date que compare D02b, `date_h` de .regle_prealable()) : sous l'hypothèse déclarée,
 #   cette date au plus l'arrêté ; sans hypothèse, faux si elle est connue après l'arrêté,
 #   inconnu sinon (aucune pour une fille, qui suit sa parente) ; ligne refusée sur une
@@ -5960,13 +6056,14 @@ parties_ligne <- function() lapply(.PARTIES_LIGNE, function(p) list(table = p$ta
 # déterminée ; et toujours ET le statut de sa ligne. Écarts déclarés entre la vue et les
 # comptes : (i) table refusée en portée table (.construire_vue()) ; (ii) mode "comptes" : une
 # ligne que l'exclusion déclarée de D03g sort de la vue a la visibilité de l'hypothèse avec un
-# délai nul (la date que compare D02b, evenements.date_effet ou sinistres.date_declaration,
-# tient lieu de date de saisie ; aucune pour une fille, que borne sa parente ; D5, réserve Q4) ;
+# délai nul (la date que compare D02b, .EFFET_D03G : evenements.date_effet,
+# sinistres.date_declaration ou catastrophes.date_evenement, tient lieu de date de saisie ;
+# aucune pour une fille, que borne sa parente ; D5, réserve Q4) ;
 # (iii) mode "d03g" : même règle pour les lignes entières de D03g non résolues et celles qui
 # suivent leur parente (réserve Q8). À l'arrêté égal à l'extraction, tout est visible (règle 3),
 # hors des versions de famille remplacées. `refus` : entrées de .refus_vue(), relues par
 # .construire_vue().
-.EFFET_D03G <- list(evenements = "date_effet", sinistres = "date_declaration")
+.EFFET_D03G <- list(evenements = "date_effet", sinistres = "date_declaration", catastrophes = "date_evenement")
 .visibilite_a <- function(ctx, mode = "vue") {
   nom <- paste0("visibilite_", mode)
   if (!is.null(ctx[[nom]])) return(ctx[[nom]])
@@ -5999,14 +6096,15 @@ parties_ligne <- function() lapply(.PARTIES_LIGNE, function(p) list(table = p$ta
     effet <- .EFFET_D03G[[t]]
     for (c1 in .DATES_VISIBILITE[[t]]) {
       d <- .date_connue(ctx, t, c1)
-      if (c1 == "date_saisie") {
+      if (isTRUE(.COLONNES_D03G[t] == c1)) {
         g <- ctx$date_g[[t]]
         if (!is.null(g)) d <- ifelse(is.na(g), d, g)
         if (length(delai0)) d[delai0] <- if (is.null(effet)) -Inf else .date_connue(ctx, t, effet)[delai0]
       }
-      # une date absente est celle d'une ligne de D03g (date de saisie, traitée ci-dessus) ou
+      # une date absente est celle d'une ligne de D03g (date de saisie, traitée ci-dessus), ou
       # une valeur obligatoire refusée comme manquante, inconnue (refus de valeur, ou table
-      # refusée en portée table, où .refus_valeur_de() ne la rend pas) : NA
+      # refusée en portée table, où .refus_valeur_de() ne la rend pas), ou manquante dans une
+      # colonne de D03i (valeur inconnue, M701) : NA
       v <- v & d <= a
     }
     if (mode == "vue") v[exclues] <- FALSE
@@ -6585,7 +6683,7 @@ parties_ligne <- function() lapply(.PARTIES_LIGNE, function(p) list(table = p$ta
     # visibilité non déterminée, hors de l'hypothèse placée ; celles qui ne se calculent pas
     # par elles-mêmes attendent l'exclusion (Q5), non celles qui suivent leur parente (Q2 (b))
     lignes_h <- lignes
-    if (k$code == "D03g" && r_ok && identical(k$colonne, "date_saisie")) {
+    if (k$code == "D03g" && r_ok && !identical(k$colonne, "date_saisie_fin")) {
       reste <- intersect(lignes, ctx$reste_g[[k$table]])
       lignes_h <- setdiff(lignes, c(reste, ctx$parente_g[[k$table]]))
       for (f in familles) {

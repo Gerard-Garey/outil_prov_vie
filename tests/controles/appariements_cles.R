@@ -97,6 +97,10 @@ LISTE_BLANCHE <- c(
     "cle_garantie : ids reunit contrat_g et hypothese : contrats apparies par apparier_cles() sur des garanties retenues par cle_renseignee() (gs, ct, i_gs)",
   "R/donnees.R | cles_lignes_hypothese | colonne %in% cles" =
     "metadonnee",
+  "R/donnees.R | .inconnues_d03i | c1 %in% names ( ctx $ base [[ t ] ] )" =
+    "metadonnee",
+  "R/donnees.R | .appliquer_h_d03g | liens $ table_cible %in% cibles" =
+    "metadonnee",
   "R/donnees.R | cles_lignes_hypothese | lignes %in% placees" =
     "indice",
   "R/donnees.R | .exclu_vue | liens $ table %in% intersect ( tables , .TABLES_CASCADE_EXCLUSION )" =
