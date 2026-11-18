@@ -303,6 +303,14 @@ LISTE_BLANCHE <- c(
     "a_instruire : somme_parts : beneficiaires.id_dossier \"\" regroupe par rowsum() (ok <- !is.na(dossier) seul) ; releve, #164",
   "R/donnees.R | .regle_v | dossier %in% brut [ nd ]" =
     "a_instruire : somme_parts : id_dossier \"\" des beneficiaires non determines apparie a \"\" ; releve, #164",
+  "R/donnees.R | .regle_v_parente_posterieure | liens $ table %in% ctx $ tables" =
+    "metadonnee",
+  "R/donnees.R | .regle_v_parente_posterieure | liens $ table_cible %in% ctx $ tables" =
+    "metadonnee",
+  "R/donnees.R | .regle_v_parente_posterieure | fx %in% k $ lignes" =
+    "indice",
+  "R/donnees.R | .regle_v_parente_posterieure | fx %in% couvertes" =
+    "indice",
   "R/donnees.R | .regle_v_manquants | match ( vv ( \"evenements\" , \"type_evenement\" ) , te $ type_evenement )" =
     "code",
   "R/donnees.R | .regle_v_doublons | match ( groupe , groupe )" =

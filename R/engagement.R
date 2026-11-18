@@ -752,6 +752,15 @@ calculer_engagement <- function(vue, plan, tables, catalogue, garantie, poste) {
   pa <- postes_a_arreter(catalogue, vue$bilan, plan$postes, parties_ligne())$postes
   motif_bilan <- pa$motif_arret[pa$garantie == garantie & pa$poste == poste]
   if (length(motif_bilan) == 1L && !is.na(motif_bilan)) return(arreter(motif_bilan, NA_character_))
+  # dossier de la population dont la garantie souscrite n'est pas retenue à l'arrêté (exception
+  # de la règle 1 : garantie d'effet postérieur à l'arrêté, D10b, ou de contrat d'effet postérieur,
+  # D11a, ou de visibilité non déterminée ; dossier non exclu pour engagement, ni à couverture
+  # exclue ; spécification `donnees` v1.9, § 9.3 (1) et bloc « Erratum 1.9.2 », (i) et (vii),
+  # M509, #83) : le poste lit les colonnes de la garantie, jamais lues sur une version non
+  # retenue : arrêt parametre_non_determine, premier dossier en cause
+  # (dossiers_garantie_invisible(), seule implémentation)
+  invisibles <- dossiers_garantie_invisible(vue, "engagement")
+  if (length(invisibles)) return(arreter("parametre_non_determine", invisibles[1L]))
 
   a <- vue$bilan$vue$date_arrete
   etats <- etats_a_date(vue, garantie, "engagement")

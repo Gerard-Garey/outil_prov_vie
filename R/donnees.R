@@ -127,15 +127,13 @@ CAUSE_NON_LISIBLE <- "non_lisible"
 .ni <- function(code, table, colonne = NA_character_) {
   data.frame(code = code, table = table, colonne = colonne, stringsAsFactors = FALSE)
 }
-# États transitoires du dictionnaire 1.6 (spécification `donnees` v1.9, § 9.8, liste fermée ;
-# M685), chacun retiré par le commit qui l'écrit : T4, parente_posterieure (#83) ; T5, D02b sur
-# prestations (#83) ; T9, D11b et D11c (#81). T2 (D03i) et T3 (D03g sur dossiers, catastrophes
-# et victimes, avec sa garde) sont levés au commit 60b de #60.
+# États transitoires du dictionnaire 1.6 (spécification `donnees` v1.9, § 9.8, liste fermée),
+# chacun retiré par le commit qui l'écrit : T9, D11b et D11c (#81). T2 (D03i) et T3 (D03g sur
+# dossiers, catastrophes et victimes, avec sa garde) sont levés au commit 60b de #60 ; T4
+# (parente_posterieure) et T5 (D02b sur prestations) au commit de #83.
 CONTROLES_NON_IMPLEMENTES <- rbind(
   .ni("D03d", "assures", "situation_familiale"),
   .ni("D09", c("parametres", "affiliations", "evenements", "prestations", "cotisations")),
-  .ni("parente_posterieure", c("affiliations", "garanties_souscrites", "cotisations")),
-  .ni("D02b", "prestations"),
   .ni("D11b", "dossiers", "id_garantie_souscrite"),
   .ni("D11c", "affiliations", "college")
 )
@@ -549,17 +547,31 @@ etats_a_date <- function(vue, garanties, famille) {
   res[.COLONNES_ETATS]
 }
 
+# Couverture exclue d'une ligne de garanties_souscrites pour une famille (spécification de B2,
+# § 5.1, § 5.3, § 5.5 et § 5.6, erratum v1.0.13 ; spécification `donnees` v1.9, § 9.3, bloc
+# « Erratum 1.9.2 », (ii), #83) : vecteur logique sur toutes les lignes de la base (retenues ou
+# non), vrai si la ligne est exclue pour la famille (`exclu` : vue$exclu[[famille]]) ou si sa clé
+# de contrat désigne une ligne de contrats exclue pour la famille (clé manquante ou vide, d'un
+# côté ou de l'autre : aucun appariement, apparier_cles(), #154, règle (i)). Seules les clés
+# (id_contrat) sont lues dans la base. Seule implémentation de la règle de population : lue par
+# garanties_couverture_exclue() (lignes retenues) et par dossiers_garantie_invisible() (lignes
+# non retenues).
+.couverture_exclue_gs <- function(ctx, exclu) {
+  if (is.null(ctx$base$garanties_souscrites)) return(logical(0))
+  ct_exclus <- if (is.null(ctx$base$contrats)) character(0) else
+    as.character(.valeurs(ctx, "contrats", "id_contrat"))[exclu$contrats]
+  exclu$garanties_souscrites | !is.na(apparier_cles(.valeurs(ctx, "garanties_souscrites", "id_contrat"), ct_exclus))
+}
+
 # Garanties souscrites dont la couverture est exclue pour la famille `famille` (code de
 # FAMILLES_CALCUL) (spécification de B2, § 5.1, § 5.3, § 5.5 et § 5.6, erratum v1.0.13) :
 # identifiants (id_garantie_souscrite, triés radix, jamais NA ni "") des garanties souscrites
-# retenues dont la ligne de garanties_souscrites est exclue pour la famille (vue$exclu[[famille]]),
-# ou dont le contrat a une ligne retenue de contrats exclue pour la famille (clé de contrat
-# manquante ou vide : aucun appariement, apparier_cles(), #154). Seule implémentation de la
-# règle de population : un dossier (P1, P2, famille engagement) ou un contrat (P3, famille
-# risque_en_cours) d'une telle garantie sort de la population, sans arrêt ; seules les clés
-# (id_garantie_souscrite, id_contrat) des lignes exclues sont lues. Une exclusion pour une
-# autre famille est sans effet ; le dictionnaire (§ 1.10) n'est pas étendu : vue$exclu des
-# autres tables est inchangé. Sans point : appelée par les familles engagement et
+# retenues à couverture exclue pour la famille (.couverture_exclue_gs(), seule implémentation de
+# la règle de population, restreinte ici aux lignes retenues) : un dossier (P1, P2, famille
+# engagement) ou un contrat (P3, famille risque_en_cours) d'une telle garantie sort de la
+# population, sans arrêt ; seules les clés (id_garantie_souscrite, id_contrat) sont lues. Une
+# exclusion pour une autre famille est sans effet ; le dictionnaire (§ 1.10) n'est pas étendu :
+# vue$exclu des autres tables est inchangé. Sans point : appelée par les familles engagement et
 # risque_en_cours et par segments_vue() ; non exportée.
 garanties_couverture_exclue <- function(vue, famille) {
   if (!inherits(vue, "vue_provie")) {
@@ -570,19 +582,48 @@ garanties_couverture_exclue <- function(vue, famille) {
                 "FAMILLES_CALCUL (", paste(FAMILLES_CALCUL, collapse = ", "), ")"), call. = FALSE)
   }
   ctx <- vue$ctx
-  exclu <- vue$exclu[[famille]]
-  vv <- function(t, c1) .valeurs_vue(ctx, t, c1)
-  # appartenance au contrat exclu : une clé de contrat manquante ou vide, d'un côté ou de l'autre,
-  # ne s'apparie à rien (règle de la clé manquante, #154, règle (i))
-  ct_exclus <- as.character(vv("contrats", "id_contrat"))[ctx$retenu$contrats & exclu$contrats]
-  r_gs <- ctx$retenu$garanties_souscrites
-  gs_exclue <- r_gs & (exclu$garanties_souscrites |
-                         !is.na(apparier_cles(vv("garanties_souscrites", "id_contrat"), ct_exclus)))
+  if (is.null(ctx$base$garanties_souscrites)) return(character(0))
+  gs_exclue <- ctx$retenu$garanties_souscrites & .couverture_exclue_gs(ctx, vue$exclu[[famille]])
   # identifiants rendus : jamais NA ni "" (#154, Q-B4 (T1)) ; une garantie souscrite d'identifiant
   # manquant ou vide n'appartient à aucune population (règle (ii)) et ne s'apparie à rien : les
   # appelants l'écartent par cle_renseignee(), elle n'a pas à figurer dans la liste
-  id_gs <- as.character(vv("garanties_souscrites", "id_garantie_souscrite"))
+  id_gs <- as.character(.valeurs(ctx, "garanties_souscrites", "id_garantie_souscrite"))
   sort(unique(id_gs[gs_exclue & cle_renseignee(id_gs)]), method = "radix")
+}
+
+# Dossiers de la vue `vue` (objet vue_a_date()) dont la garantie souscrite n'est pas lisible par
+# les familles à l'arrêté (exception de la règle 1, dictionnaire 1.6, § 6 ; spécification
+# `donnees` v1.9, § 9.3 (1) et bloc « Erratum 1.9.2 », (ii) et (vii) ; M509, option (a) ; #83) :
+# identifiants (id_dossier, triés radix, jamais NA ni "") des dossiers retenus, non exclus pour
+# la famille `famille` (code de FAMILLES_CALCUL ; vue$exclu[[famille]]$dossiers, cascade
+# comprise), dont la clé de garantie souscrite désigne une ligne de garanties_souscrites non
+# retenue dans la vue (invisible à l'arrêté, ou de visibilité non déterminée) et aucune ligne de
+# garanties_souscrites à couverture exclue pour la famille (.couverture_exclue_gs(), sur toutes
+# les lignes : le dossier sort alors de la population, l'exclusion déclarée portant l'enjeu) ;
+# vide à l'arrêté égal à l'extraction (vue totale). La garantie non retenue n'est pas lue
+# (valeurs_vue() la masque) : un poste qui lit ses colonnes n'est jamais calculé sur elle, il est
+# arrêté par l'appelant (parametre_non_determine, identifiant du premier dossier). Seules les
+# clés (id_garantie_souscrite, id_contrat) sont lues dans la base. Sans point : appelée par la
+# famille engagement ; non exportée.
+dossiers_garantie_invisible <- function(vue, famille) {
+  if (!inherits(vue, "vue_provie")) {
+    stop("dossiers_garantie_invisible() : `vue` doit \u00eatre un objet vue_provie", call. = FALSE)
+  }
+  if (!is.character(famille) || length(famille) != 1L || is.na(famille) || !(famille %in% FAMILLES_CALCUL)) {
+    stop(paste0("erreur interne de provie : dossiers_garantie_invisible() : `famille` doit \u00eatre un code de ",
+                "FAMILLES_CALCUL (", paste(FAMILLES_CALCUL, collapse = ", "), ")"), call. = FALSE)
+  }
+  ctx <- vue$ctx
+  if (is.null(ctx$base$dossiers) || is.null(ctx$base$garanties_souscrites)) return(character(0))
+  exclu <- vue$exclu[[famille]]
+  id_gs <- .valeurs(ctx, "garanties_souscrites", "id_garantie_souscrite")
+  gs_exclue <- .couverture_exclue_gs(ctx, exclu)
+  gs <- .valeurs_vue(ctx, "dossiers", "id_garantie_souscrite")
+  invisible_gs <- !is.na(apparier_cles(gs, id_gs)) & is.na(apparier_cles(gs, id_gs[ctx$retenu$garanties_souscrites])) &
+    is.na(apparier_cles(gs, id_gs[gs_exclue]))
+  id_d <- as.character(.valeurs_vue(ctx, "dossiers", "id_dossier"))
+  k <- ctx$retenu$dossiers & !exclu$dossiers & invisible_gs & cle_renseignee(id_d)
+  sort(unique(id_d[k]), method = "radix")
 }
 
 # Mois de la période d'une cotisation par périodicité (dictionnaire, § 9, D03f ; spécification de
@@ -2965,6 +3006,40 @@ parties_ligne <- function() lapply(.PARTIES_LIGNE, function(p) list(table = p$ta
   l
 }
 
+# Liens qui masquent une ligne fille par la règle 1 : ceux de .liens_visibilite(), hors
+# l'exception du dictionnaire 1.6 (§ 6, règle 1 ; spécification `donnees` v1.9, § 9.3 (1) ; M509,
+# #83) : une ligne de dossiers dont la visibilité propre tient à A (date_ouverture, sinistre
+# visible) n'est pas masquée par sa garantie souscrite, visible ou non ; D10b y est évalué
+# (.regle_v_garanties()) et les familles ne lisent pas la garantie invisible
+# (dossiers_garantie_invisible()). Lus par l'évaluation de la visibilité (.visibilite_a()), les
+# colonnes lues pour la vue (.construire_vue(), `lit_vue`), la cause (γ) (.cause_nd()),
+# parente_posterieure et la visibilité des parentes de l'hypothèse de D03g (.appliquer_h_d03g(),
+# M702 lu selon M705 ; spécification `donnees` v1.9, § 9.6, P18 (a), note v1.9.2) ; seule la
+# cascade des exclusions (.exclu_vue()) garde tous les liens.
+.liens_regle1 <- function(dico) {
+  l <- .liens_visibilite(dico)
+  l <- l[!(l$table == "dossiers" & l$colonne == "id_garantie_souscrite"), , drop = FALSE]
+  rownames(l) <- NULL
+  l
+}
+
+# Statut de la parente d'un lien `lien` (ligne de .liens_regle1()) pour chaque ligne de la table
+# fille, en logique de Kleene : vrai sans parente (orpheline, clé manquante ou vide) ou si une
+# ligne de même clé est visible (`statut` : statuts par table), inconnu si aucune ne l'est et
+# qu'une l'est de façon non déterminée, faux sinon ; clé du lien illisible par sa forme : inconnu.
+# Seule implémentation, lue par la règle 1 (.visibilite_a()) et par parente_posterieure.
+.parente_regle1 <- function(ctx, lien, statut) {
+  t <- lien$table
+  u <- lien$table_cible
+  lisible <- function(t1, c1) is.na(.cause(ctx, t1, c1, forme_seule = TRUE))
+  if (!lisible(t, lien$colonne) || !lisible(u, lien$colonne_cible)) return(rep(NA, length(statut[[t]])))
+  cle <- .cle_manquante(as.character(.valeurs(ctx, t, lien$colonne)))
+  cible <- .cle_manquante(as.character(.valeurs(ctx, u, lien$colonne_cible)))
+  vu <- statut[[u]]
+  ifelse(is.na(apparier_cles(cle, cible)) | !is.na(apparier_cles(cle, cible[vu %in% TRUE])), TRUE,
+         ifelse(!is.na(apparier_cles(cle, cible[is.na(vu)])), NA, FALSE))
+}
+
 .vue_totale <- function(ctx) as.numeric(ctx$arrete) == as.numeric(ctx$date_extraction)
 
 # Règle P et visibilité propre, jusqu'au point fixe des refus qu'elle induit (décision du
@@ -3281,6 +3356,12 @@ parties_ligne <- function() lapply(.PARTIES_LIGNE, function(p) list(table = p$ta
     list("evenements", "date_saisie", "id_sinistre", "sinistres", "id_sinistre", "date_saisie"),
     list("evenements", "date_saisie", "id_dossier", "dossiers", "id_dossier", "date_ouverture"),
     list("evenements", "date_saisie", "id_rente", "rentes", "id_rente", "date_saisie"),
+    # prestation saisie ou réglée avant l'ouverture de son dossier ou la saisie de sa rente
+    # (dictionnaire 1.6, § 9, D02b ; spécification `donnees` v1.9, § 9.3 (3), #83)
+    list("prestations", "date_saisie", "id_dossier", "dossiers", "id_dossier", "date_ouverture"),
+    list("prestations", "date_reglement", "id_dossier", "dossiers", "id_dossier", "date_ouverture"),
+    list("prestations", "date_saisie", "id_rente", "rentes", "id_rente", "date_saisie"),
+    list("prestations", "date_reglement", "id_rente", "rentes", "id_rente", "date_saisie"),
     list("victimes", "date_saisie", "id_catastrophe", "catastrophes", "id_catastrophe", "date_saisie"),
     list("victimes", "date_saisie", "id_sinistre", "sinistres", "id_sinistre", "date_saisie"))
   for (f in filles) {
@@ -3338,7 +3419,9 @@ parties_ligne <- function() lapply(.PARTIES_LIGNE, function(p) list(table = p$ta
 # bornée par la visibilité des parentes, .PARENTE_EFFET_D03G, M702) ; délai de seuils$d03g_delai_jours pour la table. Fin
 # d'un contrat ou d'une affiliation (partie de ligne) : connue à date_fin + délai (erratum
 # de D5, D9). Visibilité d'une parente : max des dates de .DATES_VISIBILITE de la
-# ligne et de ses ascendantes (règle 1), NA si l'une est inconnue ; versions de famille : la
+# ligne et de ses ascendantes (règle 1, liens de .liens_regle1() : la garantie souscrite d'un
+# dossier n'en fait pas partie, M705 ; spécification `donnees` v1.9, § 9.6, P18 (a), note
+# v1.9.2), NA si l'une est inconnue ; versions de famille : la
 # plus ancienne. Une date qui ne se calcule pas laisse la ligne de visibilité non
 # déterminée (`nd`, motif D03g ; `ctx$reste_g` : ces lignes, par table, hors de l'hypothèse
 # placée et attendues en exclusion, réserve Q5), sauf si seule sa parente est non
@@ -3349,11 +3432,13 @@ parties_ligne <- function() lapply(.PARTIES_LIGNE, function(p) list(table = p$ta
 # `donnees` v1.9, § 9.6, P18 (a), « dossier : son sinistre ; victime : sa catastrophe ») : la
 # date de saisie retenue est
 # max(visibilité de cette parente + délai, visibilité des parentes selon la règle 1), au lieu de
-# max(visibilité des parentes) + délai pour les autres filles.
+# max(visibilité des parentes) + délai pour les autres filles. Pour un dossier, le sinistre est
+# la seule parente de la règle 1 (M705) : date retenue = visibilité du sinistre + délai.
 .PARENTE_EFFET_D03G <- list(dossiers = "sinistres", victimes = "catastrophes")
 .appliquer_h_d03g <- function(ctx, nd) {
   if (length(ctx$h_g) == 0L) return(invisible(NULL))
-  liens <- .liens_visibilite(ctx$dico)
+  # liens de la règle 1 (M705) : la garantie souscrite d'un dossier n'est pas une parente
+  liens <- .liens_regle1(ctx$dico)
   liens <- liens[liens$table %in% ctx$tables & liens$table_cible %in% ctx$tables, , drop = FALSE]
   lisible <- function(t, c1) is.na(.cause(ctx, t, c1, forme_seule = TRUE))
   # une valeur refusée n'est pas lue (M199) : inconnue
@@ -3473,7 +3558,7 @@ parties_ligne <- function() lapply(.PARTIES_LIGNE, function(p) list(table = p$ta
 # clés des liens ; famille : id_membre et date_saisie, à tout arrêté).
 .construire_vue <- function(ctx) {
   totale <- .vue_totale(ctx)
-  liens <- .liens_visibilite(ctx$dico)
+  liens <- .liens_regle1(ctx$dico)
   liens <- liens[liens$table %in% ctx$tables & liens$table_cible %in% ctx$tables, , drop = FALSE]
   tables <- setdiff(ctx$tables, "extraction")
   ev <- .visibilite_a(ctx, "vue")
@@ -3766,7 +3851,7 @@ parties_ligne <- function() lapply(.PARTIES_LIGNE, function(p) list(table = p$ta
 # vue$visibilite_non_determinee (spécification `donnees` v1.6, § 3.1, départage à rang égal,
 # #59). Une ligne écartée sans élément qui l'explique est une erreur interne.
 .cause_nd <- function(ctx, index, lignes, code, table) {
-  liens <- .liens_visibilite(ctx$dico)
+  liens <- .liens_regle1(ctx$dico)
   liens <- liens[liens$table %in% ctx$tables & liens$table_cible %in% ctx$tables, , drop = FALSE]
   statut <- .visibilite_a(ctx, "vue")$statut
   causes <- character(0)
@@ -3905,6 +3990,7 @@ parties_ligne <- function() lapply(.PARTIES_LIGNE, function(p) list(table = p$ta
     attr(r, "index") <- list(beneficiaires = index)
     r
   })
+  .regle_v_parente_posterieure(ctx)
   .regle_v_manquants(ctx)
   .regle_v_ordre_dates(ctx)
   .regle_v_doublons(ctx)
@@ -3919,6 +4005,86 @@ parties_ligne <- function() lapply(.PARTIES_LIGNE, function(p) list(table = p$ta
   .regle_v_couverture(ctx)
   .regle_v_suites(ctx)
   .regle_v_double_effet(ctx)
+  invisible(NULL)
+}
+
+# parente_posterieure (dictionnaire 1.6, § 1.10 et § 6, règle 1 ; spécification `donnees` v1.9,
+# § 9.3 (2) ; #83 ; M685 : parametres exclu) : ligne de affiliations, garanties_souscrites ou
+# cotisations visible par sa propre date de visibilité (statut propre de .visibilite_a()), masquée
+# par la règle 1 parce qu'une ascendante est invisible. Leurs ascendantes (contrats ;
+# garanties_souscrites et, par elle, contrats) n'ont pour visibilité que leur date d'effet
+# (.DATES_VISIBILITE ; ni D02b ni D03g sur la ligne entière) : leur invisibilité déterminée vient
+# toujours d'une date d'effet postérieure à l'arrêté. Détection exacte sur la table entière (la
+# ligne reste masquée : sans effet sur la vue), traitement S (controles.csv), colonne NA. À
+# l'arrêté égal à l'extraction, la vue est totale : la règle ne produit rien (ni constat, ni ligne
+# de controles_non_executes). Verdict à trois valeurs (Kleene) : propre ET NON parente
+# (.parente_regle1(), conjonction sur les liens de .liens_regle1()) ; les colonnes de visibilité
+# sont lues comme colonnes de la vue (`lit_vue` : leur refus de valeur ne bloque pas la règle,
+# M200). Une ligne au verdict inconnu est écartée (détection partielle, nombre minorant) et la
+# règle garde une ligne dans controles_non_executes, de cause (γ) la plus petite dans l'ordre
+# (rang, position) (.cause_retenue()) parmi : pour une ligne de statut non déterminé, celle de
+# .cause_nd() sur la ligne (inscription propre, ou ascendante non déterminée) et sur ses parentes
+# non déterminées ; pour une ligne invisible de façon déterminée (parente invisible) de
+# visibilité propre non déterminée, le motif qui la rend non déterminée (règle P : D02b ou D03g,
+# declaration_absente ; refus de valeur ou D03i d'une colonne de visibilité : son code). Une
+# ligne écartée sans cause est une erreur interne.
+.TABLES_PARENTE_POSTERIEURE <- c("affiliations", "garanties_souscrites", "cotisations")
+.regle_v_parente_posterieure <- function(ctx) {
+  if (.vue_totale(ctx)) return(invisible(NULL))
+  code <- "parente_posterieure"
+  ev <- .visibilite_a(ctx, "vue")
+  liens <- .liens_regle1(ctx$dico)
+  liens <- liens[liens$table %in% ctx$tables & liens$table_cible %in% ctx$tables, , drop = FALSE]
+  for (t in intersect(.TABLES_PARENTE_POSTERIEURE, ctx$tables)) {
+    l_t <- liens[liens$table == t, , drop = FALSE]
+    n <- nrow(ctx$base[[t]])
+    cle <- paste(t, eclater_champ(ctx$dico$tables$cle_primaire[ctx$dico$tables$table == t])[1L], sep = ".")
+    lit <- unique(c(cle, paste(l_t$table, l_t$colonne, sep = "."), paste(l_t$table_cible, l_t$colonne_cible, sep = ".")))
+    verdict <- NULL
+    res <- .regle(ctx, code, t, NA_character_, lit, .traitement_code_controle(ctx$dico, code), "exacte", function() {
+      parente <- rep(TRUE, n)
+      for (i in seq_len(nrow(l_t))) parente <- parente & .parente_regle1(ctx, l_t[i, , drop = FALSE], ev$statut)
+      verdict <<- ev$propre[[t]] & !parente
+      verdict %in% TRUE
+    }, vue = ctx$lit_vue[[t]])
+    ecartees <- which(is.na(verdict))
+    if (is.null(res) || length(ecartees) == 0L) next
+    statut_t <- ev$statut[[t]]
+    nd_l <- ecartees[is.na(statut_t[ecartees])]
+    causes <- character(0)
+    if (length(nd_l) > 0L) {
+      # la ligne et ses parentes non déterminées de même clé (inscrites dans lignes_nd)
+      index <- list()
+      index[[t]] <- vector("list", n)
+      index[[t]][nd_l] <- as.list(nd_l)
+      for (i in seq_len(nrow(l_t))) {
+        u <- l_t$table_cible[i]
+        cible <- .cle_manquante(as.character(.valeurs(ctx, u, l_t$colonne_cible[i])))
+        p_nd <- which(is.na(ev$statut[[u]]) & !is.na(cible))
+        if (length(p_nd) == 0L) next
+        par_cle <- split(p_nd, cible[p_nd])
+        cle_f <- .cle_manquante(as.character(.valeurs(ctx, t, l_t$colonne[i])))[nd_l]
+        if (is.null(index[[u]])) index[[u]] <- vector("list", n)
+        index[[u]][nd_l] <- unname(lapply(cle_f, function(k) if (is.na(k)) NULL else par_cle[[k]]))
+      }
+      causes <- c(causes, .cause_nd(ctx, index, nd_l, code, t))
+    }
+    fx <- setdiff(ecartees, nd_l)
+    if (length(fx) > 0L) {
+      propres <- character(0)
+      couvertes <- integer(0)
+      for (k in c(ctx$nd_p, ev$refus)) {
+        if (k$table != t || !is.na(k$colonne) || k$motif == "parente_non_determinee" || !any(fx %in% k$lignes)) next
+        propres <- c(propres, if (k$motif %in% .MOTIFS_REGLE_P) "declaration_absente" else k$motif)
+        couvertes <- c(couvertes, intersect(fx, k$lignes))
+      }
+      causes <- c(causes, propres)
+      if (!all(fx %in% couvertes)) {
+        stop("erreur interne de provie : parente_posterieure : ligne \u00e9cart\u00e9e sans cause (", t, ")", call. = FALSE)
+      }
+    }
+    .ajouter_non_execute(ctx, code, t, NA_character_, .cause_retenue(causes, ctx$dico, ctx$ordre_codes))
+  }
   invisible(NULL)
 }
 
@@ -4219,13 +4385,26 @@ parties_ligne <- function() lapply(.PARTIES_LIGNE, function(p) list(table = p$ta
   vv <- function(table, colonne) .valeurs_vue(ctx, table, colonne)
   lit_gs <- c("dossiers.id_garantie_souscrite", "garanties_souscrites.id_garantie_souscrite")
   # D10 (b) : version de garantie hors vigueur à la survenance ; traitement S + X : deux
-  # constats de même clé (code, table, colonne), un par traitement (réserve m3)
+  # constats de même clé (code, table, colonne), un par traitement (réserve m3). Évalué aussi sur
+  # un dossier de la vue dont la garantie souscrite est invisible à l'arrêté (exception de la
+  # règle 1, .liens_regle1() ; dictionnaire 1.6, § 6 et § 9 ; spécification `donnees` v1.9,
+  # § 9.3 (1), #83) : la garantie est lue à sa valeur extraite, sur toutes les occurrences de sa
+  # clé (.jointe3(), lecture existentielle de .joindre3(), M663) : dates inconnues si elles
+  # divergent (cause candidate D01a). Chemin non atteignable aujourd'hui : une clé de
+  # garanties_souscrites en double est un refus D01a (R) de portée table, qui bloque la règle
+  # avant la lecture (C83-5) ; .jointe3() y rend alors les mêmes valeurs que .joindre(), d'où
+  # aucun test qui les distingue. Cause de la ligne écartée dans le chemin V : #169.
   hors_vigueur <- function() {
     gs <- vv("dossiers", "id_garantie_souscrite")
     survenance <- as.numeric(.joindre(ctx, "sinistres", "id_sinistre", "date_survenance", vv("dossiers", "id_sinistre")))
-    effet <- as.numeric(.joindre(ctx, "garanties_souscrites", "id_garantie_souscrite", "date_effet", gs))
-    fin <- as.numeric(.joindre(ctx, "garanties_souscrites", "id_garantie_souscrite", "date_fin", gs))
-    !is.na(survenance) & !is.na(effet) & (survenance < effet | (!is.na(fin) & survenance > fin))
+    .verdict3(list(survenance = .connue3("sinistres.date_survenance", survenance),
+                   effet = .jointe3(ctx, "garanties_souscrites.date_effet", "id_garantie_souscrite", gs),
+                   fin = .jointe3(ctx, "garanties_souscrites.date_fin", "id_garantie_souscrite", gs)), function(x) {
+      s1 <- as.numeric(x$survenance)
+      e <- as.numeric(x$effet)
+      f <- as.numeric(x$fin)
+      !is.na(s1) & !is.na(e) & (s1 < e | (!is.na(f) & s1 > f))
+    })
   }
   lit_b <- c(lit_gs, "garanties_souscrites.date_effet", "garanties_souscrites.date_fin", "dossiers.id_sinistre",
              "sinistres.id_sinistre", "sinistres.date_survenance")
@@ -6134,23 +6313,15 @@ parties_ligne <- function() lapply(.PARTIES_LIGNE, function(p) list(table = p$ta
   }
   statut <- propre
   if (!totale) {
-    # règle 1, jusqu'au point fixe ; une clé de lien illisible par sa forme : non déterminée
-    liens <- .liens_visibilite(ctx$dico)
+    # règle 1, jusqu'au point fixe ; une clé de lien illisible par sa forme : non déterminée ;
+    # exception de la garantie souscrite d'un dossier (.liens_regle1(), #83)
+    liens <- .liens_regle1(ctx$dico)
     liens <- liens[liens$table %in% tables & liens$table_cible %in% tables, , drop = FALSE]
     repeat {
       change <- FALSE
       for (i in seq_len(nrow(liens))) {
         t <- liens$table[i]
-        u <- liens$table_cible[i]
-        if (lisible(t, liens$colonne[i]) && lisible(u, liens$colonne_cible[i])) {
-          cle <- .cle_manquante(as.character(.valeurs(ctx, t, liens$colonne[i])))
-          cible <- .cle_manquante(as.character(.valeurs(ctx, u, liens$colonne_cible[i])))
-          vu <- statut[[u]]
-          parente <- ifelse(is.na(apparier_cles(cle, cible)) | !is.na(apparier_cles(cle, cible[vu %in% TRUE])), TRUE,
-                            ifelse(!is.na(apparier_cles(cle, cible[is.na(vu)])), NA, FALSE))
-        } else {
-          parente <- rep(NA, length(statut[[t]]))
-        }
+        parente <- .parente_regle1(ctx, liens[i, , drop = FALSE], statut)
         nouveau <- statut[[t]] & parente
         if (!identical(nouveau, statut[[t]])) {
           statut[[t]] <- nouveau
