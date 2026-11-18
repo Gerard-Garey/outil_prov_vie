@@ -2364,7 +2364,12 @@ Sous-section ouverte à la cinquante-deuxième série, à l'épuisement du bloc 
 |---|---|---|---|
 | M700 | 18/11/2026 | **Visa 3 de M677 — totaux du candidat R1 visés** (run 44328788928, calculé sur `8cc2c53`, empreinte `b3f24db1…`) : provisions totales des dix couples renommés identiques au bit près aux références précédentes ; commit de référence `11ab732` ; visa consigné en commentaire de la PR #165 (issuecomment-6982744440) | § 1.16, 0c, R1 ; M677 ; PR #165 |
 
-Prochain numéro : **M701**.
+| M701 | 18/11/2026 | **60b, Q2 : date manquante de D03i lue comme valeur inconnue** (lecture (b), recommandée par `actuary`) : hors de la détection de D03i, une cellule manquante de `contrats.date_effet`, `garanties_souscrites.date_effet`, `prestations.date_reglement` ou `cotisations.date_mouvement` suit le mécanisme d'une valeur refusée (règle B ou P partielle, règle V bloquée, M169), cause D03i au rang 3, sans ligne de `refus_tables` ; lecture (a) « connue absente » écartée (un refus R `chevauchement` disparaissait, verdicts faux présentés comme déterminés) ; lecture fine renvoyée à #105 | #60, 60b ; spéc. donnees § 2.2 (b), § 9.6 ; M169 ; #105 |
+| M702 | 18/11/2026 | **60b, Q4 : date d'effet de l'hypothèse H de D03g pour les filles à deux parentes, à la lettre du § 9.6 P18 (a)** : victime : max(visibilité de sa catastrophe + délai, visibilité des parentes) ; dossier : max(visibilité de son sinistre + délai, visibilité des parentes) (extension aux dossiers validée par `actuary` en application de la même phrase) ; règle générique max(parentes) + délai écartée | #60, 60b ; spéc. donnees § 9.6 |
+| M703 | 18/11/2026 | **60b, Q1 : D03i sous `exclure`** : la ligne reste dans `vue$visibilite_non_determinee` (motif D03i), y compris sous `exclure` pour les quatre familles ; la règle de D03g (sortie de la vue) n'est pas reprise (visibilité = fait de la donnée ; enjeu non déterminé plutôt que nul) ; `postes_a_arreter()` arrête les postes de toute famille qui n'exclut pas le motif (aucune déclaration comprise) | #60, 60b ; spéc. donnees § 2.2, § 6 |
+| M704 | 18/11/2026 | **60b, Q3 (constat M1 de l'audit) : arrêt des lecteurs d'une date de D03i manquante à tout arrêté** : pour chaque constat D03i (t, c), les postes qui lisent (t, c) selon `lectures.csv` sont arrêtés, motif D03i, pour les familles qui n'excluent pas D03i ; avant l'extraction, la règle 3 du § 6 (table et descendance) reste la plus large ; report avec échec attendu écarté (provision dégradée sans signal) ; restriction aux unités renvoyée à #105 ; aucun effet sur les dix couples (mesuré) | #60, 60b ; spéc. donnees § 6 ; #105 |
+
+Prochain numéro : **M705**.
 
 ## 5. Escalades, relances et arrêts hors branche
 
