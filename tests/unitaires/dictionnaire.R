@@ -230,6 +230,30 @@ verifier("modalité en double (assures.sexe, « F;M;M ») : refus nommant table,
 verifier("modalité en double (assures.sexe, « A;A ») : refus nommant la modalité",
          grepl("^dictionnaire_invalide .*en double dans assures\\.sexe : A$", motif_modalites("A;A")))
 verifier_egal("modalités distinctes (assures.sexe, « F;M ») : forme admise", motif_modalites("F;M"), "aucun")
+# #162 : une modalité vide ou entourée d'espaces allonge le domaine sans valeur de la base ;
+# motifs sans caractère non ASCII (les batteries tournent aussi sous une locale C)
+refus_modalite_mal_formee <- function(modalites, nommee, debut = "^dictionnaire_invalide ") {
+  grepl(paste0(debut, ".*modalit\u00e9 vide ou entour\u00e9e d'espaces dans assures\\.sexe : \u00ab", nommee, "\u00bb$"),
+        motif_modalites(modalites))
+}
+verifier("modalité vide (assures.sexe, « F;;M ») : refus nommant ligne, table et colonne",
+         refus_modalite_mal_formee("F;;M", "", paste0("^dictionnaire_invalide .*colonnes\\.csv, ligne ", ligne_sexe, " : ")))
+verifier("modalité vide en tête (« ;F;M ») : refus", refus_modalite_mal_formee(";F;M", ""))
+verifier("deux modalités vides (« F;;;M ») : refus de la modalité vide, message non tronqué, avant le doublon",
+         refus_modalite_mal_formee("F;;;M", ""))
+verifier("modalité vide en queue (« F;M; » et « F;M;; ») : refus",
+         refus_modalite_mal_formee("F;M;", "") && refus_modalite_mal_formee("F;M;;", ""))
+verifier("modalité précédée d'une espace (« F; M ») : refus nommant la modalité", refus_modalite_mal_formee("F; M", " M"))
+verifier("modalité suivie d'une espace (« F ;M ») : refus nommant la modalité", refus_modalite_mal_formee("F ;M", "F "))
+verifier("modalité faite d'espaces (« F; ;M ») : refus", refus_modalite_mal_formee("F; ;M", " "))
+verifier("modalité précédée d'une tabulation (« F;<tab>M ») : refus", refus_modalite_mal_formee("F;\tM", "\tM"))
+verifier("modalité précédée d'une tabulation verticale (« F;<VT>M », U+000B) : refus", refus_modalite_mal_formee("F;\vM", "\vM"))
+verifier("modalité précédée d'un saut de page (« F;<FF>M », U+000C) : refus", refus_modalite_mal_formee("F;\fM", "\fM"))
+# U+000D traverse la relecture du CSV (read.csv) et en ressort U+000A : le refus nomme alors « F\\n »
+verifier("modalité suivie d'un saut de ligne ou d'un retour chariot (« F;M<LF> », « F<CR>;M ») : refus",
+         refus_modalite_mal_formee("F;M\n", "M\n") && refus_modalite_mal_formee("F\r;M", "F[\r\n]"))
+verifier_egal("modalité à espace insécable (« F;\\u00a0M », U+00A0) : forme admise (classe de blancs fermée, M655)",
+              motif_modalites("F;\u00a0M"), "aucun")
 x <- copie_alteree("tables.csv", function(df) { df$en_trop <- ""; df })
 verifier_refus("colonne en trop dans un CSV", lire_dictionnaire(x), "dictionnaire_invalide")
 x <- copie_alteree("types_evenements.csv", function(df) { df$colonnes_requises[2L] <- "inconnue"; df })

@@ -225,6 +225,19 @@ dictionnaire <- function() {
     # Une modalit\u00e9 d\u00e9clar\u00e9e deux fois fausse tout contr\u00f4le qui lit le domaine de la colonne
     # (un domaine (A, A) n'a qu'une valeur, mais sa longueur est 2 : #145) ; la premi\u00e8re est nomm\u00e9e.
     mod_i <- .eclater(col$modalites[i])
+    # Une modalité vide ou entourée d'espaces (`F;;M`, `A; F`, `A;`) allonge le domaine d'une valeur que
+    # la base ne porte pas telle quelle (#162) ; refus avant celui du doublon, dont le message serait
+    # tronqué pour deux modalités vides. Lue sur la chaîne brute, car strsplit() perd le dernier élément vide.
+    # Blancs : classe fermée U+0020, U+0009 à U+000D (M655), que trimws() par défaut ne couvre pas en entier
+    # (U+000B et U+000C) ; U+00A0 reste une modalité admise.
+    if (col$modalites[i] != "") {
+      brutes <- strsplit(paste0(col$modalites[i], ";"), ";", fixed = TRUE)[[1L]]
+      mal_formees <- brutes[brutes != trimws(brutes, whitespace = "[ \t\n\v\f\r]") | !nzchar(brutes)]
+      if (length(mal_formees)) {
+        echec("colonnes.csv", i, sprintf("modalit\u00e9 vide ou entour\u00e9e d'espaces dans %s.%s : \u00ab%s\u00bb",
+                                         col$table[i], col$colonne[i], mal_formees[1L]))
+      }
+    }
     if (anyDuplicated(mod_i)) {
       echec("colonnes.csv", i, sprintf("modalit\u00e9 en double dans %s.%s : %s", col$table[i],
                                        col$colonne[i], mod_i[anyDuplicated(mod_i)]))
