@@ -967,7 +967,7 @@ Les constantes sont citées d'après le code (\code{R/outils.R}).
 \rowcolor{tableheader}
 \textcolor{financeblue}{\textbf{Constante}} & \textcolor{financeblue}{\textbf{Valeur}} & \textcolor{financeblue}{\textbf{Objet}} \\
 \code{VERSION\_FICHE} & entier \code{1} & Version du format de la fiche de calcul, écrite dans la fiche par \code{construire\_fiche()} et contrôlée la première au rejeu (section~\ref{sec:plan-fiche}). \\
-\code{VERSION\_DICTIONNAIRE\_ATTENDUE} & \code{"1.5"} & Version du dictionnaire de la base attendue par le moteur (dictionnaire de la base, version~1.5). Lue par \code{dictionnaire()}, qui refuse un dictionnaire embarqué d'une autre version, et par \code{controler\_version\_extraction()}, qui refuse une base d'une autre version (section~\ref{sec:dictionnaire}). \\
+\code{VERSION\_DICTIONNAIRE\_ATTENDUE} & \code{"1.6"} & Version du dictionnaire de la base attendue par le moteur (dictionnaire de la base, version~1.6). Lue par \code{dictionnaire()}, qui refuse un dictionnaire embarqué d'une autre version, et par \code{controler\_version\_extraction()}, qui refuse une base d'une autre version (section~\ref{sec:dictionnaire}). \\
 \code{REPRESENTATION\_CANONIQUE} & \code{"provie-resultat-1"} & Identifiant de la représentation canonique du résultat, dont \code{empreinte\_resultat()} calcule le MD5, écrit dans la fiche de calcul par \code{construire\_fiche()} (sections~\ref{sec:plan-fiche} et~\ref{sec:rapport-empreintes}). \\
 \code{VERSION\_LISTE} & entier \code{1} & Version du format de sérialisation des listes (section~\ref{sec:format-liste}). \\
 \code{MOTIFS\_REFUS} & dix-neuf motifs & Liste fermée des motifs de refus d'appel (ci-dessous). \\
@@ -1429,7 +1429,7 @@ Les constantes du module sont citées d'après le code
 \textcolor{financeblue}{\textbf{Constante}} & \textcolor{financeblue}{\textbf{Valeur et objet}} \\
 \code{TYPES\_DICTIONNAIRE} & \code{character}, \code{integer}, \code{numeric}, \code{Date}, \code{logical}~: les cinq types d'une colonne. \\
 \code{FUTUR\_ADMIS\_VALEURS} & \code{TRUE}, \code{FALSE}, \code{programmable}~: valeurs de \code{colonnes.csv}, \code{futur\_admis}. \\
-\code{PORTEES\_CONTROLES} & \code{colonne}, \code{table}, \code{colonne\_table}, \code{ligne}~: valeurs de \code{controles.csv}, \code{portee}. \\
+\code{PORTEES\_CONTROLES} & \code{colonne}, \code{table}, \code{colonne\_table}, \code{ligne}, \code{ligne\_table}~: valeurs de \code{controles.csv}, \code{portee}\fsp; dans l'état du code, \code{ligne\_table} est encore lue comme \code{colonne\_table} (état transitoire T1, spécification du module \code{donnees}, version~1.9, §~9.8). \\
 \code{FICHIERS\_DICTIONNAIRE} & Les sept CSV, dans l'ordre du tableau ci-dessus, qui est celui des empreintes de \code{dictionnaire.txt}. \\
 \code{COLONNES\_DICTIONNAIRE} & Liste, par CSV, des noms de colonnes attendus, dans leur ordre. \\
 \end{tabular}
@@ -3510,7 +3510,7 @@ Les constantes du module sont citées d'après le code (\code{R/donnees.R})~:
 \code{COMPOSANTES\_ENJEU} & Tableau des composantes de l'enjeu (composante, unité, définition), dix lignes. \\
 \code{CAUSE\_NON\_IMPLEMENTE} & \code{"non\_implemente"}~: cause d'un contrôle reporté. \\
 \code{CAUSE\_NON\_LISIBLE} & \code{"non\_lisible"}~: cause d'un sous-cas illisible dans la base. \\
-\code{CONTROLES\_NON\_IMPLEMENTES} & Tableau des contrôles reportés (code, table, colonne), six lignes~: D03d sur \code{assures.situation\_familiale}, D09 aux seuils sur cinq tables. \\
+\code{CONTROLES\_NON\_IMPLEMENTES} & Tableau des contrôles reportés (code, table, colonne), dix-neuf lignes~: six reports déclarés (D03d sur \code{assures.situation\_familiale}, D09 aux seuils sur cinq tables) et treize rangées d'états transitoires du dictionnaire~1.6, chacune retirée par le commit qui écrit son contrôle (spécification du module \code{donnees}, version~1.9, §~9.8)~: D03i sur quatre tables (T2), D03g sur \code{dossiers}, \code{catastrophes} et \code{victimes} (T3), \code{parente\_posterieure} sur trois tables (T4), D02b sur \code{prestations} (T5), D11b sur \code{dossiers} et D11c sur \code{affiliations} (T9). \\
 \end{tabular}
 \end{center}
 
@@ -5504,7 +5504,7 @@ Les constantes du module sont citées d'après le code
 \code{FLUX\_SIMULATION\_V2} & \code{individuels}, \code{suites\_deces}~: flux ajoutés par une loi vraie de version~2, tirés après les précédents. \\
 \code{GRAINES\_SIMULATION\_V2} & \code{population}, \code{famille}, \code{sinistres}, \code{information}, \code{individuels}, \code{suites\_deces}, \code{defauts}~: noms de l'argument \code{graines} pour une loi vraie de version~2, dans l'ordre des tirages. \\
 \code{VERSION\_LOI\_VRAIE} & Entier \code{2}~: version du format de la loi vraie (la version~1 reste lue). \\
-\code{VERSION\_SIMULATEUR} & Entier \code{1}~: version du simulateur, consignée au manifeste. \\
+\code{VERSION\_SIMULATEUR} & Entier \code{2}~: version du simulateur, consignée au manifeste. \\
 \code{DEFAUTS\_SIMULES} & Catalogue des défauts injectables (rang, code, paramètre, table, lignes éligibles), douze lignes. \\
 \code{COLONNES\_REGISTRE} & Colonnes du registre des défauts, dans leur ordre. \\
 \code{SCHEMA\_VERITE} & Tables de vérité, leurs colonnes et leurs types (types du dictionnaire). \\
