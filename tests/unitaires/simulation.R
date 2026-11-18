@@ -26,9 +26,9 @@ verifier("catalogue des défauts simulés : rangs 1..n, codes et paramètres du 
 section("simulation : forme du jeu simulé (ADR 0010, point 19)")
 set.seed(4242)
 etat <- .Random.seed
-j1 <- simuler_jeu_v1("v1-modeste-01")
+j1 <- simuler_jeu_v1("v1-modeste-04")
 verifier("simuler_base() restaure l'état du générateur de l'appelant", identical(.Random.seed, etat))
-j2 <- simuler_jeu_v1("v1-modeste-02")
+j2 <- simuler_jeu_v1("v1-modeste-05")
 obligatoires <- d$tables$table[d$tables$obligatoire == "O"]
 verifier("classe jeu_simule ; champs base, loi_vraie, verite, manifeste, declarations",
          inherits(j1, "jeu_simule") && identical(names(j1), c("base", "loi_vraie", "verite", "manifeste", "declarations")))
@@ -42,19 +42,31 @@ verifier("base : types conformes au dictionnaire (controler_types)", {
 verifier("base : noms de lignes automatiques",
          all(vapply(c(j1$base, j2$base), function(df) identical(attr(df, "row.names"), seq_len(nrow(df))) ||
                       (nrow(df) == 0L), NA)))
-verifier_egal("loi vraie portée telle quelle", j2$loi_vraie, loi_vraie_v1("v1-modeste-02"))
+verifier_egal("loi vraie portée telle quelle", j2$loi_vraie, loi_vraie_v1("v1-modeste-05"))
 verifier_egal("verite : tables de ce que l'organisme ignore et registre",
               names(j1$verite), c("flux_futurs", "etats_vrais", "familles_vraies", "sinistres_non_declares", "defauts"))
 verifier_egal("registre : colonnes du point 19", names(j2$verite$defauts),
               c("code", "parametre", "rang", "table", "cle", "colonne", "valeur_propre", "valeur_injectee"))
 verifier("registre du jeu sans défaut : vide", nrow(j1$verite$defauts) == 0L)
-verifier("registre de v1-modeste-02 : chaque défaut simulé au moins une fois",
+verifier("registre de v1-modeste-05 : chaque défaut simulé au moins une fois",
          setequal(unique(j2$verite$defauts$code), ns$DEFAUTS_SIMULES$code))
 verifier_egal("manifeste : champs dans l'ordre de l'ADR 0010, onzième série, (c)", names(j1$manifeste),
               c("nom", "version_dictionnaire", "version_provie", "version_simulateur", "graines", "date_extraction",
                 "volumetrie", "description", "date_visa", "colonnes_verite"))
 verifier("manifeste : version_simulateur = VERSION_SIMULATEUR (entier)",
          identical(j1$manifeste$version_simulateur, ns$VERSION_SIMULATEUR) && is.integer(ns$VERSION_SIMULATEUR))
+# maintien_deces (dictionnaire 1.6, P6) : constante du simulateur, hors de la loi vraie (M678 ;
+# spécification `donnees` v1.9, § 9.7) : FALSE sur la garantie deces d'un contrat collectif,
+# manquante ailleurs (une valeur présente hors condition serait hors_domaine)
+maintien_attendu <- function(b) {
+  gs <- b$garanties_souscrites
+  nature <- b$contrats$nature_contrat[match(gs$id_contrat, b$contrats$id_contrat)]
+  ifelse(gs$code_garantie == "deces" & nature != "individuel", FALSE, NA)
+}
+verifier("maintien_deces (P6, M678) : FALSE sur la garantie deces de chaque contrat collectif, manquante ailleurs (v1-modeste-04, -05)",
+         identical(j1$base$garanties_souscrites$maintien_deces, maintien_attendu(j1$base)) &&
+           identical(j2$base$garanties_souscrites$maintien_deces, maintien_attendu(j2$base)) &&
+           sum(j1$base$garanties_souscrites$maintien_deces %in% FALSE) == 5L)
 verifier("schéma de la vérité : tables et types de SCHEMA_VERITE, copiés dans manifeste$colonnes_verite",
          identical(names(j2$verite), names(ns$SCHEMA_VERITE)) &&
            all(vapply(names(ns$SCHEMA_VERITE), function(t) {
@@ -82,8 +94,8 @@ verifier("flux_futurs : décès survenus après l'extraction distingués (date_s
 u8 <- function(x) { Encoding(x) <- "UTF-8"; x }
 verifier_egal("format() : décomptes du jeu (nom, versions, visa, tables, registre par code, déclarations)",
               format(j2)[c(1L, 2L, 4L, 5L)],
-              u8(c("jeu simulé v1-modeste-02 (extraction du 2025-12-31)",
-                paste0("  dictionnaire 1.5, simulateur 1, provie ", j2$manifeste$version_provie, ", visa ",
+              u8(c("jeu simulé v1-modeste-05 (extraction du 2025-12-31)",
+                paste0("  dictionnaire 1.6, simulateur 2, provie ", j2$manifeste$version_provie, ", visa ",
                        if (is.na(j2$manifeste$date_visa)) "non renseigné" else format(j2$manifeste$date_visa)),
                 paste0("  registre des défauts : ", nrow(j2$verite$defauts), " ligne(s) ; par code : D01b 4, D02a 4, ",
                        "D02b 3, D03a 11, D03b 6, D03c 11, D03g 1, D04b 4, D05 2, D06 3, D09 1, D13 4"),
@@ -106,7 +118,7 @@ verifier("portefeuille à garanties liées : décès, incapacité, invalidité s
          all(vapply(split(j1$base$garanties_souscrites$code_garantie, j1$base$garanties_souscrites$id_contrat),
                     function(x) setequal(x, c("deces", "incapacite", "invalidite")), NA)) &&
            setequal(unique(j1$base$sinistres$nature_sinistre), c("deces", "arret_travail")))
-verifier_egal("deux tirages de mêmes entrées : identiques", simuler_jeu_v1("v1-modeste-01"), j1)
+verifier_egal("deux tirages de mêmes entrées : identiques", simuler_jeu_v1("v1-modeste-04"), j1)
 
 section("simulation : flux séparés et défauts indépendants (E4.9)")
 # Jeu propre reconstitué du jeu à défauts et de son registre (valeurs propres ; lignes
@@ -131,7 +143,7 @@ reconstituer <- function(base, registre) {
   }
   base
 }
-verifier_egal("jeu propre de v1-modeste-02 (base et registre) = base de v1-modeste-01",
+verifier_egal("jeu propre de v1-modeste-05 (base et registre) = base de v1-modeste-04",
               reconstituer(j2$base, j2$verite$defauts), j1$base)
 verifier("tables de vérité du jeu propre inchangées par les défauts",
          identical(j1$verite[1:4], j2$verite[1:4]))
@@ -163,7 +175,7 @@ seul <- vapply(ns$DEFAUTS_SIMULES$parametre, function(p) {
 verifier("activer un défaut seul rend ses lignes du registre complet (douze défauts)", all(seul))
 # A8 : un paramètre du flux information (cadence de saisie des événements) ne change pas les
 # sorties des flux amont (population, famille, sinistres)
-lv_cad <- loi_vraie_v1("v1-modeste-01")
+lv_cad <- loi_vraie_v1("v1-modeste-04")
 lv_cad$cadences$saisie_evenement <- 21
 cad <- simuler_base(lv_cad, GRAINES_V1, A, nom = "v1-modeste-98", description = "essai")
 verifier("flux séparés : une autre cadence de saisie ne change ni trajectoires, ni familles, ni population, ni cotisations",
@@ -175,7 +187,7 @@ verifier("flux séparés : une autre cadence de saisie ne change ni trajectoires
            !identical(cad$base$evenements$date_saisie, j1$base$evenements$date_saisie))
 g_info <- GRAINES_V1
 g_info$information <- 1L
-autre <- simuler_base(loi_vraie_v1("v1-modeste-01"), g_info, A, nom = "v1-modeste-99", description = "essai")
+autre <- simuler_base(loi_vraie_v1("v1-modeste-04"), g_info, A, nom = "v1-modeste-99", description = "essai")
 verifier("flux séparés : une autre graine d'information ne change ni les trajectoires vraies ni les familles",
          identical(autre$verite$etats_vrais, j1$verite$etats_vrais) &&
            identical(autre$verite$familles_vraies[, 1:4], j1$verite$familles_vraies[, 1:4]) &&
@@ -183,8 +195,8 @@ verifier("flux séparés : une autre graine d'information ne change ni les traje
            !identical(autre$base$sinistres$date_saisie, j1$base$sinistres$date_saisie))
 
 section("simulation : refus d'appel")
-lv <- loi_vraie_v1("v1-modeste-01")
-sim <- function(loi = lv, graines = GRAINES_V1, date = A, nom = "v1-modeste-01") {
+lv <- loi_vraie_v1("v1-modeste-04")
+sim <- function(loi = lv, graines = GRAINES_V1, date = A, nom = "v1-modeste-04") {
   simuler_base(loi, graines, date, nom = nom, description = "essai")
 }
 verifier_egal("loi vraie sans argument : jeu_invalide", motif_de(simuler_base(lv, GRAINES_V1, A)), "jeu_invalide")
@@ -210,10 +222,10 @@ manque <- lv
 manque$defauts$orpheline <- NULL
 verifier_egal("intensité non déclarée : jeu_invalide", motif_de(sim(loi = manque)), "jeu_invalide")
 verifier_egal("declarations d'une entrée inconnue : jeu_invalide",
-              motif_de(simuler_base(lv, GRAINES_V1, A, nom = "v1-modeste-01", description = "essai",
+              motif_de(simuler_base(lv, GRAINES_V1, A, nom = "v1-modeste-04", description = "essai",
                                     declarations = list(seuils = list()))), "jeu_invalide")
 verifier("declarations réduites aux conventions : admises (A1)",
-         identical(simuler_base(lv, GRAINES_V1, A, nom = "v1-modeste-01", description = "essai",
+         identical(simuler_base(lv, GRAINES_V1, A, nom = "v1-modeste-04", description = "essai",
                                 declarations = list(conventions = list(age = "revolu")))$declarations,
                    list(conventions = list(age = "revolu"))))
 verifier_egal("extraction avant le début de l'historique : jeu_invalide",
@@ -318,7 +330,7 @@ section("simulation : controler_base() accepte chaque jeu (critère 8)")
 # l'arrêté demande la déclaration (les jeux versionnés ne la portent pas, M189).
 avec_d07b <- function(declarations) { declarations$seuils$d07b_mois <- 6L; declarations }
 # Exclusion de D12 pour engagement, action conserver (valeur du plan de référence de V2, M337 ;
-# spécification `donnees` v1.6, § 8.12) : au 2024-12-31, v1-modeste-03 détecte D12 sur SI0181
+# spécification `donnees` v1.6, § 8.12) : au 2024-12-31, v1-modeste-06 détecte D12 sur SI0181
 # (EV00429, suite visible commençant par une sortie), qui demande l'exclusion.
 avec_d12 <- function(declarations) {
   declarations$exclusions <- list(list(motif = "D12", famille = "engagement", action = "conserver"))
@@ -335,37 +347,37 @@ injectees <- function(reg) {
 for (arrete in list(A, A0)) {
   etiquette <- format(arrete)
   r1 <- bilan_de(j1, arrete)
-  verifier(paste0("v1-modeste-01 à ", etiquette, " : aucun constat, aucune déclaration requise, vue définitive"),
+  verifier(paste0("v1-modeste-04 à ", etiquette, " : aucun constat, aucune déclaration requise, vue définitive"),
            nrow(r1$controles) == 0L && nrow(r1$declarations_requises) == 0L && nrow(r1$refus_tables) == 0L &&
              !r1$vue$provisoire)
-  verifier(paste0("v1-modeste-01 à ", etiquette, " : seuls non exécutés, les reports déclarés et D03h non lisible"),
-           all(r1$controles_non_executes$cause %in% c("non_implemente", "non_lisible")))
+  verifier(paste0("v1-modeste-04 à ", etiquette, " : seuls non exécutés, les reports et les états transitoires déclarés (non_implemente ; D03h non lisible retiré par P6)"),
+           all(r1$controles_non_executes$cause %in% "non_implemente"))
   r2 <- bilan_de(j2, arrete)
-  verifier(paste0("v1-modeste-02 à ", etiquette, " : jeu de contrôle, D09 refuse prestations.montant (seul refus)"),
+  verifier(paste0("v1-modeste-05 à ", etiquette, " : jeu de contrôle, D09 refuse prestations.montant (seul refus)"),
            identical(r2$refus_tables[, c("table", "colonne", "motif")],
                      data.frame(table = "prestations", colonne = "montant", motif = "D09", stringsAsFactors = FALSE)))
-  verifier(paste0("v1-modeste-02 à ", etiquette, " : aucune déclaration requise"), nrow(r2$declarations_requises) == 0L)
+  verifier(paste0("v1-modeste-05 à ", etiquette, " : aucune déclaration requise"), nrow(r2$declarations_requises) == 0L)
   reg <- j2$verite$defauts
-  verifier(paste0("v1-modeste-02 à ", etiquette, " : chaque défaut injecté figure au bilan, aucun autre code"),
+  verifier(paste0("v1-modeste-05 à ", etiquette, " : chaque défaut injecté figure au bilan, aucun autre code"),
            setequal(paste(r2$controles$code, r2$controles$table), unique(paste(reg$code, reg$table))))
   # identifiants détectés : parmi les lignes injectées du même défaut
   inclus <- vapply(seq_len(nrow(r2$controles)), function(k) {
     ids <- strsplit(r2$controles$identifiants[k], ";", fixed = TRUE)[[1L]]
     all(ids %in% reg$cle[reg$code == r2$controles$code[k] & reg$table == r2$controles$table[k]])
   }, NA)
-  verifier(paste0("v1-modeste-02 à ", etiquette, " : identifiants détectés parmi les lignes injectées"), all(inclus))
+  verifier(paste0("v1-modeste-05 à ", etiquette, " : identifiants détectés parmi les lignes injectées"), all(inclus))
   n_inj <- injectees(reg)
   n_det <- tapply(r2$controles$nombre, paste(r2$controles$code, r2$controles$table), max)
   if (identical(arrete, A)) {
-    verifier_egal("v1-modeste-02 à l'extraction : détection exacte = injection (spécification, § 2.5, critère 4)",
+    verifier_egal("v1-modeste-05 à l'extraction : détection exacte = injection (spécification, § 2.5, critère 4)",
                   n_det[names(n_inj)], n_inj)
   } else {
     # règles B et P (base entière, indépendantes de l'arrêté) : exactes à tout arrêté ; règle V
     # (vue) : au plus les lignes injectées
     bp <- c("D02b prestations", "D02b evenements", "D03g prestations", "D04b cotisations", "D09 prestations")
     bp <- intersect(bp, names(n_inj))
-    verifier_egal(paste0("v1-modeste-02 à ", etiquette, " : règles B et P exactes"), n_det[bp], n_inj[bp])
-    verifier(paste0("v1-modeste-02 à ", etiquette, " : règle V, au plus les lignes injectées"),
+    verifier_egal(paste0("v1-modeste-05 à ", etiquette, " : règles B et P exactes"), n_det[bp], n_inj[bp])
+    verifier(paste0("v1-modeste-05 à ", etiquette, " : règle V, au plus les lignes injectées"),
              all(n_det[names(n_inj)] <= n_inj))
   }
 }
@@ -382,13 +394,13 @@ for (arrete in list(A, A0)) {
 r_sans <- controler_base(j2$base, A0, conventions = j2$declarations$conventions)
 r_avec <- bilan_de(j2, A0)
 cles_ne <- function(r) with(r$controles_non_executes, paste(code, table, colonne, cause))
-verifier_egal("W8 (#40) : v1-modeste-02 sans déclaration au 2024-12-31 : PR00027 non déterminée (D03g), aucune ligne (D02a, prestations) dans controles_non_executes ; lignes non exécutées = celles avec déclarations, plus D02c (declaration_absente) et paiements_cumules (D09, inchangé) ; D02a sur PR00039 seule",
+verifier_egal("W8 (#40) : v1-modeste-05 sans déclaration au 2024-12-31 : PR00027 non déterminée (D03g), aucune ligne (D02a, prestations) dans controles_non_executes ; lignes non exécutées = celles avec déclarations, plus D02c (declaration_absente) et paiements_cumules (D09, inchangé) ; D02a sur PR00039 seule",
               list(with(r_sans$vue$visibilite_non_determinee, identifiants[table == "prestations"]),
                    nrow(r_sans$controles_non_executes[r_sans$controles_non_executes$code == "D02a", ]),
                    setdiff(cles_ne(r_sans), cles_ne(r_avec)),
                    r_sans$controles$identifiants[r_sans$controles$code == "D02a"]),
               list("PR00027", 0L, c("D02c assures NA declaration_absente", "D02c famille NA declaration_absente",
-                                    "D07 dossiers NA declaration_absente", "D12 evenements type_evenement declaration_absente",
+                                    "D07b dossiers NA declaration_absente", "D12 evenements type_evenement declaration_absente",
                                     "paiements_cumules prestations montant D09"), "PR00039"))
 
 section("lecture : ecrire_jeu() et lire_jeu() (ADR 0010, point 20)")
@@ -577,15 +589,15 @@ for (champ in c("loi_vraie", "manifeste", "declarations")) {
            motif_de(ecrire_jeu(porte, d9)) == "liste_invalide" && !file.exists(d9))
 }
 
-section("simulation : loi vraie version 2 et jeu v1-modeste-03 (#69 ; spécification de B2, § 7.9.2 et § 7.9.7, J.1 à J.5)")
+section("simulation : loi vraie version 2 et jeu v1-modeste-06 (#69 ; spécification de B2, § 7.9.2 et § 7.9.7, J.1 à J.5)")
 lv3 <- LOI_VRAIE_V1_03
 G3 <- GRAINES_V1_03
-sim3 <- function(loi = lv3, graines = G3, date = A) simuler_base(loi, graines, date, nom = "v1-modeste-03", description = "essai")
+sim3 <- function(loi = lv3, graines = G3, date = A) simuler_base(loi, graines, date, nom = "v1-modeste-06", description = "essai")
 avec <- function(l, chemin, valeur) { l[[strsplit(chemin, "/", fixed = TRUE)[[1L]]]] <- valeur; l }
 # J.1 : version du simulateur inchangée, version 1 lue (identité des jeux 01 et 02 :
 # tests/test_reproductibilite.R)
-verifier("J.1 : VERSION_SIMULATEUR vaut 1, VERSION_LOI_VRAIE vaut 2 ; une loi de version 1 est lue",
-         identical(ns$VERSION_SIMULATEUR, 1L) && identical(ns$VERSION_LOI_VRAIE, 2L) && inherits(j1, "jeu_simule") &&
+verifier("J.1 : VERSION_SIMULATEUR vaut 2 (dictionnaire 1.6, colonne maintien_deces, M678), VERSION_LOI_VRAIE vaut 2 ; une loi de version 1 est lue",
+         identical(ns$VERSION_SIMULATEUR, 2L) && identical(ns$VERSION_LOI_VRAIE, 2L) && inherits(j1, "jeu_simule") &&
            identical(j1$loi_vraie$version, 1L))
 # J.2 : contrôles de la version 2, un témoin par refus
 chemins_v2 <- vapply(ns$.SCHEMA_LOI_VRAIE_V2, `[`, "", 1L)
@@ -638,7 +650,7 @@ verifier("J.2 : témoin : periode_cotisation civile, aucun contrat individuel, p
                                l <- avec(l, "individuels/nombre_contrats", 0L)
                                avec(l, "suites_deces/part_non_reclames", 0) }), "jeu_simule"))
 
-j3 <- simuler_jeu_v1("v1-modeste-03")
+j3 <- simuler_jeu_v1("v1-modeste-06")
 b3 <- j3$base
 # J.3 : indépendance des flux. Lignes collectives (préfixes CT, GS, AS) comparées hors des
 # identifiants en numérotation commune (sinistres, événements, prestations, cotisations) ; un
@@ -701,8 +713,8 @@ verifier(paste0("J.3 : une autre graine suites_deces ne change que les qualités
            identical(autre_sd$verite[c("etats_vrais", "familles_vraies", "sinistres_non_declares")],
                      j3$verite[c("etats_vrais", "familles_vraies", "sinistres_non_declares")]) &&
            !identical(autre_sd$base$beneficiaires, b3$beneficiaires))
-# J.4 : additivité, loi de v1-modeste-01 en version 2 aux valeurs neutres
-neutre <- loi_vraie_v1("v1-modeste-01")
+# J.4 : additivité, loi de v1-modeste-04 en version 2 aux valeurs neutres
+neutre <- loi_vraie_v1("v1-modeste-04")
 neutre$version <- 2L
 neutre$garanties$periode_cotisation <- "civile"
 neutre$garanties$deces$majoration_conjoint <- 0
@@ -713,27 +725,32 @@ neutre$individuels$taux_tarif$annee <- c(2018L, 2020L, 2023L)
 neutre$suites_deces <- list(part_non_reclames = 0, part_fixation_differee = 0, delai_fixation_differee = 1095)
 g_neutre <- c(GRAINES_V1[c("population", "famille", "sinistres", "information")], list(individuels = 1L, suites_deces = 2L),
               GRAINES_V1["defauts"])
-jn <- simuler_base(neutre, g_neutre, A, nom = "v1-modeste-01", description = j1$manifeste$description)
-verifier("J.4 : loi de v1-modeste-01 en version 2 aux valeurs neutres : base et vérité identical à celles de v1-modeste-01",
+jn <- simuler_base(neutre, g_neutre, A, nom = "v1-modeste-04", description = j1$manifeste$description)
+verifier("J.4 : loi de v1-modeste-04 en version 2 aux valeurs neutres : base et vérité identical à celles de v1-modeste-04",
          identical(jn$base, j1$base) && identical(jn$verite, j1$verite))
 # J.5 : deux appels identiques ; aller-retour exact
-verifier_egal("J.5 : deux tirages de v1-modeste-03 : identiques", simuler_jeu_v1("v1-modeste-03"), j3)
+verifier_egal("J.5 : deux tirages de v1-modeste-06 : identiques", simuler_jeu_v1("v1-modeste-06"), j3)
+verifier_egal("maintien_deces (P6, M678) : v1-modeste-06, FALSE sur les six garanties deces collectives, manquante sur les 212 autres lignes (dont 200 décès individuels)",
+              list(identical(j3$base$garanties_souscrites$maintien_deces, maintien_attendu(j3$base)),
+                   table(j3$base$garanties_souscrites$maintien_deces, useNA = "always")[["FALSE"]],
+                   sum(is.na(j3$base$garanties_souscrites$maintien_deces))),
+              list(TRUE, 6L, 212L))
 d3b <- tempfile("jeu-")
-verifier_egal("J.5 : lire_jeu(ecrire_jeu(v1-modeste-03)) identique", lire_jeu(ecrire_jeu(j3, d3b)), j3)
+verifier_egal("J.5 : lire_jeu(ecrire_jeu(v1-modeste-06)) identique", lire_jeu(ecrire_jeu(j3, d3b)), j3)
 # B1 (audit) : description du jeu, de sa loi vraie et statut sans octet écrit en clair (`<c3>`),
 # signe d'un paste() de chaînes d'encodages mêlés sous une locale C
 octets_clairs <- function(x) grepl("<[0-9a-f]{2}>", x)
 verifier("descriptions des jeux, de leurs lois vraies et statuts : aucun motif <xx> (octet écrit en clair)",
          !any(vapply(names(JEUX_V1), function(n) {
-           j <- if (n == "v1-modeste-03") j3 else if (n == "v1-modeste-01") j1 else j2
+           j <- if (n == "v1-modeste-06") j3 else if (n == "v1-modeste-04") j1 else j2
            any(octets_clairs(c(j$manifeste$description, j$loi_vraie$description, j$loi_vraie$statut)))
          }, NA)))
-verifier("v1-modeste-03 : contrats individuels à prime unique, annuelle et trimestrielle ; majoration du conjoint ; capitaux non réclamés",
+verifier("v1-modeste-06 : contrats individuels à prime unique, annuelle et trimestrielle ; majoration du conjoint ; capitaux non réclamés",
          setequal(b3$garanties_souscrites$periodicite_cotisation[startsWith(b3$garanties_souscrites$id_garantie_souscrite, "GI")],
                   c("unique", "annuelle", "trimestrielle")) &&
            any(b3$parametres$parametre == "majoration_conjoint") && any(b3$beneficiaires$qualite == "non_identifie"))
 
-section("jeu v1-modeste-03 : critères de visa V.1 à V.7 (spécification de B2, § 7.9.7 ; M188)")
+section("jeu v1-modeste-06 : critères de visa V.1 à V.7 (spécification de B2, § 7.9.7 ; M188)")
 source(file.path(racine, "tests", "b2_bases.R"), local = TRUE)
 tb3 <- b2_tables_v1_03()
 verifier_egal("tables fictives des plans des jeux : empreintes du § 3.6 (m15)",
@@ -774,7 +791,7 @@ for (arrete in list(A0, A)) {
   du <- e1$id_dossier[e1$etat_dossier == "capital_du"]
   paye_du <- du %in% b3$prestations$id_dossier[b3$prestations$type_prestation == "capital" &
                                                  b3$prestations$date_reglement <= arrete]
-  cat(sprintf("    [INDICATEUR] v1-modeste-03 à %s : dossiers de P1 capital_du payés / non payés : %d / %d\n", et_a,
+  cat(sprintf("    [INDICATEUR] v1-modeste-06 à %s : dossiers de P1 capital_du payés / non payés : %d / %d\n", et_a,
               sum(paye_du), sum(!paye_du)))
   verifier(paste0("V.3 à ", et_a, " : >= 1 dossier de P2 ; >= 1 dossier de P1 ouvert ",
                   "d'un contrat collectif ; P3 individuel : chaque nature valorisée ; P3 collectif > 0, d'une période non civile"),

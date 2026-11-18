@@ -364,7 +364,7 @@ verifier_refus("lire_plan() : texte non canonique refusé", lire_plan(charToRaw(
 
 section("plan : fiche de calcul, aller-retour (critère 1.6) et VERSION_FICHE (critère 1.7)")
 
-j <- lire_jeu(file.path(racine, "inst", "extdata", "jeux", "v1-modeste-01"))
+j <- lire_jeu(file.path(racine, "inst", "extdata", "jeux", "v1-modeste-04"))
 base <- j$base
 bilan <- controler_base(base, as.Date("2025-12-31"), j$declarations$declarations, j$declarations$conventions)
 vide_chr <- function(colonnes) as.data.frame(stats::setNames(rep(list(character(0)), length(colonnes)), colonnes),
@@ -397,7 +397,7 @@ verifier("fiche : provenance reprise ; résultat et code non remplis (issue 4) ;
 verifier("fiche : versions de R, de provie, du dictionnaire",
          identical(fiche$versions$r, paste(R.version$major, R.version$minor, sep = ".")) &&
            identical(fiche$versions$provie, as.character(utils::packageVersion("provie"))) &&
-           identical(fiche$versions$dictionnaire, "1.5"))
+           identical(fiche$versions$dictionnaire, "1.6"))
 verifier_egal("fiche : graine et générateur", fiche$graine,
               list(valeur = 1L, generateur = c("Mersenne-Twister", "Inversion", "Rejection")))
 verifier_egal("générateur consigné = celui que fixe avec_graine()", ns$avec_graine(1L, RNGkind()), ns$.GENERATEUR_GRAINE)
@@ -471,7 +471,7 @@ verifier("fiche relue : mêmes contrôles", nrow(ns$controler_rejeu(lire_fiche(o
 
 section("plan : sous-schéma donnees inchangé (critère 1.8)")
 
-for (nom in c("v1-modeste-01", "v1-modeste-02")) {
+for (nom in c("v1-modeste-04", "v1-modeste-05")) {
   jj <- lire_jeu(file.path(racine, "inst", "extdata", "jeux", nom))
   p <- plan_min()
   p$donnees <- jj$declarations$declarations

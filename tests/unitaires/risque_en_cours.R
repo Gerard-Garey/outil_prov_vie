@@ -233,7 +233,7 @@ verifier_egal("témoin rétrospectif calculé seulement à la demande (temoin = 
               list(NA_real_, NA_real_, 2924.6224668679, TRUE), tolerance = TOL)
 
 verifier_egal("témoin rétrospectif : NA pour une prime unique (CTI1 de la base construite à l'arrêté 2025-01-01, avant : -1 010,1010101010), à l'effet comme après ; contrat à primes périodiques (CTI3) : recoupement de Norberg inchangé ; provisions inchangées (#80)",
-              { bc <- b2_base_construite_deces_01()
+              { bc <- b2_base_construite_deces_02()
                 r <- ns$provisions_individuelles(b2_vue(bc, A1), plan_p3(), tb, TRUE)$contrats
                 u <- r[r$id_contrat == "CTI1", ]; pe <- r[r$id_contrat == "CTI3", ]
                 bu <- b2_base_p3(); effet_u <- ns$provisions_individuelles(b2_vue(bu, D("2024-01-01")), plan_p3(D("2024-01-01")), tb, TRUE)$contrats

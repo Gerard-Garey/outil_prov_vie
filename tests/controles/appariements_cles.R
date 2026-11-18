@@ -117,20 +117,22 @@ LISTE_BLANCHE <- c(
     "code",
   "R/donnees.R | lire_declarations | names ( sa ) %in% names ( .EMPLOIS_D02C )" =
     "metadonnee",
-  "R/donnees.R | lire_declarations | paste ( ex $ motif , ex $ famille ) %in% paste ( .EXCEPTIONS_FAMILLE $ motif , .EXCEPTIONS_FAMILLE $ famille )" =
+  "R/donnees.R | lire_declarations | paste ( ex $ motif , ex $ famille ) %in% paste ( exceptions $ motif , exceptions $ famille )" =
     "metadonnee",
+  "R/donnees.R | lire_declarations | ex $ motif %in% parents" =
+    "code",
+  "R/donnees.R | lire_declarations | hy $ motif %in% motifs_s" =
+    "code",
+  "R/donnees.R | lire_declarations | hy $ motif %in% parents" =
+    "code",
   "R/donnees.R | lire_declarations | cle_s [ signalement ] %in% cle_s [ duplicated ( cle_s ) | duplicated ( cle_s , fromLast = TRUE ) ]" =
     "metadonnee",
   "R/donnees.R | .application_d03g | FAMILLES_CALCUL %in% ex $ famille [ ex $ motif == \"D03g\" ]" =
     "metadonnee",
   "R/donnees.R | .application_d03g | REFERENTIELS %in% hy $ referentiel [ hy $ motif == \"D03g\" ]" =
     "metadonnee",
-  "R/donnees.R | .motif_admet | motif %in% names ( .TRAITEMENTS_SOUS_CAS_D10 )" =
-    "metadonnee",
   "R/donnees.R | .motif_admet | match ( motif , dico $ defauts $ code )" =
     "metadonnee",
-  "R/donnees.R | .motif_admet | motif %in% dico $ defauts $ code" =
-    "code",
   "R/donnees.R | .motif_admet | t %in% eclater_champ ( x )" =
     "code",
   "R/donnees.R | .contexte | dico $ tables $ table %in% names ( donnees )" =
@@ -240,6 +242,8 @@ LISTE_BLANCHE <- c(
   "R/donnees.R | .causes_enjeu | d $ colonne %in% ecart $ colonne" =
     "metadonnee",
   "R/donnees.R | .causes_enjeu | dr $ colonne %in% ecart $ colonne" =
+    "metadonnee",
+  "R/donnees.R | .refus_p_empechee | t %in% names ( empechees )" =
     "metadonnee",
   "R/donnees.R | .refus_p_empechee | t %in% ctx $ tables" =
     "metadonnee",

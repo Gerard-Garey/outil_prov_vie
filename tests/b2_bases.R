@@ -154,7 +154,7 @@ b2_base_capital <- function(capital = 100000, instruction = D("2024-09-10"), pai
            montant = paiements$montant, date_saisie = paiements$date)
   list(
     extraction = b2_tab("extraction", date_extraction = extraction, debut_historique = D("2017-01-01"),
-                        type_organisme = "societe_assurance", version_dictionnaire = "1.5", devise = "EUR"),
+                        type_organisme = "societe_assurance", version_dictionnaire = "1.6", devise = "EUR"),
     adherents = b2_tab("adherents", id_adherent = "AD1"),
     contrats = b2_tab("contrats", id_contrat = "CT1", nature_contrat = "collectif_obligatoire", id_adherent = "AD1",
                       date_effet = D("2020-01-01"), mois_echeance = 1L, jour_echeance = 1L, preavis_mois = 2L,
@@ -162,7 +162,7 @@ b2_base_capital <- function(capital = 100000, instruction = D("2024-09-10"), pai
     garanties_souscrites = b2_tab("garanties_souscrites", id_garantie_souscrite = "GS1", id_contrat = "CT1",
                                   code_garantie = "deces", college = "ensemble", date_effet = D("2020-01-01"),
                                   type_assiette = "salaire_reference", option_iad = FALSE, periodicite_cotisation = "annuelle",
-                                  clause_type_beneficiaire = "conjoint_enfants_heritiers"),
+                                  clause_type_beneficiaire = "conjoint_enfants_heritiers", maintien_deces = FALSE),
     parametres = b2_tab("parametres", id_garantie_souscrite = "GS1",
                         parametre = c("taux_capital", "age_fin_garantie", "majoration_conjoint", "majoration_enfant"),
                         valeur = c(2, 67, 0.5, 0.25)),
@@ -204,7 +204,7 @@ b2_base_p3 <- function(periodicite = "unique", prime = NA_real_, tarif = 0.02, c
            montant = cotisation$montant)
   list(
     extraction = b2_tab("extraction", date_extraction = extraction, debut_historique = D("2017-01-01"),
-                        type_organisme = "societe_assurance", version_dictionnaire = "1.5", devise = "EUR"),
+                        type_organisme = "societe_assurance", version_dictionnaire = "1.6", devise = "EUR"),
     adherents = b2_tab("adherents", id_adherent = "AD3"),
     contrats = b2_tab("contrats", id_contrat = c("CT2", "CT3"), nature_contrat = c("individuel", "collectif_obligatoire"),
                       id_adherent = c(NA, "AD3"), id_assure = c("AS2", NA), date_effet = D(c("2024-01-01", "2020-01-01")),
@@ -215,7 +215,7 @@ b2_base_p3 <- function(periodicite = "unique", prime = NA_real_, tarif = 0.02, c
                                   code_garantie = "deces", college = "ensemble", date_effet = D(c("2024-01-01", "2020-01-01")),
                                   type_assiette = c("forfait", "salaire_reference"), option_iad = FALSE,
                                   periodicite_cotisation = c(periodicite, "annuelle"), taux_technique_tarif = as.numeric(c(tarif, NA)),
-                                  clause_type_beneficiaire = "conjoint_enfants_heritiers"),
+                                  clause_type_beneficiaire = "conjoint_enfants_heritiers", maintien_deces = c(NA, FALSE)),
     parametres = b2_tab("parametres", id_garantie_souscrite = c(rep("GS2", nrow(par)), "GS3", "GS3"),
                         parametre = c(par$parametre, "taux_capital", "age_fin_garantie"), valeur = c(par$valeur, 2, 67)),
     assures = b2_tab("assures", id_assure = "AS2", sexe = "M", date_naissance = D("1984-01-01")),
@@ -235,20 +235,25 @@ b2_vue <- function(base, arrete, declarations = NULL, conventions = list(age = "
   b2_ns$vue_a_date(base, arrete, declarations, conventions)
 }
 
-# Base construite `construite-deces-01` (spécification de B2, § 7.8.1, erratum v1.0.8 ; ADR
+# Base construite `construite-deces-02` (spécification de B2, § 7.8.1, erratum v1.0.8 ; ADR
 # 0011, points 11 à 13) : base fictive écrite à la main, sans loi vraie ni graine, qui réunit
 # sous des identifiants distincts (suffixe = nom du cas) les dossiers de R1, R3, R4, R5 (a) et
 # R5 (b) (contrat collectif CTC1, garantie GSC1), les contrats individuels de T1 (CTI1, prime
 # unique) et de T3 / T5 (CTI3, primes annuelles, prime_periodique 2 300), les cotisations de T7
 # (COC1) et T7 bis (COC2) ; valeurs de b2_base_capital() et de b2_base_p3(). Quinze tables du
-# dictionnaire 1.5. Elle ne change jamais en place : une base modifiée prend le numéro 02.
-b2_base_construite_deces_01 <- function() {
+# dictionnaire 1.6. Elle ne change jamais en place : une base modifiée prend le numéro suivant.
+# Remplace `construite-deces-01` (dictionnaire 1.5, lisible à a5e8970 ; #60, commit 60a, M678) :
+# mêmes valeurs, sauf extraction.version_dictionnaire (1.6) et la colonne
+# garanties_souscrites.maintien_deces (FALSE pour GSC1, garantie deces du contrat collectif ;
+# manquante pour GSI1 et GSI3, contrats individuels ; dictionnaire 1.6, P6 ; spécification
+# `donnees` v1.9, § 9.7, précision 2).
+b2_base_construite_deces_02 <- function() {
   cas <- c("R1", "R3", "R4", "R5A", "R5B")
   fixes <- c("R1", "R3", "R4")
   n <- length(cas)
   list(
     extraction = b2_tab("extraction", date_extraction = D("2026-03-31"), debut_historique = D("2017-01-01"),
-                        type_organisme = "societe_assurance", version_dictionnaire = "1.5", devise = "EUR"),
+                        type_organisme = "societe_assurance", version_dictionnaire = "1.6", devise = "EUR"),
     adherents = b2_tab("adherents", id_adherent = "ADC1"),
     contrats = b2_tab("contrats", id_contrat = c("CTC1", "CTI1", "CTI3"),
                       nature_contrat = c("collectif_obligatoire", "individuel", "individuel"),
@@ -263,7 +268,7 @@ b2_base_construite_deces_01 <- function() {
                                   type_assiette = c("salaire_reference", "forfait", "forfait"), option_iad = FALSE,
                                   periodicite_cotisation = c("annuelle", "unique", "annuelle"),
                                   taux_technique_tarif = c(NA, 0.02, 0.02),
-                                  clause_type_beneficiaire = "conjoint_enfants_heritiers"),
+                                  clause_type_beneficiaire = "conjoint_enfants_heritiers", maintien_deces = c(FALSE, NA, NA)),
     parametres = b2_tab("parametres",
                         id_garantie_souscrite = c(rep("GSC1", 4L), rep("GSI1", 2L), rep("GSI3", 3L)),
                         parametre = c("taux_capital", "age_fin_garantie", "majoration_conjoint", "majoration_enfant",

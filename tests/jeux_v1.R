@@ -3,14 +3,22 @@
 # déclarations et conventions de controler_base(). Sourcé par tests/test_reproductibilite.R et
 # tests/unitaires/simulation.R.
 # La session principale écrit les jeux versionnés après le visa du mainteneur (M188), sa date
-# portée dans DATE_VISA_V1 (ou DATE_VISA_V1_03) ci-dessous, depuis la racine du dépôt, package
-# provie installé (un seul jeu : remplacer names(JEUX_V1) par son nom) :
-#   rm -rf inst/extdata/jeux/v1-modeste-01 inst/extdata/jeux/v1-modeste-02 inst/extdata/jeux/v1-modeste-03
+# portée dans DATE_VISA_V1_6 ci-dessous, depuis la racine du dépôt, package provie installé (un
+# seul jeu : remplacer names(JEUX_V1) par son nom) :
+#   rm -rf inst/extdata/jeux/v1-modeste-04 inst/extdata/jeux/v1-modeste-05 inst/extdata/jeux/v1-modeste-06
 #   Rscript -e 'library(provie); source("tests/jeux_v1.R"); for (j in names(JEUX_V1))
 #     ecrire_jeu(simuler_jeu_v1(j), file.path("inst/extdata/jeux", j))'
 # Un jeu versionné ne change jamais en place (ADR 0008) : modifier une définition ci-dessous fait
 # échouer le test de reproductibilité ; un jeu d'une version antérieure est retiré par un commit
 # donnees: et remplacé par un jeu <nn+1> (M189).
+# Dictionnaire 1.6 (#60, commit 60a ; M674, M678) : v1-modeste-04, -05 et -06 remplacent
+# v1-modeste-01, -02 et -03 (lisibles à a5e8970), dans cet ordre, mêmes loi vraie, graines, date
+# d'extraction, descriptions et déclarations ; seuls changent le nom, la version du dictionnaire,
+# celle du simulateur (2 : colonne maintien_deces) et la date de visa, et, dans la description,
+# les noms des jeux cités, substitués selon M678 (01 -> 04, 02 -> 05, 03 -> 06 ; décision du
+# mainteneur, Q1 option (b) restreinte). Égalité contrôlée par tests/controles/egalite_jeux.R
+# (anciens jeux de git archive a5e8970 contre les nouveaux, description comparée après cette
+# substitution).
 #
 # Loi vraie : chaque valeur est un jugement d'expert déclaré (statut rappelé en commentaire,
 # avec sa justification courte), sans calibration sur une référence, choisie pour un
@@ -125,6 +133,10 @@ DATE_EXTRACTION_V1 <- as.Date("2025-12-31")
 # Date du visa du mainteneur (M188) : visa donné le 9 novembre 2026, avec retouches (phrase
 # d'usage, id_sinistre_origine) ; les jeux sont écrits à cette date (commande en tête de fichier).
 DATE_VISA_V1 <- as.Date("2026-11-09")
+# Date du visa du mainteneur des jeux du dictionnaire 1.6 (M677, M188) : visa donné le 18/11/2026 ; NA tant que le visa n'est
+# pas donné (date_visa du manifeste non renseignée, échec attendu de tests/test_reproductibilite.R,
+# renvoi #60) ; la session la renseigne et réécrit les trois jeux (commande en tête de fichier).
+DATE_VISA_V1_6 <- as.Date("2026-11-18")
 
 # Déclarations communes, jugements de l'analyste pour le jeu (non de la loi vraie) : jeu de
 # déclarations de controler_base() en Bd (réserve R3 d'actuary) ; un calcul sur ces jeux, en B2,
@@ -174,16 +186,16 @@ DATE_VISA_V1 <- as.Date("2026-11-09")
   seuils = .seuils_v1)
 
 JEUX_V1 <- list(
-  `v1-modeste-01` = list(
+  `v1-modeste-04` = list(
     description = .u8(paste(
       "Jeu propre (aucun d\u00e9faut inject\u00e9) du portefeuille modeste \u00e0 garanties li\u00e9es d\u00e9c\u00e8s et arr\u00eat",
-      "de travail ; m\u00eames graines que v1-modeste-02. declarations.txt : jeu de d\u00e9clarations de",
+      "de travail ; m\u00eames graines que v1-modeste-05. declarations.txt : jeu de d\u00e9clarations de",
       "controler_base() en Bd (aucune d\u00e9claration requise \u00e0 l'extraction et au 31 d\u00e9cembre 2024).", .USAGE_V1)),
     defauts = list(),
     declarations = list(declarations = list(seuils = .seuils_v1), conventions = .conventions_v1)),
-  `v1-modeste-02` = list(
+  `v1-modeste-05` = list(
     description = .u8(paste(
-      "Jeu de contr\u00f4le, non de calcul : m\u00eame jeu propre que v1-modeste-01, avec douze d\u00e9fauts du",
+      "Jeu de contr\u00f4le, non de calcul : m\u00eame jeu propre que v1-modeste-04, avec douze d\u00e9fauts du",
       "dictionnaire, \u00a7 9 ; D09 refuse la colonne prestations.montant. Sous-cas simul\u00e9s (loi vraie,",
       "version 1) : doublon_contenu sur les encaissements de cotisations, date_ordre par permutation",
       "des p\u00e9riodes d'indemnit\u00e9s journali\u00e8res, saisie_anterieure sur evenements, manquants de date",
@@ -263,7 +275,7 @@ DATE_VISA_V1_03 <- as.Date("2026-11-11")
 # Phrase d'usage et limites (spécification de B2, § 7.9.1 et § 7.9.5).
 .USAGE_V1_03 <- paste(
   "Usage : tests fonctionnels et r\u00e9f\u00e9rences, sans port\u00e9e statistique ; revue sur mesure de I1 (#70).",
-  "Limites : celles de v1-modeste-01 pour la part collective (pas de 30 jours, tous les arr\u00eats d\u00e9clar\u00e9s,",
+  "Limites : celles de v1-modeste-04 pour la part collective (pas de 30 jours, tous les arr\u00eats d\u00e9clar\u00e9s,",
   "d\u00e9lais exponentiels sans queue, volume de test, \u00e2ge de fin de garantie collectif jamais atteint) ;",
   "v\u00e9rit\u00e9 d'un capital non r\u00e9clam\u00e9 = d\u00e9p\u00f4t nominal, revalorisation l\u00e9gale non simul\u00e9e ;",
   "intensit\u00e9s des suites des d\u00e9c\u00e8s et mortalit\u00e9 relev\u00e9e, volume de test ; tarif individuel = formule",
@@ -280,24 +292,24 @@ DATE_VISA_V1_03 <- as.Date("2026-11-11")
   "seul crit\u00e8re P1 capital_du, retir\u00e9 de V.3, sous 190306 \u00e0 190316, puis 190317 retenue \u00e0 tort : son",
   "seul dossier de P1 capital_du \u00e9tait d\u00e9j\u00e0 pay\u00e9) est abandonn\u00e9e.")
 
-JEUX_V1$`v1-modeste-03` <- list(
+JEUX_V1$`v1-modeste-06` <- list(
   description = .u8(paste(
     "Jeu propre du capital d\u00e9c\u00e8s et des garanties li\u00e9es : six contrats collectifs (p\u00e9riodes de",
     "cotisation \u00e0 l'anniversaire, majoration du conjoint) et deux cents temporaires d\u00e9c\u00e8s individuelles",
     "\u00e0 prime unique ou p\u00e9riodique ; capitaux non r\u00e9clam\u00e9s et fixations diff\u00e9r\u00e9es, \u00e0 des intensit\u00e9s",
-    "de test. declarations.txt : celles de v1-modeste-01.", .USAGE_V1_03, .ESSAIS_V1_03)),
+    "de test. declarations.txt : celles de v1-modeste-04.", .USAGE_V1_03, .ESSAIS_V1_03)),
   defauts = list(),
   declarations = list(declarations = list(seuils = .seuils_v1), conventions = .conventions_v1))
 
 # Loi vraie, graines et date de visa d'un jeu : celles de la v1 (intensités de défauts du jeu
-# substituées) ; celles de v1-modeste-03 pour ce jeu.
+# substituées) ; celles de v1-modeste-03 pour v1-modeste-06 ; date de visa du dictionnaire 1.6.
 loi_vraie_v1 <- function(nom) {
-  lv <- if (identical(nom, "v1-modeste-03")) LOI_VRAIE_V1_03 else LOI_VRAIE_V1
+  lv <- if (identical(nom, "v1-modeste-06")) LOI_VRAIE_V1_03 else LOI_VRAIE_V1
   for (p in names(JEUX_V1[[nom]]$defauts)) lv$defauts[[p]] <- JEUX_V1[[nom]]$defauts[[p]]
   lv
 }
-graines_v1 <- function(nom) if (identical(nom, "v1-modeste-03")) GRAINES_V1_03 else GRAINES_V1
-date_visa_v1 <- function(nom) if (identical(nom, "v1-modeste-03")) DATE_VISA_V1_03 else DATE_VISA_V1
+graines_v1 <- function(nom) if (identical(nom, "v1-modeste-06")) GRAINES_V1_03 else GRAINES_V1
+date_visa_v1 <- function(nom) DATE_VISA_V1_6
 
 simuler_jeu_v1 <- function(nom, date_visa = date_visa_v1(nom)) {
   j <- JEUX_V1[[nom]]

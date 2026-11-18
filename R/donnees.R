@@ -117,17 +117,30 @@ ENTREES_CONVENTIONS <- c("age", "instant_date", "repartition_annee", "fractionne
 # Priorité des causes : un contrôle non implémenté porte `non_implemente`, avant toute
 # autre cause (declaration_absente, refus d'une colonne lue).
 CAUSE_NON_IMPLEMENTE <- "non_implemente"
-# Sous-cas qu'aucune colonne de la base ne permet de lire (décision du mainteneur, D2 :
-# D03h pour la garantie décès d'un contrat collectif qui porte le maintien de la garantie
-# décès, colonne prévue au dictionnaire 1.6) : non exécuté, cause `non_lisible`, colonne NA
-# (sous-cas distinct de la règle écrite sur la même colonne).
+# Sous-cas qu'aucune colonne de la base ne permet de lire (décision du mainteneur, D2) : non
+# exécuté, cause `non_lisible`, colonne NA (sous-cas distinct de la règle écrite sur la même
+# colonne). Depuis le dictionnaire 1.6, D03h lit `maintien_deces` (P6) et n'en produit plus ;
+# seul producteur restant : le sous-cas du maintien de D11a (spécification `donnees` v1.9,
+# § 9.5, retiré au commit de #81). La constante et son rang restent dans la liste fermée des
+# causes (erratum du projet de dictionnaire 1.6, § 11.3 (a)).
 CAUSE_NON_LISIBLE <- "non_lisible"
 .ni <- function(code, table, colonne = NA_character_) {
   data.frame(code = code, table = table, colonne = colonne, stringsAsFactors = FALSE)
 }
+# États transitoires du dictionnaire 1.6 (spécification `donnees` v1.9, § 9.8, liste fermée ;
+# M685), chacun retiré par le commit qui l'écrit : T2, D03i (60b) ; T3, D03g sur dossiers,
+# catastrophes et victimes (60b, avec la garde .GARDE_T3) ; T4, parente_posterieure (#83) ; T5,
+# D02b sur prestations (#83) ; T9, D11b et D11c (#81).
 CONTROLES_NON_IMPLEMENTES <- rbind(
   .ni("D03d", "assures", "situation_familiale"),
-  .ni("D09", c("parametres", "affiliations", "evenements", "prestations", "cotisations"))
+  .ni("D09", c("parametres", "affiliations", "evenements", "prestations", "cotisations")),
+  .ni("D03i", c("contrats", "garanties_souscrites", "prestations", "cotisations"),
+      c("date_effet", "date_effet", "date_reglement", "date_mouvement")),
+  .ni("D03g", c("dossiers", "catastrophes", "victimes"), c("date_ouverture", "date_saisie", "date_saisie")),
+  .ni("parente_posterieure", c("affiliations", "garanties_souscrites", "cotisations")),
+  .ni("D02b", "prestations"),
+  .ni("D11b", "dossiers", "id_garantie_souscrite"),
+  .ni("D11c", "affiliations", "college")
 )
 
 # Règle de limite d'âge de D07 (c) (M155) et conventions d'âge admises pour cet emploi
@@ -136,14 +149,26 @@ REGLES_LIMITE_AGE <- c("atteinte", "depassement")
 CONVENTIONS_LIMITE_AGE <- c("revolu", "millesime")
 
 # Couples (motif, famille) traités S par le dictionnaire (§ 9) : la famille ne lit pas la
-# colonne (D03a : « S pour la famille triangle », dict. :743 ; D12 : « S pour la famille
-# triangle, qui ne lit pas les états », dict. :761, et, pour la même raison, S pour les familles
-# risque_en_cours et regle_comptable, spécification `donnees` v1.6, § 8.8). Hors du critère de
-# couverture d'une exclusion (ni declarations_requises ni enjeu non déclaré) ; une exclusion
-# déclarée sur l'un d'eux est refusée (plan_invalide).
-.EXCEPTIONS_FAMILLE <- data.frame(motif = c("D03a", rep("D12", 3L)),
-                                  famille = c("triangle", "triangle", "risque_en_cours", "regle_comptable"),
-                                  stringsAsFactors = FALSE)
+# colonne (D03a : « S pour la famille triangle » ; D12 : « S pour la famille triangle, qui ne lit
+# pas les états », et, pour la même raison, S pour les familles risque_en_cours et
+# regle_comptable, spécification `donnees` v1.6, § 8.8). Hors du critère de couverture d'une
+# exclusion (ni declarations_requises ni enjeu non déclaré) ; une exclusion déclarée sur l'un
+# d'eux est refusée (plan_invalide). Liste dérivée de defauts.csv (version 1.6, P7 ;
+# spécification `donnees` v1.9, § 9.6) : éléments famille:<famille> de la colonne
+# `signalement`, data.frame (motif, famille) dans l'ordre du fichier ; une famille hors de
+# FAMILLES_CALCUL est un dictionnaire invalide.
+.exceptions_famille <- function(dico) {
+  el <- lapply(dico$defauts$signalement, eclater_champ)
+  n <- lengths(el)
+  x <- data.frame(motif = rep(dico$defauts$code, n), element = unlist(el, use.names = FALSE), stringsAsFactors = FALSE)
+  x <- x[startsWith(x$element, "famille:"), , drop = FALSE]
+  familles <- substring(x$element, 9L)
+  if (!all(familles %in% FAMILLES_CALCUL)) {
+    refuser(paste0("dictionnaire de la base : defauts.csv, signalement : famille hors de FAMILLES_CALCUL (",
+                   paste(setdiff(familles, FAMILLES_CALCUL), collapse = ", "), ")"), "dictionnaire_invalide", module = "donnees")
+  }
+  data.frame(motif = x$motif, famille = familles, stringsAsFactors = FALSE)
+}
 # Motifs de la règle P, appliqués à la construction de la vue (une seule vue pour les deux
 # référentiels) : une hypothèse porte sur tous les postes, avec la même valeur pour les deux
 # référentiels ; aucune n'est un signalement déclaré (S seulement à l'extraction).
@@ -155,15 +180,25 @@ CONVENTIONS_LIMITE_AGE <- c("revolu", "millesime")
 # pour les lignes entières, H pour les parties de ligne (.application_d03g()).
 .MOTIFS_TRAITEMENT_UNIQUE <- c("D02a", "D03a", "D03c", "D03f")
 # Motifs dont le signalement (S) est un choix déclarable, alternative à H ou à X
-# (dictionnaire, § 9 ; D07 : sous-cas (a) et (c)) : liste explicite (réserve d'`actuary`),
-# non dérivée de defauts.csv$traitements, qui ne distingue pas un S alternatif (« H;S ») d'un
-# S cumulatif (« S + X », D02c, D10 (b)) ni d'un S réservé à une famille (D03a, D12).
-.MOTIFS_SIGNALEMENT <- c("D05", "D06", "D07", "D08", "D10f", "D13", "D14")
-# Traitements de chaque sous-cas de D10 (dictionnaire, § 9) : (a) et (h) R ; (b) S + X (S
-# automatique) ; (c) et (d) S ; (e) X ; (f) H ou S. Lus à la place de la liste de D10 pour
-# admettre une déclaration (réserve c3 de l'audit).
-.TRAITEMENTS_SOUS_CAS_D10 <- c(D10a = "R", D10b = "S;X", D10c = "S", D10d = "S", D10e = "X", D10f = "H;S",
-                               D10h = "R")
+# (dictionnaire, § 9, colonne « Signalement ») : liste dérivée de defauts.csv (version 1.6, P7 ;
+# spécification `donnees` v1.9, § 9.6), codes de `signalement` = alternatif, dans l'ordre du
+# fichier. La colonne distingue un S alternatif d'un S cumulatif (D02c, D10b), d'un S réservé à
+# une famille (D03a, D12) et d'un S à l'extraction (D02b, D03g), que `traitements` ne distingue pas.
+.motifs_signalement <- function(dico) dico$defauts$code[dico$defauts$signalement == "alternatif"]
+# Traitements de chaque sous-cas lettré (D07a à D07c, D10a à D10h, D11a à D11c) : lignes de
+# defauts.csv de `parent` renseigné (version 1.6, P8 ; spécification `donnees` v1.9, § 9.6),
+# vecteur nommé par code, dans l'ordre du fichier. Liste dérivée du § 9.6 (remplace
+# .TRAITEMENTS_SOUS_CAS_D10), lue par le test d'égalité des listes dérivées
+# (tests/unitaires/donnees.R) et, dans le package, pour le seul traitement du constat de D07 (b)
+# (.regle_v_extinctions()) ; .motif_admet() lit directement defauts.csv, où chaque sous-cas est
+# une ligne depuis la version 1.6. `.codes_a_sous_cas()` : codes parents (D07,
+# D10, D11), qui ne se déclarent que par sous-cas (réserve m1 ; spécification `donnees` v1.9,
+# § 9.5 et § 9.6).
+.traitements_sous_cas <- function(dico) {
+  sous <- nzchar(dico$defauts$parent)
+  stats::setNames(dico$defauts$traitements[sous], dico$defauts$code[sous])
+}
+.codes_a_sous_cas <- function(dico) unique(dico$defauts$parent[nzchar(dico$defauts$parent)])
 # Motifs dont le refus porte sur une clé étrangère (lien) : cette colonne ne bloque pas
 # l'enjeu de son propre écart (.causes_enjeu(), réserve Q4).
 .MOTIFS_LIEN_ECART <- c("D04a", "D04b", "D10a", "D10h")
@@ -803,14 +838,15 @@ eclater_champ <- function(x) if (identical(x, "") || is.na(x)) character(0) else
 # Sous-schéma `donnees` du plan (ADR 0010, point 17) : NULL (aucune déclaration fournie,
 # M148) ou liste nommée de rubriques connues (RUBRIQUES_DECLARATIONS). Rend la liste, avec
 # `exclusions` et `hypotheses` mises sous forme de data.frame (.table_declarations()).
-# `exclusions` : motif d'un défaut admettant X (code du § 9, ou sous-cas D10a à D10f et D10h),
+# `exclusions` : motif d'un défaut admettant X (code du § 9, sous-cas lettrés compris),
 # famille de FAMILLES_CALCUL, action de ACTIONS_EXCLUSION, une ligne par (motif, famille),
-# hors des couples traités S (.EXCEPTIONS_FAMILLE), D03g en `exclure` seulement ;
+# hors des couples traités S (.exceptions_famille()), D03g en `exclure` seulement ;
 # `hypotheses` : motif d'un défaut admettant H (ou, pour la valeur .VALEUR_SIGNALEMENT, motif
-# de .MOTIFS_SIGNALEMENT, seule ligne de son (motif, referentiel)), référentiel de
+# de .motifs_signalement(), seule ligne de son (motif, referentiel)), référentiel de
 # REFERENTIELS, poste (ou `tous`) et valeur en chaînes, une ligne par (motif, referentiel,
 # poste) ; D02b et D03g : poste `tous`, même valeur pour les deux référentiels, sans
-# signalement. D10 se déclare par sous-cas (traitements du sous-cas). Un motif à traitement
+# signalement. D07, D10 et D11 se déclarent par sous-cas (traitements du sous-cas,
+# .codes_a_sous_cas()). Un motif à traitement
 # unique (.MOTIFS_TRAITEMENT_UNIQUE) ne se déclare pas dans les deux rubriques (D8).
 # `seuils` : liste nommée ; d03g_delai_jours (liste nommée par table de D03g, jours entiers
 # positifs ou nuls), d02c_age_min et d02c_age_max (listes nommées par emploi de D02c) et
@@ -868,14 +904,17 @@ lire_declarations <- function(declarations, dico) {
     .refus_plan("declarations$seuils : d02c_age_min sup\u00e9rieur \u00e0 d02c_age_max pour un emploi")
   }
   ex <- .table_declarations(declarations$exclusions, c("motif", "famille", "action"), "exclusions")
-  # un motif D10 se déclare par sous-cas (D10a à D10f et D10h) : D10 seul est refusé (réserve m1)
-  if (!all(.motif_admet(dico, ex$motif, "X")) || any(ex$motif == "D10") || !all(ex$famille %in% FAMILLES_CALCUL) ||
+  # un motif à sous-cas se déclare par sous-cas (D07a à D07c, D10a à D10f et D10h, D11a à D11c) :
+  # D07, D10 ou D11 seul est refusé (réserve m1 ; spécification `donnees` v1.9, § 9.5 et § 9.6)
+  parents <- .codes_a_sous_cas(dico)
+  if (!all(.motif_admet(dico, ex$motif, "X")) || any(ex$motif %in% parents) || !all(ex$famille %in% FAMILLES_CALCUL) ||
       !all(ex$action %in% ACTIONS_EXCLUSION) || anyDuplicated(ex[, c("motif", "famille")])) {
-    .refus_plan(paste0("declarations$exclusions : motif d'un d\u00e9faut trait\u00e9 X (D10 par sous-cas), famille (",
+    .refus_plan(paste0("declarations$exclusions : motif d'un d\u00e9faut trait\u00e9 X (D07, D10 et D11 par sous-cas), famille (",
                        paste(FAMILLES_CALCUL, collapse = ", "), "), action (exclure, conserver), ",
                        "une ligne par (motif, famille)"))
   }
-  if (any(paste(ex$motif, ex$famille) %in% paste(.EXCEPTIONS_FAMILLE$motif, .EXCEPTIONS_FAMILLE$famille))) {
+  exceptions <- .exceptions_famille(dico)
+  if (any(paste(ex$motif, ex$famille) %in% paste(exceptions$motif, exceptions$famille))) {
     .refus_plan(paste0("declarations$exclusions : D03a est un signalement pour la famille triangle, D12 pour les familles ",
                        "triangle, risque_en_cours et regle_comptable (dictionnaire, \u00a7 9 ; sp\u00e9cification donnees v1.6, \u00a7 8.8)"))
   }
@@ -884,12 +923,13 @@ lire_declarations <- function(declarations, dico) {
   }
   hy <- .table_declarations(declarations$hypotheses, c("motif", "referentiel", "poste", "valeur"), "hypotheses")
   signalement <- hy$valeur == .VALEUR_SIGNALEMENT
-  if (!all(.motif_admet(dico, hy$motif, "H") | signalement) || !all(hy$motif %in% .MOTIFS_SIGNALEMENT | !signalement) ||
-      any(hy$motif == "D10") || !all(hy$referentiel %in% REFERENTIELS) ||
+  motifs_s <- .motifs_signalement(dico)
+  if (!all(.motif_admet(dico, hy$motif, "H") | signalement) || !all(hy$motif %in% motifs_s | !signalement) ||
+      any(hy$motif %in% parents) || !all(hy$referentiel %in% REFERENTIELS) ||
       anyDuplicated(hy[, c("motif", "referentiel", "poste")])) {
     .refus_plan(paste0("declarations$hypotheses : motif d'un d\u00e9faut trait\u00e9 H, ou la valeur ",
                        .VALEUR_SIGNALEMENT, " pour un motif dont S est un choix (",
-                       paste(.MOTIFS_SIGNALEMENT, collapse = ", "), ") (D10 par sous-cas), r\u00e9f\u00e9rentiel (",
+                       paste(motifs_s, collapse = ", "), ") (D07, D10 et D11 par sous-cas), r\u00e9f\u00e9rentiel (",
                        paste(REFERENTIELS, collapse = ", "), "), une ligne par (motif, referentiel, poste)"))
   }
   # un signalement déclaré est la seule ligne de son (motif, referentiel)
@@ -918,8 +958,11 @@ lire_declarations <- function(declarations, dico) {
 }
 
 # Familles de calcul d'une exclusion du motif `motif` : toutes, hors les couples traités S
-# (.EXCEPTIONS_FAMILLE).
-.familles_x <- function(motif) setdiff(FAMILLES_CALCUL, .EXCEPTIONS_FAMILLE$famille[.EXCEPTIONS_FAMILLE$motif == motif])
+# (.exceptions_famille()).
+.familles_x <- function(dico, motif) {
+  ef <- .exceptions_famille(dico)
+  setdiff(FAMILLES_CALCUL, ef$famille[ef$motif == motif])
+}
 
 # Application de D03g à la vue pour la table `table` (décisions du mainteneur, D5 et D9) :
 # "X" si l'exclusion (exclure) est déclarée pour les quatre familles, pour une ligne entière
@@ -937,14 +980,12 @@ lire_declarations <- function(declarations, dico) {
   NA_character_
 }
 
-# Motifs (codes du § 9, ou sous-cas D10a à D10h, la lettre g n'étant attribuée à aucun) dont
-# le traitement admet `t` (defauts.csv$traitements ; un sous-cas de D10 lit son propre
-# traitement, .TRAITEMENTS_SOUS_CAS_D10).
+# Motifs (codes du § 9, sous-cas lettrés compris : lignes de defauts.csv depuis la version 1.6,
+# la lettre g de D10 n'étant attribuée à aucun) dont le traitement admet `t`
+# (defauts.csv$traitements ; un sous-cas lit son propre traitement, .traitements_sous_cas()).
 .motif_admet <- function(dico, motif, t) {
-  sous_cas <- motif %in% names(.TRAITEMENTS_SOUS_CAS_D10)
-  traitements <- ifelse(sous_cas, .TRAITEMENTS_SOUS_CAS_D10[motif], dico$defauts$traitements[match(motif, dico$defauts$code)])
-  connu <- motif %in% dico$defauts$code | sous_cas
-  connu & !is.na(traitements) & vapply(traitements, function(x) t %in% eclater_champ(x), NA, USE.NAMES = FALSE)
+  traitements <- dico$defauts$traitements[match(motif, dico$defauts$code)]
+  !is.na(traitements) & vapply(traitements, function(x) t %in% eclater_champ(x), NA, USE.NAMES = FALSE)
 }
 
 # Rubrique `exclusions` ou `hypotheses` du sous-schéma `donnees` (« liste de triplets »,
@@ -1045,6 +1086,11 @@ lire_declarations <- function(declarations, dico) {
 # portée table comme les autres, seuls les refus de valeur y rendent une valeur inconnue
 # (spécification, § 2.2, B.5).
 .CODES_FORME <- c("colonne_absente", "colonne_inconnue", "type_incompatible")
+# Refus de portée table induits (sans écart propre de l'enjeu, origine relue par
+# .refus_regle_b()) : refus_induit (clé étrangère vers une table refusée) et vue_empechee
+# (vue empêchée par un défaut de forme, dictionnaire 1.6, P12 ; spécification `donnees` v1.9,
+# § 9.1 : traitement du refus_induit né d'une vue empêchée).
+.CODES_INDUITS <- c("refus_induit", "vue_empechee")
 .refus_valeur_de <- function(ctx, table, colonne) {
   if (is.null(ctx$refus_pv)) return(ctx$refus_valeur[[table]][[colonne]])
   if (!is.null(ctx$refus_pv$tables[[table]])) return(NULL)
@@ -1117,6 +1163,10 @@ lire_declarations <- function(declarations, dico) {
 # (.regle_domaine(), .regles_b()) choisit les règles à exécuter par `ctx$passe` (fonction de
 # code, table, colonne, lit, traitement ; NULL hors de ses passes) : une règle qu'il écarte
 # n'est ni exécutée ni bloquée et rend FALSE (#56, point 5).
+# `f` NULL : causes de la règle bloquée seulement (sous-cas non exécuté faute de déclaration,
+# D07b et D07c, qui reçoit aussi les causes candidates de sa branche déclarée ; spécification
+# `donnees` v1.9.1, § 3.1 et § 9.6, point (3)) : bloquée, la règle émet sa ligne comme
+# ci-dessus ; sinon rien n'est émis ni détecté et la règle rend integer(0).
 .regle <- function(ctx, code, table, colonne, lit, traitement, detection, f, colonne_ne = colonne,
                    partiel = FALSE, vue = character(0), parente = NULL) {
   if (!is.null(ctx$passe) && !ctx$passe(code, table, colonne, lit, traitement)) return(invisible(FALSE))
@@ -1173,6 +1223,7 @@ lire_declarations <- function(declarations, dico) {
     .ajouter_non_execute(ctx, code, table, colonne_ne, cause, lu = sort(lu, method = "radix"))
     return(invisible(NULL))
   }
+  if (is.null(f)) return(invisible(integer(0)))
   detecte <- f()
   if (partiel && (length(refusees) > 0L || regle_b)) {
     # verdict à trois valeurs (.avant3(), .manque3(), .verdict3()) : seules les lignes au verdict inconnu
@@ -1238,18 +1289,21 @@ lire_declarations <- function(declarations, dico) {
   invisible(lignes)
 }
 
-# Traitement d'un code de contrôle de structure (règle provisoire d'`architect`, ADR 0010,
-# sixième série, (a), et septième série, (d)) : un code de portée `ligne` est un
-# signalement (S), tout autre code un refus (R). Seul endroit où la règle est écrite.
+# Traitement d'un code de contrôle de structure : colonne `traitement` de controles.csv
+# (dictionnaire 1.6, P17 ; spécification `donnees` v1.9, § 9.6), qui remplace la règle
+# provisoire d'`architect` (ADR 0010, sixième série, (a), et septième série, (d) : portée
+# `ligne` -> S). Seul endroit où le traitement d'un code de contrôle est lu.
 .traitement_code_controle <- function(dico, code) {
-  portee <- dico$controles$portee[dico$controles$code == code]
-  if (length(portee) != 1L) stop("code de contr\u00f4le inconnu : ", code, call. = FALSE)
-  if (portee == "ligne") "S" else "R"
+  traitement <- dico$controles$traitement[dico$controles$code == code]
+  if (length(traitement) != 1L) stop("code de contr\u00f4le inconnu : ", code, call. = FALSE)
+  traitement
 }
 
 # Portée effective d'un refus R (§ 1.10 du dictionnaire ; ADR 0010, sixième série, (b) 1) :
 # `colonne_table` (et tout défaut D.. de portée non fixée) devient `table` pour une colonne
-# de la clé primaire ou qui porte une référence, `colonne` sinon ; D10 (a) porte sur la
+# de la clé primaire ou qui porte une référence, `colonne` sinon ; `ligne_table` (dictionnaire
+# 1.6, #72) est lue comme `colonne_table` jusqu'au commit de #72 (état transitoire T1,
+# spécification `donnees` v1.9, § 9.8) ; D10 (a) porte sur la
 # table de la table fille (spécification, § 2.4) ; toute anomalie de evaluations_gestion
 # refuse la table seule (dictionnaire, § 7.5).
 .portee_effective <- function(dico, code, table, colonne) {
@@ -1290,7 +1344,9 @@ lire_declarations <- function(declarations, dico) {
     garanties_souscrites.prolongation_handicap = "garanties_souscrites.code_garantie",
     garanties_souscrites.maintien_double_effet = "garanties_souscrites.code_garantie",
     garanties_souscrites.clause_type_beneficiaire = "garanties_souscrites.code_garantie",
-    garanties_souscrites.taux_technique_tarif = "garanties_souscrites.code_garantie",
+    garanties_souscrites.taux_technique_tarif = c("garanties_souscrites.code_garantie", "garanties_souscrites.maintien_deces",
+                                                  "contrats.nature_contrat"),
+    garanties_souscrites.maintien_deces = c("garanties_souscrites.code_garantie", "contrats.nature_contrat"),
     garanties_souscrites.college = "contrats.nature_contrat",
     assures.date_situation_familiale = c("assures.situation_familiale", "assures.nombre_enfants_charge"),
     affiliations.motif_fin = "affiliations.date_fin",
@@ -1886,8 +1942,15 @@ lire_declarations <- function(declarations, dico) {
 # une absence qui est une valeur (colonne C ou F, ou O à défaut de manquant) ne l'est pas.
 # `.manquant_refuse()` : les valeurs manquantes d'une colonne dont l'absence est refusée (NA, pas
 # NaN : un NaN est hors domaine, règle hors_domaine). Lues par manquant_obligatoire et D01a.
-.absence_refusee <- function(obligatoire, defauts) {
-  obligatoire == "O" && !any(eclater_champ(defauts) %in% .DEFAUTS_MANQUANT)
+# Garde transitoire T3 (spécification `donnees` v1.9, § 9.8 ; S-4 (a), M687), levée à 60b : D03g
+# n'est pas encore écrit sur ces colonnes (CONTROLES_NON_IMPLEMENTES) ; leur manquant reste
+# refusé manquant_obligatoire, comme sous le dictionnaire 1.5, bien que leur cellule `defauts`
+# (1.6 : « D02b;D03g ») porte D03g. `tc` : « table.colonne ».
+.GARDE_T3 <- c("dossiers.date_ouverture", "catastrophes.date_saisie", "victimes.date_saisie")
+.absence_refusee <- function(obligatoire, defauts, tc) {
+  d <- eclater_champ(defauts)
+  if (tc %in% .GARDE_T3) d <- setdiff(d, "D03g")
+  obligatoire == "O" && !any(d %in% .DEFAUTS_MANQUANT)
 }
 .manquant_refuse <- function(x) is.na(x) & !is.nan(x)
 
@@ -1931,7 +1994,7 @@ lire_declarations <- function(declarations, dico) {
         .regle(ctx, "hors_domaine", table, colonne, character(0), "R", "exacte",
                function() is.nan(x) | is.infinite(x))
       }
-      if (.absence_refusee(col$obligatoire, col$defauts)) {
+      if (.absence_refusee(col$obligatoire, col$defauts, paste(table, colonne, sep = "."))) {
         .regle(ctx, "manquant_obligatoire", table, colonne, character(0), "R", "exacte",
                function() .manquant_refuse(x))
       }
@@ -2083,13 +2146,28 @@ apparier_cles <- function(x, table) {
     .regle_condition(ctx, "garanties_souscrites", colonne, "garanties_souscrites.code_garantie",
                      function(x) ifelse(is.na(x$code), NA, x$code %in% garanties), code3)
   }
+  # maintien_deces (dictionnaire 1.6, P6 ; spécification `donnees` v1.9, § 9.6) : requise pour la
+  # garantie deces d'un contrat collectif, manquante ailleurs ; nature d'un contrat non joint
+  # (garantie orpheline, D04b) : libre
+  lit_nature <- c("garanties_souscrites.id_contrat", "contrats.id_contrat", "contrats.nature_contrat")
+  code_nature3 <- function() {
+    i <- .index_jointure(ctx, "contrats", "id_contrat", v("garanties_souscrites", "id_contrat"))
+    c(code3(), list(nature = e3("contrats.nature_contrat", index = i)))
+  }
+  collectif <- function(nature) ifelse(is.na(nature), NA, nature != "individuel")
+  .regle_condition(ctx, "garanties_souscrites", "maintien_deces", c("garanties_souscrites.code_garantie", lit_nature),
+                   function(x) ifelse(x$code %in% "deces", collectif(x$nature), FALSE), code_nature3)
   # taux_technique_tarif : jamais pour l'arrêt de travail ; requis ailleurs selon le § 3, T4
-  # (manquant : D03h, règle V ; le maintien de la garantie décès n'est pas lisible dans la
-  # base, la présence sur un décès collectif est donc admise) ; bornes de contrôle.
+  # (manquant : D03h, règle V) ; sur la garantie deces d'un contrat collectif, requis si
+  # maintien_deces vaut TRUE, hors condition (présent : hors_domaine) s'il vaut FALSE
+  # (dictionnaire 1.6, P6 : l'admission d'un taux présent sur un décès collectif est retirée) ;
+  # bornes de contrôle.
   .regle(ctx, "hors_domaine", "garanties_souscrites", "taux_technique_tarif",
-         "garanties_souscrites.code_garantie", "R", "exacte", function() {
-    .verdict3(c(list(taux = soi("garanties_souscrites.taux_technique_tarif")), code3()), function(x) {
-      !is.na(x$taux) & (x$code %in% c("incapacite", "invalidite") | x$taux < -0.05 | x$taux > 0.10)
+         c("garanties_souscrites.code_garantie", "garanties_souscrites.maintien_deces", lit_nature), "R", "exacte", function() {
+    .verdict3(c(list(taux = soi("garanties_souscrites.taux_technique_tarif"),
+                     maintien = e3("garanties_souscrites.maintien_deces")), code_nature3()), function(x) {
+      !is.na(x$taux) & (x$code %in% c("incapacite", "invalidite") | x$taux < -0.05 | x$taux > 0.10 |
+                          (x$code %in% "deces" & collectif(x$nature) %in% TRUE & x$maintien %in% FALSE))
     })
   }, partiel = TRUE)
   .regle(ctx, "hors_domaine", "garanties_souscrites", "college",
@@ -2457,7 +2535,7 @@ apparier_cles <- function(x, table) {
     col <- .colonnes_dico(ctx, table)
     refusee <- vapply(cle, function(c1) {
       k <- match(c1, col$colonne)
-      .absence_refusee(col$obligatoire[k], col$defauts[k])
+      .absence_refusee(col$obligatoire[k], col$defauts[k], paste(table, c1, sep = "."))
     }, NA)
     .regle(ctx, "D01a", table, cle[1L], lit, "R", "exacte", function() {
       o <- .ordre_canonique(ctx, table)
@@ -2707,7 +2785,7 @@ apparier_cles <- function(x, table) {
     if (k$traitement != "R") next
     if (.portee_effective(ctx$dico, k$code, k$table, k$colonne) == "table") {
       tables[[k$table]] <- unique(c(tables[[k$table]], k$code))
-      if (k$code == "refus_induit") origines[[k$table]] <- eclater_champ(k$origine)
+      if (k$code %in% .CODES_INDUITS) origines[[k$table]] <- eclater_champ(k$origine)
       else directs[[k$table]] <- rbind(directs[[k$table]], data.frame(code = k$code, colonne = k$colonne,
                                                                        stringsAsFactors = FALSE))
     } else {
@@ -2886,9 +2964,12 @@ parties_ligne <- function() lapply(.PARTIES_LIGNE, function(p) list(table = p$ta
   invisible(NULL)
 }
 
-# Refus induits d'une règle P empêchée (D12, .regle_p()) : `empechees`, liste nommée par
-# table des colonnes « table.colonne » en cause ; propagation aux tables qui visent une
-# table ainsi refusée par une clé étrangère, hors tables déjà refusées en portée table.
+# Refus d'une règle P empêchée (D12, .regle_p()) : `empechees`, liste nommée par table des
+# colonnes « table.colonne » en cause ; chaque table d'origine reçoit `vue_empechee`
+# (dictionnaire 1.6, P12, M182 ; spécification `donnees` v1.9, § 9.1), d'origine ses colonnes
+# puis les tables d'origine qu'elle vise (un seul refus de portée table par table) ; les tables
+# qui visent une table ainsi refusée par une clé étrangère, hors tables déjà refusées en portée
+# table, reçoivent `refus_induit`, d'origine la table visée (propagation).
 .refus_p_empechee <- function(ctx, empechees) {
   dico <- ctx$dico
   col <- dico$colonnes
@@ -2913,8 +2994,9 @@ parties_ligne <- function() lapply(.PARTIES_LIGNE, function(p) list(table = p$ta
   for (t in intersect(dico$tables$table, names(origines))) {
     o <- origines[[t]]
     o <- c(sort(o[grepl(".", o, fixed = TRUE)], method = "radix"), dico$tables$table[dico$tables$table %in% o])
-    .ajouter_constat(ctx, "refus_induit", t, NA_character_, seq_len(nrow(ctx$base[[t]])),
-                     .traitement_code_controle(dico, "refus_induit"), "exacte", origine = paste(o, collapse = ";"))
+    code <- if (t %in% names(empechees)) "vue_empechee" else "refus_induit"
+    .ajouter_constat(ctx, code, t, NA_character_, seq_len(nrow(ctx$base[[t]])),
+                     .traitement_code_controle(dico, code), "exacte", origine = paste(o, collapse = ";"))
   }
   ctx$p_refusees <- unique(c(ctx$p_refusees, names(empechees)))
   invisible(NULL)
@@ -3479,7 +3561,8 @@ parties_ligne <- function() lapply(.PARTIES_LIGNE, function(p) list(table = p$ta
 # verdict. `f()` rend un vecteur logique ; s'il porte l'attribut `index` (.verdict3(),
 # .existe_vue3()), une valeur NA est un verdict inconnu : la ligne est écartée de la détection
 # (nombre minorant) et la règle garde une ligne dans controles_non_executes, cause (γ)
-# (.cause_nd()). Sans cet attribut, NA vaut « non détecté » (inchangé).
+# (.cause_nd()). Sans cet attribut, NA vaut « non détecté » (inchangé). `f` NULL : causes de
+# la règle bloquée seulement (.regle()).
 .regle_vue <- function(ctx, code, table, colonne, lit, traitement, detection, f, colonne_ne = colonne,
                        vue = character(0)) {
   if (is.null(ctx$base[[table]])) return(invisible(integer(0)))
@@ -3489,7 +3572,7 @@ parties_ligne <- function() lapply(.PARTIES_LIGNE, function(p) list(table = p$ta
   totale <- .vue_totale(ctx)
   ecart <- NULL
   res <- .regle(ctx, code, table, colonne, if (totale) c(lit, vue, cle, ctx$lit_vue[[table]]) else c(lit, cle), traitement,
-                detection, function() {
+                detection, if (!is.null(f)) function() {
     r <- .verdict_vue(ctx, table, f)
     x <- ifelse(attr(r, "population"), r, FALSE)
     if (!is.null(attr(r, "index"))) {
@@ -3750,7 +3833,7 @@ parties_ligne <- function() lapply(.PARTIES_LIGNE, function(p) list(table = p$ta
 .regle_v_manquants <- function(ctx) {
   vv <- function(table, colonne) .valeurs_vue(ctx, table, colonne)
   # D03a : date de naissance manquante (famille : hors enfant à naître) ; X ou H pour les
-  # familles qui lisent la colonne, S pour la famille triangle (.EXCEPTIONS_FAMILLE) : deux
+  # familles qui lisent la colonne, S pour la famille triangle (.exceptions_famille()) : deux
   # constats de même clé, le signalement écrit dès la détection, comme D01b (réserve Q2)
   for (t in c("S", "X;H")) {
     .regle_vue(ctx, "D03a", "assures", "date_naissance", character(0), t, "exacte",
@@ -3784,19 +3867,25 @@ parties_ligne <- function() lapply(.PARTIES_LIGNE, function(p) list(table = p$ta
     is.na(vv("cotisations", "debut_periode")) | is.na(vv("cotisations", "fin_periode"))
   })
   # D03h : taux du tarif manquant là où il est requis (§ 3, T4) : décès d'un contrat
-  # individuel, rente de conjoint, rente d'éducation, double effet. Le maintien de la
-  # garantie décès d'un contrat collectif n'est pas lisible dans la base : sous-cas non
-  # exécuté, cause non_lisible (D2).
-  if (!is.null(ctx$base$garanties_souscrites)) {
-    .ajouter_non_execute(ctx, "D03h", "garanties_souscrites", NA_character_, CAUSE_NON_LISIBLE)
-  }
+  # individuel, décès d'un contrat collectif dont maintien_deces vaut TRUE (dictionnaire 1.6,
+  # P6 ; spécification `donnees` v1.9, § 9.6 : le sous-cas non_lisible est retiré), rente de
+  # conjoint, rente d'éducation, double effet. Nature du contrat lue sur toutes les occurrences
+  # de sa clé (.jointe3(), lecture existentielle de .joindre3(), M663) : inconnue si elles
+  # divergent (cause candidate D01a).
   .regle_vue(ctx, "D03h", "garanties_souscrites", "taux_technique_tarif",
-             c("garanties_souscrites.code_garantie", "garanties_souscrites.id_contrat", "contrats.id_contrat",
-               "contrats.nature_contrat"), "H", "exacte", function() {
-    code <- vv("garanties_souscrites", "code_garantie")
-    nature <- .joindre(ctx, "contrats", "id_contrat", "nature_contrat", vv("garanties_souscrites", "id_contrat"))
-    requis <- code %in% c("rente_conjoint", "rente_education", "double_effet") | (code %in% "deces" & nature %in% "individuel")
-    requis & is.na(vv("garanties_souscrites", "taux_technique_tarif"))
+             c("garanties_souscrites.code_garantie", "garanties_souscrites.maintien_deces", "garanties_souscrites.id_contrat",
+               "contrats.id_contrat", "contrats.nature_contrat"), "H", "exacte", function() {
+    .verdict3(list(code = .connue3("garanties_souscrites.code_garantie", vv("garanties_souscrites", "code_garantie")),
+                   maintien = .connue3("garanties_souscrites.maintien_deces", vv("garanties_souscrites", "maintien_deces")),
+                   manque = .connue3("garanties_souscrites.taux_technique_tarif",
+                                     is.na(vv("garanties_souscrites", "taux_technique_tarif"))),
+                   nature = .jointe3(ctx, "contrats.nature_contrat", "id_contrat", vv("garanties_souscrites", "id_contrat"))),
+              function(x) {
+      deces <- x$code %in% "deces"
+      requis <- x$code %in% c("rente_conjoint", "rente_education", "double_effet") | (deces & x$nature %in% "individuel") |
+        (deces & !is.na(x$nature) & x$nature != "individuel" & x$maintien %in% TRUE)
+      requis & x$manque
+    })
   })
   invisible(NULL)
 }
@@ -4443,17 +4532,35 @@ parties_ligne <- function() lapply(.PARTIES_LIGNE, function(p) list(table = p$ta
 # existe au moins une ligne candidate (.candidats_d07c()) ; sans ligne candidate, exécuté à
 # vide, sans exigence (spécification de B2, docs/specifications/b2-capital-deces-v1.md,
 # § 6.3, niveau 1 : une déclaration qui ne peut changer aucune ligne du bilan ne bloque pas).
-# Constat sur la table qui porte la charge (rentes, dossiers), colonne NA ; même clé que D07 (a)
-# et (b) (.regle_v_extinctions()).
+# Constat sur la table qui porte la charge (rentes, dossiers), colonne NA, code D07c (lettrage
+# du dictionnaire 1.6, M660 ; une clé par sous-cas, spécification `donnees` v1.9, § 9.6). Sans
+# déclaration, chaque table non exécutée reçoit aussi les causes candidates de la règle bloquée
+# de la branche déclarée (mêmes colonnes lues, `lit` et `vue_commun`, définies une fois ;
+# .regle_vue() sans `f`) : une cause directe (rang 3) l'emporte sur declaration_absente (rang
+# 6), qui reste dans declarations_requises (spécification `donnees` v1.9.1, § 9.6, point (3)).
 .regle_v_limite_age <- function(ctx) {
   tables <- intersect(c("rentes", "dossiers"), names(ctx$base))
   la <- ctx$conventions$limite_age
+  # colonnes lues par la règle, par table (une seule définition pour les deux branches)
+  ev_lus <- paste0("evenements.", c("id_evenement", "type_evenement", "date_effet", "date_saisie"))
+  lit_commun <- c("dossiers.id_dossier", "dossiers.id_garantie_souscrite", "garanties_souscrites.id_garantie_souscrite",
+                  "garanties_souscrites.code_garantie", "garanties_souscrites.prolongation_handicap",
+                  "parametres.id_garantie_souscrite", "parametres.parametre", "parametres.valeur", "famille.id_membre",
+                  "famille.lien", "famille.date_naissance", "famille.situation", "famille.date_deces", ev_lus)
+  lit <- list(rentes = c("rentes.id_rente", "rentes.id_dossier", "rentes.id_membre", "evenements.id_rente", lit_commun),
+              dossiers = c("dossiers.id_sinistre", "sinistres.id_sinistre", "sinistres.id_assure", "famille.id_assure",
+                           "evenements.id_dossier", lit_commun))
+  # colonnes lues pour établir la vue de famille, parametres et evenements (.regle_vue())
+  vue_commun <- c(ctx$lit_vue$famille, ctx$lit_vue$parametres, ctx$lit_vue$evenements)
   if (is.null(la)) {
     if (!.candidats_d07c(ctx)) return(invisible(NULL))
-    for (t in tables) .ajouter_non_execute(ctx, "D07", t, NA_character_, "declaration_absente")
+    for (t in tables) {
+      .ajouter_non_execute(ctx, "D07c", t, NA_character_, "declaration_absente")
+      .regle_vue(ctx, "D07c", t, NA_character_, lit[[t]], "H;S", "exacte", NULL, vue = vue_commun)
+    }
     if (length(tables) > 0L) {
-      .requerir(ctx, "conventions", "D07", "limite_age$regle", paste(REGLES_LIMITE_AGE, collapse = ";"))
-      .requerir(ctx, "conventions", "D07", "limite_age$age", paste(CONVENTIONS_LIMITE_AGE, collapse = ";"))
+      .requerir(ctx, "conventions", "D07c", "limite_age$regle", paste(REGLES_LIMITE_AGE, collapse = ";"))
+      .requerir(ctx, "conventions", "D07c", "limite_age$age", paste(CONVENTIONS_LIMITE_AGE, collapse = ";"))
     }
     return(invisible(NULL))
   }
@@ -4470,7 +4577,7 @@ parties_ligne <- function() lapply(.PARTIES_LIGNE, function(p) list(table = p$ta
   # limite non déterminable pour une ligne candidate : la table va dans controles_non_executes
   # (colonne NA, cause parametre_non_defini) ; les autres lignes restent contrôlées
   noter <- function(t, e) {
-    if (any(e$non_defini)) .ajouter_non_execute(ctx, "D07", t, NA_character_, .CAUSE_PARAMETRE_NON_DEFINI)
+    if (any(e$non_defini)) .ajouter_non_execute(ctx, "D07c", t, NA_character_, .CAUSE_PARAMETRE_NON_DEFINI)
     e$eteint
   }
   # enfant à charge : ligne valable dans la vue, lien enfant, non décédé à l'arrêté (`val` = v :
@@ -4498,15 +4605,7 @@ parties_ligne <- function() lapply(.PARTIES_LIGNE, function(p) list(table = p$ta
     effet <- as.numeric(vv("evenements", "date_effet"))
     list(type = type, retenu = !is.na(type) & !is.na(effet) & effet <= a)
   }
-  ev_lus <- paste0("evenements.", c("id_evenement", "type_evenement", "date_effet", "date_saisie"))
-  lit_commun <- c("dossiers.id_dossier", "dossiers.id_garantie_souscrite", "garanties_souscrites.id_garantie_souscrite",
-                  "garanties_souscrites.code_garantie", "garanties_souscrites.prolongation_handicap",
-                  "parametres.id_garantie_souscrite", "parametres.parametre", "parametres.valeur", "famille.id_membre",
-                  "famille.lien", "famille.date_naissance", "famille.situation", "famille.date_deces", ev_lus)
-  # colonnes lues pour établir la vue de famille, parametres et evenements (.regle_vue())
-  vue_commun <- c(ctx$lit_vue$famille, ctx$lit_vue$parametres, ctx$lit_vue$evenements)
-  .regle_vue(ctx, "D07", "rentes", NA_character_, c("rentes.id_rente", "rentes.id_dossier", "rentes.id_membre",
-                                                    "evenements.id_rente", lit_commun), "H;S", "exacte", function() {
+  .regle_vue(ctx, "D07c", "rentes", NA_character_, lit$rentes, "H;S", "exacte", function() {
     nr <- nrow(ctx$base$rentes)
     # rente non éteinte à l'arrêté (en service ou suspendue) : statut de service commun à D07 (a),
     # (b) et (c) (.statut_service(), spécification `donnees` v1.6, § 8.0 bis, point 3)
@@ -4546,9 +4645,7 @@ parties_ligne <- function() lapply(.PARTIES_LIGNE, function(p) list(table = p$ta
   }, vue = vue_commun)
   # double effet : un dossier clos, ou dont le second décès est retenu à l'arrêté (le droit
   # au capital s'y fixe, avis d'`actuary`, Q3 (b)), n'est pas candidat
-  .regle_vue(ctx, "D07", "dossiers", NA_character_, c("dossiers.id_sinistre", "sinistres.id_sinistre",
-                                                      "sinistres.id_assure", "famille.id_assure", "evenements.id_dossier",
-                                                      lit_commun), "H;S", "exacte", function() {
+  .regle_vue(ctx, "D07c", "dossiers", NA_character_, lit$dossiers, "H;S", "exacte", function() {
     nd <- nrow(ctx$base$dossiers)
     ev <- evenements_retenus()
     gs <- v("dossiers", "id_garantie_souscrite")
@@ -4898,7 +4995,8 @@ parties_ligne <- function() lapply(.PARTIES_LIGNE, function(p) list(table = p$ta
 
 # D07 (a) et (b), extinction non enregistrée (dictionnaire, § 9, sous-cas deces_connu_ailleurs ;
 # spécification `donnees` v1.6, §§ 8.1 et 8.2), sur la vue, constat sur rentes ou dossiers,
-# colonne NA (même clé que D07 (c)). Unités : rentes (toute garantie) et dossiers incapacite,
+# colonne NA, codes D07a et D07b (lettrage du dictionnaire 1.6, M660 ; une clé par sous-cas,
+# spécification `donnees` v1.9, § 9.6). Unités : rentes (toute garantie) et dossiers incapacite,
 # statut de service à l'arrêté (.statut_service()).
 # (a) unité non éteinte (service ou suspension) dont le bénéficiaire a un décès connu de date au
 # plus l'arrêté : (i) sinistre deces visible de l'assuré bénéficiaire (assuré du sinistre du
@@ -4907,12 +5005,14 @@ parties_ligne <- function() lapply(.PARTIES_LIGNE, function(p) list(table = p$ta
 # dont le sinistre a pour membre rattaché (famille.id_sinistre) le membre de la rente, de lien
 # conjoint, partenaire_pacs ou concubin, hors rente de conjoint du même sinistre (configuration
 # de D10 (f), comptée sous D10 (f) seul, M335) ; (iii) fin_service de motif deces_beneficiaire
-# d'une autre rente du même membre. Traitement H ou S, détection exacte (même constat que D07 (c)).
+# d'une autre rente du même membre. Traitement H ou S, détection exacte (code D07a).
 # (b) unité en service dont le dernier paiement visible (prestations de nature paiement, date de
 # règlement au plus l'arrêté ; rente : prestations.id_rente ; dossier : prestations.id_dossier,
 # hors arrerage), à défaut le premier ouverture_service, date de référence, vérifie
-# ajouter_mois(référence, d07b_mois) < arrêté. Traitement S ou X, détection présomptive (second
-# constat de la clé). Sans seuils$d07b_mois : non exécuté (cause declaration_absente) et
+# ajouter_mois(référence, d07b_mois) < arrêté. Traitement X ou S (lu dans defauts.csv,
+# .traitements_sous_cas()), détection présomptive (code D07b). Sans seuils$d07b_mois : non
+# exécuté (cause declaration_absente, plus les causes candidates de la règle bloquée de la
+# branche déclarée, mêmes colonnes lues : spécification `donnees` v1.9.1, § 9.6, point (3)) et
 # déclaration requise (rubrique seuils, clé d07b_mois), s'il existe une unité en service, retenue
 # ou de visibilité non déterminée (colonne de statut illisible : prudent, l'unité compte) ;
 # exécuté à vide sinon (spécification de B2, § 6.3, niveau 1).
@@ -4944,7 +5044,7 @@ parties_ligne <- function() lapply(.PARTIES_LIGNE, function(p) list(table = p$ta
   conjoints <- c("conjoint", "partenaire_pacs", "concubin")
 
   # (a), rentes
-  .regle_vue(ctx, "D07", "rentes", NA_character_,
+  .regle_vue(ctx, "D07a", "rentes", NA_character_,
              c(statut_lus$rentes, "rentes.id_membre", "dossiers.id_sinistre", lit_i, "famille.id_membre", "famille.id_assure_membre",
                "famille.lien", "famille.id_sinistre", "evenements.id_dossier", "evenements.motif"),
              "H;S", "exacte", function() {
@@ -4994,15 +5094,21 @@ parties_ligne <- function() lapply(.PARTIES_LIGNE, function(p) list(table = p$ta
     .k3_resultat(.k3_op(`&`, ne, .k3_op(`|`, d_inv, d_m, d_iii)))
   }, vue = c(vue_ev, ctx$lit_vue$famille, ctx$lit_vue$sinistres))
   # (a), dossiers incapacite : (i) seul
-  .regle_vue(ctx, "D07", "dossiers", NA_character_, c(statut_lus$dossiers, lit_i), "H;S", "exacte", function() {
+  .regle_vue(ctx, "D07a", "dossiers", NA_character_, c(statut_lus$dossiers, lit_i), "H;S", "exacte", function() {
     ne <- .k3_entree(.service3(ctx, .statut_service(ctx, "dossiers"), .NON_ETEINT))
     assure <- as.character(.joindre(ctx, "sinistres", "id_sinistre", "id_assure", v("dossiers", "id_sinistre")))
     .k3_resultat(.k3_op(`&`, .k3(unite("dossiers")), ne, deces_assure(assure)))
   }, vue = c(vue_ev, ctx$lit_vue$sinistres))
 
-  # (b)
+  # (b) ; colonnes lues par la règle, par table, et colonnes lues pour la vue (une seule
+  # définition pour les deux branches) ; traitement lu dans le dictionnaire (defauts.csv, X;S)
   mois <- ctx$declarations$seuils[[SEUIL_MOIS_D07B]]
   tables <- intersect(c("rentes", "dossiers"), names(ctx$base))
+  lit_p <- list(rentes = paste0("prestations.", c("id_rente", "nature_mouvement", "date_reglement")),
+                dossiers = paste0("prestations.", c("id_dossier", "type_prestation", "nature_mouvement", "date_reglement")))
+  lit_b <- list(rentes = c(statut_lus$rentes, lit_p$rentes), dossiers = c(statut_lus$dossiers, lit_p$dossiers))
+  vue_b <- c(vue_ev, ctx$lit_vue$prestations)
+  traitement_b <- .traitements_sous_cas(ctx$dico)[["D07b"]]
   if (is.null(mois)) {
     # unité en service, retenue ou de visibilité non déterminée (prudent : colonne illisible)
     en_service <- function(t) {
@@ -5013,15 +5119,18 @@ parties_ligne <- function() lapply(.PARTIES_LIGNE, function(p) list(table = p$ta
       any((ctx$retenu[[t]] | .nd_vue(ctx, t)) & unite(t) & (s3$valeurs | s3$inconnu))
     }
     avec <- tables[vapply(tables, en_service, NA)]
-    for (t in avec) .ajouter_non_execute(ctx, "D07", t, NA_character_, "declaration_absente")
-    if (length(avec) > 0L) .requerir(ctx, "seuils", "D07", SEUIL_MOIS_D07B)
+    # causes candidates de la règle bloquée de la branche déclarée (.regle_vue() sans `f` ;
+    # spécification `donnees` v1.9.1, § 9.6, point (3))
+    for (t in avec) {
+      .ajouter_non_execute(ctx, "D07b", t, NA_character_, "declaration_absente")
+      .regle_vue(ctx, "D07b", t, NA_character_, lit_b[[t]], traitement_b, "presomptive", NULL, vue = vue_b)
+    }
+    if (length(avec) > 0L) .requerir(ctx, "seuils", "D07b", SEUIL_MOIS_D07B)
     return(invisible(NULL))
   }
-  lit_p <- list(rentes = paste0("prestations.", c("id_rente", "nature_mouvement", "date_reglement")),
-                dossiers = paste0("prestations.", c("id_dossier", "type_prestation", "nature_mouvement", "date_reglement")))
   for (t in tables) {
     cle <- if (t == "rentes") "id_rente" else "id_dossier"
-    .regle_vue(ctx, "D07", t, NA_character_, c(statut_lus[[t]], lit_p[[t]]), "S;X", "presomptive", function() {
+    .regle_vue(ctx, "D07b", t, NA_character_, lit_b[[t]], traitement_b, "presomptive", function() {
       n <- nrow(ctx$base[[t]])
       sv <- .k3_entree(.service3(ctx, .statut_service(ctx, t), "service"))
       id <- as.character(v(t, cle))
@@ -5077,7 +5186,7 @@ parties_ligne <- function() lapply(.PARTIES_LIGNE, function(p) list(table = p$ta
         }
       }
       .k3_resultat(.k3_op(`&`, .k3(unite(t)), sv, ref3))
-    }, vue = c(vue_ev, ctx$lit_vue$prestations))
+    }, vue = vue_b)
   }
   invisible(NULL)
 }
@@ -5251,8 +5360,10 @@ parties_ligne <- function() lapply(.PARTIES_LIGNE, function(p) list(table = p$ta
   x
 }
 
-# D11, sinistre hors période de couverture (dictionnaire, § 9, D11a du projet de dictionnaire
-# 1.6 ; spécification `donnees` v1.6, § 8.7), sur la vue, constat sur sinistres, colonne
+# D11a, sinistre hors période de couverture (dictionnaire 1.6, § 9, sous-cas (a) ; renommé de
+# D11 sans changement de règle, M675, spécification `donnees` v1.9, § 9.5 ; règle de la
+# spécification `donnees` v1.6, § 8.7, jusqu'au commit de #81 : état transitoire T10, § 9.8),
+# sur la vue, constat sur sinistres, colonne
 # date_survenance, traitement S + X (deux constats de même clé, comme D10 (b)), détection exacte :
 # sinistre dont la survenance n'est couverte par aucun contrat (couverture d'une date par un
 # contrat, .couverture3()) : avec des dossiers dans la vue, pour au moins un dossier, le contrat
@@ -5262,7 +5373,7 @@ parties_ligne <- function() lapply(.PARTIES_LIGNE, function(p) list(table = p$ta
 # (`non_lisible`, précédent D03h, M168) : sinistre deces non couvert dont l'assuré a un sinistre
 # arret_travail retenu, survenu pendant une couverture d'un contrat en cause (contrat d'un dossier
 # non couvert ; sans dossier, tout contrat), de fin connue à l'arrêté et antérieure au décès, et
-# non clos à cette fin (aucune sortie retenue d'effet au plus la fin) : non détecté, et (D11,
+# non clos à cette fin (aucune sortie retenue d'effet au plus la fin) : non détecté, et (D11a,
 # sinistres, NA) dans controles_non_executes, cause non_lisible. Couverture du sous-cas : lignes
 # retenues d'affiliations ou de contrats individuels, fin connue (partie visible ; contrat
 # individuel : min(date_fin connue, date_terme)) ; une couverture de fin non connue n'ouvre pas le
@@ -5273,7 +5384,7 @@ parties_ligne <- function() lapply(.PARTIES_LIGNE, function(p) list(table = p$ta
 # antérieure au décès (seule la clôture à cette fin lit evenements) ; nature illisible, tout
 # sinistre non couvert. Un tel sinistre a un sous-cas inconnu : il est écarté (non détecté ; s'il
 # est aussi de couverture inconnue, il garde son verdict inconnu et sa cause γ), les autres
-# détections du cœur restent, et (D11, sinistres, NA) entre dans controles_non_executes, cause =
+# détections du cœur restent, et (D11a, sinistres, NA) entre dans controles_non_executes, cause =
 # cause directe des colonnes illisibles du sous-cas, la plus petite dans l'ordre (rang, position)
 # (.cause_retenue(), comme M169 ; décision du mainteneur du 13/11/2026), s'il existe un sinistre
 # retenu écarté ; aucun sinistre n'y relève alors certainement du sous-cas (pas de non_lisible).
@@ -5292,11 +5403,11 @@ parties_ligne <- function() lapply(.PARTIES_LIGNE, function(p) list(table = p$ta
   f <- function() {
     if (is.null(verdict)) {
       verdict <<- .verdict_d11(ctx)
-      if (attr(verdict, "non_lisible")) .ajouter_non_execute(ctx, "D11", "sinistres", NA_character_, CAUSE_NON_LISIBLE)
+      if (attr(verdict, "non_lisible")) .ajouter_non_execute(ctx, "D11a", "sinistres", NA_character_, CAUSE_NON_LISIBLE)
     }
     verdict
   }
-  for (t in c("S", "X")) .regle_vue(ctx, "D11", "sinistres", "date_survenance", lit, t, "exacte", f, vue = vue)
+  for (t in c("S", "X")) .regle_vue(ctx, "D11a", "sinistres", "date_survenance", lit, t, "exacte", f, vue = vue)
   invisible(NULL)
 }
 
@@ -5391,7 +5502,7 @@ parties_ligne <- function() lapply(.PARTIES_LIGNE, function(p) list(table = p$ta
       })
       cause <- .cause_retenue(unlist(candidates), ctx$dico, ctx$ordre_codes)
       lu <- tc_m[vapply(candidates, function(z) cause %in% z, NA)]
-      .ajouter_non_execute(ctx, "D11", "sinistres", NA_character_, cause, lu = sort(lu, method = "radix"))
+      .ajouter_non_execute(ctx, "D11a", "sinistres", NA_character_, cause, lu = sort(lu, method = "radix"))
     }
     return(res)
   }
@@ -5506,7 +5617,7 @@ parties_ligne <- function() lapply(.PARTIES_LIGNE, function(p) list(table = p$ta
 # l'ordre de la date d'effet, de l'ordre du type (§ 4), puis de l'identifiant ; identifiant : le
 # premier événement à partir duquel l'automate échoue (.echec_d12()), un par sinistre. Traitement
 # X par sinistre pour engagement (l'exclusion porte sur le sinistre, .placer()) et S pour triangle,
-# risque_en_cours et regle_comptable (.EXCEPTIONS_FAMILLE) : deux constats de même clé (comme
+# risque_en_cours et regle_comptable (.exceptions_famille()) : deux constats de même clé (comme
 # D03a). Verdict à trois valeurs : événements de l'automate non déterminés du sinistre placés,
 # dans l'ordre, avant son dernier événement retenu (les suivants sont sans effet : élagage exact),
 # au plus .MAX_EVENEMENTS_ND_D12, chaque sous-ensemble essayé (verdict commun, inconnu s'il
@@ -6379,7 +6490,7 @@ parties_ligne <- function() lapply(.PARTIES_LIGNE, function(p) list(table = p$ta
 # Placement des constats selon leur traitement et les déclarations (spécification, § 3 ; ADR
 # 0010, sixième série, (b) 3 et 4 ; décisions du mainteneur D4 et D5). R et S sont placés par
 # .bilan(). Un constat à choix a deux axes : X par famille de calcul (.familles_x() : hors des
-# couples traités S, .EXCEPTIONS_FAMILLE) et H ou S par référentiel (S : valeur
+# couples traités S, .exceptions_famille()) et H ou S par référentiel (S : valeur
 # .VALEUR_SIGNALEMENT de `hypotheses`, pour un constat qui admet S). Il est couvert si
 # l'exclusion est déclarée pour chaque famille, ou H ou S pour chaque référentiel ; couvert,
 # il n'est placé que sur un axe (réserve M1 ; un motif à traitement unique n'est jamais
@@ -6415,7 +6526,7 @@ parties_ligne <- function() lapply(.PARTIES_LIGNE, function(p) list(table = p$ta
     t <- eclater_champ(k$traitement)
     base_ecart <- list(table = k$table, colonne = k$colonne, motif = k$code)
     if (identical(t, "R")) {
-      if (k$code != "refus_induit") {
+      if (!(k$code %in% .CODES_INDUITS)) {
         ecarts <- ajouter(ecarts, c(base_ecart, list(famille = "ensemble", action = "refus", lignes = k$lignes)))
       }
       next
@@ -6423,7 +6534,7 @@ parties_ligne <- function() lapply(.PARTIES_LIGNE, function(p) list(table = p$ta
     if (identical(t, "S")) next
     lignes <- k$lignes
     if (k$code %in% c("D04a", "D04b")) lignes <- lignes[!(.connus(ctx, k$table)[lignes] %in% FALSE)]
-    familles <- if ("X" %in% t) .familles_x(k$code) else character(0)
+    familles <- if ("X" %in% t) .familles_x(ctx$dico, k$code) else character(0)
     e_k <- ex[ex$motif == k$code & ex$famille %in% familles, , drop = FALSE]
     h_k <- hy[hy$motif == k$code, , drop = FALSE]
     s_k <- if ("S" %in% t) h_k[h_k$valeur == .VALEUR_SIGNALEMENT, , drop = FALSE] else h_k[0L, ]
@@ -7098,33 +7209,35 @@ parties_ligne <- function() lapply(.PARTIES_LIGNE, function(p) list(table = p$ta
 # Rangs de la priorité des causes de controles_non_executes (spécification, § 3.1 ; M185,
 # M194, M195) : rang 3 pour toute cause directe (.RANG_CAUSE_DIRECTE, motif du refus d'une
 # colonne lue). À tenir à jour : toute nouvelle cause qui n'est pas un motif de refus (code de
-# controles.csv ou de defauts.csv, ou sous-cas lettré de .TRAITEMENTS_SOUS_CAS_D10)
+# controles.csv ou de defauts.csv, sous-cas lettrés compris depuis le dictionnaire 1.6)
 # reçoit un rang ici, sinon .dedoublonner_non_executes() s'arrête (test d'exhaustivité,
 # tests/unitaires/donnees.R). visibilite_non_determinee n'a pas de rang : elle n'est jamais
 # une cause de controles_non_executes (spécification, § 4.2).
 .RANG_CAUSE_DIRECTE <- 3L
+# vue_empechee partage le rang 7 de refus_induit (M684, S-1 (a) ; spécification `donnees` v1.9,
+# § 9.1) : candidat d'une règle bloquée seulement sans cause d'un autre rang ; départage par la
+# position dans .ordre_codes(), refus_induit d'abord (.cle_causes() : rang 7 sans position 0).
+.RANG_INDUIT <- 7L
 .RANGS_CAUSES <- c(stats::setNames(1:2, c(CAUSE_NON_IMPLEMENTE, CAUSE_NON_LISIBLE)),
                    stats::setNames(4:7, c(.CAUSE_AGE_NON_DEFINI, .CAUSE_PARAMETRE_NON_DEFINI,
-                                          "declaration_absente", "refus_induit")))
+                                          "declaration_absente", "refus_induit")),
+                   stats::setNames(.RANG_INDUIT, "vue_empechee"))
 
 # Ordre déclaré des causes à rang égal (spécification `donnees` v1.6, § 3.1, départage à rang
 # égal, #59 ; M335) : codes du dictionnaire, lignes de controles.csv puis lignes de
-# defauts.csv dans l'ordre des fichiers ; un sous-cas lettré absent de defauts.csv
-# (.TRAITEMENTS_SOUS_CAS_D10 : D10a à D10f et D10h) prend place juste après son code parent,
-# dans l'ordre des lettres. Dérivé des fichiers lus par dictionnaire() : aucune liste tenue à
-# la main. Seul endroit où l'ordre est écrit.
-.ordre_codes <- function(dico) {
-  sous <- setdiff(names(.TRAITEMENTS_SOUS_CAS_D10), dico$defauts$code)
-  parent <- sub("[a-z]$", "", sous)
-  c(dico$controles$code,
-    unlist(lapply(dico$defauts$code, function(x) c(x, sort(sous[parent == x], method = "radix"))), use.names = FALSE))
-}
+# defauts.csv dans l'ordre des fichiers ; depuis le dictionnaire 1.6, les sous-cas lettrés
+# (D07a à D07c, D10a à D10h, D11a à D11c) sont des lignes de defauts.csv, placées après leur
+# code parent (spécification `donnees` v1.9, § 9.6), et vue_empechee suit refus_induit dans
+# controles.csv (§ 9.1). Dérivé des fichiers lus par dictionnaire() : aucune liste tenue à la
+# main. Seul endroit où l'ordre est écrit.
+.ordre_codes <- function(dico) c(dico$controles$code, dico$defauts$code)
 
 # Clé de départage (rang, position) de chaque cause de `causes` (spécification, § 3.1 ; M185,
-# M194, M195 ; #59) : rang de .RANGS_CAUSES, cherché d'abord (refus_induit est aussi un code
-# de controles.csv), sinon rang 3 pour une cause directe (motif de refus : code de
-# .ordre_codes()) ; position dans .ordre_codes() pour une cause directe, 0 pour les autres
-# rangs, qui n'ont chacun qu'une valeur. Une cause ni rangée ni motif de refus est une erreur
+# M194, M195 ; #59) : rang de .RANGS_CAUSES, cherché d'abord (refus_induit et vue_empechee sont
+# aussi des codes de controles.csv), sinon rang 3 pour une cause directe (motif de refus : code
+# de .ordre_codes()) ; position dans .ordre_codes() pour une cause directe et pour le rang 7, qui
+# a deux valeurs (refus_induit, vue_empechee : M684), 0 pour les autres rangs, qui n'ont chacun
+# qu'une valeur. Une cause ni rangée ni motif de refus est une erreur
 # interne : elle ne se range pas en silence. `.cause_retenue()` : la plus petite des causes
 # candidates dans cet ordre lexicographique, NA sans cause ; elle ne dépend pas de l'ordre des
 # candidates (minimum sous un ordre total). `ordre` : .ordre_codes(dico), calculé une fois par
@@ -7136,7 +7249,8 @@ parties_ligne <- function() lapply(.PARTIES_LIGNE, function(p) list(table = p$ta
   rang[directe] <- .RANG_CAUSE_DIRECTE
   if (anyNA(rang)) stop("erreur interne de provie : cause de contr\u00f4le non ex\u00e9cut\u00e9 inconnue : ",
                         paste(unique(causes[is.na(rang)]), collapse = ", "), call. = FALSE)
-  position[!directe] <- 0L
+  # le rang 7 a deux valeurs (refus_induit, vue_empechee) : elles gardent leur position
+  position[!directe & rang != .RANG_INDUIT] <- 0L
   list(rang = rang, position = position)
 }
 .cause_retenue <- function(causes, dico, ordre = .ordre_codes(dico)) {

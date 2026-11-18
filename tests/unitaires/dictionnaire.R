@@ -31,7 +31,7 @@ ecrire_csv_test <- function(df, chemin) {
 }
 octets <- function(chemin) readBin(chemin, "raw", n = file.info(chemin)$size)
 # Réécrit dictionnaire.txt avec les empreintes des CSV présents.
-reecrire_entete <- function(dossier, version = "1.5") {
+reecrire_entete <- function(dossier, version = "1.6") {
   empreintes <- lapply(fichiers_csv, function(f) ns$empreinte(octets(file.path(dossier, f))))
   names(empreintes) <- fichiers_csv
   writeBin(ns$ecrire_liste(list(version = version, date_visa = as.Date("2026-11-08"),
@@ -69,12 +69,12 @@ d <- dictionnaire()
 verifier_egal("champs de l'objet, dans l'ordre", names(d),
               c("version", "date_visa", "tables", "colonnes", "types_evenements", "parametres",
                 "defauts", "filiation", "controles"))
-verifier_egal("version 1.5", d$version, "1.5")
+verifier_egal("version 1.6", d$version, "1.6")
 verifier_egal("version égale à VERSION_DICTIONNAIRE_ATTENDUE", d$version, ns$VERSION_DICTIONNAIRE_ATTENDUE)
-verifier_egal("date de visa", d$date_visa, as.Date("2026-11-08"))
+verifier_egal("date de visa", d$date_visa, as.Date("2026-11-18"))
 verifier_egal("décomptes des sept CSV", vapply(d[3:9], nrow, 0L),
-              c(tables = 20L, colonnes = 171L, types_evenements = 17L, parametres = 26L,
-                defauts = 25L, filiation = 109L, controles = 10L))
+              c(tables = 20L, colonnes = 172L, types_evenements = 17L, parametres = 26L,
+                defauts = 39L, filiation = 109L, controles = 12L))
 verifier_egal("vingt tables, dans l'ordre T1 à T20", d$tables$table,
               c("extraction", "adherents", "contrats", "garanties_souscrites", "parametres",
                 "assures", "affiliations", "famille", "sinistres", "dossiers", "beneficiaires",
@@ -96,7 +96,8 @@ verifier_egal("futur_admis programmable : evenements.date_effet seulement",
 verifier_egal("D01a : toutes les tables à clé primaire, parametres comprise, extraction exclue",
               d$defauts$tables[d$defauts$code == "D01a"],
               paste(d$tables$table[d$tables$cle_primaire != ""], collapse = ";"))
-verifier_egal("D07 : table evenements (types d'événements cités)", d$defauts$tables[d$defauts$code == "D07"], "evenements")
+verifier_egal("D07 : tables dossiers, rentes (constat) et evenements (types d'événements cités), dans l'ordre de tables.csv (version 1.6)",
+              d$defauts$tables[d$defauts$code == "D07"], "dossiers;rentes;evenements")
 verifier_egal("D09 : traitements R, X, H, S (R en gras dans la colonne Détection)",
               d$defauts$traitements[d$defauts$code == "D09"], "R;X;H;S")
 verifier_egal("ordre des types d'événements entier", d$types_evenements$ordre, 1:17)
@@ -108,16 +109,24 @@ verifier_egal("affiliations.college : clé étrangère composite (id_contrat, co
               d$colonnes$reference[d$colonnes$table == "affiliations" & d$colonnes$colonne == "college"],
               "garanties_souscrites.id_contrat;garanties_souscrites.college")
 verifier_egal("une seule référence composite", sum(grepl(";", d$colonnes$reference, fixed = TRUE)), 1L)
-verifier_egal("extraction.version_dictionnaire : seule modalité 1.5",
+verifier_egal("extraction.version_dictionnaire : seule modalité 1.6",
               d$colonnes$modalites[d$colonnes$table == "extraction" & d$colonnes$colonne == "version_dictionnaire"],
-              "1.5")
-verifier_egal("controles.csv : dix codes des contrôles de structure, dans l'ordre du texte (section 1.10)",
+              "1.6")
+verifier_egal("controles.csv : douze codes des contrôles de structure, dans l'ordre du texte (section 1.10 ; vue_empechee après refus_induit, P12 ; parente_posterieure, #83)",
               d$controles$code,
               c("colonne_absente", "colonne_inconnue", "type_incompatible", "manquant_obligatoire",
                 "hors_domaine", "chaine_vide", "chevauchement", "table_conditionnelle_absente",
-                "refus_induit", "somme_parts"))
-verifier_egal("controles.csv : portées", d$controles$portee,
-              c("table", "table", rep("colonne_table", 4L), "table", "table", "table", "ligne"))
+                "refus_induit", "vue_empechee", "somme_parts", "parente_posterieure"))
+verifier_egal("controles.csv : portées (ligne_table pour les refus de valeur, #72)", d$controles$portee,
+              c("table", "table", "colonne_table", rep("ligne_table", 3L), "table", "table", "table", "table", "ligne", "ligne"))
+verifier_egal("controles.csv : traitements (colonne traitement, P17) : S pour somme_parts et parente_posterieure, R ailleurs",
+              d$controles$traitement, c(rep("R", 10L), "S", "S"))
+verifier_egal("defauts.csv : sous-cas lettrés (parent renseigné) D07a à D07c, D10a à D10h, D11a à D11c, chacun après son parent",
+              list(d$defauts$code[nzchar(d$defauts$parent)], unique(d$defauts$parent[nzchar(d$defauts$parent)])),
+              list(c("D07a", "D07b", "D07c", "D10a", "D10b", "D10c", "D10d", "D10e", "D10f", "D10h", "D11a", "D11b", "D11c"),
+                   c("D07", "D10", "D11")))
+verifier_egal("defauts.csv : signalement vide pour les seuls défauts à sous-cas (M690)",
+              d$defauts$code[d$defauts$signalement == ""], c("D07", "D10", "D11"))
 verifier_egal("controles.csv : motifs de refus d'appel, les trois motifs de forme seulement",
               d$controles$motif_refus_appel[d$controles$motif_refus_appel != ""],
               c("colonne_absente", "colonne_inconnue", "type_incompatible"))
@@ -146,13 +155,13 @@ x <- copie_dico(); writeBin(charToRaw("version 1.3\n"), file.path(x, "dictionnai
 verifier_refus("dictionnaire.txt illisible par lire_liste()", lire_dictionnaire(x), "dictionnaire_invalide")
 x <- copie_dico(); reecrire_entete(x, version = "1.4")
 e <- refus_de(lire_dictionnaire(x))
-verifier("version 1.4 dans dictionnaire.txt : refus, attendu 1.5, reçu 1.4",
-         !is.null(e) && e$motif == "dictionnaire_invalide" && identical(e$attendu, "1.5") &&
+verifier("version 1.4 dans dictionnaire.txt : refus, attendu 1.6, reçu 1.4",
+         !is.null(e) && e$motif == "dictionnaire_invalide" && identical(e$attendu, "1.6") &&
            identical(e$recu, "1.4"))
 x <- copie_dico(); unlink(file.path(x, "controles.csv"))
 verifier_refus("controles.csv absent", lire_dictionnaire(x), "dictionnaire_invalide")
 x <- copie_dico()
-writeBin(ns$ecrire_liste(list(version = "1.5", date_visa = as.Date("2026-11-08"),
+writeBin(ns$ecrire_liste(list(version = "1.6", date_visa = as.Date("2026-11-08"),
                               empreintes = lapply(stats::setNames(fichiers_csv[1:6], fichiers_csv[1:6]),
                                                   function(f) ns$empreinte(octets(file.path(x, f)))))),
          file.path(x, "dictionnaire.txt"))
@@ -272,7 +281,7 @@ verifier("colonne manquante (portee) : refus",
 verifier("colonne manquante (motif_refus_appel) : refus",
          grepl("^dictionnaire_invalide .*colonnes de controles\\.csv",
                motif_controles(function(df) { df$motif_refus_appel <- NULL; df })))
-verifier("portée hors liste (colonne, table, colonne_table, ligne) : refus",
+verifier("portée hors liste (colonne, table, colonne_table, ligne, ligne_table) : refus",
          grepl("^dictionnaire_invalide .*controles\\.csv, ligne 3 : port",
                motif_controles(function(df) { df$portee[2L] <- "base"; df })))
 verifier("portée vide : refus",
@@ -315,8 +324,73 @@ for (blanc in c("00a0", "202f", "2003", "3000", "200b", "feff")) {
 }
 verifier("objet non blanc après un blanc Unicode : accepté",
          identical(motif_controles(function(df) { df$objet[1L] <- paste0(intToUtf8(160L), "x"); df }), "aucun"))
-verifier_egal("portée colonne (admise, non employée par le texte 1.5) : admise",
+verifier_egal("portée colonne (admise, non employée par le texte 1.6) : admise",
               motif_controles(function(df) { df$portee[3L] <- "colonne"; df }), "aucun")
+# colonne traitement (version 1.6, P17)
+verifier("colonne manquante (traitement) : refus",
+         grepl("^dictionnaire_invalide .*colonnes de controles\\.csv",
+               motif_controles(function(df) { df$traitement <- NULL; df })))
+verifier("traitement hors de R, S (X sur somme_parts) : refus nommant la ligne",
+         grepl("^dictionnaire_invalide .*controles\\.csv, ligne 12 : traitement hors de R, S : X$",
+               motif_controles(function(df) { df$traitement[df$code == "somme_parts"] <- "X"; df })))
+verifier("traitement vide : refus",
+         startsWith(motif_controles(function(df) { df$traitement[1L] <- ""; df }), "dictionnaire_invalide"))
+verifier_egal("traitement S sur un code de portée table (forme admise par le module, l'écart au texte relève de la concordance)",
+              motif_controles(function(df) { df$traitement[df$code == "chevauchement"] <- "S"; df }), "aucun")
+
+section("dictionnaire : refus dictionnaire_invalide, defauts.csv (signalement et parent, version 1.6)")
+motif_defauts <- function(f) {
+  e <- refus_de(lire_dictionnaire(copie_alteree("defauts.csv", f)))
+  if (is.null(e)) "aucun" else paste(e$motif, conditionMessage(e))
+}
+ligne_def <- function(code) which(d$defauts$code == code) + 1L   # + l'en-tête
+verifier("colonnes manquantes (signalement, parent) : refus",
+         grepl("^dictionnaire_invalide .*colonnes de defauts\\.csv", motif_defauts(function(df) { df$signalement <- NULL; df })) &&
+           grepl("^dictionnaire_invalide .*colonnes de defauts\\.csv", motif_defauts(function(df) { df$parent <- NULL; df })))
+for (s in c("aucun;cumulatif", "alternatif;famille:triangle", "signalement", "famille:triangle;famille:triangle",
+            "famille:triangle;", ";famille:triangle", "famille:", "Famille:triangle", "aucun ")) {
+  verifier(paste0("signalement mal formé (D05 : « ", s, " ») : refus nommant la ligne"),
+           grepl(paste0("^dictionnaire_invalide .*defauts\\.csv, ligne ", ligne_def("D05"), " : signalement"),
+                 motif_defauts(function(df) { df$signalement[df$code == "D05"] <- s; df })))
+}
+verifier_egal("signalement famille:<famille> répété (D05 : triangle, risque_en_cours) : forme admise par le module",
+              motif_defauts(function(df) { df$signalement[df$code == "D05"] <- "famille:triangle;famille:risque_en_cours"; df }),
+              "aucun")
+verifier("signalement vide d'un défaut sans sous-cas (D05) : refus (M690)",
+         grepl(paste0("^dictionnaire_invalide .*defauts\\.csv, ligne ", ligne_def("D05"), " : signalement"),
+               motif_defauts(function(df) { df$signalement[df$code == "D05"] <- ""; df })))
+verifier("signalement renseigné d'un défaut à sous-cas (D10 : aucun) : refus (M690)",
+         grepl(paste0("^dictionnaire_invalide .*defauts\\.csv, ligne ", ligne_def("D10"), " : signalement d'un d"),
+               motif_defauts(function(df) { df$signalement[df$code == "D10"] <- "aucun"; df })))
+verifier("parent vidé d'un sous-cas (D11b) : refus nommant la ligne ; le parent D11 garde des sous-cas",
+         grepl(paste0("^dictionnaire_invalide .*defauts\\.csv, ligne ", ligne_def("D11b"), " : parent"),
+               motif_defauts(function(df) { df$parent[df$code == "D11b"] <- ""; df })))
+verifier("parent d'un code sans parent dans le fichier (D01a : D01) : refus",
+         grepl(paste0("^dictionnaire_invalide .*defauts\\.csv, ligne ", ligne_def("D01a"), " : parent"),
+               motif_defauts(function(df) { df$parent[df$code == "D01a"] <- "D01"; df })))
+verifier("parent autre que le code sans sa lettre (D07a : D10) : refus",
+         grepl(paste0("^dictionnaire_invalide .*defauts\\.csv, ligne ", ligne_def("D07a"), " : parent"),
+               motif_defauts(function(df) { df$parent[df$code == "D07a"] <- "D10"; df })))
+verifier("parent placé après son sous-cas (ligne D07 déplacée après D07c) : refus nommant la ligne de D07a, message propre à la place du parent",
+         grepl(paste0("^dictionnaire_invalide .*defauts\\.csv, ligne ", ligne_def("D07"), " : parent : la ligne du parent .*D07.* est plac.e apr.s"),
+               motif_defauts(function(df) {
+                 i <- which(df$code == "D07")
+                 df[c(seq_len(i - 1L), i + 1:3, i, (i + 4L):nrow(df)), ]
+               })))
+# D11 retiré aussi des cellules `defauts` de colonnes.csv (sinon le refus d'un défaut inconnu
+# de colonnes.csv pourrait précéder celui de la colonne `parent`) : seule la règle `parent` est
+# en cause, sur la ligne de D11a (celle de D11 dans le fichier d'origine)
+sans_d11 <- copie_alteree("defauts.csv", function(df) df[df$code != "D11", ], entete = FALSE)
+cl_sans_d11 <- lire_csv_test(file.path(sans_d11, "colonnes.csv"))
+cl_sans_d11$defauts <- vapply(strsplit(cl_sans_d11$defauts, ";", fixed = TRUE),
+                              function(x) paste(setdiff(x, "D11"), collapse = ";"), "")
+ecrire_csv_test(cl_sans_d11, file.path(sans_d11, "colonnes.csv"))
+reecrire_entete(sans_d11)
+e_sans_d11 <- refus_de(lire_dictionnaire(sans_d11))
+verifier("sous-cas lettré sans ligne parente (D11 retirée de defauts.csv et des cellules defauts de colonnes.csv, D11a à D11c gardant parent D11) : refus de la règle parent, sur la ligne de D11a",
+         !any(grepl("(^|;)D11(;|$)", cl_sans_d11$defauts)) && !is.null(e_sans_d11) &&
+           grepl(paste0("^dictionnaire_invalide .*defauts\\.csv, ligne ", ligne_def("D11"), " : parent : code sans sa lettre"),
+                 paste(e_sans_d11$motif, conditionMessage(e_sans_d11))))
 
 # --- controler_types ------------------------------------------------------------------------
 
@@ -334,7 +408,7 @@ base <- lapply(d$tables$table, function(t) {
 names(base) <- d$tables$table
 base$extraction <- data.frame(date_extraction = as.Date("2026-12-31"),
                               debut_historique = as.Date("2017-01-01"),
-                              type_organisme = "mutuelle", version_dictionnaire = "1.5",
+                              type_organisme = "mutuelle", version_dictionnaire = "1.6",
                               devise = "EUR", stringsAsFactors = FALSE)
 avec <- function(table, colonne, valeur) {
   b <- base
@@ -414,13 +488,13 @@ verifier_refus("noms de colonnes dupliqués", controler_types(b), "liste_invalid
 
 section("controler_types : table extraction")
 e <- refus_de(controler_types(avec("extraction", "version_dictionnaire", "1.2")))
-verifier("version 1.2 : extraction_invalide, attendu 1.5, reçu 1.2",
+verifier("version 1.2 : extraction_invalide, attendu 1.6, reçu 1.2",
          !is.null(e) && e$motif == "extraction_invalide" && e$colonne == "version_dictionnaire" &&
-           identical(e$attendu, "1.5") && identical(e$recu, "1.2"))
-e <- refus_de(controler_types(avec("extraction", "version_dictionnaire", "1.4")))
-verifier("version 1.4, version précédente : extraction_invalide, reçu 1.4",
-         !is.null(e) && e$motif == "extraction_invalide" && identical(e$recu, "1.4"))
-for (v in c("1.0", "1.1", "1.2", "1.3", "1.4", "1.50", " 1.5", "")) {
+           identical(e$attendu, "1.6") && identical(e$recu, "1.2"))
+e <- refus_de(controler_types(avec("extraction", "version_dictionnaire", "1.5")))
+verifier("version 1.5, version précédente : extraction_invalide, reçu 1.5",
+         !is.null(e) && e$motif == "extraction_invalide" && identical(e$recu, "1.5"))
+for (v in c("1.0", "1.1", "1.2", "1.3", "1.4", "1.5", "1.60", " 1.6", "")) {
   verifier_refus(paste0("version « ", v, " » refusée"),
                  controler_types(avec("extraction", "version_dictionnaire", v)), "extraction_invalide")
 }
@@ -440,7 +514,7 @@ verifier_egal("version lue avant les autres colonnes d'extraction : extraction_i
               motif_de(controler_types(b)), "extraction_invalide")
 b <- avec("extraction", "version_dictionnaire", "1.2"); b$extraction$devise <- NULL
 verifier_egal("version lue avant les colonnes absentes d'extraction", motif_de(controler_types(b)), "extraction_invalide")
-b <- base; b$extraction$version_dictionnaire <- 1.5
+b <- base; b$extraction$version_dictionnaire <- 1.6
 verifier_egal("version de type numeric : type_incompatible (non lue)", motif_de(controler_types(b)), "type_incompatible")
 b <- base; b$extraction <- rbind(base$extraction, base$extraction); b$extraction$version_dictionnaire[2L] <- "1.2"
 verifier_egal("deux lignes dont une d'une autre version : extraction_invalide sur la version",
@@ -651,7 +725,7 @@ temoin("référence composite de affiliations.college restée à la forme de la 
        function(df) {
          df$reference[df$table == "affiliations" & df$colonne == "college"] <- "garanties_souscrites.college"
          df
-       }, "colonnes\\.csv:62 .*champ `reference`")
+       }, "colonnes\\.csv:63 .*champ `reference`")
 r <- racine_copie(); alterer(r, "parametres.csv", function(df) { df$unite[1L] <- "x"; df }, entete = FALSE)
 verifier("CSV modifié sans mise à jour de l'empreinte : ECHEC", echoue_sur(lancer_controle(r), "empreinte de parametres\\.csv"))
 r <- racine_copie()
@@ -662,13 +736,13 @@ alterer(r, "defauts.csv", function(df) { df$sous_parametres[df$code == "D09"] <-
 verifier("sous-paramètre oublié (part_signe_inverse) : ECHEC", echoue_sur(lancer_controle(r), "part_signe_inverse"))
 r <- racine_copie()
 outils_r <- file.path(r, "R", "outils.R")
-writeBin(charToRaw(sub("VERSION_DICTIONNAIRE_ATTENDUE <- \"1.5\"", "VERSION_DICTIONNAIRE_ATTENDUE <- \"1.6\"",
+writeBin(charToRaw(sub("VERSION_DICTIONNAIRE_ATTENDUE <- \"1.6\"", "VERSION_DICTIONNAIRE_ATTENDUE <- \"1.7\"",
                        rawToChar(octets(outils_r)), fixed = TRUE, useBytes = TRUE)), outils_r)
 verifier("constante du moteur différente de la version du texte : ECHEC", echoue_sur(lancer_controle(r), "version"))
 
 section("contrôle concordance_dictionnaire.R : témoins de controles.csv")
 temoin("code retiré (somme_parts)", "controles.csv", function(df) df[df$code != "somme_parts", ],
-       "controles\\.csv : 9 lignes, 10 dans le texte")
+       "controles\\.csv : 11 lignes, 12 dans le texte")
 temoin("portée changée (chevauchement : table -> colonne_table)", "controles.csv", function(df) {
   df$portee[df$code == "chevauchement"] <- "colonne_table"
   df
@@ -699,4 +773,27 @@ i <- grep("^\\| `somme_parts` \\|", texte)
 texte[i] <- sub("| ligne |", "| colonne |", texte[i], fixed = TRUE)
 writeBin(charToRaw(enc2utf8(paste0(paste(texte, collapse = "\n"), "\n"))), md)
 verifier("portée changée dans le texte sans nouvelle transcription : ECHEC",
-         echoue_sur(lancer_controle(r), "controles\\.csv:11 .*champ `portee`"))
+         echoue_sur(lancer_controle(r), "controles\\.csv:12 .*champ `portee`"))
+temoin("traitement changé (somme_parts : S -> R)", "controles.csv", function(df) {
+  df$traitement[df$code == "somme_parts"] <- "R"
+  df
+}, "controles\\.csv:12 .*champ `traitement`")
+temoin("portée ligne_table remise à colonne_table (hors_domaine)", "controles.csv", function(df) {
+  df$portee[df$code == "hors_domaine"] <- "colonne_table"
+  df
+}, "controles\\.csv:6 .*champ `portee`")
+
+section("contrôle concordance_dictionnaire.R : témoins de defauts.csv (signalement et parent, version 1.6)")
+temoin("signalement changé (D05 : alternatif -> aucun)", "defauts.csv", function(df) {
+  df$signalement[df$code == "D05"] <- "aucun"
+  df
+}, "defauts\\.csv:[0-9]+ .*champ `signalement`")
+temoin("signalement famille retiré (D12 : regle_comptable)", "defauts.csv", function(df) {
+  df$signalement[df$code == "D12"] <- "famille:triangle;famille:risque_en_cours"
+  df
+}, "defauts\\.csv:[0-9]+ .*champ `signalement`")
+temoin("sous-cas lettré retiré (D07b)", "defauts.csv", function(df) df[df$code != "D07b", ], "defauts\\.csv")
+temoin("traitements d'un sous-cas changés (D10b : X;S -> S)", "defauts.csv", function(df) {
+  df$traitements[df$code == "D10b"] <- "S"
+  df
+}, "defauts\\.csv:[0-9]+ .*champ `traitements`")

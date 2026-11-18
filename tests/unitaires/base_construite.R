@@ -1,4 +1,4 @@
-# Tests de la base construite `construite-deces-01` et de ses plans de référence (spécification
+# Tests de la base construite `construite-deces-02` et de ses plans de référence (spécification
 # de B2, docs/specifications/b2-capital-deces-v1.md, § 7.8, critères R.1 à R.4 ; ADR 0011,
 # points 11 à 13 ; #67) sur les familles de calcul, avant calculer_provisions(). R.5 et R.7
 # (calculer_provisions()) sont dans tests/unitaires/calculer_provisions.R ; R.6 (couverture des
@@ -25,14 +25,14 @@ P2 <- "capitaux_non_reclames"
 P3 <- "provision_mathematique_temporaire_deces"
 A1 <- D("2025-12-31")
 A0 <- D("2025-01-01")
-base <- b2_base_construite_deces_01()
+base <- b2_base_construite_deces_02()
 COUPLES_C <- list(C1 = list(plan = "recommandees", arrete = A1), C2 = list(plan = "recommandees", arrete = A0),
                   C3 = list(plan = "alternatives", arrete = A1), C4 = list(plan = "alternatives", arrete = A0))
 plan_c <- function(k) b2_plan_reference(COUPLES_C[[k]]$plan, COUPLES_C[[k]]$arrete, tb)
 vue_c <- function(b, p) b2_vue(b, p$arrete, p$donnees, p$conventions)
 
-section("base construite construite-deces-01 : composition (R.1, § 7.8.1)")
-verifier("quinze tables du dictionnaire 1.5, colonnes dans l'ordre du dictionnaire",
+section("base construite construite-deces-02 : composition (R.1, § 7.8.1)")
+verifier("quinze tables du dictionnaire 1.6, colonnes dans l'ordre du dictionnaire",
          identical(names(base), names(b2_base_capital())) &&
            all(vapply(names(base), function(t) identical(names(base[[t]]), b2_dico$colonnes$colonne[b2_dico$colonnes$table == t]), NA)))
 cas <- c("R1", "R3", "R4", "R5A", "R5B")

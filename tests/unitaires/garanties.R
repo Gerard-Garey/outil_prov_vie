@@ -126,7 +126,7 @@ verifier_egal("dossier introuvable", motif_de(lire_catalogue(file.path(tempdir()
 section("garanties : postes_a_arreter() (M239 ; spécification de B2, § 6.2, critère 3.8, #66)")
 
 # Bilans construits (seules les colonnes lues par postes_a_arreter() comptent) et bilan de
-# v1-modeste-02 aux deux arrêtés.
+# v1-modeste-05 aux deux arrêtés.
 cat_g <- catalogue_garanties()
 postes_b2 <- list(deces = list(capitaux_non_reclames = list(), provision_mathematique_temporaire_deces = list(),
                                sinistres_declares_non_regles = list()))
@@ -168,8 +168,8 @@ verifier_egal("règle (iii) : partie de ligne seule (sinistres.date_instruction,
               arrets(bilan_de(list("sinistres", "date_instruction", "D02c", "colonne"),
                               list("sinistres", "date_instruction", "D02c", "sinistres.date_instruction")))$postes$motif_arret,
               c("D02c", NA, "D02c"))
-j2 <- lire_jeu(file.path(racine, "inst", "extdata", "jeux", "v1-modeste-02"))
-verifier_egal("(3.8) v1-modeste-02 aux deux arrêtés : refus D09 sur prestations.montant (portée colonne) : P1 et P2 arrêtés (D09), P3 non ; postes_arretes de la ligne",
+j2 <- lire_jeu(file.path(racine, "inst", "extdata", "jeux", "v1-modeste-05"))
+verifier_egal("(3.8) v1-modeste-05 aux deux arrêtés : refus D09 sur prestations.montant (portée colonne) : P1 et P2 arrêtés (D09), P3 non ; postes_arretes de la ligne",
               lapply(as.Date(c("2024-12-31", "2025-12-31")), function(a) {
                 x <- arrets(controler_base(j2$base, a, j2$declarations$declarations, j2$declarations$conventions))
                 list(x$postes$motif_arret, x$refus_tables$postes_arretes)

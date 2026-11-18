@@ -8,7 +8,7 @@
 source(file.path(racine, "tests", "references.R"))
 ns <- asNamespace("provie")
 tb <- b2_tables()
-r_c1 <- calculer_provisions(b2_base_construite_deces_01(), b2_plan_reference("recommandees", D("2025-12-31"), tb), par_identifiant(tb))
+r_c1 <- calculer_provisions(b2_base_construite_deces_02(), b2_plan_reference("recommandees", D("2025-12-31"), tb), par_identifiant(tb))
 relu <- function(x) ns$lire_liste(ns$ecrire_liste(x))
 
 section("comparateur feuille par feuille (ADR 0011, points 7 et 8)")
@@ -74,13 +74,13 @@ verifier_egal("fiche : exclusions (versions/provie, plateforme, empreintes/code)
 
 section("arbre des références dans un dossier temporaire (ADR 0011, points 2, 5 et 23 (iv))")
 tmp <- tempfile("arbre-")
-chemins_t <- c("construite-deces-01/recommandees/2025-12-31", "x/y/2025-01-01")
+chemins_t <- c("construite-deces-02/recommandees/2025-12-31", "x/y/2025-01-01")
 prov <- list(version_references = VERSION_REFERENCES, commit = strrep("a", 40L), run = "1", tentative = "1",
              image = "rocker/r-ver:4.3.3@sha256:0", plateforme = ns$decrire_plateforme(), couples = chemins_t[1L])
 e_arbre <- ecrire_arbre_references(stats::setNames(list(r_c1), chemins_t[1L]), tmp, prov)
 verifier_egal("arbre écrit : provenance.txt, empreintes.md5, resultat.txt et fiche.txt ; empreinte de l'arbre = MD5 de empreintes.md5",
               list(sort(list.files(tmp, recursive = TRUE), method = "radix"), e_arbre),
-              list(c("construite-deces-01/recommandees/2025-12-31/fiche.txt", "construite-deces-01/recommandees/2025-12-31/resultat.txt",
+              list(c("construite-deces-02/recommandees/2025-12-31/fiche.txt", "construite-deces-02/recommandees/2025-12-31/resultat.txt",
                      "empreintes.md5", "provenance.txt"), unname(as.character(tools::md5sum(file.path(tmp, "empreintes.md5"))))))
 verifier_egal("controler_arbre() : arbre conforme (couple produit et couple a_produire sans répertoire)",
               controler_arbre(tmp, chemins_t, c(TRUE, FALSE)), c(bijection = TRUE, md5 = TRUE, provenance = TRUE))
@@ -102,7 +102,7 @@ section("résumé du candidat et message du commit de référence (ADR 0011, poi
 res_t <- stats::setNames(list(r_c1), chemins_t[1L])
 lignes <- resume_candidat(res_t, stats::setNames(list(NULL), chemins_t[1L]), prov, e_arbre)
 verifier("résumé : total deces de C1 (445 437,9451518568), couple sans « avant », empreinte de l'arbre",
-         any(grepl("| construite-deces-01/recommandees/2025-12-31 | deces | comptes_sociaux | 445437.9451518568 | calcule |  |",
+         any(grepl("| construite-deces-02/recommandees/2025-12-31 | deces | comptes_sociaux | 445437.9451518568 | calcule |  |",
                    lignes, fixed = TRUE)) && any(grepl("premi\u00e8res r\u00e9f\u00e9rences", lignes, fixed = TRUE)) &&
            any(grepl(e_arbre, lignes, fixed = TRUE)))
 m <- message_commit_candidat(res_t, stats::setNames(list(NULL), chemins_t[1L]), prov, e_arbre, character(0), "https://exemple/1")

@@ -18,7 +18,7 @@ egal_mixte <- function(x, r) is.numeric(x) && length(x) == length(r) && all(abs(
 tb <- b2_tables()
 tid <- par_identifiant(tb)
 A1 <- D("2025-12-31")
-base <- b2_base_construite_deces_01()
+base <- b2_base_construite_deces_02()
 p_c1 <- b2_plan_reference("recommandees", A1, tb)
 r_c1 <- calculer_provisions(base, p_c1, tid)
 couple <- function(nom) {
@@ -103,7 +103,7 @@ verifier("V1 : total deces = P1 + P2 + P3 (mesures m24 : 541 440,13 + 552 375,52
 
 section("total arrêté et arrêt de poste (spécification de B2, § 6.1 et § 6.2 ; ADR 0010, point 11)")
 p3 <- j3$r$provisions
-verifier_egal("J3 (v1-modeste-02) : P1 et P2 arrêtés (D09), P3 calculé (0), total arrêté poste_arrete:<postes triés>, montant et nombre NA",
+verifier_egal("J3 (v1-modeste-05) : P1 et P2 arrêtés (D09), P3 calculé (0), total arrêté poste_arrete:<postes triés>, montant et nombre NA",
               lapply(c("sinistres_declares_non_regles", "capitaux_non_reclames", "provision_mathematique_temporaire_deces", "total"),
                      function(po) as.list(p3[p3$poste == po, c("montant", "nombre_dossiers", "statut_calcul", "motif_arret")])),
               list(list(montant = NA_real_, nombre_dossiers = NA_integer_, statut_calcul = "arrete", motif_arret = "D09"),
@@ -119,7 +119,7 @@ verifier_egal("J3 : la ligne de refus_tables du bilan porte postes_arretes (M239
 sans_af <- b2_base_capital(capital = NA)
 sans_af$affiliations <- sans_af$affiliations[0, ]
 p_af <- p_c1
-p_af$donnees$exclusions <- lapply(ns$FAMILLES_CALCUL, function(f) list(motif = "D11", famille = f, action = "conserver"))
+p_af$donnees$exclusions <- lapply(ns$FAMILLES_CALCUL, function(f) list(motif = "D11a", famille = f, action = "conserver"))
 r_af <- calculer_provisions(sans_af, p_af, tid)
 pa <- r_af$provisions
 pr_af <- r_af$fiche$parametres_retenus$postes
@@ -327,7 +327,7 @@ verifier("format.resultat_provie() : quatre lignes de décomptes ; print() rend 
                                                  length(sortie) == 4L }) &&
            grepl("10 cellule\\(s\\), dont 0", format(r_c1)[2L]))
 
-# --- Base construite construite-deces-01 : critères R.5 et R.7 (spécification de B2, § 7.8.4 et
+# --- Base construite construite-deces-02 : critères R.5 et R.7 (spécification de B2, § 7.8.4 et
 # § 7.8.6), et unités de P3 (élément `contrats` de calculer_risque_en_cours()). Valeurs en dur du
 # § 7.8.4, comparées élément par élément à la tolérance mixte (ADR 0011, r3).
 P1 <- "sinistres_declares_non_regles"
@@ -895,7 +895,7 @@ attendu_echec("(4.5) (h) D02a sous H : la date rejetée est tenue pour manquante
               !isTRUE(all.equal(cel_x(calculer_provisions(b_h90, p_h90, tid), P2)$montant, 126906.734629181941, tolerance = 1e-12)))
 
 section("période inversée ou nulle, cas limites et valeur de D03f d'une cotisation de P3 (critère (4.6), § 5.5, erratum v1.0.16, #92)")
-# Base construite (copies : b2_base_construite_deces_01() n'est pas modifiée), plan recommandees
+# Base construite (copies : b2_base_construite_deces_02() n'est pas modifiée), plan recommandees
 # à A = 2025-12-31 ; D02a déclaré conserver pour les quatre familles, plus D03f quand le cas le
 # dit ; sans segmentation, puis avec nature_contrat et contrat. Valeurs en dur : § 7.7, critère
 # (4.6) ; « avant » mesuré à 88b47f3 (m25).

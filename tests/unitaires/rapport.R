@@ -7,7 +7,7 @@
 source(file.path(racine, "tests", "references.R"))
 ns <- asNamespace("provie")
 tb <- b2_tables()
-r <- calculer_provisions(b2_base_construite_deces_01(), b2_plan_reference("recommandees", D("2025-12-31"), tb), par_identifiant(tb))
+r <- calculer_provisions(b2_base_construite_deces_02(), b2_plan_reference("recommandees", D("2025-12-31"), tb), par_identifiant(tb))
 
 section("rapport : representation_resultat()")
 rep <- ns$representation_resultat(r)
