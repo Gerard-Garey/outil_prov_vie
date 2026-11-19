@@ -1694,9 +1694,9 @@ calcul. Il ne peut appeler que \code{dictionnaire} et
 \code{eclater\_champ()} & \code{x} & Éclate un champ «~a;b~» d'un CSV du dictionnaire en vecteur de chaînes (vide pour une chaîne vide ou \code{NA}). Non exportée, appelée aussi par \code{plan}. \\
 \code{lire\_declarations()} & \code{declarations}, \code{dico} & Contrôle le sous-schéma \code{donnees} du plan (rubriques, motifs, familles, référentiels, seuils, \code{evaluations\_gestion}) et le rend, \code{exclusions} et \code{hypotheses} mises en \code{data.frame}\fsp; refus \code{plan\_invalide}. Non exportée, appelée aussi par \code{valider\_plan()}. \\
 \code{vue\_a\_date()} & \code{donnees}, \code{arrete}, \code{declarations}, \code{conventions} & Construit une fois la vue à l'arrêté (classe \code{vue\_provie}), seule lecture de la base par les familles de calcul~: bilan de \code{controler\_base()}, lignes retenues, parties de ligne connues, lignes exclues par famille de calcul, hypothèses par défaut appliquées\fsp; mêmes refus d'appel que \code{controler\_base()}. Non exportée. \\
-\code{valeurs\_vue()} & \code{vue}, \code{table}, \code{colonne} & Rend les valeurs d'une colonne dans la vue\fsp; \code{NA} signifie «~hors de la vue~», jamais «~absente~». Non exportée. \\
+\code{valeurs\_vue()} & \code{vue}, \code{table}, \code{colonne} & Rend les valeurs d'une colonne dans la vue\fsp; \code{NA} signifie «~hors de la vue~» ou, sous l'hypothèse de D02a, «~tenue pour inconnue~», jamais «~absente~»\fsp; une date d'effet de \code{mise\_a\_jour} rejetée y est remplacée par la règle écrite de R13. Non exportée. \\
 \code{cles\_lignes\_hypothese()} & \code{vue}, \code{table}, \code{lignes}, \code{colonne} & Rend la valeur de la base d'une colonne d'identifiant (\code{id\_*}, clé primaire ou clé étrangère) pour des lignes placées sous une hypothèse de la vue, visibles ou non à l'arrêté, désignées par \code{lignes}, vecteur numérique d'indices entiers, finis et positifs\fsp; tout autre appel (dont un \code{lignes} logique, \code{TRUE} par exemple) est une erreur interne\fsp; seul rattachement d'une ligne cachée à son unité, pour un statut, jamais lu pour un montant. Non exportée, appelée par \code{engagement}. \\
-\code{etats\_a\_date()} & \code{vue}, \code{garanties}, \code{famille} & Rend l'état à l'arrêté de chaque dossier des garanties demandées (B2~: \code{deces}), pour une famille de calcul exigée~: état, montant en vigueur, état du dossier (\code{ouvert}, \code{capital\_du}, \code{clos}) par l'automate du dossier, instruction\fsp; les dossiers exclus pour la famille sont rendus, et l'appelant les filtre\fsp; la garantie souscrite et le sinistre du dossier s'apparient par \code{apparier\_cles()} (une clé manquante ou vide ne s'apparie à rien). Non exportée. \\
+\code{etats\_a\_date()} & \code{vue}, \code{garanties}, \code{famille} & Rend l'état à l'arrêté de chaque dossier des garanties demandées (B2~: \code{deces}), pour une famille de calcul exigée~: état, montant en vigueur, état du dossier (\code{ouvert}, \code{capital\_du}, \code{clos}) par l'automate du dossier, instruction (inconnue si la partie de ligne l'est ou si D02a sous \code{H} la tient pour inconnue)\fsp; les dossiers exclus pour la famille sont rendus, et l'appelant les filtre\fsp; la garantie souscrite et le sinistre du dossier s'apparient par \code{apparier\_cles()} (une clé manquante ou vide ne s'apparie à rien). Non exportée. \\
 \code{garanties\_couverture\_exclue()} & \code{vue}, \code{famille} & Rend les identifiants des garanties souscrites retenues dont la ligne, ou celle de leur contrat, est exclue pour la famille de calcul, triés, jamais manquants ni vides (un tel identifiant est retiré, sans erreur)\fsp; le contrat exclu s'apparie par \code{apparier\_cles()}\fsp; la règle de population sous couverture exclue a une seule implémentation, un assistant interne qui la rend pour toutes les lignes de \code{garanties\_souscrites}, restreint ici aux lignes retenues et lu aussi par \code{dossiers\_garantie\_invisible()} sur les lignes non retenues (issue~83)\fsp; appelée par les familles \code{engagement} et \code{risque\_en\_cours} et par \code{segments\_vue()}. Non exportée. \\
 \code{dossiers\_garantie\_invisible()} & \code{vue}, \code{famille} & Rend les identifiants des dossiers retenus, non exclus pour la famille de calcul, dont la garantie souscrite n'est pas retenue à l'arrêté (exception de la règle~1~: invisible ou de visibilité non déterminée) et n'est pas à couverture exclue pour la famille, triés, jamais manquants ni vides\fsp; vide à l'arrêté égal à l'extraction. Garde des familles de calcul (issue~83)~: appelée par la famille \code{engagement}, qui arrête alors P1 et P2 avec le motif \code{parametre\_non\_determine} et le premier identifiant de cette liste triée. Non exportée. \\
 \code{dates\_inconnues\_vue()} & \code{vue}, \code{table}, \code{colonne} & Rend, pour chaque ligne de la table (retenue ou non), vrai si sa date \code{colonne} est tenue pour inconnue dans la vue par D02a sous \code{H} (annexe~B du dictionnaire de la base, version~1.6), hors date substituée par la règle écrite de R13\fsp; tout faux sans D02a placé en \code{H}. Seule lecture de ce statut par les familles de calcul (lecture de Kleene, issue~90)~: appelée par \code{etats\_a\_date()} et par les familles \code{engagement} et \code{risque\_en\_cours}. Non exportée. \\
@@ -1741,7 +1741,10 @@ population de couverture exclue\fsp; version~1.9 visée en bloc le
 dictionnaire de la base en version~1.6, §~9\fsp; erratum~1.9.1 du même
 jour, points~(1) à~(3) visés par lui, M695 et M696\fsp; erratum~1.9.2 du
 même jour, visé en bloc par lui, M706, sur sa décision M705~: exception
-de la règle~1 pour la garantie d'un dossier, issue~83), sous le dictionnaire
+de la règle~1 pour la garantie d'un dossier, issue~83\fsp; erratum~1.9.3
+du 19~novembre~2026, visé en bloc par lui, M708, avec le changement de
+résultat qu'il entraîne, M707~: hypothèse par défaut de D02a,
+issue~90), sous le dictionnaire
 de la base en version~1.6. La date d'arrêté est obligatoire,
 sans valeur par défaut. \code{declarations} est le sous-schéma
 \code{donnees} du plan (rubriques \code{exclusions}, \code{hypotheses},
@@ -1820,14 +1823,69 @@ Un constat qui admet un choix est placé selon les déclarations, dans un
 seul élément par famille de calcul ou par référentiel\fsp; sans déclaration,
 il va dans \code{declarations\_requises}.
 
-\textbf{Limite connue (issue~90 du dépôt).} Sous l'hypothèse par défaut de
-D02a (dates d'une ligne dans un ordre incohérent), le dictionnaire de la
-base (§~9) prévoit que la date rejetée soit tenue pour manquante, puis
-reçoive le traitement du manquant de sa colonne. La vue n'applique pas
-cette règle~: un poste lit la date rejetée comme sous la conservation, et
-l'hypothèse est comptée dans \code{hypotheses\_defaut} sans effet sur le
-calcul. Le comportement visé est codé en échec attendu dans la batterie
-unitaire (spécification de la branche B2, version~1.0.15, critère~(4.5)~(h)).
+\textbf{Hypothèse par défaut de D02a} (dictionnaire de la base,
+version~1.6, §~9 et annexe~B\fsp; spécification, version~1.9, §~9.4, et
+erratum~1.9.3\fsp; issue~90). Sous l'hypothèse déclarée pour D02a (dates
+d'une ligne dans un ordre incohérent), chaque date rejetée est
+\textbf{tenue pour inconnue} dans la vue, selon sa relation (R1 à R13 de
+l'annexe~B), et jamais pour manquante~: elle ne vaut ni fin ouverte, ni
+fait non survenu, ni instruction pendante. Par défaut, les deux dates de
+la relation sont inconnues\fsp; quatre relations ont une règle écrite~:
+R8 (naissance de l'assuré postérieure à la survenance)~: la survenance,
+la naissance de l'assuré étant inconnue dans toutes ses lectures, fait de
+la personne à source unique\fsp; R11 (naissance d'un membre de la
+famille postérieure à la survenance du sinistre rattaché)~: la seule
+naissance du membre\fsp; R12 (premier état daté autrement que la
+survenance) et R13 (\code{mise\_a\_jour} hors de l'intervalle de la
+survenance à l'extraction)~: la seule date de l'événement. Les autres
+valeurs de la ligne restent lues. Le traitement qui s'enchaîne est celui
+du défaut de manquant de la colonne~: D03a pour la naissance de l'assuré
+(R8) et pour celle du membre (R11), D03f pour les deux bornes de la
+période (R7), sur une cotisation ou sur une prestation d'un type que D03f
+vise (indemnité journalière, arrérage)~; ce défaut enchaîné est placé,
+sur les seules lignes rejetées, comme une ligne de ce défaut, sa
+déclaration est exigée dans \code{declarations\_requises} (M688), et la
+ligne figure dans l'enjeu sous son code, avec l'action de sa déclaration,
+les comptes de détection restant ceux des manquants propres. Une borne de
+période tenue pour inconnue n'est pas une fin de période connue au plus
+l'arrêté. Sans traitement enchaîné, les familles lisent la date inconnue
+en logique de Kleene~: une condition connue décide si elle le peut, sinon
+le poste est arrêté (sections~\ref{sec:engagement-capital}
+et~\ref{sec:risque-en-cours-p3}). La substitution est appliquée à la vue
+après le bilan~: les règles~V, l'enjeu et la visibilité lisent les dates
+brutes, de sorte que la visibilité n'est pas modifiée.
+
+\textbf{Règle écrite de R13.} La date d'effet d'une \code{mise\_a\_jour}
+rejetée est remplacée par la dernière information valide précédente
+(dictionnaire de la base, §~4\fsp; erratum~1.9.3, point~(i))~: la date
+d'effet de la \code{mise\_a\_jour} retenue, de date d'effet non rejetée et
+de date de saisie renseignée strictement antérieure à celle de la mise à
+jour en cause, la plus récemment saisie, la date d'effet la plus tardive
+départageant deux saisies du même jour. Les candidates d'une mise à jour
+de niveau dossier sont celles du même dossier et celles de niveau
+sinistre du même sinistre~; celles d'une mise à jour de niveau sinistre,
+les mises à jour de niveau sinistre du même sinistre\fsp; une
+\code{demande\_mise\_a\_jour} ou un autre type n'en est pas une. À défaut,
+la date d'instruction, à défaut la date de survenance, lues dans la vue,
+la remplacent\fsp; sinon elle reste inconnue. Les exclusions par famille
+ne sont pas lues~: la substitution est faite une fois, dans la vue
+(jugement d'expert, D02a sous l'hypothèse ne portant aucune exclusion).
+
+\textbf{Lecture du statut par les familles.} Seule
+\code{dates\_inconnues\_vue()} rend aux familles le statut «~tenue pour
+inconnue~» d'une date (hors date substituée par R13), \code{valeurs\_vue()}
+y rendant une valeur manquante. Les lignes rejetées sont des hypothèses de
+la vue, de motif D02a~: chaque entrée de \code{vue\$hypotheses} porte ses
+colonnes (dates tenues pour inconnues pour D02a, colonnes de l'hypothèse
+pour D02b et D03g), et un lecteur ne retient une hypothèse que si l'une de
+ses colonnes est lue par lui (garde par colonnes, décision du mainteneur du
+18~novembre~2026, M661, et erratum~1.9.3, point~(v)). Ainsi, R1 touche la
+partie de fin d'un contrat, R2 et R3 non. Aucune famille ne redétecte
+D02a. Un enfant de la famille né après la survenance du sinistre rattaché
+n'est pas rejeté par R11, sans borne de délai, et un enfant à naître ne
+l'est jamais (M662)\fsp; R11 lit \code{famille.lien}, et un lien refusé
+donne à R11 une ligne de \code{controles\_non\_executes} de cause
+\code{hors\_domaine}.
 
 \textbf{Refus de valeur et vue.} Une \emph{colonne lue par la vue} est une
 colonne de visibilité d'une ligne ou d'une partie de ligne (dictionnaire de
@@ -3673,10 +3731,10 @@ l'assuré\fsp; (c)~le comportement antérieur à l'issue~157, où l'absence de
   fonctions que D07~(c)), et qui n'a aucun dossier \code{double\_effet}.
   Un enfant de la famille rattachée né après la survenance compte comme
   à naître, sans borne de délai (décision du mainteneur du 13~novembre
-  2026\fsp; D07~(c) inchangé)\fsp; cette ligne reste détectée par D02a
-  (naissance postérieure à la survenance du sinistre rattaché), et D14 ne
-  lit que les lignes retenues selon le traitement déclaré de D02a~:
-  cohabitation déclarée, à reprendre au dictionnaire~1.6. Un enfant né sans date de naissance (D03a)
+  2026\fsp; D07~(c) inchangé)\fsp; depuis le dictionnaire de la base en
+  version~1.6, D02a ne rejette plus cette ligne (R11, M662), et la
+  cohabitation des deux contrôles, déclarée sous la version~1.5, est
+  levée. Un enfant né sans date de naissance (D03a)
   compte comme possible~: s'il décide du verdict, le sinistre est écarté
   et la ligne prend la cause \code{age\_non\_defini} (même décision). Sans
   \code{conventions\$limite\_age}, un sinistre est candidat si son verdict
@@ -3798,7 +3856,9 @@ puis de l'identifiant~:
 \code{capital\_du} entièrement payé a un solde nul
 (section~\ref{sec:engagement-capital}). L'instruction est lue en logique de
 Kleene~: inconnue si la partie de ligne \code{sinistres.date\_instruction}
-est inconnue, sinon vraie si la partie est connue et la date présente.
+est inconnue, ou si D02a sous l'hypothèse la tient pour inconnue (R10~:
+une instruction inconnue ne vaut pas «~non instruit~»), sinon vraie si la
+partie est connue et la date présente.
 
 \textbf{Couverture exclue.} \code{garanties\_couverture\_exclue(vue,
 famille)} rend les garanties souscrites retenues dont la ligne de
@@ -4295,10 +4355,10 @@ n'est exportée.
 \code{valeur\_actuelle\_probable()} & \code{echeancier}, \code{actualisation}, \code{conventions} & Seule fonction de valeur actuelle probable du package~: flux $\times$ probabilité $\times$ facteur d'actualisation, sommés par clé\fsp; un type d'actualisation admis sans branche de calcul est une erreur interne, jamais un facteur~1. Lue aussi par \code{risque\_en\_cours}. \\
 \code{duree\_annees()} & \code{debut}, \code{fin}, \code{conventions} & Durée en années entre deux dates selon la convention de décompte des jours (\code{exact\_exact} ou \code{exact\_365}). \\
 \code{parametre\_vue()} & \code{vue}, \code{nom}, \code{gs}, \code{famille = NULL} & Rend un paramètre de chaque garantie souscrite dans la vue\fsp; \code{NA} s'il manque, \code{ambigu} s'il porte plusieurs valeurs\fsp; si une famille de calcul est donnée, \code{exclu} signale une ligne retenue du paramètre exclue pour cette famille\fsp; une clé manquante ou vide, de la garantie ou de la ligne de paramètre, ne s'apparie à rien (issue~158). Seule lecture des paramètres d'une garantie souscrite, appelée par les familles «~engagement~» et «~risque en cours~». \\
-\code{hypothese\_vue()} & \code{vue}, \code{motif}, \code{referentiel}, \code{table}, \code{lignes}, \code{poste} & Seule sélection d'une hypothèse placée par la vue pour chaque ligne d'une table, lue par un poste~: hypothèse du poste de préférence à celle de \code{tous}, puis la première placée\fsp; \code{NA} sans hypothèse appliquée\fsp; le contrôle de la valeur reste à chaque lecteur. Avec \code{cles\_lignes\_hypothese()}, seule lectrice des hypothèses placées par la vue. Appelée aussi par \code{risque\_en\_cours} (D03h, D03f). \\
-\code{hypotheses\_vue\_unites()} & \code{vue}, \code{referentiel}, \code{poste}, \code{famille}, \code{n}, \code{lectures} & Seule détection des hypothèses appliquées par la vue (source S2~: D02b, D03g) aux lignes lues pour chaque unité d'un poste, visibles ou non, hors lignes exclues pour la famille\fsp; une clé composée n'est jointe que si chacune de ses composantes est renseignée (issue~158)\fsp; rend les codes de chaque unité. Appelée aussi par \code{risque\_en\_cours}. \\
+\code{hypothese\_vue()} & \code{vue}, \code{motif}, \code{referentiel}, \code{table}, \code{lignes}, \code{poste}, \code{colonnes = NULL} & Seule sélection d'une hypothèse placée par la vue pour chaque ligne d'une table, lue par un poste~: hypothèse du poste de préférence à celle de \code{tous}, puis la première placée\fsp; avec \code{colonnes}, seules comptent les hypothèses dont une colonne est lue par le poste (garde par colonnes, M661, issue~90)\fsp; \code{NA} sans hypothèse appliquée\fsp; le contrôle de la valeur reste à chaque lecteur. Avec \code{cles\_lignes\_hypothese()}, seule lectrice des hypothèses placées par la vue. Appelée aussi par \code{risque\_en\_cours} (D03h, D03f). \\
+\code{hypotheses\_vue\_unites()} & \code{vue}, \code{referentiel}, \code{poste}, \code{famille}, \code{n}, \code{lectures} & Seule détection des hypothèses appliquées par la vue (source S2~: D02a, D02b, D03g) aux lignes lues pour chaque unité d'un poste, visibles ou non, hors lignes exclues pour la famille\fsp; une clé composée n'est jointe que si chacune de ses composantes est renseignée (issue~158)\fsp; rend les codes de chaque unité. Appelée aussi par \code{risque\_en\_cours}. \\
 \code{joindre\_codes()} & \code{...} & Seule réunion des codes d'hypothèse d'une unité (sources S1 et S2)~: codes uniques, triés, joints par «~;~». Appelée aussi par \code{risque\_en\_cours}. \\
-\code{lecture\_unites()} & \code{table}, \code{colonnes}, \code{cles}, \code{unite}, \code{garde}, \code{admises} & Décrit la lecture d'une table par les unités d'un poste pour la détection S2 (clés, unités, lignes admises)\fsp; une clé manquante ou vide ne rattache rien (issue~158). Appelée aussi par \code{risque\_en\_cours}. \\
+\code{lecture\_unites()} & \code{table}, \code{colonnes}, \code{cles}, \code{unite}, \code{garde}, \code{admises}, \code{lues} & Décrit la lecture d'une table par les unités d'un poste pour la détection S2 (clés, unités, lignes admises\fsp; avec \code{lues}, colonnes lues, seules les hypothèses qui portent sur l'une d'elles comptant, garde par colonnes, issue~90)\fsp; une clé manquante ou vide ne rattache rien (issue~158). Appelée aussi par \code{risque\_en\_cours}. \\
 \code{refus\_ligne\_unites()} & \code{vue}, \code{famille}, \code{n}, \code{lectures}, \code{table}, \code{refusees} & Seule détection de la condition~(2) de l'arrêt par unité (issue~72)~: rend, pour chaque unité, vrai si une ligne refusée de portée ligne, retenue à l'arrêté, non exclue pour la famille et admise par la lecture, lui est rattachée par ses clés. Appelée aussi par \code{risque\_en\_cours}. \\
 \code{arret\_refus\_ligne()} & \code{vue}, \code{pa}, \code{cle}, \code{famille}, \code{n}, \code{lectures}, \code{ids}, \code{listees}, \code{evaluees}, \code{repli} & Arrêt d'un poste par les lignes de portée ligne de \code{refus\_tables} dont il est candidat (issue~72)~: rend les lignes qui l'arrêtent, le motif de la première et la première unité en cause\fsp; une table sans liste de lignes lues par unité arrête le poste sans identifiant. Appelée aussi par \code{risque\_en\_cours}. \\
 \code{statut\_le\_plus\_faible()} & \code{statuts} & Rend le plus faible d'un ensemble de statuts de résultat (\code{exact} sans élément). \\
@@ -4526,6 +4586,38 @@ d'enfants), jugement d'expert. Une majoration absente des paramètres vaut
 zéro, son absence ayant ce sens dans le dictionnaire~; une majoration
 exclue n'est pas absente, et arrête le poste comme ci-dessus.
 
+\textbf{Dates tenues pour inconnues} (D02a sous l'hypothèse\fsp;
+spécification du module \code{donnees}, version~1.9, §~9.4, et
+erratum~1.9.3\fsp; issue~90). Une date que D02a tient pour inconnue
+(section~\ref{sec:donnees-bilan}, paragraphe «~Hypothèse par défaut de
+D02a~») n'est jamais lue comme absente~: elle se lit en logique de
+Kleene, par \code{dates\_inconnues\_vue()}, une condition connue
+décidant si elle le peut, et le poste est arrêté sinon. Une affiliation
+de dates inconnues (R5) peut couvrir la survenance~: de collège égal ou
+inconnu, elle rend l'affiliation qui porte l'assiette non déterminée
+(\code{affiliation\_non\_determinee}). Une survenance inconnue (R8, R9),
+lue par toute méthode (revalorisation, reconstitution), et une date de
+déclaration inconnue (R9, R10), lue par l'horizon de dépôt pour un décès
+survenu à partir de 2015, arrêtent le poste
+(\code{parametre\_non\_determine}, premier dossier en cause). Une
+instruction inconnue (R10) ne vaut pas «~non instruit~»~: un dossier à
+reconstituer dont elle décide (structure familiale du plan ou famille
+réelle) arrête le poste avec le même motif. Pour le critère
+\code{sans\_evenement} des capitaux non réclamés, un événement de date
+d'effet inconnue (R12, ou R13 sans valeur substituée) peut être récent~:
+le critère est inconnu pour un dossier sans événement récent connu,
+dossier clos compris, et, si aucun critère connu vrai ne le décide, la
+partition non déterminée arrête les deux postes
+(\code{parametre\_non\_determine}, premier dossier en cause). Motif~: lire une date rejetée comme absente
+ferait d'une fin incohérente une fin ouverte, ou d'une instruction
+incohérente une instruction pendante, correction silencieuse que le
+dictionnaire interdit. Dans le cas de test C90-1 (critère~(4.5)~(h) de
+la spécification de la branche B2, plan \code{alternatives}), sous
+l'hypothèse de D02a, la survenance tenue pour inconnue d'un sinistre
+arrête ainsi le poste des capitaux non réclamés, que la version
+antérieure calculait sur la date brute (changement de provision totale
+visé par le mainteneur, M707).
+
 \textbf{Facteur d'issue.} Le capital est pondéré par le complément à~1 de
 \code{taux\_sans\_suite} pour un dossier ouvert d'un sinistre décès,
 par \code{probabilite\_reconnaissance\_iad} pour un dossier ouvert d'une
@@ -4596,9 +4688,10 @@ par défaut dont P1 et P2 lisent la valeur est celle du salaire manquant
 \code{D03c}, y compris quand son solde est au plus nul (il est alors
 restitué à montant nul)~; D03a déclarée en hypothèse n'est pas lue, l'âge
 restant inconnu. Les hypothèses de visibilité D02b et D03g, appliquées par
-la vue à un arrêté antérieur à l'extraction, marquent aussi le dossier
-dont une ligne lue est placée sous l'une d'elles, qu'elle l'ait rendue
-visible ou cachée~: le dossier est \code{jugement\_expert} et ses codes
+la vue à un arrêté antérieur à l'extraction, et l'hypothèse de D02a
+(dates tenues pour inconnues, à tout arrêté, issue~90), marquent aussi le
+dossier dont une ligne lue est placée sous l'une d'elles, qu'elle l'ait
+rendue visible ou cachée~: le dossier est \code{jugement\_expert} et ses codes
 vont dans \code{hypotheses\_defaut} (issue~87 du dépôt~; règle unique de
 statut, section~\ref{sec:statut-unite}). La colonne
 \code{hypotheses\_defaut} d'un dossier réunit donc les codes de D03c et
@@ -4638,9 +4731,10 @@ seules~:
   D03h (champ individuel) et D03f (champ collectif) pour la provision
   mathématique (section~\ref{sec:risque-en-cours-p3})\fsp;
 \item \textbf{S2, hypothèse appliquée par la vue}~: une ligne lue pour
-  l'unité figure parmi les lignes d'une hypothèse D02b ou D03g placée par
-  la vue (comptes sociaux, poste du calcul ou tous les postes), que
-  l'hypothèse l'ait rendue visible ou cachée à l'arrêté\fsp;
+  l'unité figure parmi les lignes d'une hypothèse D02a, D02b ou D03g
+  placée par la vue (comptes sociaux, poste du calcul ou tous les postes),
+  que l'hypothèse l'ait rendue visible ou cachée à l'arrêté (D02b, D03g)
+  ou qu'elle y tienne des dates pour inconnues (D02a, issue~90)\fsp;
 \item \textbf{S3, extrapolation d'une table}~: un point lu pour l'unité
   est hors des axes de la table, sous la déclaration
   \code{derniere\_valeur} (dans l'état du code, la table du tarif du champ
@@ -4961,6 +5055,26 @@ emploierait les valeurs d'une ligne écartée. L'alternative «~ligne exclue
 égale ligne absente~» a été écartée par le mainteneur (spécification,
 version~1.0.10).
 
+\textbf{Champ individuel~: dates tenues pour inconnues} (D02a sous
+l'hypothèse\fsp; spécification du module \code{donnees}, version~1.9,
+§~9.4, et erratum~1.9.3, point~(v)\fsp; issue~90). La même lecture de
+Kleene s'applique aux dates que D02a tient pour inconnues
+(section~\ref{sec:donnees-bilan})~: une version de garantie (R4) ou un
+contrat (R1 à R3) dont la mise en vigueur ou la fin n'est pas connue
+reste dans la population et arrête le poste
+(\code{parametre\_non\_determine}, premier contrat en cause), sauf sortie
+par une condition connue~; un sinistre \code{deces} ou \code{iad} retenu,
+non exclu, de l'assuré, de survenance inconnue (R8, R9), peut être
+survenu au plus l'arrêté, et rend la sortie inconnue comme un sinistre
+exclu. Pour la restitution à montant nul d'un contrat sorti, seule une
+hypothèse de la vue qui porte sur une colonne lue pour établir la sortie
+en décide (garde par colonnes, M661)~: pour la sortie par un sinistre,
+l'assuré, la nature, la survenance ou la date de saisie du sinistre
+(D02b et D03g, constatés sur la date de saisie, en décident\fsp; D02a de
+R10, sur la déclaration ou l'instruction, n'en décide pas, et la sortie
+reste observée)\fsp; pour la sortie par la fin du contrat, une colonne de
+sa partie de fin (D02a de R1 en décide, de R2 et R3 non).
+
 \textbf{Champ individuel~: échéancier.} Les bornes sont l'arrêté, chaque
 date de pas postérieure (années ou mois d'assurance, comptés depuis la date
 d'effet) et la fin de couverture. L'âge de l'année d'assurance~$k$ est l'âge
@@ -5044,8 +5158,12 @@ cotisation retenue du champ est lue dans cet ordre (issue~92 du dépôt~;
 spécification, version~1.0.16)~: (1)~si sa fin de période est connue et au
 plus l'arrêté, elle sort du calcul, avant toute hypothèse et quels que
 soient sa date de début et les traitements déclarés des défauts D03f et
-D02a~; (2)~sinon, si une borne manque, le traitement déclaré du défaut
-D03f s'applique (ci-dessous)~; (3)~sinon, les deux bornes étant connues et
+D02a~; (2)~sinon, si une borne manque, ou si l'hypothèse de D02a tient
+les deux bornes pour inconnues (R7, la période étant inversée ou de
+longueur nulle\fsp; issue~90), le traitement déclaré du défaut D03f
+s'applique (ci-dessous), D03f s'enchaînant alors à D02a
+(section~\ref{sec:donnees-bilan})~; une borne tenue pour inconnue n'est
+jamais une fin de période connue au plus l'arrêté~; (3)~sinon, les deux bornes étant connues et
 la fin postérieure à l'arrêté, une période inversée ou de longueur nulle
 (fin moins début plus un jour au plus nul) arrête le poste
 (\code{parametre\_non\_determine}, premier contrat en cause)~; (4)~sinon,
@@ -5053,10 +5171,9 @@ le prorata s'applique. La règle~(3) est une lecture de Kleene, jugement
 d'expert~: une borne au moins est fausse, sans qu'on sache laquelle, et le
 prorata n'est pas déterminé~; échanger les bornes serait une correction
 silencieuse, un prorata nul omettrait un montant, et la prime entière
-supposerait la période entièrement à venir. Elle vaut que le défaut D02a
-(dates incohérentes) soit déclaré en conservation ou en hypothèse par
-défaut, la règle de cette hypothèse n'étant encore appliquée par aucun
-module (section~\ref{sec:donnees-bilan}).
+supposerait la période entièrement à venir. Elle vaut sous la
+conservation du défaut D02a (dates incohérentes)\fsp; sous son hypothèse
+par défaut, la période inversée relève de la règle~(2).
 
 \textbf{Champ collectif~: période couverte manquante.} Une cotisation
 retenue du champ dont la date de début ou de fin de période manque
