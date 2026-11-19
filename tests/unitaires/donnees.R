@@ -6094,6 +6094,18 @@ sortie_dc34 <- function(effet) within(maint34(effet, maintien = TRUE), {
 verifier_egal("D11a, C81-2 (R1) : sortie motif deces de SI2 datée du décès SI1 : SI1 non détecté ; sortie la veille du décès : détecté",
               lapply(c("2025-01-10", "2025-01-09"), function(x) co34(controler_base(sortie_dc34(x), A, s34(1000), cv34), "D11a")),
               list(character(0), rep("sinistres exacte SI1", 2L)))
+# C81-2, borne « au plus t » à la fin de la couverture (M658 ; audit de la reprise de #81) : sortie
+# EV3 de SI2 (2024-09-01) avant la fin de AF1 (2024-12-31), puis rechute EV7 datée du jour de la
+# fin : l'événement de la fin est lu, l'arrêt est en cours à la fin et au décès, SI1 non détecté
+# (une borne stricte à la fin le rendrait détecté) ; témoin, rechute le lendemain de la fin
+# (2025-01-01) : l'arrêt est fini à la fin, détecté
+rech_fin34 <- function(effet) ev34(maint34("2024-09-01", maintien = TRUE), id_evenement = "EV7", id_sinistre = "SI2",
+                                   type_evenement = "rechute", date_effet = D(effet), date_saisie = D("2025-01-02"))
+verifier_egal("D11a, C81-2 : sortie avant la fin de AF1, rechute datée du jour de la fin : SI1 non détecté ; rechute le lendemain de la fin : détecté",
+              lapply(c("2024-12-31", "2025-01-01"), function(x) {
+                r <- controler_base(rech_fin34(x), A, s34(1000), cv34); c(co34(r, "D11a"), ne34(r, "D11a"))
+              }),
+              list(character(0), rep("sinistres exacte SI1", 2L)))
 # T10 (spécification `donnees` v1.9, § 9.8) levé au commit de #81 (C81-6) : l'échec attendu est
 # devenu le premier cas de C81-1 ci-dessus
 maint_nd34 <- within(maint34("2024-11-01", maintien = TRUE), evenements$date_saisie[3L] <- D(NA))
