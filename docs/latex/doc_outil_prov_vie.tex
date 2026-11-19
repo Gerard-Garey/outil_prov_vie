@@ -2196,14 +2196,16 @@ règle~P.
   vue, \code{etats\_a\_date()} (garantie souscrite et sinistre du
   dossier) et \code{segments\_vue()} (garantie souscrite du dossier,
   contrat des unités contrat, sinistre de l'année de survenance, nature
-  du contrat)\fsp; le sous-cas du maintien de D11
+  du contrat)\fsp; le sous-cas du maintien de D11a et de D11b
   (\code{.maintien\_d11()}~: assuré des couvertures, contrat en cause,
   assuré des sinistres d'arrêt de travail, sinistre des sorties) et, à la
   source du contrat en cause, le contrat de la garantie de chaque dossier,
-  lu par \code{.verdict\_d11()}, où une clé vide se lit comme une clé
-  manquante dès sa lecture, et où ce contrat, manquant ou vide, ne
-  s'apparie à aucune couverture (issue~152, puis issue~157\fsp; point~D11 du paragraphe «~Contrôles écrits à la
-  fermeture partielle de l'issue~34~» ci-dessous). La règle vaut aussi
+  lu par \code{.verdict\_d11()} sur toutes les occurrences de sa clé
+  (\code{.jointe3()}, issue~81) puis ramené par \code{.cle3()}, où une
+  clé vide se lit comme une clé manquante, et où ce contrat, manquant ou
+  vide, ne s'apparie à aucune couverture (issue~152, puis issue~157\fsp;
+  point~D11a du paragraphe «~Contrôles écrits à la fermeture partielle de
+  l'issue~34~» ci-dessous). La règle vaut aussi
   pour les clés composites, qui ne sont plus mises bout à bout en texte
   (issue~153\fsp; décision du mainteneur du 15~novembre~2026, M613)~: la
   garantie en vigueur à la survenance, commune à D10~(c), D10~(d) et D14
@@ -2928,7 +2930,7 @@ précision P2 de M222\fsp; version~1.5.4, M226).
   et la règle garde une ligne dans \code{controles\_non\_executes}, avec la
   cause~($\gamma$) ci-dessous. À l'arrêté égal à l'extraction, aucun
   élément n'est non déterminé.
-\item \textbf{Clés exposées.} Vingt-huit clés (code, table, colonne) ont un
+\item \textbf{Clés exposées.} Trente clés (code, table, colonne) ont un
   verdict qui lit une autre ligne de la vue, une partie de ligne ou une
   version de \code{famille} (tableau ci-dessous). Les autres règles~V ont
   un verdict propre à la ligne, ou ne lisent qu'une parente ou une ligne
@@ -2972,7 +2974,9 @@ D07a, D07b et D07c sur \code{dossiers} & Clôtures et seconds décès, enfants d
 D08 sur \code{sinistres} & Sorties des autres sinistres de l'assuré & Inconnu si une sortie non déterminée, d'effet au plus l'arrêté ou inconnu, peut former une paire détectée. \\
 D10d sur \code{evenements} & Dossiers du sinistre, versions de la garantie \code{invalidite}\fsp; sans dossier, couvertures de la survenance & Inconnu si un dossier, une version, une affiliation ou un contrat non déterminé peut changer l'existence d'une version en vigueur. \\
 D10f sur \code{evenements} & Dossier \code{double\_effet} et rente de conjoint du sinistre, leurs événements & Statut de service de la rente comme pour D07\fsp; inconnu si la rente, le dossier ou le \code{second\_deces} est de visibilité non déterminée et peut changer le verdict. \\
-D11a sur \code{sinistres.date\_survenance} & Dossiers, affiliations et contrats de l'assuré\fsp; pour le sous-cas du maintien, sinistres d'arrêt de travail et sorties & Non-couverture inconnue si une couverture possible (affiliation ou contrat non déterminé) ou un dossier non déterminé peut couvrir la survenance\fsp; sous-cas inconnu si une sortie ou un sinistre non déterminé peut l'ouvrir. \\
+D11a sur \code{sinistres.date\_survenance} & Dossiers, affiliations et contrats de l'assuré\fsp; pour le sous-cas du maintien, sinistres d'arrêt de travail, versions de la garantie \code{deces}, sorties et rechutes & Non-couverture inconnue si une couverture possible (affiliation ou contrat non déterminé) ou un dossier non déterminé peut couvrir la survenance\fsp; sous-cas inconnu si un sinistre, une version ou un événement non déterminé peut l'ouvrir. \\
+D11b sur \code{dossiers}, colonne \code{id\_garantie\_souscrite} & Affiliations de l'assuré au contrat, dans le collège du dossier et dans les autres\fsp; contrat de la garantie\fsp; sous-cas du maintien restreint au collège & Inconnu si une affiliation, une partie de fin ou une ligne de contrat non déterminée peut changer l'existence d'une couverture, ou si le sous-cas l'est. \\
+D11c sur \code{affiliations.college} & Autres affiliations de l'assuré au même contrat & Inconnu si une affiliation ou une partie de fin non déterminée peut former ou défaire un chevauchement. \\
 D12 sur \code{evenements.type\_evenement} & Autres événements de l'automate du sinistre & Verdict commun sur chaque sous-ensemble des événements non déterminés placés avant le dernier retenu, inconnu s'il varie\fsp; au-delà de dix, chaque événement retenu du sinistre est inconnu (limite de calcul). \\
 D14 sur \code{sinistres} & Dossiers du sinistre, versions de la garantie \code{double\_effet}, membres de la famille rattachée & Inconnu si un dossier, une version ou un membre de visibilité non déterminée peut changer le verdict. \\
 \end{longtable}
@@ -3267,10 +3271,13 @@ exacte pour \code{famille}, que l'issue~49 demande.
   directe de rang~3 l'emporte (spécification, erratum~1.9.1, point~(3),
   M696)\fsp;
 \item \code{non\_lisible}~: sous-cas qu'aucune colonne de la base ne permet
-  de lire (sous-cas du maintien de la garantie décès de D11a\fsp; la ligne
-  de D03h sur un décès collectif est retirée depuis que le dictionnaire
-  de la base, version~1.6, porte \code{garanties\_souscrites.maintien\_deces},
-  P6)\fsp;
+  de lire. Cette cause n'a plus de producteur~: ses deux sous-cas, la
+  ligne de D03h sur un décès collectif et le sous-cas du maintien de la
+  garantie décès de D11a, se lisent depuis que le dictionnaire de la base,
+  version~1.6, porte \code{garanties\_souscrites.maintien\_deces} (P6\fsp;
+  issue~81). Elle reste dans la liste fermée des causes, à son rang
+  (jugement d'expert~: la retirer changerait l'ordre des rangs sans motif
+  de fond)\fsp;
 \item \code{age\_non\_defini}~: date de référence antérieure à la
   naissance\fsp; pour D14, enfant né sans date de naissance dont l'âge
   décide du verdict\fsp;
@@ -3495,8 +3502,12 @@ d'un jeu de cinq lignes d'une clé, deux cents permutations tirées sous
 graine locale d'un jeu de douze lignes sur trois clés), l'arrêt sur une cause inconnue (dont une lettre
 ajoutée à un code déjà lettré, comme D01ab, et un sous-cas non déclaré,
 comme D05z), et, sur l'ensemble des appels qu'elle fait, que toute cause
-émise est rangée ou directe, que les cinq causes non directes autres que
-\code{refus\_induit} sont émises, et que
+émise est rangée ou directe, que cinq causes non directes autres que
+\code{refus\_induit} sont émises (\code{non\_implemente},
+\code{age\_non\_defini}, \code{parametre\_non\_defini},
+\code{declaration\_absente} et \code{vue\_empechee}), que
+\code{non\_lisible} ne l'est jamais et n'est nommée dans le code que par
+sa constante et son rang, et que
 \code{visibilite\_non\_determinee} ne l'est jamais.
 
 \textbf{Âge invraisemblable et fin de charge.} Le défaut D02c, pour un
@@ -3610,7 +3621,7 @@ simulés est renvoyée à l'issue~117.
   (contrat, collège) de ses dossiers, de version \code{invalidite} en
   vigueur à la survenance (fonction de garantie en vigueur commune avec
   D10~(c) et D14). Sans dossier, la version est cherchée pour chaque
-  contrat qui couvre la survenance (couverture définie au point de D11
+  contrat qui couvre la survenance (couverture définie au point de D11a
   ci-dessous), sous le collège de
   l'affiliation, ou sous le seul contrat pour un contrat individuel\fsp;
   aucun contrat~: détecté. Motif du collège (jugement d'expert,
@@ -3640,8 +3651,9 @@ simulés est renvoyée à l'issue~117.
   sinistre porte plusieurs rentes de conjoint (ex-conjoint et conjoint),
   une fausse alarme est possible dans les deux sens, l'alarme restant
   déclarable en signalement.
-\item \textbf{D11}, sinistre hors période de couverture (forme D11a du
-  projet de dictionnaire~1.6, sous le code \code{D11}). Une date est
+\item \textbf{D11a}, sinistre hors période de couverture (code \code{D11}
+  jusqu'au dictionnaire de la base en version~1.5, renommé D11a par le
+  lettrage du défaut D11, M675). Une date est
   couverte par un contrat si une affiliation de l'assuré au contrat la
   contient, bornes incluses, une fin inconnue à l'arrêté étant ouverte,
   ou, pour un contrat individuel, si elle est comprise entre sa date
@@ -3650,29 +3662,97 @@ simulés est renvoyée à l'issue~117.
   au moins un de ses dossiers, le contrat de la garantie ne couvre pas la
   survenance, ou, sans dossier, qu'aucun contrat ne couvre. Le cœur du
   contrôle ne lit ni \code{evenements} ni
-  \code{sinistres.nature\_sinistre}. Sous-cas du maintien de la garantie
-  décès~: un sinistre \code{deces} non couvert dont l'assuré a un
-  sinistre \code{arret\_travail} survenu pendant une couverture d'un
-  contrat en cause, de fin connue et antérieure au décès, et non clos à
-  cette fin (aucune \code{sortie} d'effet au plus la fin), n'est pas
-  détecté, et (D11, \code{sinistres}, \code{NA}) prend la cause
-  \code{non\_lisible}~: le dictionnaire~1.5 ne dit pas si un contrat porte
-  le maintien, et détecter ou non supposerait une hypothèse non
-  déclarée. Si une colonne que lit ce seul sous-cas est illisible, il
-  n'est lu que pour sa partie lisible~: le décès dont le sous-cas devient
-  inconnu est écarté, et la ligne prend la cause directe de la colonne
-  illisible, départagée comme toute cause (décision du mainteneur du
-  13~novembre~2026)\fsp; aucune ligne \code{non\_lisible} n'est alors
-  écrite, car, sans la clôture, aucun sinistre ne relève certainement du
-  sous-cas. Dans ce sous-cas, l'assuré des couvertures, le contrat en
-  cause, l'assuré des sinistres d'arrêt de travail et le sinistre des
-  sorties suivent la règle de la clé manquante~: une clé manquante ou
+  \code{sinistres.nature\_sinistre}. Le contrat de la garantie d'un
+  dossier est lu sur toutes les occurrences de sa clé (lecture
+  existentielle, point C-5 de l'issue~164, M663)~: l'atome «~le contrat
+  ne couvre pas la survenance~» est évalué pour chaque valeur, et le
+  verdict est inconnu si elles diffèrent, avec la cause candidate D01a\fsp;
+  ce chemin est latent (une garantie en double refuse sa table en portée
+  table, issue~169).
+
+  \emph{Sous-cas du maintien de la garantie décès} (spécification,
+  version~1.9, §~9.5\fsp; décisions du mainteneur du 18~novembre~2026,
+  M657 et M658, et du 19~novembre~2026, M709). Un sinistre \code{deces}
+  non couvert n'est pas détecté si l'assuré a un sinistre
+  \code{arret\_travail}, retenu ou de visibilité non déterminée, qui
+  réunit trois conditions~: il est survenu pendant une affiliation à un
+  contrat collectif en cause, de fin connue et antérieure au décès\fsp; la
+  garantie \code{deces} de ce contrat, au collège de cette affiliation,
+  porte \code{maintien\_deces} vrai dans sa version en vigueur à la
+  survenance de l'arrêt (fonction unique de la garantie en vigueur à la
+  survenance, commune avec D10~(c), D10~(d) et D14)\fsp; l'arrêt est en
+  cours à la fin de la couverture et au décès. Un arrêt est en cours à une
+  date~$t$ si le dernier événement \code{sortie} ou \code{rechute} de son
+  sinistre, dans l'ordre des événements (date d'effet, ordre des types du
+  dictionnaire, date de saisie, identifiant), n'est pas une
+  \code{sortie}~; sans tel événement, il est en cours. À la fin de la
+  couverture, l'événement est pris de date d'effet au plus~$t$\fsp; au
+  décès, de date d'effet strictement antérieure (M709), de sorte qu'une
+  \code{sortie} de motif \code{deces} datée du jour du décès ne rompt pas
+  l'arrêt. \code{maintien\_deces} faux, ou l'absence de garantie
+  \code{deces} à ce collège, met le décès hors du sous-cas, et
+  \code{evenements} n'est alors pas lu\fsp; vrai, il laisse le décès non
+  détecté, sans aucune ligne\fsp; inconnu, il écarte le décès, avec la
+  cause directe de la valeur refusée, ou la cause~($\gamma$) d'une version
+  ou d'un événement non déterminé. Un événement retenu dont la date
+  d'effet est refusée pour sa valeur compte comme non déterminé. Un
+  contrat individuel est hors du sous-cas. Interprétations déclarées
+  (jugements d'expert, M669 et M670)~: (1)~le terme de la période
+  d'incapacité ou d'invalidité (loi n\textsuperscript{o}~89-1009,
+  art.~7-1, al.~1, 2\textsuperscript{e}~phrase, lue sur la consolidation
+  LEGI), défini par le contrat et absent de la base, est lu
+  comme la fin de l'arrêt~: le \code{passage\_invalidite} ne rompt pas la
+  période, une \code{sortie}, quel que soit son motif, y met fin\fsp; si le
+  terme contractuel est autre (une \code{sortie} de motif
+  \code{fin\_droits}, par exemple), le décès est détecté, signalé et exclu,
+  visible au bilan, mais la lecture n'est pas prudente en comptes sociaux
+  si le décès est couvert, et un paramètre déclaré des motifs de
+  \code{sortie} est renvoyé au poste du maintien de la garantie décès
+  (issues~106 et~14, point~4)\fsp; (2)~la fin d'une affiliation est
+  assimilée à la résiliation ou au non-renouvellement du contrat, lecture
+  déclarée et non texte. Limite connue C1 (M671, issue~166)~: un décès
+  couvert par le maintien dont l'arrêt est assuré chez un autre organisme,
+  la base n'ayant alors aucun sinistre \code{arret\_travail} de l'assuré,
+  est détecté, signalé et exclu. Limite relevée (issue~173)~: une
+  affiliation de visibilité non déterminée, ou dont la partie de fin l'est,
+  qui ouvrirait le sous-cas, est ignorée au lieu de rendre le verdict
+  inconnu\fsp; le cas est latent dans les couples de référence, dont aucune
+  garantie ne porte \code{maintien\_deces} vrai. Le sous-cas
+  \code{non\_lisible} de la version~1.5 du dictionnaire, qui ne pouvait
+  pas dire si un contrat porte le maintien, est remplacé, et la cause
+  \code{non\_lisible} n'a plus de producteur.
+
+  \emph{Sous-cas illisible} (décision du mainteneur du 13~novembre~2026,
+  gardée par M659\fsp; lecture fine renvoyée à l'issue~105). Les colonnes
+  que lit le seul sous-cas forment une liste fermée~: la nature du
+  sinistre\fsp; \code{maintien\_deces}, le code, le collège et les dates
+  de la garantie souscrite\fsp; le sinistre, le type, la date d'effet, la
+  date de saisie et l'identifiant des événements (ces deux derniers pour
+  l'ordre). Si l'une d'elles est illisible, le sous-cas n'est lu que pour
+  sa partie lisible~: le décès dont le sous-cas devient inconnu est
+  écarté, et la ligne (D11a, \code{sinistres}, \code{NA}) prend la cause
+  directe des colonnes illisibles du sous-cas, départagée comme toute
+  cause. La date d'effet d'un événement refusée pour sa valeur, lue par le
+  sous-cas, l'est ainsi grossièrement~: le sous-cas est écarté avec la
+  cause directe, et le verdict non déterminé d'un événement de date
+  refusée n'est atteint que par appel interne. Écart de lettre à la
+  décision M710, consigné ici~: M710 indexe ce verdict non déterminé
+  «~sur \code{evenements}~»\fsp; le code l'indexe sous
+  «~\code{evenements.date\_effet}~» pour un événement retenu de date
+  d'effet refusée, afin que la cause~($\gamma$) retenue soit le motif du
+  refus de valeur de cette colonne (issue~72), et garde l'index
+  «~\code{evenements}~» pour un événement de visibilité non déterminée.
+
+  \emph{Clés manquantes ou vides.} Dans ce sous-cas, l'assuré des
+  couvertures, le contrat en cause, l'assuré des sinistres d'arrêt de
+  travail et le sinistre des sorties suivent la règle de la clé
+  manquante~: une clé manquante ou
   vide ne s'apparie à rien, et le contrat de la garantie du dossier, d'où
   vient le contrat en cause, se lit comme manquant s'il est vide
   (spécification, version~1.8, §~2.2, B.4, et erratum de rédaction du
   16~novembre~2026\fsp; issue~152\fsp; point «~Clé vide~» ci-dessus). Le cas
   est latent~: une telle clé refuse sa table en portée table, ce qui
-  bloque D11\fsp; la batterie unitaire le vérifie par des appels internes,
+  bloque D11a\fsp; la batterie unitaire le vérifie par des appels internes,
   où une clé vide et une clé manquante donnent le même verdict. Contrat
   manquant ou vide (issue~157\fsp; lecture~(a) retenue par le mainteneur
   le 16~novembre~2026, M628\fsp; spécification, §~2.2, B.4, et §~8.7)~:
@@ -3680,25 +3760,53 @@ simulés est renvoyée à l'issue~117.
   aucune couverture, comme un assuré manquant conduit à «~aucune
   couverture~»~; l'atome «~le contrat ne couvre pas la survenance~» est
   vrai pour ce dossier, et le sinistre est détecté, sauf si le sous-cas du
-maintien est ouvert, ou peut l'être, par un autre contrat en cause,
-renseigné~: le sinistre suit alors les règles ordinaires du sous-cas (non
-lisible, ou écarté)\fsp; le test le vérifie pour le sous-cas ouvert (non
-détecté, non lisible). Un contrat
+  maintien est ouvert, ou peut l'être, par un autre contrat en cause,
+  renseigné~: le sinistre suit alors les règles ordinaires du sous-cas.
+  Un contrat
   manquant n'ouvre jamais ce sous-cas~: il ne s'apparie à aucune
   couverture de l'assuré. Motif~: c'est la règle de la clé
   manquante, appliquée à l'atome. Alternatives écartées~: (b)~lire le
-  sinistre de ce dossier par la branche «~sans dossier~» (couverture de l'assuré par tout contrat), qui tiendrait pour absent un
-dossier connu et lui imputerait le contrat de toute couverture de
-l'assuré\fsp; (c)~le comportement antérieur à l'issue~157, où l'absence de
+  sinistre de ce dossier par la branche «~sans dossier~» (couverture de
+  l'assuré par tout contrat), qui tiendrait pour absent un
+  dossier connu et lui imputerait le contrat de toute couverture de
+  l'assuré\fsp; (c)~le comportement antérieur à l'issue~157, où l'absence de
   contrat valait couverture, et qui supposait un lien que la base ne
   contient pas. Le cas est latent, comme ci-dessus\fsp; la batterie
   unitaire le vérifie par des appels internes, contrat manquant puis
   vide, au même verdict, avec un témoin à clés renseignées non
-  détecté. Limite renvoyée à l'issue~128~: une rechute
-  postérieure à la sortie et antérieure à la fin de couverture n'est pas
-  lue. Traitement signalement et exclusion par famille (deux constats de
-  même clé), détection exacte, constat sur
+  détecté. Traitement signalement et exclusion par famille (deux
+  constats de même clé), détection exacte, constat sur
   \code{sinistres.date\_survenance}.
+\item \textbf{D11b}, dossier sur une garantie d'un collège qui ne couvre
+  pas la survenance (spécification, version~1.9, §~9.5). Un dossier dont
+  la garantie souscrite porte le couple (contrat, collège) est détecté si
+  aucune affiliation de l'assuré à ce contrat dans ce collège ne couvre la
+  survenance, si une affiliation au même contrat dans un autre collège la
+  couvre, et si le sous-cas du maintien, restreint aux affiliations du
+  collège du dossier, n'est pas vrai. D11a et D11b sont disjoints. La
+  couverture est celle de D11a, restreinte au collège par un argument
+  facultatif de la même fonction (une seule implémentation). Un contrat
+  individuel, dont la nature est lue sur la vue de \code{contrats}, est
+  hors du champ\fsp; une ligne de contrat de visibilité non déterminée
+  rend le verdict inconnu (cause~($\gamma$)). Le contrat et le collège de
+  la garantie sont lus sur toutes les occurrences de sa clé, comme pour
+  D11a. Le sous-cas du maintien y suit la même lecture grossière que pour
+  D11a (M710)~: un dossier dont le sous-cas devient inconnu par une
+  colonne illisible est écarté, avec la ligne (D11b, \code{dossiers},
+  \code{NA}) de cause directe. Traitement signalement et exclusion par
+  famille, détection exacte, constat sur
+  \code{dossiers.id\_garantie\_souscrite}.
+\item \textbf{D11c}, affiliations simultanées (spécification,
+  version~1.9, §~9.5). Deux affiliations d'un même assuré au même
+  contrat, dans deux collèges distincts, dont les périodes de couverture
+  se chevauchent, bornes incluses (dictionnaire, §~1.4), la fin étant
+  prise connue à l'arrêté et une fin absente ou inconnue à l'arrêté
+  ouverte. Une affiliation dont une composante de la clé (assuré, contrat,
+  collège) manque ou est vide, blancs compris, est hors du contrôle (forme
+  «~chevauchement~»)\fsp; une ligne ou une partie de fin de visibilité non
+  déterminée rend le verdict inconnu (cause~($\gamma$)). Traitement
+  signalement et exclusion par famille, détection exacte, constat sur
+  \code{affiliations.college}.
 \item \textbf{D12}, suite d'états impossible. L'automate du §~4 du
   dictionnaire, lu dans \code{types\_evenements.csv}, est appliqué à la
   lettre aux événements de niveau sinistre retenus d'un sinistre
@@ -3752,7 +3860,8 @@ mainteneur (M181, issue~34 du dépôt) figurent, pour chaque table
 présente, dans les contrôles non exécutés, avec la cause
 \code{non\_implemente}. L'issue~34 a été fermée en partie (spécification
 \code{donnees}, version~1.6, §~8\fsp; M335 et M338)~: D07~(a) et~(b), D08,
-D10~(d) à~(f), D11, D12 et D14 sont désormais écrits (paragraphe
+D10~(d) à~(f), D11 (D11a), D12 et D14 sont désormais écrits, et D11b et
+D11c le sont depuis l'issue~81 (spécification, version~1.9, §~9.5) (paragraphe
 «~Contrôles écrits à la fermeture partielle de l'issue~34~» ci-dessus). Il
 reste six lignes (code, table, colonne) sur deux codes dans la constante
 \code{CONTROLES\_NON\_IMPLEMENTES}~: D03d sur
@@ -3786,7 +3895,7 @@ Les constantes du module sont citées d'après le code (\code{R/donnees.R})~:
 \code{MOIS\_PERIODE\_COTISATION} & Mois de la période d'une cotisation par périodicité (défaut D03f), vecteur nommé~: 12 pour \code{annuelle}, 6 pour \code{semestrielle}, 3 pour \code{trimestrielle}, 1 pour \code{mensuelle}\fsp; seule table des mois par périodicité, lue aussi par \code{risque\_en\_cours}. \\
 \code{COMPOSANTES\_ENJEU} & Tableau des composantes de l'enjeu (composante, unité, définition), dix lignes. \\
 \code{CAUSE\_NON\_IMPLEMENTE} & \code{"non\_implemente"}~: cause d'un contrôle reporté. \\
-\code{CAUSE\_NON\_LISIBLE} & \code{"non\_lisible"}~: cause d'un sous-cas illisible dans la base. \\
+\code{CAUSE\_NON\_LISIBLE} & \code{"non\_lisible"}~: cause d'un sous-cas illisible dans la base, sans producteur depuis l'issue~81, gardée dans la liste fermée des causes et à son rang. \\
 \code{CONTROLES\_NON\_IMPLEMENTES} & Tableau des contrôles reportés (code, table, colonne), six lignes~: D03d sur \code{assures.situation\_familiale}, D09 aux seuils sur cinq tables (les rangées d'états transitoires du dictionnaire~1.6 sont toutes retirées, la dernière, T9, par le commit de \#81~; spécification du module \code{donnees}, version~1.9, §~9.8). \\
 \end{tabular}
 \end{center}
