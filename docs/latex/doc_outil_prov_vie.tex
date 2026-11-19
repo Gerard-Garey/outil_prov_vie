@@ -1333,8 +1333,8 @@ le module lui-même et, hors de lui, les modules \code{lecture} et
 
 Le dictionnaire lisible par machine est la transcription, sous
 \code{inst/extdata/dictionnaire/}, du dictionnaire de la base visé par le
-mainteneur (\code{docs/specifications/dictionnaire-base-v1.md}, version~1.5,
-visée le 8~novembre~2026). Un script de contrôle du dépôt compare la
+mainteneur (\code{docs/specifications/dictionnaire-base-v1.md}, version~1.6,
+visée le 18~novembre~2026). Un script de contrôle du dépôt compare la
 transcription au texte (section~\ref{sec:controles}). Il compte sept
 fichiers CSV et un en-tête~:
 
@@ -1346,12 +1346,12 @@ fichiers CSV et un en-tête~:
 \textcolor{financeblue}{\textbf{Fichier}} & \textcolor{financeblue}{\textbf{Contenu}} \\
 \code{dictionnaire.txt} & Version du dictionnaire, date de visa et empreinte MD5 de chacun des sept CSV, au format \code{provie-liste 1} (section~\ref{sec:format-liste}). \\
 \code{tables.csv} & Une ligne par table de la base~: numéro, nom, objet, clé primaire, obligation (\code{O}, \code{F}, ou \code{F\_si:<table>}), visibilité. \\
-\code{colonnes.csv} & Une ligne par colonne~: table, nom, type, modalités, domaine, unité, obligation (\code{O}, \code{C}, \code{F}) et condition, mode de saisie et colonne de saisie, date future admise (\code{futur\_admis}), référence, défauts de données qui la concernent. \\
+\code{colonnes.csv} & Une ligne par colonne (172 colonnes)~: table, nom, type, modalités, domaine, unité, obligation (\code{O}, \code{C}, \code{F}) et condition, mode de saisie et colonne de saisie, date future admise (\code{futur\_admis}), référence, défauts de données qui la concernent. \\
 \code{types\_evenements.csv} & Une ligne par type d'événement, dans l'ordre~: niveau, garanties, effet, colonnes requises, caractère programmable, automate du sinistre d'arrêt de travail (état de départ et d'arrivée), motifs. \\
 \code{parametres.csv} & Paramètres de garantie~: code de garantie, paramètre, unité, dimension, obligation et condition. \\
-\code{defauts.csv} & Défauts de données (codes \code{D..})~: libellé, tables et colonnes, détection (\code{exacte}, \code{presomptive}), traitements admis (\code{R}, \code{X}, \code{H}, \code{S}), paramètre d'intensité et sous-paramètres. \\
+\code{defauts.csv} & Défauts de données (codes \code{D..}, 39 lignes, dont les sous-cas lettrés D07a à D07c, D10a à D10h et D11a à D11c, chacun sur sa ligne après celle de son défaut parent)~: libellé, tables et colonnes, détection (\code{exacte}, \code{presomptive}), traitements admis (\code{R}, \code{X}, \code{H}, \code{S}), paramètre d'intensité et sous-paramètres, signalement (ci-dessous), parent (code du défaut parent d'un sous-cas). \\
 \code{filiation.csv} & Correspondance avec la version~1 de la base~: table et colonne, statut (\code{reprise}, \code{renommee}, \code{non\_reprise}), motif. \\
-\code{controles.csv} & Codes de contrôle de structure (ci-dessous)~: code, objet, détection, portée, motif de refus d'appel. \\
+\code{controles.csv} & Codes de contrôle de structure (ci-dessous)~: code, objet, détection, portée, motif de refus d'appel, traitement. \\
 \end{tabular}
 \end{center}
 
@@ -1371,18 +1371,39 @@ table de la ligne, sous le même nom. C'est une contrainte d'existence du
 n-uplet dans la table visée, qui n'en fait pas une clé de cette table. Une
 référence simple ne vise pas la colonne qui la porte.
 
-\textbf{Codes de contrôle de structure.} \code{controles.csv} compte dix
-codes, tous à détection exacte~: \code{colonne\_absente},
-\code{colonne\_inconnue}, \code{type\_incompatible},
-\code{manquant\_obligatoire}, \code{hors\_domaine}, \code{chaine\_vide},
-\code{chevauchement}, \code{table\_conditionnelle\_absente},
-\code{refus\_induit} et \code{somme\_parts}. Leur portée prend l'une des
-quatre valeurs de \code{PORTEES\_CONTROLES}~: \code{colonne}, \code{table},
+\textbf{Codes de contrôle de structure.} \code{controles.csv} compte douze
+codes, tous à détection exacte. Ce sont, dans l'ordre du fichier~: les
+trois défauts de forme (\code{colonne\_absente}, \code{colonne\_inconnue}
+et \code{type\_incompatible})\fsp; les trois contrôles de valeur
+(\code{manquant\_obligatoire}, \code{hors\_domaine} et
+\code{chaine\_vide})\fsp; quatre refus de portée table, le chevauchement de
+versions ou de paliers (\code{chevauchement}), la table conditionnelle
+absente (\code{table\_conditionnelle\_absente}), le refus induit
+(\code{refus\_induit}) et la vue empêchée (\code{vue\_empechee})\fsp;
+enfin deux signalements, \code{somme\_parts} et
+\code{parente\_posterieure}. Leur portée prend l'une des
+cinq valeurs de \code{PORTEES\_CONTROLES}~: \code{colonne}, \code{table},
 \code{colonne\_table} (la colonne, ou la table pour une colonne de clé
-primaire ou qui porte une référence) et \code{ligne} (signalement). Les
+primaire ou qui porte une référence), \code{ligne} (signalement) et
+\code{ligne\_table} (les lignes en cause, ou la table pour une colonne de
+clé~: refus de valeur, portée de \code{manquant\_obligatoire},
+\code{hors\_domaine} et \code{chaine\_vide}). Leur traitement, lu dans la
+colonne \code{traitement}, vaut \code{R} (refus) ou \code{S}
+(signalement)~: \code{S} pour \code{somme\_parts} et
+\code{parente\_posterieure}, \code{R} pour les autres. Les
 trois premiers codes sont aussi des motifs de refus d'appel, qu'ils portent
 dans la colonne \code{motif\_refus\_appel}~: un code qui est un motif de
 \code{MOTIFS\_REFUS} porte ce motif, et lui seul.
+
+\textbf{Signalement et parent d'un défaut.} La colonne \code{signalement}
+de \code{defauts.csv} dit comment un défaut traité en signalement se
+déclare (dictionnaire de la base, §~9)~: une valeur seule parmi
+\code{aucun}, \code{alternatif}, \code{cumulatif} et \code{extraction},
+ou une suite d'éléments \code{famille:<famille>} distincts, joints par
+«~;~»\fsp; elle est vide pour un défaut parent (un code qui a des sous-cas
+lettrés) et pour lui seul. La colonne \code{parent} d'un sous-cas lettré
+(\code{D07a}, par exemple) porte le code sans sa lettre quand ce code est
+une ligne du fichier, placée avant la sienne, et elle est vide sinon.
 
 \textbf{Validation.} \code{dictionnaire()} refuse
 (\code{dictionnaire\_invalide}) un en-tête qui ne porte pas, dans cet ordre,
@@ -1393,7 +1414,13 @@ discordante, qui n'est pas de l'UTF-8 ou dont les colonnes ne sont pas
 celles attendues, et toute référence interne invalide~: table, colonne,
 type, défaut, motif ou paramètre cité qui n'existe pas où il est cité,
 valeur hors de sa liste fermée, référence mal formée, code de contrôle
-répété ou sans objet\fsp; une modalité vide ou entourée de blancs dans la
+répété ou sans objet, traitement d'un code de contrôle autre que \code{R}
+ou \code{S}\fsp; un signalement de défaut d'une autre forme que celle
+décrite ci-dessus, ou renseigné pour un défaut parent (décision du
+mainteneur du 18~novembre~2026, M690)\fsp; un parent autre que le code
+sans sa lettre (s'il est une ligne du fichier) ou que le vide (sinon), et
+un parent dont la ligne est placée après celle de son sous-cas, sous deux
+messages distincts\fsp; une modalité vide ou entourée de blancs dans la
 liste des modalités d'une colonne de \code{colonnes.csv}, en queue de liste
 comprise (\code{F;;M}, \code{;F;M}, \code{F;M;}, «~\code{F; M}~»), le
 message nommant la ligne, la table, la colonne et la première modalité mal
@@ -1689,7 +1716,7 @@ calcul. Il ne peut appeler que \code{dictionnaire} et
 
 \code{controler\_base(donnees, arrete, declarations, conventions)}
 applique la spécification du module \code{donnees}
-(\code{docs/specifications/module-donnees-v1.md}, version~1.8\fsp;
+(\code{docs/specifications/module-donnees-v1.md}, version~1.9\fsp;
 versions~1.1, 1.3, 1.4 et~1.5 visées par le mainteneur, la version~1.5
 le 10~novembre~2026 avec ses précisions P1 à~P5, M222\fsp; errata~1.5.1
 et~1.5.2 et précisions~1.5.3 et~1.5.4 sur ses décisions du même jour, M223
@@ -1709,7 +1736,11 @@ manquante, issues~152, 153 et~154\fsp; erratum de rédaction du
 16~novembre~2026 sur sa décision du même jour, M629~: catégorie
 d'invalidité vide hors du contrôle de chevauchement, issue~143\fsp; errata
 de la validation de l'issue~154 visés par lui le même jour, M630~:
-population de couverture exclue), sous le dictionnaire de la base en version~1.5. La date d'arrêté est obligatoire,
+population de couverture exclue\fsp; version~1.9 visée en bloc le
+18~novembre~2026, M679, avec ses options M684 à M689~: alignement sur le
+dictionnaire de la base en version~1.6, §~9\fsp; erratum~1.9.1 du même
+jour, points~(1) à~(3) visés par lui, M695 et M696), sous le dictionnaire
+de la base en version~1.6. La date d'arrêté est obligatoire,
 sans valeur par défaut. \code{declarations} est le sous-schéma
 \code{donnees} du plan (rubriques \code{exclusions}, \code{hypotheses},
 \code{seuils}, \code{evaluations\_gestion})\fsp; \code{conventions} est la
@@ -1743,9 +1774,46 @@ inconnue une valeur refusée par une strate antérieure (paragraphe
 
 \textbf{Traitements.} Chaque anomalie est enregistrée avec son traitement~:
 refus~(R) d'une table ou d'une colonne, exclusion~(X), hypothèse par
-défaut~(H) ou signalement~(S)\fsp; aucune donnée n'est modifiée. Un code
-de contrôle de structure de portée \code{ligne} est traité en
-signalement, tout autre en refus (règle provisoire, fixée par l'ADR~0010).
+défaut~(H) ou signalement~(S)\fsp; aucune donnée n'est modifiée. Le
+traitement d'un code de contrôle de structure est celui de la colonne
+\code{traitement} de \code{controles.csv} (section~\ref{sec:dictionnaire-csv}),
+lue en un seul endroit du module\fsp; elle remplace la règle provisoire
+de l'ADR~0010 (portée \code{ligne} traitée en signalement, toute autre en
+refus)\fsp; les deux codes de portée \code{ligne} y sont traités en
+signalement et tous les autres en refus, comme sous cette règle.
+
+\textbf{Maintien de la garantie décès} (dictionnaire de la base,
+version~1.6, P6\fsp; spécification, version~1.9, §~9.6, et erratum~1.9.1,
+point~(2)). La colonne logique \code{garanties\_souscrites.maintien\_deces}
+dit si la garantie \code{deces} d'un contrat collectif comporte une clause
+de maintien de la garantie décès en cas d'incapacité de travail ou
+d'invalidité, imposée par la loi n\textsuperscript{o}~89-1009, art.~7-1,
+al.~1 (assurés ou adhérents garantis collectivement dans les conditions
+de son art.~2, dans le cadre d'un ou de plusieurs contrats, conventions
+ou bulletins d'adhésion à un règlement comportant la couverture des
+risques décès, incapacité de travail et invalidité\fsp; selon la
+jurisprudence, l'obligation vaut aussi quand l'employeur a souscrit les
+garanties incapacité de travail et invalidité auprès d'un autre organisme
+d'assurance que celui qui couvre le décès, le maintien ayant un caractère
+autonome~: interprétation jurisprudentielle, Cass.~2\textsuperscript{e}~civ.,
+21~septembre~2023, n\textsuperscript{o}~21-22.197, publié au Bulletin), ou
+stipulée par le contrat
+(dictionnaire de la base, version~1.6, §~3, table
+\code{garanties\_souscrites}). Elle
+est requise pour la garantie \code{deces} d'un contrat collectif, et doit
+manquer ailleurs (règle \code{manquant\_obligatoire} ou
+\code{hors\_domaine} d'une colonne conditionnelle)\fsp; pour une garantie
+\code{deces} orpheline (D04b), dont la nature du contrat ne se lit pas,
+elle est libre (jugement d'expert, M695). Le taux du tarif
+(\code{taux\_technique\_tarif}) d'une garantie \code{deces} collective est
+requis si \code{maintien\_deces} vaut vrai, et hors domaine s'il est
+présent alors qu'elle vaut faux\fsp; le défaut D03h (taux du tarif
+manquant là où il est requis) porte ainsi aussi sur le décès collectif à
+maintien, la nature du contrat étant lue sur toutes les occurrences de sa
+clé (lecture existentielle, cause candidate D01a si elles divergent,
+M663)\fsp; la ligne de D03h de cause \code{non\_lisible}, qui tenait lieu
+de la colonne absente, est retirée. Le simulateur tire cette colonne
+comme une constante (section~\ref{sec:simulation}).
 Un constat qui admet un choix est placé selon les déclarations, dans un
 seul élément par famille de calcul ou par référentiel\fsp; sans déclaration,
 il va dans \code{declarations\_requises}.
@@ -1776,8 +1844,12 @@ antérieur à l'extraction, un défaut de forme sur une colonne que lit une
 règle~P empêche cette règle, et un défaut de forme sur une colonne de
 visibilité d'une ligne entière, qu'une règle~P la lise ou non, empêche la
 vue de sa table (spécification, version~1.5.2, M224)\fsp; l'un et l'autre
-produisent un refus induit de portée table, d'origine «~table.colonne~» (toutes les colonnes en cause, en ordre radix, séparées par «~;~»),
-propagé aux filles par les clés étrangères~: la table sort de la vue,
+produisent, sur la table, le refus de portée table \code{vue\_empechee}
+(dictionnaire de la base, version~1.6, P12\fsp; spécification,
+version~1.9, §~9.1), d'origine «~table.colonne~» (toutes les colonnes en
+cause, en ordre radix, séparées par «~;~»), et, sur ses filles par les
+clés étrangères, un refus induit (\code{refus\_induit}) d'origine la
+table refusée~: la table sort de la vue,
 aucune de ses lignes n'est inscrite comme non déterminée, et la vue est
 provisoire. Rien de tel à l'arrêté égal à l'extraction. Une date de partie de ligne qu'aucune règle~P ne lit
 (\code{sinistres.date\_instruction}) illisible par sa forme garde au
@@ -1796,8 +1868,8 @@ lit «~hors de la vue~»~; un module qui a besoin de la distinction lit le
 statut de la partie, jamais la valeur masquée seule (issue~54). Les dates de saisie de la fin (\code{contrats.date\_saisie\_fin},
 \code{affiliations.date\_saisie\_fin}), que lisent D02b et D03g, relèvent
 du cas précédent~: illisibles par leur forme à un arrêté antérieur à
-l'extraction, elles empêchent ces règles et produisent le refus induit de
-portée table de leur table. Le mécanisme du refus de valeur est le
+l'extraction, elles empêchent ces règles et produisent le refus
+\code{vue\_empechee} de leur table. Le mécanisme du refus de valeur est le
 suivant~:
 
 \begin{itemize}[itemsep=2pt]
@@ -1861,8 +1933,15 @@ suivant~:
   comme valeur reste bloquée, avec le motif du refus pour cause (M169).
 \item Un refus de valeur n'appelle aucune déclaration dans
   \code{declarations\_requises}~: c'est un refus, qu'aucune déclaration ne
-  lève (dictionnaire de la base, §~1.10)\fsp; l'exclusion déclarée de ces
-  lignes est reportée au dictionnaire en version~1.6 (M203).
+  lève (dictionnaire de la base, §~1.10)\fsp; l'exclusion déclarée demandée
+  par l'issue~33 (M203) est tranchée par le dictionnaire de la base,
+  version~1.6 (P18)~: une date de visibilité manquante relève de D03g,
+  étendu à \code{dossiers.date\_ouverture},
+  \code{catastrophes.date\_saisie} et \code{victimes.date\_saisie}, ou de
+  D03i pour les quatre dates d'effet de visibilité (paragraphe
+  «~Visibilité à l'arrêté~»), défauts qui se déclarent par famille et ne
+  sont pas des refus\fsp; une valeur refusée pour une autre raison (hors
+  domaine, chaîne vide, hors bornes) reste un refus (M151).
 \item \textbf{À l'arrêté égal à l'extraction}, la vue est la base
   entière, hors des versions remplacées de \code{famille}~: aucune ligne
   n'est non déterminée, et seuls les deux premiers points s'appliquent au
@@ -1999,7 +2078,19 @@ règle~P.
   valeur présente, comportement antérieur, qui donnait deux codes à une
   anomalie\fsp; (b)~la tenir pour un manquant, qui ajouterait
   \code{manquant\_obligatoire} sous la condition et contredirait le §~1.6
-  du dictionnaire.
+  du dictionnaire. Depuis le dictionnaire de la base en version~1.6, une
+  chaîne faite seulement de blancs est une chaîne vide (décision du
+  mainteneur du 18~novembre~2026, M655\fsp; spécification, version~1.9,
+  §~9.6)~: elle reçoit le seul code \code{chaine\_vide}, et, dans une
+  colonne de clé, suit la règle de la clé manquante (point suivant). Les
+  blancs sont ceux d'une classe fermée, écrite dans le code
+  (\code{.BLANCS}) et indépendante de la locale~: l'espace (U+0020) et
+  les caractères de contrôle U+0009 à U+000D\fsp; une valeur qui porte un
+  autre caractère est lue telle quelle, blancs compris, sans qu'aucun
+  blanc soit retiré. Motif~: une chaîne faite de blancs n'identifie rien
+  et n'est pas une valeur du domaine\fsp; la tenir pour une valeur
+  distincte de la chaîne vide ferait dépendre le bilan de caractères
+  invisibles.
 \item \textbf{Clé vide} (spécification, §~2.2, B.4, «~Chaîne vide~», point
   «~Clé vide~», erratum du 15~novembre~2026\fsp; décision du mainteneur du
   15~novembre~2026, M396\fsp; issue~123\fsp; jugement d'expert\fsp;
@@ -2228,7 +2319,10 @@ tests, consignée dans l'issue~164\fsp; D06 est atteint avec un
   1er~janvier~1901 ou l'absence, qui ouvre l'intervalle, pour
   \code{date\_fin}\fsp; \code{parametres.age\_max}, les âges de~0 à~120 ou
   l'absence\fsp; \code{garanties\_souscrites.college}, code opaque, toute
-  chaîne. Une colonne refusée sans modalités énumérées à laquelle aucune
+  chaîne sans blanc, ni «~;~», ni «~=~» (décision du mainteneur du
+  18~novembre~2026, M656, qui amende M511\fsp; un collège qui en porte un
+  est \code{hors\_domaine}, un collège fait seulement de blancs ne reçoit
+  que \code{chaine\_vide}). Une colonne refusée sans modalités énumérées à laquelle aucune
   règle ne donne de domaine arrêterait le calcul («~erreur interne de
   provie~»).
 \item \textbf{Formes.} Le tableau ci-dessous donne les formes qui découlent
@@ -2288,7 +2382,8 @@ Chevauchement (versions de \code{garanties\_souscrites} par contrat, garantie et
   primaire ou étrangère manquante). L'alternative écartée, «~une clé
   manquante s'apparie à une clé manquante~», était celle de l'entrée
   «~décès souscrit~» de la règle~B avant l'issue~56~: sur le jeu
-  \code{v1-modeste-03} à l'arrêté du 31~décembre~2025, un contrat
+  \code{v1-modeste-03} (que reprend \code{v1-modeste-06}) à l'arrêté du
+  31~décembre~2025, un contrat
   individuel privé de sa date de terme et dont l'identifiant manque, comme
   celui de sa garantie décès, recevait un \code{manquant\_obligatoire} sur
   \code{contrats.date\_terme}, en appariant les deux absences\fsp; il n'en
@@ -2571,8 +2666,28 @@ conjonction de Kleene~:
   connue au plus A rend la condition vraie, une date connue après A la
   rend fausse, une date refusée pour sa valeur la rend inconnue. Une date
   de visibilité absente est lue inconnue~: toutes ces dates sont
-  obligatoires, et leur absence, hors de la date de saisie d'une ligne de
-  D03g (point~3), est un refus.
+  obligatoires, et leur absence est un refus, hors de deux cas. La date de
+  saisie d'une ligne de D03g, dont \code{dossiers.date\_ouverture} (point~3),
+  relève de D03g. Les quatre dates de D03i, «~date d'effet de visibilité
+  manquante~» (\code{contrats.date\_effet},
+  \code{garanties\_souscrites.date\_effet},
+  \code{prestations.date\_reglement}, \code{cotisations.date\_mouvement}\fsp;
+  dictionnaire de la base, version~1.6, P18~(b)), relèvent de D03i~:
+  détection exacte, traitement exclusion par famille, à tout arrêté\fsp;
+  hors de sa détection, la date manquante est une valeur inconnue, par le
+  mécanisme d'une valeur refusée (paragraphe «~Refus de valeur et vue~»),
+  sans ligne de \code{refus\_tables} (décision du mainteneur du
+  18~novembre~2026, M701). La ligne est alors non déterminée, inscrite
+  sous le motif D03i, y compris sous l'exclusion de D03i (M686,
+  M703)\fsp; une règle~B ou~P qui lit la date est exécutée en partie, une
+  règle~V qui la lit est bloquée (M169), avec la cause D03i (rang~3).
+  Motif (jugement d'expert, M701 et M703)~: lire la date manquante comme
+  connue absente rendrait déterminés des verdicts qui ne le sont pas, et
+  la visibilité est un fait de la donnée~: l'exclusion retire la ligne
+  des calculs de la famille, elle ne la rend pas visible ni invisible.
+  Alternative écartée~: la lecture «~connue absente~», qui faisait
+  disparaître un refus \code{chevauchement} et présentait des verdicts
+  faux comme déterminés.
 \item \textbf{D02b} (saisie antérieure à la date que compare la règle).
   Sous l'hypothèse déclarée pour les deux référentiels, la condition
   «~date comparée au plus A~» s'ajoute (\code{evenements.date\_effet},
@@ -2581,16 +2696,30 @@ conjonction de Kleene~:
   invisible de façon déterminée si sa date de saisie ou la date comparée
   est connue après A, ou si sa parente est invisible, et non déterminée
   sinon.
-\item \textbf{D03g, ligne entière} (date de saisie manquante). Sous
+\item \textbf{D03g, ligne entière} (date de saisie manquante\fsp; pour
+  \code{dossiers}, date d'ouverture manquante, qui tient lieu de date de
+  saisie\fsp; douze tables, dont \code{dossiers}, \code{catastrophes} et
+  \code{victimes} depuis le dictionnaire de la base, version~1.6,
+  P18~(a), et \code{contrats} pour la seule partie de ligne, point~4). Sous
   l'exclusion déclarée, la ligne sort de la vue. Sous l'hypothèse déclarée
   (délai par table, \code{seuils\$d03g\_delai\_jours}, commun aux deux
   référentiels), sa date de saisie retenue est le maximum de la date
-  d'effet augmentée du délai et de la visibilité de la parente. Sans
-  déclaration complète, ou si cette date ne se calcule pas, la ligne est
+  d'effet augmentée du délai et de la visibilité des parentes. La date
+  d'effet est \code{evenements.date\_effet},
+  \code{sinistres.date\_declaration} ou
+  \code{catastrophes.date\_evenement}\fsp; pour un dossier et pour une
+  victime, qui n'ont pas de date d'effet propre, la visibilité de leur
+  sinistre, ou de leur catastrophe, en tient lieu~: la date retenue est le
+  maximum de cette visibilité augmentée du délai et de la visibilité des
+  parentes (décision du mainteneur du 18~novembre~2026, M702)\fsp; pour les
+  autres tables, le maximum des visibilités des parentes augmenté du
+  délai. Sans déclaration complète, ou si cette date ne se calcule pas,
+  la ligne est
   invisible de façon déterminée si une autre date propre est connue après
   A (\code{prestations.date\_reglement}), si la date d'effet de
   l'hypothèse est connue après A (\code{evenements.date\_effet},
-  \code{sinistres.date\_declaration}~: le délai étant positif ou nul, la
+  \code{sinistres.date\_declaration}, \code{catastrophes.date\_evenement}~:
+  le délai étant positif ou nul, la
   date retenue la dépasserait) ou si sa parente est invisible\fsp; elle est
   non déterminée sinon.
 \item \textbf{Partie de ligne} (fin d'un contrat ou d'une affiliation,
@@ -2643,7 +2772,8 @@ des versions remplacées de \code{famille}, invisibles pour les comptes
 comme pour la vue (P5).
 
 \textbf{Inscription.} Une ligne entière non déterminée est inscrite dans
-\code{vue\$visibilite\_non\_determinee} sous son motif~: D02b, D03g, code
+\code{vue\$visibilite\_non\_determinee} sous son motif~: D02b, D03g,
+D03i (date de D03i manquante, origine la colonne), code
 du refus avec son origine, ou \code{parente\_non\_determinee} pour une
 ligne visible par elle-même dont seule la parente est non déterminée. Une
 partie non déterminée d'une ligne visible est inscrite sous sa colonne.
@@ -2702,7 +2832,7 @@ précision P2 de M222\fsp; version~1.5.4, M226).
   et la règle garde une ligne dans \code{controles\_non\_executes}, avec la
   cause~($\gamma$) ci-dessous. À l'arrêté égal à l'extraction, aucun
   élément n'est non déterminé.
-\item \textbf{Clés exposées.} Vingt-quatre clés (code, table, colonne) ont un
+\item \textbf{Clés exposées.} Vingt-huit clés (code, table, colonne) ont un
   verdict qui lit une autre ligne de la vue, une partie de ligne ou une
   version de \code{famille} (tableau ci-dessous). Les autres règles~V ont
   un verdict propre à la ligne, ou ne lisent qu'une parente ou une ligne
@@ -2712,7 +2842,7 @@ précision P2 de M222\fsp; version~1.5.4, M226).
   référence antérieure à la naissance) ne rend pas inconnu le verdict de
   D02c sur \code{assures} et n'émet pas \code{age\_non\_defini}, émis pour
   une référence de la vue seulement.
-  De même, pour D07 sur \code{rentes} et sur \code{dossiers},
+  De même, pour D07c sur \code{rentes} et sur \code{dossiers},
   \code{parametre\_non\_defini} n'est émis que pour un enfant de la
   vue~: un enfant non déterminé, ou une candidate d'un membre à version
   valable non déterminée, dont la limite d'âge n'est pas déterminable est
@@ -2720,7 +2850,7 @@ précision P2 de M222\fsp; version~1.5.4, M226).
   déterminé, la règle est celle de l'âge ci-dessus. Pour les candidates d'un
   membre visible, c'est un écart à la substitution du critère~6~(c)~: si la
   limite n'est déterminable pour aucune candidate, la cause serait émise
-  dans tout état, et D07 ne laisse aujourd'hui aucune trace (issue~50 du
+  dans tout état, et D07c ne laisse aujourd'hui aucune trace (issue~50 du
   dépôt).
 \end{itemize}
 
@@ -2741,12 +2871,12 @@ D06 sur \code{evenements.justificatif} & Prestations du dossier & Clôture de mo
 D13 sur \code{sinistres.date\_instruction} & Prestations en capital des dossiers décès du sinistre & Vrai si une telle prestation est visible, faux si aucune n'est visible ni non déterminée, inconnu sinon. \\
 D10c sur \code{dossiers} & Autres dossiers du sinistre\fsp; versions décès de la garantie souscrite & Conjonction de «~aucun dossier décès dans la vue~» et de «~décès souscrit à la survenance~», chacun vrai, faux ou inconnu selon les lignes visibles et non déterminées. \\
 D02c sur \code{assures} (deux emplois) & Sinistres, affiliations et contrats individuels qui citent l'assuré & Vrai si une référence visible donne un âge hors bornes\fsp; faux si aucune référence visible ni non déterminée n'en donne\fsp; inconnu sinon. \\
-D07 sur \code{rentes} & Événements de la rente, version valable de l'enfant\fsp; pour (a), décès connus ailleurs\fsp; pour (b), prestations & Statut de service inconnu si un événement non déterminé, d'effet au plus l'arrêté ou inconnu, peut suivre le dernier retenu avec une classe de verdict différent\fsp; enfant lu sur chaque candidate\fsp; décès de (a) vrai s'il est visible, inconnu s'il n'est que non déterminé\fsp; date de référence de (b) entre la plus petite et la plus grande date possibles\fsp; conjonction. \\
-D07 sur \code{dossiers} & Clôtures et seconds décès, enfants de l'assuré\fsp; pour (a) et (b), comme sur \code{rentes} (statut de service du dossier \code{incapacite}, clôture et sortie comprises) & «~Candidat~» inconnu si une clôture ou un second décès non déterminé existe\fsp; «~chaque enfant à charge éteint~» faux si un enfant visible n'est pas éteint de façon déterminée, inconnu si un enfant non déterminé, ou une candidate, peut être à charge non éteint\fsp; conjonction. \\
+D07a, D07b et D07c sur \code{rentes} & Événements de la rente, version valable de l'enfant\fsp; pour (a), décès connus ailleurs\fsp; pour (b), prestations & Statut de service inconnu si un événement non déterminé, d'effet au plus l'arrêté ou inconnu, peut suivre le dernier retenu avec une classe de verdict différent\fsp; enfant lu sur chaque candidate\fsp; décès de (a) vrai s'il est visible, inconnu s'il n'est que non déterminé\fsp; date de référence de (b) entre la plus petite et la plus grande date possibles\fsp; conjonction. \\
+D07a, D07b et D07c sur \code{dossiers} & Clôtures et seconds décès, enfants de l'assuré\fsp; pour (a) et (b), comme sur \code{rentes} (statut de service du dossier \code{incapacite}, clôture et sortie comprises) & «~Candidat~» inconnu si une clôture ou un second décès non déterminé existe\fsp; «~chaque enfant à charge éteint~» faux si un enfant visible n'est pas éteint de façon déterminée, inconnu si un enfant non déterminé, ou une candidate, peut être à charge non éteint\fsp; conjonction. \\
 D08 sur \code{sinistres} & Sorties des autres sinistres de l'assuré & Inconnu si une sortie non déterminée, d'effet au plus l'arrêté ou inconnu, peut former une paire détectée. \\
 D10d sur \code{evenements} & Dossiers du sinistre, versions de la garantie \code{invalidite}\fsp; sans dossier, couvertures de la survenance & Inconnu si un dossier, une version, une affiliation ou un contrat non déterminé peut changer l'existence d'une version en vigueur. \\
 D10f sur \code{evenements} & Dossier \code{double\_effet} et rente de conjoint du sinistre, leurs événements & Statut de service de la rente comme pour D07\fsp; inconnu si la rente, le dossier ou le \code{second\_deces} est de visibilité non déterminée et peut changer le verdict. \\
-D11 sur \code{sinistres.date\_survenance} & Dossiers, affiliations et contrats de l'assuré\fsp; pour le sous-cas du maintien, sinistres d'arrêt de travail et sorties & Non-couverture inconnue si une couverture possible (affiliation ou contrat non déterminé) ou un dossier non déterminé peut couvrir la survenance\fsp; sous-cas inconnu si une sortie ou un sinistre non déterminé peut l'ouvrir. \\
+D11a sur \code{sinistres.date\_survenance} & Dossiers, affiliations et contrats de l'assuré\fsp; pour le sous-cas du maintien, sinistres d'arrêt de travail et sorties & Non-couverture inconnue si une couverture possible (affiliation ou contrat non déterminé) ou un dossier non déterminé peut couvrir la survenance\fsp; sous-cas inconnu si une sortie ou un sinistre non déterminé peut l'ouvrir. \\
 D12 sur \code{evenements.type\_evenement} & Autres événements de l'automate du sinistre & Verdict commun sur chaque sous-ensemble des événements non déterminés placés avant le dernier retenu, inconnu s'il varie\fsp; au-delà de dix, chaque événement retenu du sinistre est inconnu (limite de calcul). \\
 D14 sur \code{sinistres} & Dossiers du sinistre, versions de la garantie \code{double\_effet}, membres de la famille rattachée & Inconnu si un dossier, une version ou un membre de visibilité non déterminée peut changer le verdict. \\
 \end{longtable}
@@ -2777,6 +2907,8 @@ D14 sur \code{sinistres} & Dossiers du sinistre, versions de la garantie \code{d
     par un refus de valeur\fsp;
   \item \code{declaration\_absente}, pour une ligne ou une partie non
     déterminée sous D02b ou D03g\fsp;
+  \item D03i (cause directe, rang~3), pour une ligne non déterminée sous
+    D03i (M686)\fsp;
   \item pour une fille inscrite sous \code{parente\_non\_determinee}, la
     cause de l'ascendante la plus proche qui est non déterminée par
     elle-même\fsp;
@@ -2851,12 +2983,13 @@ déterminée sont recensées dans le sous-élément
 colonnes~: \code{table}\fsp; \code{colonne}, \code{NA} pour la ligne
 entière, sinon la colonne de la partie de ligne\fsp; \code{motif}, qui vaut
 D02b (hypothèse non déclarée), D03g (déclaration incomplète, ou date non
-calculable sous l'hypothèse), \code{parente\_non\_determinee} (fille d'une
+calculable sous l'hypothèse), D03i (date de D03i manquante, quel que
+soit le traitement déclaré), \code{parente\_non\_determinee} (fille d'une
 ligne non déterminée) ou le code d'un refus de valeur, une même ligne
 pouvant figurer sous plusieurs motifs (cas limite~1, et ligne de D03g à date
 d'effet refusée)\fsp; \code{origine},
-«~table.colonne~» de la valeur refusée pour un motif de refus, toujours une
-colonne de la table de la ligne, et \code{NA} pour D02b, D03g et
+«~table.colonne~» de la valeur refusée pour un motif de refus, ou de la
+date manquante pour D03i, toujours une colonne de la table de la ligne, et \code{NA} pour D02b, D03g et
 \code{parente\_non\_determinee}\fsp; \code{nombre}\fsp; \code{identifiants}.
 Une ligne par (\code{table}, \code{colonne}, \code{motif},
 \code{origine})\fsp; tri du bilan, puis par origine, \code{NA} en dernier.
@@ -3006,15 +3139,18 @@ exacte pour \code{famille}, que l'issue~49 demande.
 
 \begin{itemize}[itemsep=2pt]
 \item le motif d'un refus d'une colonne lue (\textbf{cause directe})~:
-  code de contrôle (\code{controles.csv}), code de défaut
-  (\code{defauts.csv}) ou sous-cas lettré du défaut D10 (D10a à D10f et
-  D10h, la lettre~g n'étant attribuée à aucun sous-cas), liste fermée\fsp;
+  code de contrôle (\code{controles.csv}) ou code de défaut
+  (\code{defauts.csv}, sous-cas lettrés compris~: D07a à D07c, D10a à
+  D10f et D10h, la lettre~g n'étant attribuée à aucun sous-cas, D11a à
+  D11c), liste fermée\fsp;
 \item \code{refus\_induit}~: table refusée parce qu'une de ses clés
-  étrangères vise une table refusée, ou, à un arrêté antérieur à
-  l'extraction, parce qu'une règle~P a été empêchée par un défaut de forme
+  étrangères vise une table refusée (jamais par un refus de valeur)\fsp;
+\item \code{vue\_empechee}~: à un arrêté antérieur à l'extraction, table
+  refusée parce qu'une règle~P a été empêchée par un défaut de forme
   d'une colonne qu'elle lit, ou la vue de la table par un défaut de forme
   d'une de ses colonnes de visibilité de ligne entière, sur une table que
-  lit la vue (jamais par un refus de valeur)\fsp;
+  lit la vue (dictionnaire de la base, version~1.6, P12\fsp; ses filles
+  reçoivent \code{refus\_induit})\fsp;
 \item \code{non\_implemente}~: contrôle prévu par la spécification et
   reporté (ci-dessous)\fsp;
 \item \code{declaration\_absente}~: déclaration du plan absente, au sens
@@ -3023,9 +3159,17 @@ exacte pour \code{famille}, que l'issue~49 demande.
   règle~P (hypothèse de D02b\fsp; hypothèse, exclusion ou délai de D03g),
   dont l'absence laisse non déterminée une ligne, ou une partie, dont
   dépend le verdict d'une règle~V\fsp; dans les deux cas, la déclaration
-  manquante figure dans \code{declarations\_requises}\fsp;
+  manquante figure dans \code{declarations\_requises}. Une règle D07b ou
+  D07c non exécutée faute de son seuil ou de sa convention reçoit, avec
+  \code{declaration\_absente}, les causes candidates de la règle bloquée
+  de sa branche déclarée (mêmes colonnes lues), de sorte qu'une cause
+  directe de rang~3 l'emporte (spécification, erratum~1.9.1, point~(3),
+  M696)\fsp;
 \item \code{non\_lisible}~: sous-cas qu'aucune colonne de la base ne permet
-  de lire (D03h, sous-cas du maintien de la garantie décès de D11)\fsp;
+  de lire (sous-cas du maintien de la garantie décès de D11a\fsp; la ligne
+  de D03h sur un décès collectif est retirée depuis que le dictionnaire
+  de la base, version~1.6, porte \code{garanties\_souscrites.maintien\_deces},
+  P6)\fsp;
 \item \code{age\_non\_defini}~: date de référence antérieure à la
   naissance\fsp; pour D14, enfant né sans date de naissance dont l'âge
   décide du verdict\fsp;
@@ -3083,11 +3227,13 @@ position) décrit ci-dessous (décisions du mainteneur du
 \item \code{age\_non\_defini}\fsp;
 \item \code{parametre\_non\_defini}\fsp;
 \item \code{declaration\_absente}\fsp;
-\item \code{refus\_induit}.
+\item \code{refus\_induit} et \code{vue\_empechee}, départagés par
+  l'ordre des codes du dictionnaire, \code{refus\_induit} d'abord
+  (jugement d'expert, M684).
 \end{enumerate}
 
-Un refus induit n'est donc retenu que si la clé n'a
-aucune autre cause, et la priorité de la cause directe sur tout refus
+Un refus induit, ou une vue empêchée, n'est donc retenu que si la clé
+n'a aucune cause d'un autre rang, et la priorité de la cause directe sur tout refus
 induit, règle~B comprise (M185), est conservée. Cette priorité départage
 des causes qui empêchent chacune la règle~: un refus de valeur sur une
 colonne lue seulement par la règle~P ou pour la vue n'en est pas une
@@ -3101,18 +3247,24 @@ dictionnaire), puis le défaut de l'extraction, puis la grandeur que la
 base ne détermine pas\fsp; (c)~les deux derniers rangs vont aux causes
 dont l'information reste au bilan quand elles ne sont pas retenues~: une
 déclaration absente figure toujours dans \code{declarations\_requises},
-le refus d'origine d'un refus induit dans \code{refus\_tables}, alors
+le refus d'origine d'un refus induit, et le défaut de forme d'une vue
+empêchée, dans \code{refus\_tables}, alors
 qu'une cause directe, un âge non défini ou un paramètre non défini
 masqués seraient perdus.
 
 \textbf{Départage à rang égal} (spécification, §~3.1, version~1.6\fsp;
 décision du mainteneur du 13~novembre~2026, M335\fsp; issue~59). Seul le
-rang~3 admet plusieurs causes~: chacun des six autres rangs n'en a qu'une.
+rang~3 admet un nombre quelconque de causes, et le rang~7 en a
+deux (\code{refus\_induit} et \code{vue\_empechee})~: chacun des cinq
+autres rangs n'en a qu'une.
 À rang égal, la cause retenue est la première dans l'ordre des codes du
 dictionnaire~: les lignes de \code{controles.csv} dans l'ordre du
-fichier, puis celles de \code{defauts.csv} dans l'ordre du fichier, un
-sous-cas lettré absent de \code{defauts.csv} (D10a à D10f et D10h) prenant
-place juste après son code parent, dans l'ordre des lettres. Cet ordre
+fichier, où \code{vue\_empechee} suit \code{refus\_induit}, puis celles de
+\code{defauts.csv} dans l'ordre du fichier, où chaque sous-cas lettré
+(D07a à D07c, D10a à D10h, D11a à D11c) a sa ligne juste après celle de
+son code parent, dans l'ordre des lettres (dictionnaire de la base,
+version~1.6\fsp; spécification, version~1.9, §~9.6), soit cinquante et
+un codes. Cet ordre
 se dérive des deux fichiers, sans liste tenue à la main~; il commence par
 les trois défauts de forme (\code{colonne\_absente},
 \code{colonne\_inconnue}, \code{type\_incompatible}), puis
@@ -3124,8 +3276,9 @@ candidates de toutes les émissions de la clé~:
 \item règle bloquée~: pour chaque colonne lue qui bloque, le refus de
   portée table de sa table et la cause propre de la colonne (défaut de
   forme ou refus~R), chacun s'il existe, en concurrence sous le même
-  ordre (la table n'a plus la préséance)~; un \code{refus\_induit} n'est
-  retenu que si aucune autre cause ne l'est (rang~7)\fsp;
+  ordre (la table n'a plus la préséance)~; un \code{refus\_induit} ou un
+  \code{vue\_empechee} n'est retenu que si aucune cause d'un autre rang
+  ne l'est (rang~7)\fsp;
 \item règle~B ou règle~P exécutée en partie~: les motifs de tous les
   refus de valeur qui touchent une ligne écartée, et D01a pour une ligne
   écartée par une clé jointe en double aux occurrences divergentes\fsp;
@@ -3222,11 +3375,12 @@ d'une composante empêchée par un rattachement illisible
 (\code{.cause\_lecture()}) passe aussi par \code{.cause\_colonnes()}, et
 celle d'une rangée de l'enjeu (\code{.rangees\_enjeu()}) par
 \code{.cause\_retenue()}. Les rangs sont lus dans deux constantes internes~:
-\code{.RANGS\_CAUSES}, qui donne les rangs des six causes nommées
+\code{.RANGS\_CAUSES}, qui donne les rangs des sept causes nommées
 ci-dessus, et \code{.RANG\_CAUSE\_DIRECTE}, qui vaut~3. Le rang d'une
 cause est cherché dans \code{.RANGS\_CAUSES} avant de tester si elle est
-directe, parce que \code{refus\_induit} est aussi un code de
-\code{controles.csv}. Une cause qui n'est ni rangée ni dans la liste
+directe, parce que \code{refus\_induit} et \code{vue\_empechee} sont aussi
+des codes de \code{controles.csv}\fsp; seuls ces deux codes et les causes
+directes gardent leur position dans la clé de départage. Une cause qui n'est ni rangée ni dans la liste
 fermée des causes directes arrête le calcul, avec un message qui
 commence par «~erreur interne de provie~»~: elle n'est jamais rangée en
 silence, et toute cause nouvelle doit recevoir un rang dans
@@ -3250,7 +3404,7 @@ comme D05z), et, sur l'ensemble des appels qu'elle fait, que toute cause
 convention \code{conventions\$age} et les bornes déclarées
 \code{seuils\$d02c\_age\_min} et \code{seuils\$d02c\_age\_max} de chaque
 emploi\fsp; traitement signalement et exclusion. Le défaut D07, sous-cas~(c)
-(fin de charge non enregistrée), vise une rente d'éducation non éteinte
+(fin de charge non enregistrée, code D07c), vise une rente d'éducation non éteinte
 (en service ou suspendue, selon le statut de service commun décrit au
 paragraphe «~Contrôles écrits à la fermeture partielle de l'issue~34~»
 ci-dessous) ou un dossier de double effet ni clos ni de second décès retenu, dont chaque
@@ -3274,7 +3428,13 @@ ne bloque pas le calcul (spécification de la branche B2, §~6.3).
 \textbf{Contrôles écrits à la fermeture partielle de l'issue~34}
 (spécification \code{donnees}, version~1.6, §~8, et errata~1.6.2
 et~1.6.3\fsp; décisions du mainteneur du 13~novembre~2026, M335 et
-M337). Tous sont des règles~V, détectées sur la vue à l'arrêté\fsp; aucun
+M337). Depuis le dictionnaire de la base en version~1.6, les trois
+sous-cas du défaut D07 sont trois codes, D07a, D07b et D07c, chacun avec
+sa clé (code, table, colonne), ses lignes de \code{controles},
+\code{signalements}, \code{exclusions} et \code{controles\_non\_executes}
+et ses déclarations (décision du mainteneur du 18~novembre~2026, M660)\fsp;
+une déclaration du code \code{D07} sans sa lettre est refusée, comme pour
+D10. Le défaut D11 l'est de même (D11a, point~D11 ci-dessous). Tous sont des règles~V, détectées sur la vue à l'arrêté\fsp; aucun
 n'est un refus~R. Chacun, sauf D10~(e), lit une autre ligne que la
 sienne~: c'est une clé exposée (tableau des clés exposées ci-dessus), dont
 une ligne au verdict inconnu est écartée, avec la cause~($\gamma$). Une
@@ -3314,7 +3474,7 @@ simulés est renvoyée à l'issue~117.
   conjoint d'un même sinistre que le dossier \code{double\_effet} (égalité
   rente par rente) relève de D10~(f) seul, pour qu'un même fait ne soit
   compté qu'une fois. Traitement hypothèse par défaut ou signalement,
-  détection exacte, même clé que D07~(c).
+  détection exacte, code D07a.
 \item \textbf{D07~(b)}, extinction présumée. Unité en service dont la
   date de référence~--- règlement du dernier paiement visible, de date au
   plus l'arrêté, à défaut effet de la première ouverture de service~---
@@ -3329,8 +3489,9 @@ simulés est renvoyée à l'issue~117.
   (\code{declaration\_absente}) et la ligne \code{seuils}
   \code{d07b\_mois} est requise, s'il existe une unité en service, retenue
   ou de visibilité non déterminée\fsp; sinon il est exécuté à vide.
-  Traitement signalement ou exclusion par famille, détection
-  présomptive, second constat de la clé de D07. Limite déclarée~: une
+  Traitement signalement ou exclusion par famille, lu sur la ligne du
+  sous-cas dans \code{defauts.csv} (\code{X;S}), détection
+  présomptive, code D07b. Limite déclarée~: une
   rente annuelle sous un seuil inférieur à douze mois est une fausse
   alarme par construction.
 \item \textbf{D08}, rechute enregistrée comme nouveau sinistre. Sinistre
@@ -3898,7 +4059,7 @@ ne peut appeler que \code{dictionnaire} et \code{outils}. Sa fonction
 \textcolor{financeblue}{\textbf{Fonction}} & \textcolor{financeblue}{\textbf{Arguments}} & \textcolor{financeblue}{\textbf{Rôle}} \\
 \code{catalogue\_garanties()} & Aucun & Lit et valide, à chaque appel, le catalogue des garanties du package installé (\code{inst/extdata/garanties/})\fsp; rend une liste nommée d'un \code{data.frame} par fichier (\code{garanties}, \code{etats}, \code{transitions}, \code{flux}, \code{usages\_tables}, \code{postes}, \code{liens}, \code{lectures})\fsp; refus \code{catalogue\_invalide} si la forme lue n'est pas celle attendue. \\
 \code{methodes\_poste()} & \code{x}, \code{poste}, \code{colonne} & Lit le champ \code{methodes} ou \code{temoins} d'un poste de \code{postes.csv} et rend un \code{data.frame} (\code{champ}, \code{methode})\fsp; refus \code{catalogue\_invalide} pour un champ ou une méthode inconnus, ou une méthode en double. Non exportée, appelée aussi par \code{plan}. \\
-\code{postes\_a\_arreter()} & \code{catalogue}, \code{bilan}, \code{postes}, \code{parties} & Détermine les postes du plan arrêtés par le bilan (refus de tables et visibilité non déterminée), d'après les colonnes que lit chaque poste\fsp; rend chaque poste avec le motif de la première ligne qui l'arrête, et les refus de tables complétés des postes arrêtés. Non exportée. \\
+\code{postes\_a\_arreter()} & \code{catalogue}, \code{bilan}, \code{postes}, \code{parties} & Détermine les postes du plan arrêtés par le bilan (refus de tables, visibilité non déterminée et constats D03i), d'après les colonnes que lit chaque poste\fsp; rend chaque poste avec le motif de la première ligne qui l'arrête, et les refus de tables complétés des postes arrêtés. Non exportée. \\
 \end{tabular}
 \end{center}
 
@@ -3971,7 +4132,7 @@ point~11~(b) ; décision du mainteneur M239 ; spécification de la branche
 B2, §~6.2). Une cellule arrêtée porte un montant manquant, le statut de
 calcul \code{arrete} et un motif d'arrêt\fsp; elle n'est jamais un
 montant nul. \code{postes\_a\_arreter()} applique au bilan, pour chaque
-poste du plan et dans cet ordre, trois règles, d'après les colonnes que lit
+poste du plan et dans cet ordre, quatre règles, d'après les colonnes que lit
 le poste (\code{lectures.csv}) et les clés étrangères du dictionnaire~:
 
 \begin{itemize}[itemsep=2pt]
@@ -3985,7 +4146,20 @@ le poste (\code{lectures.csv}) et les clés étrangères du dictionnaire~:
   refus arrête, pour une ligne entière, les postes qui lisent la table ou
   une table descendante, et, pour une partie de ligne, les postes qui lisent
   une colonne de cette partie (la ligne et ses descendantes restent
-  visibles).
+  visibles)\fsp; la même règle vaut pour une ligne de motif D03i (date
+  d'effet de visibilité manquante), pour les seuls postes des familles qui
+  n'excluent pas ce motif (exclusion absente du plan, ou action
+  \code{conserver}\fsp; décision du mainteneur du 18~novembre~2026,
+  M703)\fsp;
+\item[(iv)] à tout arrêté, un constat D03i sur une colonne arrête, avec le
+  motif D03i, les postes des familles qui n'excluent pas ce motif et qui
+  lisent cette colonne (M704)~: la date manquante, inconnue, n'est
+  jamais lue par une famille de calcul. Avant l'extraction, la
+  règle~(iii) reste la plus large (table et descendance). Motif (décision du
+  mainteneur, M704)~: l'alternative écartée, laisser le poste lire la
+  colonne et coder la limite en échec attendu, rendrait une provision
+  dégradée sans signal\fsp; la restriction de l'arrêt aux unités qui
+  lisent la ligne est renvoyée à l'issue~105.
 \end{itemize}
 
 \noindent Les parties de ligne sont la fin d'un contrat ou d'une
@@ -4113,7 +4287,7 @@ version~1.8, §~2.2, B.4, issue~154, règle~(iii), erratum du
 manquante ou vide refuse sa table en portée table, et l'arrêt des postes
 lu sur le bilan précède la lecture des états (mesure de la validation
 de l'issue, non remesurée ici~: sur la base construite
-\code{construite-deces-01}, chacun de ses dossiers privé de son
+\code{construite-deces-01}, que reprend \code{construite-deces-02}, chacun de ses dossiers privé de son
 identifiant ou d'identifiant vide, à deux arrêtés, sous D04a et D04b
 conservés ou exclus, les deux postes sont arrêtés\fsp; la batterie unitaire
 le vérifie sur un cas, et la garde par un appel interne). Motif~: atteindre ce
@@ -4244,7 +4418,9 @@ décidée par le mainteneur le 12~novembre~2026)~:
 
 \noindent La forme stricte a une limite, retenue par le mainteneur
 (M315)~: un code de collège qui contient une espace, «~=~» ou «~;~» ne
-peut pas être déclaré. Le contrôle de la valeur à la validation du plan,
+peut pas être déclaré\fsp; depuis le dictionnaire de la base en
+version~1.6, un tel collège est hors domaine (M656), de sorte que la
+limite ne vise plus aucun collège admis. Le contrôle de la valeur à la validation du plan,
 et non à la lecture par un poste, est renvoyé à l'issue~99 du dépôt. Un
 montant fini mais énorme (de l'ordre de $10^{308}$) passe la forme et
 fait échouer plus loin le calcul de la valeur actuelle probable, par une
@@ -5315,7 +5491,8 @@ tout écart d'au plus 68~ans entre ces deux âges. Pour un écart entier~$d$, la
 condition $365{,}25\,d + 2 \le 360\,(d+1)$ équivaut à
 $d \le 358/5{,}25 \approx 68{,}19$~: 68~ans est admis et 69~refusé (calcul
 exact, vérifié par \code{simuler\_base()} sur la loi vraie du jeu
-\code{v1-modeste-01} aux seuls âges modifiés). L'âge d'entrée minimal étant
+\code{v1-modeste-01}, que reprend \code{v1-modeste-04}, aux seuls âges
+modifiés). L'âge d'entrée minimal étant
 réel, au-delà de 68,24~ans un écart non entier est admis ou refusé selon sa
 partie fractionnaire, le nombre d'uniformes étant arrondi au mois
 supérieur.
@@ -5462,9 +5639,17 @@ reproductibilité les rejoue à l'identique)~: la version reste~1. La sémantiqu
 version~1 est figée~: ajouter un sous-cas demande une nouvelle version de
 la loi vraie et du simulateur. Le format de loi vraie de version~2 n'a pas
 relevé \code{VERSION\_SIMULATEUR}~: étant additif, il ne change la sortie
-d'aucune entrée admise, et les jeux \code{v1-modeste-01} et
-\code{v1-modeste-02} sont régénérés à l'octet, hors de la version du
-package qui les a produits.
+d'aucune entrée admise, et les jeux alors versionnés \code{v1-modeste-01}
+et \code{v1-modeste-02} étaient régénérés à l'octet, hors de la version du
+package qui les avait produits. Le dictionnaire de la base en version~1.6
+a relevé la version à~2 (décision du mainteneur du 18~novembre~2026,
+M678)~: le simulateur écrit la colonne
+\code{garanties\_souscrites.maintien\_deces}, constante hors de la loi
+vraie (faux sur la garantie \code{deces} d'un contrat collectif,
+manquante ailleurs), ce qui change la sortie de toute entrée admise\fsp;
+la version de la loi vraie est inchangée, et le maintien deviendra un
+paramètre de la loi vraie avec le poste «~maintien de la garantie
+décès~» (issue~106).
 
 \textbf{Jeux versionnés.} Un jeu versionné est écrit par
 \code{ecrire\_jeu()} sous \code{inst/extdata/jeux/<nom>/}, après le visa du
@@ -5477,14 +5662,24 @@ champ, hors de la version du package qui l'a produit, contrôlée à part (au
 plus la version installée)\fsp; elle compare aussi les empreintes, et
 vérifie que les entrées du jeu sont celles du script de provenance
 \code{tests/jeux\_v1.R}, qui porte en commentaire le statut et la
-justification de chaque paramètre. Trois jeux sont versionnés~:
+justification de chaque paramètre. Trois jeux sont versionnés, écrits
+sous le dictionnaire~1.6 et la version~2 du simulateur, à la place des
+jeux \code{v1-modeste-01} à \code{-03}, retirés (M189\fsp; ils restent
+lisibles dans l'historique du dépôt, au commit \code{a5e8970})\fsp; visés
+par le mainteneur le 18~novembre~2026 (M699), ils sont égaux aux jeux
+qu'ils remplacent, dans l'ordre, hors de la colonne
+\code{maintien\_deces}, de la version du dictionnaire de la table
+\code{extraction}, des champs de version et de visa du manifeste et de
+la description, où seuls les noms des jeux sont substitués (M697), ce
+que vérifie le script de contrôle \code{egalite\_jeux.R}
+(section~\ref{sec:controles})~:
 
 \begin{itemize}[itemsep=2pt]
-\item \code{v1-modeste-01}, jeu propre d'un portefeuille modeste à
+\item \code{v1-modeste-04}, jeu propre d'un portefeuille modeste à
   garanties liées décès et arrêt de travail\fsp;
-\item \code{v1-modeste-02}, même jeu propre avec les douze défauts du
+\item \code{v1-modeste-05}, même jeu propre avec les douze défauts du
   catalogue, jeu de contrôle et non de calcul\fsp;
-\item \code{v1-modeste-03}, jeu propre du capital décès, tiré sous une loi
+\item \code{v1-modeste-06}, jeu propre du capital décès, tiré sous une loi
   vraie de version~2 (spécification de la branche B2, §~7.9)~: six contrats
   collectifs (cotisations à l'anniversaire, majoration du conjoint) et deux
   cents temporaires décès individuelles à prime unique ou périodique,
@@ -5492,7 +5687,8 @@ justification de chaque paramètre. Trois jeux sont versionnés~:
   sans aucun défaut injecté\fsp; son objet est un montant non nul des trois
   postes du capital décès. Ses graines sont déclarées sans sélection~:
   aucune n'a été choisie d'après le résultat d'un critère (décision du
-  mainteneur du 11~novembre~2026). Il a été visé le 11~novembre~2026. Ses
+  mainteneur du 11~novembre~2026). Il a été visé le 11~novembre~2026,
+  sous le nom \code{v1-modeste-03}. Ses
   limites sont écrites dans sa description~; l'une d'elles est un écart de
   modèle entre la loi vraie et la méthode~: le simulateur paie le capital au
   nominal, sans la revalorisation légale de la survenance au règlement, si
@@ -5845,7 +6041,7 @@ avant et après l'installation de TeX~Live et de R, et le script
 \label{sec:controles}
 % =============================================================================
 
-Dix scripts R de \code{tests/controles/}, appelés par la batterie
+Douze scripts R de \code{tests/controles/}, appelés par la batterie
 unitaire, et trois scripts shell, hors de la batterie unitaire,
 vérifient des règles du dépôt qui ne sont pas des tests du package.
 L'un des scripts R, \code{invariance\_bilan.R}, n'agit qu'avec l'option
@@ -5865,8 +6061,9 @@ de motifs de ce dernier. Les témoins de \code{paquets\_java.sh} et de
 dépôt (\code{Rscript tests/\allowbreak controles/\allowbreak <script>.R}), n'emploie que R de base,
 imprime une ligne par constat (\code{[OK]}, \code{[ECHEC]},
 \code{[AVERT]} pour le contrôle de Java, \code{[INFO]} pour le
-recensement des tolérances et pour les informations du contrôle
-d'invariance, \code{[RELEVE]} pour les appariements relevés du contrôle
+recensement des tolérances, pour les informations du contrôle
+d'invariance et pour celles des contrôles d'égalité des jeux et des
+références renommées, \code{[RELEVE]} pour les appariements relevés du contrôle
 des appariements de clés), avec le fichier et la ligne en
 cause, et sort avec un statut non nul au moindre échec. Un argument
 facultatif désigne une autre racine, ce qui permet de démontrer qu'un
@@ -5894,6 +6091,8 @@ script refuse une copie du dépôt délibérément fautive (témoin négatif).
 \code{preambule\_latex.R} & Le préambule de chaque document LaTeX suivi du dépôt (fichier \code{.tex} ou \code{.TEX} qui porte un \code{\textbackslash documentclass}, où qu'il soit), autre que la charte, est identique à celui de la charte graphique, hors des blocs bornés par «~À ADAPTER~», dont le nombre, l'ordre et l'objet doivent être ceux de la charte\fsp; un fichier sans \code{\textbackslash documentclass} est un fragment, ignoré. \\
 \code{recensement\_tolerances.R} & Recensement informatif, qui n'échoue sur aucun de ses signalements (issue~79)~: il liste les appels de \code{verifier\_egal()} à tolérance non nulle et les appels directs de \code{all.equal()} à tolérance déclarée des fichiers R de \code{tests/} (hors \code{tests/reference/}), et signale ceux dont la valeur attendue rassemble au moins deux valeurs numériques finies non nulles dont le rapport du plus grand au plus petit atteint~10. Il porte en outre la mention «~PETITES VALEURS~» sur chaque appel de \code{verifier\_egal()} dont la valeur attendue, même réduite à une seule valeur, compte une valeur numérique finie non nulle de valeur absolue inférieure à $\min\bigl(1, \varepsilon / (1{,}5 \cdot 10^{-7})\bigr)$, $\varepsilon$ étant la tolérance lue de l'appel (environ $6{,}7 \cdot 10^{-4}$ pour $\varepsilon = 10^{-10}$\fsp; borné à~1, au-delà duquel la tolérance mixte est relative\fsp; paragraphe «~Petites valeurs attendues~» de la section~\ref{sec:harnais}). Quatre rubriques suivent les zéros attendus de \code{verifier\_egal()} (issue~111), selon la consigne du zéro attendu du même paragraphe~: «~\code{ZEROS ATTENDUS A TOLERANCE > 0}~» liste chaque appel à tolérance positive ou non résolue dont la valeur attendue contient un zéro réel (un zéro entier, \code{0L}, est exact par son type), soit une feuille numérique nulle de la valeur évaluée, soit, si la valeur attendue n'est pas évaluable, une constante littérale~0 de l'expression, hors des arguments qui ne sont pas des valeurs (indices de \code{[} et de \code{[[}, longueurs et répétitions de \code{rep()}, nombre de chiffres de \code{round()} et de \code{signif()}), critère syntaxique qui n'est pas exhaustif, une expression non évaluable pouvant cacher d'autres zéros\fsp; un zéro obtenu par compensation, qui reste à tolérance absolue déclarée dans son propre appel, se déclare par la marque \code{\#~zero\_compense~:~<motif>}, en commentaire sur la ligne qui précède l'appel~: l'appel est alors compté sous «~\code{ZERO DE COMPENSATION DECLARE}~», hors de la rubrique précédente, et sous «~\code{ZERO DE COMPENSATION DECLARE A PLUSIEURS ZEROS}~» s'il porte plus d'un zéro réel, les autres zéros se comparant à part\fsp; une marque que ne suit pas, à la ligne suivante, un appel de \code{verifier\_egal()} qui porte un zéro est listée sous «~\code{MARQUES zero\_compense ORPHELINES}~». Le motif de la marque est une convention que le script ne contrôle pas~: une marque \code{\#~zero\_compense} sans motif compte comme une marque. Ces rubriques sont informatives, comme les autres. Un appel est reconnu sous sa forme nue, entre accents graves ou préfixée par \code{::} ou \code{:::}\fsp; un champ (\code{x\$verifier\_egal()}) n'est pas un appel. La valeur attendue est évaluée sans effet de bord, dans un environnement qui ne contient que les constantes numériques littérales du fichier et une liste blanche de fonctions pures~; une expression qui demande les données des tests ou une autre fonction est classée «~indéterminée~» et listée, sans être exécutée, comme un appel dont les arguments ne s'apparient pas sans exécution (\code{...} transmis, argument en trop). Le script imprime des lignes \code{[INFO]}, et \code{[ECHEC]} seulement si un fichier n'est pas analysable ou si les deux décomptes des appels (arbre syntaxique et analyse du source) diffèrent («~recensement incohérent~»), ce que produit un nom écrit en chaîne en position d'appel, compté par l'arbre seul. \\
 \code{appariements\_cles.R} & Contrôle de la règle de la clé manquante ou vide (issue~158\fsp; spécification du module \code{donnees}, version~1.8, §~2.2, B.4, «~Clé vide~», M396)~: recensement exhaustif, sans heuristique de noms, de tout appel à \code{match()}, à \code{is.element()} et à l'opérateur \code{\%in\%} de \code{R/donnees.R}, \code{R/engagement.R} et \code{R/risque\_en\_cours.R}, lus par \code{getParseData()} sans exécution, hors des seuls appels dont la table de recherche n'est faite que de constantes littérales ou est une constante du package (nom en majuscules affecté au premier niveau d'un fichier de \code{R/}) et hors du \code{match()} d'\code{apparier\_cles()} elle-même. Un appariement de clé s'écrit par \code{apparier\_cles()}, qui n'est pas un appel recensé~; tout appel recensé doit figurer dans une liste blanche écrite dans le script, repérée par fichier, fonction de premier niveau et jetons de l'appel, avec une catégorie fermée~: \code{code} (valeur de modalité, de cause, de type, de statut ou de date, ou nombre, jamais une clé), \code{indice} (rang de ligne ou code de groupe), \code{metadonnee} (nom de table, de colonne, de contrôle, de famille, ligne du dictionnaire), \code{cle\_garantie} (clé renseignée par construction, justification citant la garde) et \code{a\_instruire} (appariement brut d'une clé de la base dont la règle n'est pas établie, relevé et non corrigé, justification renvoyant à une issue, imprimé en \code{[RELEVE]} sans faire échouer le script). Échec pour un appel hors liste, une catégorie inconnue, une entrée sans appel correspondant (liste périmée), une entrée \code{cle\_garantie} ou \code{a\_instruire} sans justification et une entrée \code{a\_instruire} sans renvoi à une issue. L'option \code{-{}-inventaire} imprime les appels recensés, sans contrôler. Les témoins du recensement sont joués par le script lui-même, sur un fichier fictif. Limites écrites en tête du script~: les égalités \code{==} et \code{!=}, l'indexation par nom, \code{split()}, \code{intersect()}, \code{setdiff()}, \code{union()} et les fonctions passées en argument ne sont pas vues, de sorte que le contrôle n'est pas une preuve (lectures de paramètres par \code{split()}~: issue~163). Deux limites relevées par l'audit de l'issue, non écrites dans le script et renvoyées à l'issue~164, ont été vérifiées sur une copie du dépôt~: un appel dont la table de recherche est une variable locale homonyme d'une constante du package, et la forme préfixe de l'opérateur, ne sont pas recensés. \\
+\code{egalite\_jeux.R} & Égalité de deux jeux versionnés, ou de deux bases écrites par \code{ecrire\_base()}, à travers un changement de version du dictionnaire ou du simulateur (issue~60, M674, M677, M678)~: comparaison en texte, fichier par fichier et cellule par cellule, sans lecture par le package (les anciens jeux sont d'une version du dictionnaire que le moteur ne lit plus), avec des exceptions fermées~: colonne \code{garanties\_souscrites.maintien\_deces} ajoutée (ses valeurs décomptées en \code{[INFO]}), version du dictionnaire de \code{extraction.csv}, champs de nom, de versions et de visa du manifeste, description admise à différer seulement si elle est égale à l'ancienne après substitution des noms des jeux (M697), lignes d'empreintes des seuls fichiers admis à différer\fsp; toute autre différence est un échec. Appelé par la batterie unitaire avec la seule racine, il joue ses témoins intégrés (jeux synthétiques). Limite écrite dans le script~: une ligne CSV à guillemets non refermés n'est pas prise en charge (échec, du côté sûr). \\
+\code{references\_renommees.R} & Tableau avant~/ après de références de non-régression à travers un renommage des données des couples (issue~60\fsp; ADR~0011, points~10 et~22)~: pour chaque correspondance entre un couple, ou un nom de données, de l'arbre «~avant~» et de l'arbre «~après~», compare le résultat et la fiche par \code{comparer\_feuilles()} du harnais (mêmes clés, exclusions et tolérance que la batterie de reproductibilité) et imprime une ligne par écart, avec le visa requis\fsp; tout couple non couvert par une correspondance est un échec, un écart ne l'est pas (le tableau est la sortie). Il sert au visa de la régénération qui suit un renommage. Appelé par la batterie unitaire avec la seule racine, il joue ses témoins intégrés sur l'arbre commité \code{tests/reference/}. \\
 \code{invariance\_bilan.R} & Contrôle long, actif avec l'option \code{-{}-complet} seulement (issue~149\fsp; critère C131-1 de la spécification du module \code{donnees}, version~1.7)~: le bilan de \code{controler\_base()} ne dépend pas de l'ordre des lignes. Le script installe et charge le package, enregistre chaque appel de \code{controler\_base()} de l'espace de noms du package fait par \code{tests/unitaires/donnees.R}, hors des appels sans arrêté et des copies de l'espace de noms (\code{copie\_ns()}) (arguments, et issue~: bilan ou refus), ces tests devant s'exécuter sans vérification en échec, puis rejoue chaque appel sur ses tables aux lignes inversées, puis aux lignes permutées (une permutation par table, tirée par \code{avec\_graine()} sous la graine locale 20261115 augmentée du numéro d'appel, l'état du générateur global rétabli)\fsp; l'issue rejouée doit être identique (\code{identical()}) à l'issue d'origine, un refus se comparant par sa classe, son message et ses champs\fsp; échec au premier écart de chaque passe. Vérification sur le corpus fini des appels des tests, non preuve. Une régression qui rend le bilan dépendant de l'ordre des lignes fait échouer le rejeu (témoin~: identifiants non triés)\fsp; une régression qui n'en dépend pas n'est vue que par la collecte, où les tests échouent (décision du mainteneur du 16~novembre~2026, M627). Durée de l'ordre d'un quart d'heure~: hors des trois batteries, job propre de l'intégration continue (M603). \\
 \end{longtable}
 }
@@ -5910,10 +6109,10 @@ connues qui demeurent sont écrites en tête du script qu'elles concernent,
 sauf celles d'\code{invariance\_bilan.R}, écrites dans le corps du
 script, au-dessus de l'enregistreur des appels (appels hors de l'espace de
 noms du package et appels sans arrêté non collectés).
-L'en-tête de quatre scripts n'en écrit aucune
+L'en-tête de cinq scripts n'en écrit aucune
 (\code{liste\_blanche\_description.R}, \code{image\_reference.R},
-\code{commit\_reference.sh} et
-\code{preambule\_latex.R}), ce qui ne
+\code{commit\_reference.sh}, \code{preambule\_latex.R} et
+\code{references\_renommees.R}), ce qui ne
 prouve pas qu'ils n'en ont pas. Les cas laissés hors
 de l'issue~27 faute de décision du mainteneur ont été traités par
 l'issue~62, sur ses décisions du 12~novembre~2026 (M400 à M403, M409 à
@@ -5935,9 +6134,9 @@ recoupements et des contre-vérifications, qui restent des tests de la
 batterie unitaire.
 
 \textbf{Couples.} Dix couples sont déclarés dans \code{tests/references.R}
-(\code{COUPLES\_REFERENCE})~: quatre sur les jeux \code{v1-modeste-01} et
-\code{v1-modeste-02}, deux sur le jeu \code{v1-modeste-03}, et quatre sur
-la \textbf{base construite} \code{construite-deces-01}, base fictive écrite
+(\code{COUPLES\_REFERENCE})~: quatre sur les jeux \code{v1-modeste-04} et
+\code{v1-modeste-05}, deux sur le jeu \code{v1-modeste-06}, et quatre sur
+la \textbf{base construite} \code{construite-deces-02}, base fictive écrite
 à la main par une fonction de \code{tests/b2\_bases.R}, sans loi vraie ni
 graine, pour porter des cas à valeur attendue connue (ce n'est pas un jeu).
 Les plans de référence sont écrits en R dans \code{tests/references.R}~:
