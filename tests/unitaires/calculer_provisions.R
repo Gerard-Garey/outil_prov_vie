@@ -1167,6 +1167,14 @@ effet_evx <- function(b) {
 }
 verifier_egal("#90, R13 contre-témoin : mise à jour d'un autre dossier du sinistre et demande_mise_a_jour du même dossier non candidates : EVX substituée par l'instruction de SIR4 (2024-09-10) ; témoin, mise à jour du même dossier : 2025-03-01",
               list(effet_evx(b_ct13), effet_evx(b_te13)), list(list("2024-09-10", FALSE), list("2025-03-01", FALSE)))
+# R13, mise à jour de niveau sinistre (erratum 1.9.3, point (i), spécification `donnees` v1.9,
+# § 9.4) : EVX sans dossier (effet 2024-06-01, saisie 2025-04-01), rejetée par R13 sous H ; EVW,
+# mise à jour antérieure de DOR4 (effet 2025-03-01, saisie 2025-03-02), n'est pas candidate pour
+# une mise à jour de niveau sinistre (seules les mises à jour de niveau sinistre le sont) : repli
+# sur l'instruction de SIR4 (2024-09-10), non la date de EVW
+b_si13 <- ev_90(ev_90(base, "EVW", "DOR4", "2025-03-01", "2025-03-02"), "EVX", NA_character_, "2024-06-01", "2025-04-01")
+verifier_egal("#90, R13, mise à jour EVX de niveau sinistre rejetée sous H, mise à jour EVW de DOR4 saisie avant elle : EVX substituée par l'instruction de SIR4 (2024-09-10), non par EVW (2025-03-01)",
+              effet_evx(b_si13), list("2024-09-10", FALSE))
 # R13 sans valeur substituée, dossier clos (garde de Kleene du critère sans_evenement de P2) :
 # SIR4 déclaré avant sa survenance (R9 : survenance et déclaration inconnues), instruction
 # manquante ; DOR4 clos le 2024-12-01 (sans_suite) ; EVX de DOR4 (effet 2024-05-01, avant la
