@@ -333,7 +333,7 @@ LISTE_BLANCHE <- c(
     "code",
   "R/donnees.R | .garantie_en_vigueur3 | v ( \"code_garantie\" ) %in% code" =
     "code",
-  "R/donnees.R | .couverture3 | x %in% k $ lignes" =
+  "R/donnees.R | .colonne_partie | x %in% k $ lignes" =
     "indice",
   "R/donnees.R | .regle_v_ages | seq_len ( nrow ( ctx $ base [[ t ] ] ) ) %in% r $ p [ ! is.na ( age ) & ( age < mini | age > maxi ) ]" =
     "indice",
@@ -387,9 +387,9 @@ LISTE_BLANCHE <- c(
     "indice",
   "R/donnees.R | .verdict_d11 | seq_len ( ns ) %in% cv $ i [ ! cv $ certain ]" =
     "indice",
-  "R/donnees.R | .verdict_d11 | tc %in% lit_m" =
+  "R/donnees.R | .ecarter_maintien_d11 | tc %in% lit_m" =
     "metadonnee",
-  "R/donnees.R | .verdict_d11 | cause %in% z" =
+  "R/donnees.R | .ecarter_maintien_d11 | cause %in% z" =
     "code",
   "R/donnees.R | .echec_d12 | match ( types [ k ] , te $ type_evenement )" =
     "code",
