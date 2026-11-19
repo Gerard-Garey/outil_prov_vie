@@ -1870,6 +1870,15 @@ for (cas in list(
                               list(motif = "D02b", referentiel = "solvabilite_2", poste = "tous", valeur = "autre")))),
   list("D02b, poste autre que tous (Q4)",
        list(hypotheses = list(list(motif = "D02b", referentiel = "comptes_sociaux", poste = "pm", valeur = "max")))),
+  list("D02a, valeurs différentes entre référentiels (M717)",
+       list(hypotheses = list(list(motif = "D02a", referentiel = "comptes_sociaux", poste = "tous", valeur = "regle"),
+                              list(motif = "D02a", referentiel = "solvabilite_2", poste = "tous", valeur = "autre")))),
+  list("D02a, poste autre que tous, pour un seul poste (M717)",
+       list(hypotheses = lapply(ns$REFERENTIELS, function(r) list(motif = "D02a", referentiel = r,
+                                                                  poste = "capitaux_non_reclames", valeur = "regle")))),
+  list("D02a, poste tous pour un référentiel et poste autre pour l'autre (M717)",
+       list(hypotheses = list(list(motif = "D02a", referentiel = "comptes_sociaux", poste = "tous", valeur = "regle"),
+                              list(motif = "D02a", referentiel = "solvabilite_2", poste = "pm", valeur = "regle")))),
   list("D03g, signalement déclaré (Q4)", list(hypotheses = hyp2("D03g", valeur = "signalement"))),
   list("D03g, action conserver (D5)", list(exclusions = excl4("D03g", "conserver"))),
   list("délai de D03g négatif (D5)", list(seuils = list(d03g_delai_jours = list(prestations = -1)))),
@@ -1878,6 +1887,8 @@ for (cas in list(
   list("délai de D03g non nommé (D5)", list(seuils = list(d03g_delai_jours = list(30)))))) {
   verifier_egal(paste0("declarations, ", cas[[1L]], " : plan_invalide"), valider(cas[[2L]]), "plan_invalide")
 }
+verifier_egal("declarations admises : D02a poste tous, même valeur pour les deux référentiels (M717)",
+              valider(list(hypotheses = hyp2("D02a"))), "aucun")
 verifier_egal("declarations admises : D02b même valeur pour les deux référentiels, délai de D03g nommé par table",
               valider(list(hypotheses = hyp2("D02b"), seuils = list(d03g_delai_jours = list(prestations = 30, contrats = 0)))),
               "aucun")

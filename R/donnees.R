@@ -168,6 +168,11 @@ CONVENTIONS_LIMITE_AGE <- c("revolu", "millesime")
 # référentiels) : une hypothèse porte sur tous les postes, avec la même valeur pour les deux
 # référentiels ; aucune n'est un signalement déclaré (S seulement à l'extraction).
 .MOTIFS_REGLE_P <- c("D02b", "D03g")
+# Motifs dont l'hypothèse s'applique à la vue, commune aux postes et aux deux référentiels :
+# ceux de la règle P et D02a (dates rejetées tenues pour inconnues, M717) ; leur hypothèse se
+# déclare pour le poste `tous`, avec la même valeur pour les deux référentiels
+# (lire_declarations()).
+.MOTIFS_HYPOTHESE_VUE_COMMUNE <- c("D02a", .MOTIFS_REGLE_P)
 # Motifs à traitement unique (dictionnaire, § 1.10 et § 9 : X et H y sont deux alternatives
 # pour toute ligne) : une exclusion et une hypothèse déclarées pour un même motif de cette
 # liste rendent le plan invalide, quelles qu'en soient les familles ou les référentiels
@@ -902,8 +907,8 @@ eclater_champ <- function(x) if (identical(x, "") || is.na(x)) character(0) else
 # `hypotheses` : motif d'un défaut admettant H (ou, pour la valeur .VALEUR_SIGNALEMENT, motif
 # de .motifs_signalement(), seule ligne de son (motif, referentiel)), référentiel de
 # REFERENTIELS, poste (ou `tous`) et valeur en chaînes, une ligne par (motif, referentiel,
-# poste) ; D02b et D03g : poste `tous`, même valeur pour les deux référentiels, sans
-# signalement. D07, D10 et D11 se déclarent par sous-cas (traitements du sous-cas,
+# poste) ; D02a, D02b et D03g : poste `tous`, même valeur pour les deux référentiels, sans
+# signalement (M717). D07, D10 et D11 se déclarent par sous-cas (traitements du sous-cas,
 # .codes_a_sous_cas()). Un motif à traitement
 # unique (.MOTIFS_TRAITEMENT_UNIQUE) ne se déclare pas dans les deux rubriques (D8).
 # `seuils` : liste nommée ; d03g_delai_jours (liste nommée par table de D03g, jours entiers
@@ -996,12 +1001,14 @@ lire_declarations <- function(declarations, dico) {
     .refus_plan(paste0("declarations$hypotheses : la valeur ", .VALEUR_SIGNALEMENT,
                        " est la seule ligne de son (motif, referentiel)"))
   }
-  # motifs de la règle P (vue commune aux deux référentiels) : poste `tous`, même valeur pour
-  # les deux référentiels, aucun signalement déclaré (réserve Q4 d'`actuary`)
-  p <- hy[hy$motif %in% .MOTIFS_REGLE_P, , drop = FALSE]
+  # motifs de la vue commune (règle P et D02a : une seule vue pour les postes et les deux référentiels) :
+  # poste `tous`, même valeur pour les deux référentiels, aucun signalement déclaré (réserve Q4
+  # d'`actuary` ; D02a, M717 : une hypothèse déclarée pour un seul poste rendait les dates
+  # inconnues pour tous les postes)
+  p <- hy[hy$motif %in% .MOTIFS_HYPOTHESE_VUE_COMMUNE, , drop = FALSE]
   if (any(p$poste != "tous") || any(p$valeur == .VALEUR_SIGNALEMENT) ||
       any(vapply(split(p$valeur, p$motif), function(x) length(unique(x)) > 1L, NA))) {
-    .refus_plan(paste0("declarations$hypotheses : D02b et D03g portent le poste tous, la m\u00eame valeur pour les deux ",
+    .refus_plan(paste0("declarations$hypotheses : D02a, D02b et D03g portent le poste tous, la m\u00eame valeur pour les deux ",
                        "r\u00e9f\u00e9rentiels, et ne se signalent pas (S \u00e0 l'extraction seulement)"))
   }
   # motif à traitement unique déclaré à la fois en exclusion et en hypothèse (D8)
