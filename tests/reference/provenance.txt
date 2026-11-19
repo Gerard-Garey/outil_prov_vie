@@ -1,13 +1,13 @@
 provie-liste 1
 version_references	integer	1
-commit	character	d174d138958ca2f0351e7cb23ca185e9453359bd
-run	character	44501941423
+commit	character	406b3002a57154407a25d3ec6f16891d87acd0f2
+run	character	44553792167
 tentative	character	1
 image	character	rocker/r-ver:4.3.3@sha256:732d15020af326da9e919c07f70ca32bf5d3e409220af32e0a4b6d0a89437309
 plateforme/r	character	R version 4.3.3 (2024-02-29)
 plateforme/plateforme	character	x86_64-pc-linux-gnu
 plateforme/systeme	character	Linux
-plateforme/version_systeme	character	7.0.0-1014-aws
+plateforme/version_systeme	character	7.0.0-1017-azure
 plateforme/machine	character	x86_64
 plateforme/boutisme	character	little
 plateforme/blas	character	/usr/lib/x86_64-linux-gnu/openblas-pthread/libblas.so.3

@@ -7,13 +7,13 @@ provisions/provision	character	psap_vie	provision_mathematique_vie	psap_vie	\N
 provisions/segmentation	character	ensemble	ensemble	ensemble	ensemble
 provisions/segment	character	ensemble	ensemble	ensemble	ensemble
 provisions/niveau	character	calcul	calcul	calcul	agregat
-provisions/montant	double	NA	0	NA	NA
-provisions/nombre_dossiers	integer	NA	0	NA	NA
+provisions/montant	double	0	0	0	0
+provisions/nombre_dossiers	integer	0	0	0	0
 provisions/methode	character	capital_revalorise	individuel:prospective_prime_pure;collectif:prorata_cotisation	capital_dossier	\N
 provisions/statut_methode	character	recommandee	recommandee	recommandee	\N
-provisions/statut_resultat	character	\N	exact	\N	\N
-provisions/statut_calcul	character	arrete	calcule	arrete	arrete
-provisions/motif_arret	character	D09	\N	D09	poste_arrete:capitaux_non_reclames;sinistres_declares_non_regles
+provisions/statut_resultat	character	exact	exact	exact	exact
+provisions/statut_calcul	character	calcule	calcule	calcule	calcule
+provisions/motif_arret	character	\N	\N	\N	\N
 dossiers/id_dossier	character
 dossiers/id_sinistre	character
 dossiers/garantie	character
@@ -48,13 +48,13 @@ donnees/controles_non_executes/cause	character	non_implemente	non_implemente	non
 donnees/refus_tables/table	character	prestations
 donnees/refus_tables/colonne	character	montant
 donnees/refus_tables/motif	character	D09
-donnees/refus_tables/portee	character	colonne
+donnees/refus_tables/portee	character	ligne
 donnees/refus_tables/origine	character	\N
 donnees/refus_tables/nombre	integer	1
 donnees/refus_tables/nombre_visibles	integer	1
 donnees/refus_tables/identifiants	character	PR00010
 donnees/refus_tables/nombre_dossiers	integer	1
-donnees/refus_tables/postes_arretes	character	deces/capitaux_non_reclames;deces/sinistres_declares_non_regles
+donnees/refus_tables/postes_arretes	character	\N
 donnees/exclusions/motif	character	D01b	D01b	D01b	D01b	D02a	D02a	D02a	D02a	D04b	D04b	D04b	D04b
 donnees/exclusions/famille	character	engagement	triangle	risque_en_cours	regle_comptable	engagement	triangle	risque_en_cours	regle_comptable	engagement	triangle	risque_en_cours	regle_comptable
 donnees/exclusions/action	character	exclure	exclure	exclure	exclure	conserver	exclure	conserver	conserver	exclure	exclure	exclure	exclure
@@ -85,10 +85,10 @@ donnees/enjeu/garantie	character	incapacite	ensemble	incapacite	ensemble	incapac
 donnees/enjeu/poste	character	ensemble	ensemble	ensemble	ensemble	ensemble	ensemble	ensemble	ensemble	ensemble	ensemble	ensemble	ensemble	ensemble	ensemble	ensemble	ensemble	ensemble	ensemble	ensemble	ensemble	ensemble	ensemble	ensemble	provision_mathematique_temporaire_deces	ensemble	provision_mathematique_temporaire_deces	ensemble	ensemble	ensemble	ensemble	ensemble	ensemble	ensemble	ensemble	ensemble	ensemble	ensemble	ensemble	ensemble	ensemble	ensemble	ensemble	ensemble	ensemble	ensemble	ensemble	ensemble	ensemble	ensemble	ensemble	ensemble	ensemble	ensemble	ensemble	ensemble	ensemble	ensemble	ensemble	ensemble	ensemble	ensemble	ensemble	ensemble	ensemble	ensemble	ensemble	ensemble	ensemble	ensemble	ensemble	ensemble	ensemble	ensemble	ensemble	ensemble	ensemble	ensemble	ensemble	ensemble	ensemble	ensemble	ensemble	ensemble	ensemble	ensemble	ensemble	ensemble	ensemble	ensemble	ensemble	ensemble	ensemble	ensemble	ensemble
 donnees/enjeu/composante	character	prestations_ecartees	prestations_ecartees	prestations_ecartees	prestations_ecartees	prestations_ecartees	prestations_ecartees	prestations_ecartees	prestations_ecartees	prestations_ecartees	prestations_ecartees	cotisations_emises_nettes	cotisations_encaissees	cotisations_emises_nettes	cotisations_encaissees	cotisations_emises_nettes	cotisations_encaissees	cotisations_emises_nettes	cotisations_encaissees	cotisations_emises_nettes	cotisations_encaissees	cotisations_emises_nettes	cotisations_encaissees	cotisations_emises_nettes	cotisations_emises_nettes	cotisations_encaissees	cotisations_encaissees	cotisations_emises_nettes	cotisations_encaissees	cotisations_emises_nettes	cotisations_encaissees	cotisations_emises_nettes	cotisations_encaissees	cotisations_emises_nettes	cotisations_encaissees	cotisations_emises_nettes	cotisations_encaissees	cotisations_emises_nettes	cotisations_encaissees	cotisations_emises_nettes	cotisations_encaissees	cotisations_emises_nettes	cotisations_encaissees	cotisations_emises_nettes	cotisations_encaissees	cotisations_emises_nettes	cotisations_encaissees	cotisations_emises_nettes	cotisations_encaissees	cotisations_emises_nettes	cotisations_encaissees	cotisations_emises_nettes	cotisations_encaissees	prestations_ecartees	prestations_ecartees	cotisations_emises_nettes	cotisations_encaissees	cotisations_emises_nettes	cotisations_encaissees	cotisations_emises_nettes	cotisations_encaissees	cotisations_emises_nettes	cotisations_encaissees	cotisations_emises_nettes	cotisations_encaissees	prestations_ecartees	cotisations_emises_nettes	cotisations_encaissees	cotisations_emises_nettes	cotisations_encaissees	prestations_ecartees	cotisations_emises_nettes	cotisations_encaissees	prestations_ecartees	prestations_ecartees	cotisations_emises_nettes	cotisations_encaissees	cotisations_emises_nettes	cotisations_encaissees	cotisations_emises_nettes	cotisations_encaissees	cotisations_emises_nettes	cotisations_encaissees	prestations_ecartees	prestations_ecartees	cotisations_emises_nettes	cotisations_encaissees	cotisations_emises_nettes	cotisations_encaissees	cotisations_emises_nettes	cotisations_encaissees	cotisations_emises_nettes	cotisations_encaissees	prestations_ecartees	prestations_ecartees
 donnees/enjeu/unite	character	euro	euro	euro	euro	euro	euro	euro	euro	euro	euro	euro	euro	euro	euro	euro	euro	euro	euro	euro	euro	euro	euro	euro	euro	euro	euro	euro	euro	euro	euro	euro	euro	euro	euro	euro	euro	euro	euro	euro	euro	euro	euro	euro	euro	euro	euro	euro	euro	euro	euro	euro	euro	euro	euro	euro	euro	euro	euro	euro	euro	euro	euro	euro	euro	euro	euro	euro	euro	euro	euro	euro	euro	euro	euro	euro	euro	euro	euro	euro	euro	euro	euro	euro	euro	euro	euro	euro	euro	euro	euro	euro	euro	euro	euro
-donnees/enjeu/montant	double	NA	NA	NA	NA	NA	NA	NA	NA	NA	NA	0	18438.310000000001	0	18734.84	0	37173.150000000001	0	18438.310000000001	0	18734.84	0	37173.150000000001	0	0	18438.310000000001	18438.310000000001	0	18734.84	0	37173.150000000001	0	18438.310000000001	0	18734.84	0	37173.150000000001	61949.760000000002	0	61949.760000000002	0	61949.760000000002	0	61949.760000000002	0	61949.760000000002	0	61949.760000000002	0	61949.760000000002	0	61949.760000000002	0	NA	NA	0	18438.310000000001	0	18734.84	61949.760000000002	0	61949.760000000002	37173.150000000001	0	18438.310000000001	NA	0	18734.84	61949.760000000002	0	NA	61949.760000000002	37173.150000000001	NA	NA	0	18438.310000000001	0	18734.84	61949.760000000002	0	61949.760000000002	37173.150000000001	NA	NA	0	18438.310000000001	0	18734.84	61949.760000000002	0	61949.760000000002	37173.150000000001	NA	NA
+donnees/enjeu/montant	double	3636	3636	3636	3636	3636	3636	3636	3636	NA	NA	0	18438.310000000001	0	18734.84	0	37173.150000000001	0	18438.310000000001	0	18734.84	0	37173.150000000001	0	0	18438.310000000001	18438.310000000001	0	18734.84	0	37173.150000000001	0	18438.310000000001	0	18734.84	0	37173.150000000001	61949.760000000002	0	61949.760000000002	0	61949.760000000002	0	61949.760000000002	0	61949.760000000002	0	61949.760000000002	0	61949.760000000002	0	61949.760000000002	0	3636	3636	0	18438.310000000001	0	18734.84	61949.760000000002	0	61949.760000000002	37173.150000000001	0	18438.310000000001	3636	0	18734.84	61949.760000000002	0	3636	61949.760000000002	37173.150000000001	3636	3636	0	18438.310000000001	0	18734.84	61949.760000000002	0	61949.760000000002	37173.150000000001	3636	3636	0	18438.310000000001	0	18734.84	61949.760000000002	0	61949.760000000002	37173.150000000001	NA	NA
 donnees/enjeu/nombre_dossiers	integer	2	2	2	2	2	2	2	2	1	1	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	0	2	2	0	0	0	0	0	0	0	0	0	0	2	0	0	0	0	2	0	0	2	2	0	0	0	0	0	0	0	0	2	2	0	0	0	0	0	0	0	0	1	1
-donnees/enjeu/nombre_valeurs	integer	NA	NA	NA	NA	NA	NA	NA	NA	NA	NA	0	2	0	2	0	4	0	2	0	2	0	4	0	0	2	2	0	2	0	4	0	2	0	2	0	4	4	0	4	0	4	0	4	0	4	0	4	0	4	0	4	0	NA	NA	0	2	0	2	4	0	4	4	0	2	NA	0	2	4	0	NA	4	4	NA	NA	0	2	0	2	4	0	4	4	NA	NA	0	2	0	2	4	0	4	4	NA	NA
-donnees/enjeu/cause	character	D09	D09	D09	D09	D09	D09	D09	D09	D09	D09	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	D09	D09	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	D09	\N	\N	\N	\N	D09	\N	\N	D09	D09	\N	\N	\N	\N	\N	\N	\N	\N	D09	D09	\N	\N	\N	\N	\N	\N	\N	\N	D09	D09
+donnees/enjeu/nombre_valeurs	integer	2	2	2	2	2	2	2	2	NA	NA	0	2	0	2	0	4	0	2	0	2	0	4	0	0	2	2	0	2	0	4	0	2	0	2	0	4	4	0	4	0	4	0	4	0	4	0	4	0	4	0	4	0	2	2	0	2	0	2	4	0	4	4	0	2	2	0	2	4	0	2	4	4	2	2	0	2	0	2	4	0	4	4	2	2	0	2	0	2	4	0	4	4	NA	NA
+donnees/enjeu/cause	character	\N	\N	\N	\N	\N	\N	\N	\N	D09	D09	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	\N	D09	D09
 donnees/vue/date_arrete	date	2024-12-31
 donnees/vue/date_extraction	date	2025-12-31
 donnees/vue/visibilite_non_determinee/table	character
