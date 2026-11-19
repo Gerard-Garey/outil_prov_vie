@@ -1468,7 +1468,7 @@ Les constantes du module sont citées d'après le code
 \textcolor{financeblue}{\textbf{Constante}} & \textcolor{financeblue}{\textbf{Valeur et objet}} \\
 \code{TYPES\_DICTIONNAIRE} & \code{character}, \code{integer}, \code{numeric}, \code{Date}, \code{logical}~: les cinq types d'une colonne. \\
 \code{FUTUR\_ADMIS\_VALEURS} & \code{TRUE}, \code{FALSE}, \code{programmable}~: valeurs de \code{colonnes.csv}, \code{futur\_admis}. \\
-\code{PORTEES\_CONTROLES} & \code{colonne}, \code{table}, \code{colonne\_table}, \code{ligne}, \code{ligne\_table}~: valeurs de \code{controles.csv}, \code{portee}\fsp; dans l'état du code, \code{ligne\_table} est encore lue comme \code{colonne\_table} (état transitoire T1, spécification du module \code{donnees}, version~1.9, §~9.8). \\
+\code{PORTEES\_CONTROLES} & \code{colonne}, \code{table}, \code{colonne\_table}, \code{ligne}, \code{ligne\_table}~: valeurs de \code{controles.csv}, \code{portee}\fsp; \code{ligne\_table} se résout en portée effective \code{ligne} pour une colonne non clé et \code{table} pour une colonne de clé (issue~72, section~\ref{sec:donnees-bilan}). \\
 \code{FICHIERS\_DICTIONNAIRE} & Les sept CSV, dans l'ordre du tableau ci-dessus, qui est celui des empreintes de \code{dictionnaire.txt}. \\
 \code{COLONNES\_DICTIONNAIRE} & Liste, par CSV, des noms de colonnes attendus, dans leur ordre. \\
 \end{tabular}
@@ -1892,11 +1892,21 @@ colonne de visibilité d'une ligne ou d'une partie de ligne (dictionnaire de
 la base, §~6), ou une colonne que lit une règle~P (D02b, D03g), hors
 colonnes de clé, y compris une date qui entre dans une clé primaire
 composite comme \code{famille.date\_saisie}. Sur une telle colonne, un
-\textbf{refus de valeur}, refus de portée colonne qui désigne ses lignes
-(\code{manquant\_obligatoire}, \code{hors\_domaine}, \code{chaine\_vide},
-D02c pour une date hors bornes, ou tout autre refus de portée colonne hors
-défaut de forme), est de \textbf{portée ligne} pour la vue (décisions du
-mainteneur du 9~novembre~2026, M199 à M204). Un refus sur une colonne de
+\textbf{refus de valeur}, refus identifié par ligne sur une colonne non
+clé (\code{manquant\_obligatoire}, \code{hors\_domaine} et
+\code{chaine\_vide}, de portée \code{ligne\_table} dans
+\code{controles.csv}\fsp; D02c pour une date hors bornes, D09, ou tout
+autre défaut de portée non fixée, hors défaut de forme), est de
+\textbf{portée ligne} pour la vue (décisions du mainteneur du
+9~novembre~2026, M199 à M204), et sa portée effective, dans
+\code{refus\_tables}, est \code{ligne} (dictionnaire de la base,
+version~1.6, §~1.10\fsp; spécification, version~1.9, §~9.2\fsp;
+issue~72). Dans le module \code{donnees}, la portée \code{ligne} se lit
+comme la portée \code{colonne} (portée autre que \code{table})~: le refus
+de colonne, les règles~B, P et~V et la vue sont inchangés\fsp; seuls
+l'enjeu, porteur par porteur (paragraphe «~Composante de l'enjeu~»
+ci-dessous), et l'arrêt des postes, hors du module
+(section~\ref{sec:garanties-arrets}), la distinguent. Un refus sur une colonne de
 clé garde la portée table. Un \textbf{défaut de forme}
 (\code{colonne\_absente}, \code{colonne\_inconnue},
 \code{type\_incompatible}) la garde aussi pour la vue~: à un arrêté
@@ -1933,7 +1943,7 @@ l'extraction, elles empêchent ces règles et produisent le refus
 suivant~:
 
 \begin{itemize}[itemsep=2pt]
-\item \code{refus\_tables} garde la ligne du refus, de portée colonne,
+\item \code{refus\_tables} garde la ligne du refus, de portée \code{ligne},
   telle que l'établit la règle~B\fsp; aucun refus induit ne naît d'un
   refus de valeur, de sorte que les refus de valeur ne dépendent pas de
   l'arrêté.
@@ -2089,7 +2099,11 @@ règle~P.
   clé primaire de sa table ou une colonne qui porte une référence, simple
   ou composite~: son refus est de portée table. Une colonne non clé est
   \emph{refusable pour sa valeur} si une règle de refus de la règle~B la
-  contrôle avec la portée effective \code{colonne}\fsp; les colonnes de
+  contrôle avec une portée effective autre que \code{table}
+  (\code{colonne}, ou \code{ligne} pour un refus de valeur identifié par
+  ligne, issue~72), que la règle~B lit partout comme la portée
+  \code{colonne}, ce qu'entendent les mentions de cette portée dans la
+  suite du paragraphe\fsp; les colonnes de
   \code{evaluations\_gestion} ne le sont jamais, toute anomalie de cette
   table la refusant en portée table. Une \emph{règle concernée} est une
   règle de refus de la règle~B dont le verdict lit une colonne non clé
@@ -3004,7 +3018,11 @@ D14 sur \code{sinistres} & Dossiers du sinistre, versions de la garantie \code{d
   l'état peut changer le verdict, la cause est~:
   \begin{itemize}[itemsep=0pt]
   \item le motif du refus, pour une ligne ou une partie non déterminée
-    par un refus de valeur\fsp;
+    par un refus de valeur, et pour une ligne retenue dont la valeur lue
+    est refusée par un refus de portée \code{ligne}, l'élément étant
+    alors indexé sous «~table.colonne~» (\code{.cause\_nd()}\fsp; issue~72~:
+    cas d'un événement retenu de date d'effet refusée, lu par le sous-cas
+    du maintien de D11a)\fsp;
   \item \code{declaration\_absente}, pour une ligne ou une partie non
     déterminée sous D02b ou D03g\fsp;
   \item D03i (cause directe, rang~3), pour une ligne non déterminée sous
@@ -3057,7 +3075,7 @@ ordre~:
 \textcolor{financeblue}{\textbf{Élément}} & \textcolor{financeblue}{\textbf{Contenu}} \\
 \code{controles} & Toute détection~: code, table, colonne, détection (exacte ou présomptive), nombre de lignes, identifiants. \\
 \code{controles\_non\_executes} & Contrôle empêché, ou exécuté en partie (détection partielle), une ligne par (code, table, colonne), avec sa cause (ci-dessous). \\
-\code{refus\_tables} & Refus~R~: table, colonne, motif, portée effective (\code{colonne} ou \code{table}), origine d'un refus induit, nombre de lignes, lignes visibles à l'arrêté (\code{NA} si indéterminé), identifiants, dossiers rattachés à l'arrêté (\code{NA} si le rattachement d'un dossier n'est pas déterminé), postes arrêtés (\code{NA} dans le bilan de \code{controler\_base()}\fsp; dans le résultat de \code{calculer\_provisions()}, postes que la ligne arrête, section~\ref{sec:garanties-arrets}). \\
+\code{refus\_tables} & Refus~R~: table, colonne, motif, portée effective (\code{ligne}, \code{colonne} ou \code{table}), origine d'un refus induit, nombre de lignes, lignes visibles à l'arrêté (\code{NA} si indéterminé), identifiants, dossiers rattachés à l'arrêté (\code{NA} si le rattachement d'un dossier n'est pas déterminé), postes arrêtés (\code{NA} dans le bilan de \code{controler\_base()}\fsp; dans le résultat de \code{calculer\_provisions()}, postes que la ligne arrête, remplis après les familles de calcul pour une ligne de portée \code{ligne}, section~\ref{sec:garanties-arrets}). \\
 \code{exclusions} & Exclusions déclarées~: motif, famille de calcul, action (\code{exclure} ou \code{conserver}), nombre de lignes (de sinistres pour D12, dont l'exclusion porte sur le sinistre) et de dossiers rattachés à l'arrêté. \\
 \code{hypotheses\_defaut} & Hypothèses par défaut déclarées~: motif, référentiel, poste, valeur, nombre. \\
 \code{signalements} & Constats traités en signalement, ou dont le signalement est déclaré~: mêmes colonnes que \code{controles}. \\
@@ -3302,7 +3320,10 @@ montant connu à l'arrêté.
 ne lit une colonne de visibilité que pour la visibilité n'est pas
 empêchée par un refus de valeur de cette colonne, et la ligne refusée est
 chiffrée telle quelle. Une composante qui lit aussi la colonne comme
-valeur reste empêchée tout entière, cause égale au motif du refus (M169).
+valeur ne lit pas la valeur refusée~: le porteur qui lit la ligne refusée
+est sans valeur, cause égale au motif du refus (M169), les autres porteurs
+étant chiffrés (paragraphe «~Composante de l'enjeu~» ci-dessous\fsp; avant
+l'issue~72, la composante restait empêchée tout entière).
 La liste fermée de ces colonnes lues comme valeur est la constante interne
 \code{.LUS\_VALEUR\_ENJEU}, réduite à \code{evenements.date\_saisie}, que
 les composantes~2 à~4 lisent pour départager les derniers événements
@@ -3426,7 +3447,20 @@ n'empêche pas la composante (paragraphe «~À l'arrêté égal à
 l'extraction~» ci-dessus)\fsp; le refus qui constitue l'écart n'empêche
 que la lecture de sa propre colonne, hors D01a et hors clé étrangère de
 l'écart (lien non résolu)\fsp; un refus induit qui procède seulement du
-refus de l'écart n'empêche pas. La cause retenue est la plus petite, dans
+refus de l'écart n'empêche pas. Un refus de portée \code{ligne}
+n'empêche pas la composante entière (spécification, version~1.9,
+§~9.2\fsp; issue~72)~: seul le porteur qui lit une ligne refusée, rattachée
+à lui par ses clés ou pouvant entrer dans sa valeur, est sans valeur, avec
+pour cause le plus petit des motifs qu'il lit, dans l'ordre (rang,
+position), publiée sur la première colonne qui le porte dans l'ordre du
+dictionnaire\fsp; les autres porteurs sont chiffrés, ou gardent
+leur visibilité non déterminée. Un code de garantie refusé rend la
+garantie du porteur non rattachée et ses composantes~2 à~4 sans
+valeur\fsp; un type d'événement, une date d'effet d'événement ou une nature
+de cotisation refusés rendent la ligne sans valeur dans chaque unité ou
+composante où elle peut entrer (lecture de Kleene). Avant l'issue~72, la
+composante était empêchée pour tout porteur dès qu'elle lisait la
+colonne. La cause retenue est la plus petite, dans
 l'ordre (rang, position), de l'union des causes de toutes les colonnes
 lues\fsp; pour une composante~1 à~4 empêchée par un rattachement illisible
 par sa forme, de l'union des causes de forme des colonnes du chemin. La
@@ -3476,7 +3510,10 @@ seule implémentation, la clé (rang, position) d'une cause
 dérivé du dictionnaire (\code{.ordre\_codes()}), seul endroit où cet
 ordre est écrit, et calculé au plus une fois par contrôle de la base
 (issue~55). Pour une composante de l'enjeu, \code{.causes\_enjeu()} rend
-les causes éligibles d'une colonne lue, et \code{.cause\_colonnes()}
+les causes éligibles d'une colonne lue, hors refus de portée
+\code{ligne}, que lisent porteur par porteur \code{.refus\_ligne\_lus()},
+\code{.refus\_ligne\_porteurs()} et \code{.rattacher\_composante()}, et
+\code{.cause\_colonnes()}
 retient la cause et la colonne publiées, la colonne étant rangée dans
 l'ordre du dictionnaire par \code{.ordre\_dictionnaire()}\fsp; la cause
 d'une composante empêchée par un rattachement illisible
@@ -4295,7 +4332,7 @@ ne peut appeler que \code{dictionnaire} et \code{outils}. Sa fonction
 \textcolor{financeblue}{\textbf{Fonction}} & \textcolor{financeblue}{\textbf{Arguments}} & \textcolor{financeblue}{\textbf{Rôle}} \\
 \code{catalogue\_garanties()} & Aucun & Lit et valide, à chaque appel, le catalogue des garanties du package installé (\code{inst/extdata/garanties/})\fsp; rend une liste nommée d'un \code{data.frame} par fichier (\code{garanties}, \code{etats}, \code{transitions}, \code{flux}, \code{usages\_tables}, \code{postes}, \code{liens}, \code{lectures})\fsp; refus \code{catalogue\_invalide} si la forme lue n'est pas celle attendue. \\
 \code{methodes\_poste()} & \code{x}, \code{poste}, \code{colonne} & Lit le champ \code{methodes} ou \code{temoins} d'un poste de \code{postes.csv} et rend un \code{data.frame} (\code{champ}, \code{methode})\fsp; refus \code{catalogue\_invalide} pour un champ ou une méthode inconnus, ou une méthode en double. Non exportée, appelée aussi par \code{plan}. \\
-\code{postes\_a\_arreter()} & \code{catalogue}, \code{bilan}, \code{postes}, \code{parties} & Détermine les postes du plan arrêtés par le bilan (refus de tables, visibilité non déterminée et constats D03i), d'après les colonnes que lit chaque poste\fsp; rend chaque poste avec le motif de la première ligne qui l'arrête, et les refus de tables complétés des postes arrêtés. Non exportée. \\
+\code{postes\_a\_arreter()} & \code{catalogue}, \code{bilan}, \code{postes}, \code{parties} & Détermine les postes du plan arrêtés par le bilan (refus de tables, visibilité non déterminée et constats D03i), d'après les colonnes que lit chaque poste\fsp; rend chaque poste avec le motif de la première ligne qui l'arrête, les refus de tables complétés des postes arrêtés, et, pour chaque ligne de portée \code{ligne}, les postes candidats de l'arrêt par unité (issue~72). Non exportée. \\
 \end{tabular}
 \end{center}
 
@@ -4377,7 +4414,12 @@ le poste (\code{lectures.csv}) et les clés étrangères du dictionnaire~:
   table\fsp;
 \item[(ii)] une ligne de \code{refus\_tables} de portée colonne arrête les postes
   qui lisent cette colonne et, si la colonne appartient à une partie de
-  ligne, ceux qui lisent une colonne de la partie\fsp;
+  ligne, ceux qui lisent une colonne de la partie\fsp; une ligne de portée
+  \code{ligne} (refus de valeur identifié par ligne) n'arrête rien ici~:
+  les postes qui lisent la colonne, partie de ligne comprise, en sont les
+  \textbf{candidats} (condition~(1)), rendus dans l'élément
+  \code{candidats}, et leur famille de calcul les arrête par unité
+  (ci-dessous)\fsp;
 \item[(iii)] une ligne de visibilité non déterminée dont le motif est un motif de
   refus arrête, pour une ligne entière, les postes qui lisent la table ou
   une table descendante, et, pour une partie de ligne, les postes qui lisent
@@ -4411,10 +4453,62 @@ déterminée de motif D02b ou D03g, qui exige une déclaration\fsp; une
 parente non déterminée, dont la descendance porte la règle~(iii)\fsp; une
 table facultative absente.
 
+\textbf{Arrêt par unité} (dictionnaire de la base, version~1.6, §~1.10\fsp;
+spécification du module \code{donnees}, version~1.9, §~9.2\fsp; erratum du
+projet de dictionnaire~1.6, §~11.5\fsp; issue~72). Une ligne de
+\code{refus\_tables} de portée \code{ligne} arrête un poste candidat si,
+et seulement si, une de ses lignes refusées est lue pour une unité du
+poste (condition~(2))~: retenue à l'arrêté, non exclue pour la famille,
+admise par la lecture du poste et rattachée à l'unité par ses clés, selon
+les listes de lignes lues par unité de la spécification de la branche B2
+(§~5.8). Une seule implémentation, \code{arret\_refus\_ligne()}, appuyée
+sur \code{refus\_ligne\_unites()} (module \code{engagement}), sert les deux
+familles. Le poste arrêté prend le motif de la première ligne qui
+l'arrête, dans l'ordre du bilan, et pour identifiant le plus petit
+identifiant d'unité en cause pour cette ligne, en tri radix, de sorte
+qu'il ne dépend pas de l'ordre des lignes de la base\fsp; les lignes en
+cause sont portées par l'attribut \code{refus\_ligne} de la cellule. Après
+les familles, \code{calculer\_provisions()} remplit la colonne
+\code{postes\_arretes} d'une ligne de portée \code{ligne}~: postes arrêtés
+par la règle~(iii) et postes que leur famille a arrêtés sur cette ligne,
+ou une valeur manquante s'il n'y en a aucun (section~\ref{sec:enjeu}).
+Avant l'issue~72, une telle ligne arrêtait tout poste qui lisait la
+colonne, comme une ligne de portée colonne. Motif~: un refus de valeur
+désigne ses lignes~; un poste dont aucune unité ne lit une ligne refusée
+se calcule sur des valeurs toutes lues.
+
+\textbf{Limites et jugements d'expert de l'arrêt par unité} (décisions du
+mainteneur du 19~novembre~2026, M713 et M714~: documentés ici, non
+corrigés par l'issue~72). (1)~La colonne \code{postes\_arretes} d'une
+ligne de portée \code{ligne} dépend de la préséance des arrêts~: elle ne
+retient que les postes dont la famille a atteint l'arrêt par unité sur
+cette ligne\fsp; un poste arrêté auparavant pour une autre cause n'y
+figure pas, même s'il lit la ligne (limite, correction portée par
+l'issue~175). (2)~Une table pour laquelle la famille n'établit pas de
+liste de lignes lues par unité (\code{garanties\_souscrites},
+\code{parametres}, \code{extraction}) ne permet pas le rattachement~: une
+ligne refusée de cette table arrête le poste candidat sans identifiant,
+comme avant l'issue~72 (jugement d'expert, issue~174).
+(3)~Seule une ligne retenue à l'arrêté et non exclue pour la famille est
+lue~: une ligne refusée hors de la vue ou exclue n'arrête rien, car le
+calcul ne la lit pas (jugement d'expert, issue~174). (4)~Pour la provision
+mathématique de la temporaire décès, les unités de l'arrêt par unité sont
+les contrats retenus d'une garantie souscrite \code{deces}, pris avant les
+filtres de population des deux champs (version en vigueur, date de fin,
+nature)~: un contrat hors des deux populations peut arrêter le poste, la
+population dépendant de valeurs que la ligne refusée peut porter
+(jugement d'expert, lecture de Kleene, issue~174\fsp;
+section~\ref{sec:risque-en-cours-p3}).
+
 \textbf{Motifs nés d'une famille de calcul.} D'autres arrêts naissent du
 calcul lui-même, hors du bilan~; ils n'ont pas de ligne dans
-\code{refus\_tables}, et la fiche de calcul porte le premier identifiant en
-cause (dossier ou contrat) dans les paramètres retenus du poste~:
+\code{refus\_tables}, et la fiche de calcul porte l'identifiant en
+cause (dossier ou contrat) dans les paramètres retenus du poste~: le
+premier rencontré, sauf pour l'arrêt \code{parametre\_non\_determine} du
+champ individuel de la provision mathématique de la temporaire décès, qui
+retient le plus petit contrat en cause, en tri radix (issue~72), et pour
+la garde des dossiers d'une garantie non retenue, qui retient le premier
+d'une liste triée~:
 
 \begin{center}
 \small
@@ -4458,7 +4552,7 @@ n'est exportée.
 \rowcolor{tableheader}
 \textcolor{financeblue}{\textbf{Fonction}} & \textcolor{financeblue}{\textbf{Arguments}} & \textcolor{financeblue}{\textbf{Rôle}} \\
 \endhead
-\code{calculer\_engagement()} & \code{vue}, \code{plan}, \code{tables}, \code{catalogue}, \code{garantie}, \code{poste} & Point d'appel d'un poste de la famille «~engagement~» (sinistres déclarés non réglés ou capitaux non réclamés)\fsp; rend les cellules, les dossiers (dont les unités restituées à montant nul), les échéanciers et les indicateurs\fsp; un poste arrêté rend une cellule \code{arrete} sans montant. \\
+\code{calculer\_engagement()} & \code{vue}, \code{plan}, \code{tables}, \code{catalogue}, \code{garantie}, \code{poste} & Point d'appel d'un poste de la famille «~engagement~» (sinistres déclarés non réglés ou capitaux non réclamés)\fsp; rend les cellules, les dossiers (dont les unités restituées à montant nul), les échéanciers et les indicateurs\fsp; un poste arrêté rend une cellule \code{arrete} sans montant, avec l'identifiant en cause et, pour un arrêt par unité, les lignes de \code{refus\_tables} en cause (attribut \code{refus\_ligne}, issue~72). \\
 \code{capital\_deces\_dossier()} & \code{vue}, \code{plan}, \code{etats}, \code{methode}, \code{parametres}, \code{prestations}, \code{poste} & Calcule, sous l'une des quatre méthodes, le capital, le solde revalorisé à l'arrêté, le montant à l'horizon de la méthode et la date du flux de chaque dossier\fsp; signale le salaire déclaré sous l'hypothèse D03c du poste (colonne \code{d03c}) et le capital reconstitué (colonne \code{reconstitue}, qui décide des lignes lues pour la détection S2). \\
 \code{facteur\_revalorisation()} & \code{debut}, \code{fin}, \code{taux\_par\_annee}, \code{prorata}, \code{conventions}, \code{arrete}, \code{taux\_futur} & Facteur de revalorisation légale entre deux dates, produit sur les années civiles, au prorata simple ou composé\fsp; refus \code{plan\_incomplet} pour une année sans taux. Seule implémentation du package. \\
 \code{valeur\_actuelle\_probable()} & \code{echeancier}, \code{actualisation}, \code{conventions} & Seule fonction de valeur actuelle probable du package~: flux $\times$ probabilité $\times$ facteur d'actualisation, sommés par clé\fsp; un type d'actualisation admis sans branche de calcul est une erreur interne, jamais un facteur~1. Lue aussi par \code{risque\_en\_cours}. \\
@@ -4469,7 +4563,7 @@ n'est exportée.
 \code{joindre\_codes()} & \code{...} & Seule réunion des codes d'hypothèse d'une unité (sources S1 et S2)~: codes uniques, triés, joints par «~;~». Appelée aussi par \code{risque\_en\_cours}. \\
 \code{lecture\_unites()} & \code{table}, \code{colonnes}, \code{cles}, \code{unite}, \code{garde}, \code{admises}, \code{lues} & Décrit la lecture d'une table par les unités d'un poste pour la détection S2 (clés, unités, lignes admises\fsp; avec \code{lues}, colonnes lues, seules les hypothèses qui portent sur l'une d'elles comptant, garde par colonnes, issue~90)\fsp; une clé manquante ou vide ne rattache rien (issue~158). Appelée aussi par \code{risque\_en\_cours}. \\
 \code{refus\_ligne\_unites()} & \code{vue}, \code{famille}, \code{n}, \code{lectures}, \code{table}, \code{refusees} & Seule détection de la condition~(2) de l'arrêt par unité (issue~72)~: rend, pour chaque unité, vrai si une ligne refusée de portée ligne, retenue à l'arrêté, non exclue pour la famille et admise par la lecture, lui est rattachée par ses clés. Appelée aussi par \code{risque\_en\_cours}. \\
-\code{arret\_refus\_ligne()} & \code{vue}, \code{pa}, \code{cle}, \code{famille}, \code{n}, \code{lectures}, \code{ids}, \code{listees}, \code{evaluees}, \code{repli} & Arrêt d'un poste par les lignes de portée ligne de \code{refus\_tables} dont il est candidat (issue~72)~: rend les lignes qui l'arrêtent, le motif de la première et la première unité en cause\fsp; une table sans liste de lignes lues par unité arrête le poste sans identifiant. Appelée aussi par \code{risque\_en\_cours}. \\
+\code{arret\_refus\_ligne()} & \code{vue}, \code{pa}, \code{cle}, \code{famille}, \code{n}, \code{lectures}, \code{ids}, \code{listees}, \code{evaluees}, \code{repli} & Arrêt d'un poste par les lignes de portée ligne de \code{refus\_tables} dont il est candidat (issue~72)~: rend les lignes qui l'arrêtent, le motif de la première et le plus petit identifiant d'unité en cause pour celle-ci (tri radix, indépendant de l'ordre des lignes)\fsp; une table sans liste de lignes lues par unité arrête le poste sans identifiant. Appelée aussi par \code{risque\_en\_cours}. \\
 \code{statut\_le\_plus\_faible()} & \code{statuts} & Rend le plus faible d'un ensemble de statuts de résultat (\code{exact} sans élément). \\
 \code{statut\_methode\_catalogue()} & \code{catalogue}, \code{garantie}, \code{poste}, \code{champ}, \code{methode} & Rend le statut d'une méthode au catalogue~: la première méthode du champ est recommandée, les suivantes alternatives. \\
 \end{longtable}
@@ -4540,7 +4634,24 @@ partition se fait avant le filtre des dossiers clos. Un dossier clos, dont
 celui clos par un dépôt à la Caisse des dépôts et consignations, n'est pas
 calculé~; il n'est restitué, à montant nul, que si une ligne qui décide de
 sa clôture porte une hypothèse de la vue, au poste que lui donne la
-partition (section~\ref{sec:statut-unite}). Les décès que l'organisme ne connaît
+partition (section~\ref{sec:statut-unite}).
+
+\textbf{Arrêt par unité} (issue~72\fsp; section~\ref{sec:garanties-arrets}).
+Les unités de l'arrêt par unité sont les dossiers de la population du
+poste avant le filtre des dossiers clos\fsp; la partition entre les deux
+postes y est lue en logique de Kleene~: un dossier dont la qualité d'un
+bénéficiaire, la date d'effet d'un événement ou la date d'ouverture est
+refusée par un refus de portée \code{ligne} est une unité possible des
+deux postes. Les lignes lues par unité sont celles de la spécification de
+la branche B2 (§~5.8)~: dossier, sinistre, événements, prestations,
+bénéficiaires, contrat de la garantie\fsp; affiliations et famille pour un
+capital reconstitué. L'arrêt est évalué avant toute lecture des valeurs
+des unités, sauf pour les affiliations et la famille, évaluées après le
+calcul du capital et avant ses propres arrêts. Une table sans liste de
+lignes lues par unité arrête le poste candidat sans identifiant
+(section~\ref{sec:garanties-arrets}, limite~(2)). Une partition qui reste
+non déterminée arrête ensuite les deux postes
+(\code{parametre\_non\_determine}, premier dossier en cause). Les décès que l'organisme ne connaît
 pas sont des sinistres tardifs, qui ne relèvent d'aucun de ces postes
 (section~\ref{sec:totaux}).
 
@@ -5046,8 +5157,8 @@ fonctions n'est exportée.
 \begin{tabular}{@{}p{5.6cm}>{\raggedright\arraybackslash}p{3.0cm}p{6.5cm}@{}}
 \rowcolor{tableheader}
 \textcolor{financeblue}{\textbf{Fonction}} & \textcolor{financeblue}{\textbf{Arguments}} & \textcolor{financeblue}{\textbf{Rôle}} \\
-\code{calculer\_risque\_en\_cours()} & \code{vue}, \code{plan}, \code{tables}, \code{catalogue}, \code{garantie}, \code{poste} & Point d'appel de la provision mathématique de la temporaire décès\fsp; rend une cellule pour le poste (champs individuel et collectif réunis), les échéanciers des contrats individuels (deux lignes de flux nul par contrat sorti restitué), les indicateurs et les contrats valorisés par champ (unités de la restitution par segment)\fsp; un poste arrêté rend une cellule \code{arrete}. \\
-\code{provisions\_individuelles()} & \code{vue}, \code{plan}, \code{tables}, \code{temoin} & Calcule, contrat individuel par contrat, la population, l'échéancier et la provision (plancher nul par contrat)\fsp; marque les contrats dont un âge est lu hors des axes sous \code{derniere\_valeur} et rend leurs lignes \code{hors\_axes\_derniere\_valeur}\fsp; rend les codes des hypothèses de la vue de chaque contrat et les contrats sortis à restituer à montant nul\fsp; le témoin rétrospectif n'est calculé que si \code{temoin} vaut \code{TRUE} (\code{NA} en prime unique). \\
+\code{calculer\_risque\_en\_cours()} & \code{vue}, \code{plan}, \code{tables}, \code{catalogue}, \code{garantie}, \code{poste} & Point d'appel de la provision mathématique de la temporaire décès\fsp; rend une cellule pour le poste (champs individuel et collectif réunis), les échéanciers des contrats individuels (deux lignes de flux nul par contrat sorti restitué), les indicateurs et les contrats valorisés par champ (unités de la restitution par segment)\fsp; applique l'arrêt par unité (issue~72) avant toute lecture des valeurs des contrats\fsp; un poste arrêté rend une cellule \code{arrete}, avec le contrat en cause et, pour un arrêt par unité, les lignes de \code{refus\_tables} en cause (attribut \code{refus\_ligne}). \\
+\code{provisions\_individuelles()} & \code{vue}, \code{plan}, \code{tables}, \code{temoin} & Calcule, contrat individuel par contrat, la population, l'échéancier et la provision (plancher nul par contrat)\fsp; marque les contrats dont un âge est lu hors des axes sous \code{derniere\_valeur} et rend leurs lignes \code{hors\_axes\_derniere\_valeur}\fsp; rend les codes des hypothèses de la vue de chaque contrat et les contrats sortis à restituer à montant nul\fsp; le témoin rétrospectif n'est calculé que si \code{temoin} vaut \code{TRUE} (\code{NA} en prime unique)\fsp; l'arrêt \code{parametre\_non\_determine} désigne le plus petit contrat en cause (tri radix, issue~72), l'arrêt \code{hors\_axes} le premier rencontré. \\
 \code{provisions\_collectives()} & \code{vue}, \code{plan} & Calcule, par contrat collectif, la provision au prorata des cotisations nettes de chargement sur les jours postérieurs à l'arrêté (\code{prorata\_cotisation}), sous le traitement déclaré de la période couverte manquante (D03f)\fsp; rend aussi le motif d'arrêt et le premier contrat en cause, et les contrats sous une hypothèse (D03f, ou hypothèse de la vue), qui fondent le statut\fsp; un contrat sans cotisation de fin postérieure à l'arrêté n'est restitué, de montant nul, que si une de ses cotisations est lue sous D03f. \\
 \end{tabular}
 \end{center}
@@ -5084,7 +5195,29 @@ valeurs (\code{capital\_forfaitaire}, \code{age\_fin\_garantie} et, sous la
 prime déclarée pour un contrat à primes périodiques,
 \code{prime\_periodique}), une date de naissance manquante ou une fin de
 couverture indéterminée arrêtent le poste
-(\code{parametre\_non\_determine}, premier contrat en cause).
+(\code{parametre\_non\_determine}, plus petit contrat en cause, en tri
+radix, de sorte que l'identifiant ne dépend pas de l'ordre des lignes de
+la base\fsp; issue~72, M715).
+
+\textbf{Arrêt par unité} (issue~72\fsp; section~\ref{sec:garanties-arrets}).
+Avant toute lecture des valeurs des contrats, une ligne de portée
+\code{ligne} de \code{refus\_tables} dont le poste est candidat l'arrête
+si une de ses lignes refusées est lue pour un contrat. Les unités sont les
+contrats retenus d'une garantie souscrite \code{deces} du poste, avant les
+filtres de population des deux champs, sur-ensemble des deux populations
+(section~\ref{sec:garanties-arrets}, limite~(4)). Les lignes lues sont la
+ligne du contrat\fsp; pour un contrat individuel, celle de son assuré et
+celles des sinistres de cet assuré\fsp; pour un contrat collectif, les
+cotisations de ses garanties \code{deces} que le champ peut lire
+(spécification de la branche B2, §~5.8, désignée par l'erratum du projet
+de dictionnaire~1.6, §~11.5)~: de nature émission, annulation ou
+régularisation, hors cotisation de fin de période connue au plus
+l'arrêté, une nature ou une fin de période refusée étant tenue pour
+inconnue, donc admise (lecture de Kleene)\fsp; une nature du contrat
+refusée fait lire les lignes des deux champs. Ce filtre des cotisations a
+une seule implémentation, lue aussi par la détection S2 du champ
+collectif, et la sélection des garanties souscrites \code{deces} du poste
+en a une seule pour les trois fonctions du poste (M715).
 
 \textbf{Champ individuel~: clé manquante} (spécification du module
 \code{donnees}, version~1.8, §~2.2, B.4, «~Sites résiduels de la règle de
@@ -5117,7 +5250,7 @@ périodicité du contrat (jugement d'expert de la
 spécification, version~1.0.9). Un paramètre lu dont une ligne retenue est
 exclue pour la famille «~risque en cours~» n'est pas déterminé, comme un
 paramètre manquant~: le poste est arrêté (\code{parametre\_non\_determine},
-premier contrat en cause), et la valeur exclue ne vaut jamais zéro ni
+plus petit contrat en cause, en tri radix), et la valeur exclue ne vaut jamais zéro ni
 absente (issue~78 du dépôt). Un \code{age\_fin\_garantie} exclu est inconnu
 avant le calcul de la fin de couverture (lecture de Kleene)~: le contrat
 sort de la population si le terme ou la fin du contrat placent seuls la fin
@@ -5139,7 +5272,7 @@ couverture au plus l'arrêté par le terme ou la fin du contrat, ou par l'âge
 si \code{age\_fin\_garantie} et la date de naissance sont connus\fsp;
 sinistre \code{deces} ou \code{iad} retenu, non exclu, de l'assuré, survenu
 au plus l'arrêté. Sinon, une inconnue arrête le poste
-(\code{parametre\_non\_determine}, premier contrat en cause)~:
+(\code{parametre\_non\_determine}, plus petit contrat en cause, en tri radix)~:
 
 \begin{itemize}[itemsep=2pt]
 \item \textbf{assuré exclu}~: la date de naissance d'une ligne de
@@ -5171,7 +5304,7 @@ Kleene s'applique aux dates que D02a tient pour inconnues
 (section~\ref{sec:donnees-bilan})~: une version de garantie (R4) ou un
 contrat (R1 à R3) dont la mise en vigueur ou la fin n'est pas connue
 reste dans la population et arrête le poste
-(\code{parametre\_non\_determine}, premier contrat en cause), sauf sortie
+(\code{parametre\_non\_determine}, plus petit contrat en cause, en tri radix), sauf sortie
 par une condition connue~; un sinistre \code{deces} ou \code{iad} retenu,
 non exclu, de l'assuré, de survenance inconnue (R8, R9), peut être
 survenu au plus l'arrêté, et rend la sortie inconnue comme un sinistre
@@ -5275,7 +5408,8 @@ s'applique (ci-dessous), D03f s'enchaînant alors à D02a
 jamais une fin de période connue au plus l'arrêté~; (3)~sinon, les deux bornes étant connues et
 la fin postérieure à l'arrêté, une période inversée ou de longueur nulle
 (fin moins début plus un jour au plus nul) arrête le poste
-(\code{parametre\_non\_determine}, premier contrat en cause)~; (4)~sinon,
+(\code{parametre\_non\_determine}, premier contrat en cause dans l'ordre
+des cotisations de la vue)~; (4)~sinon,
 le prorata s'applique. La règle~(3) est une lecture de Kleene, jugement
 d'expert~: une borne au moins est fausse, sans qu'on sache laquelle, et le
 prorata n'est pas déterminé~; échanger les bornes serait une correction
@@ -6171,7 +6305,9 @@ du mainteneur (ADR~0011, point~22).
 
 \textbf{Fiche et rejeu.} Les paramètres retenus de la fiche portent une
 ligne par poste (méthode, statut de méthode, déclaration du poste au plan,
-premier identifiant en cause d'un arrêt né de la famille, tables lues),
+identifiant en cause d'un arrêt né de la famille, premier rencontré ou
+plus petit selon le motif, section~\ref{sec:garanties-arrets}, tables
+lues),
 puis une ligne \code{total} par garantie et par référentiel, qui nomme les
 postes sommés. \code{rejouer\_fiche(donnees, fiche, tables)} applique les
 contrôles du rejeu (section~\ref{sec:plan-fiche}), puis appelle
@@ -6197,6 +6333,12 @@ B2, §~6.4, point~7 ; décisions du mainteneur du 11~novembre~2026)~:
   nommés dans \code{postes\_arretes} des lignes de \code{refus\_tables} de
   mêmes table, colonne et motif~; une rangée de refus n'est jamais attribuée
   à un poste que le refus n'arrête pas (section~\ref{sec:garanties-arrets})\fsp;
+  pour une ligne de portée \code{ligne}, \code{postes\_arretes} est
+  complété après les familles de calcul par les postes que leur famille a
+  arrêtés sur cette ligne (arrêt par unité, issue~72), si bien qu'une
+  rangée de refus d'une ligne qu'aucune unité ne lit n'est attribuée à
+  aucun poste\fsp; la limite~(1) de l'arrêt par unité (préséance des
+  arrêts, issue~175) vaut aussi pour cette attribution\fsp;
 \item \textbf{exclure}~: copie vers chaque poste de la même garantie, de la
   famille de la rangée (toute famille pour la famille \code{ensemble}), qui
   lit une colonne quelconque de la table de la rangée, que la colonne de la
