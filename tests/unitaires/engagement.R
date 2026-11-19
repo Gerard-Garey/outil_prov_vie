@@ -244,11 +244,13 @@ verifier_egal("affiliation_non_determinee : capital non fixé sans affiliation q
                 r <- eng(b, p); list(r$cellules$statut_calcul, r$cellules$motif_arret, is.na(r$cellules$montant),
                                      attr(r$cellules, "identifiant_arret"), nrow(r$dossiers)) },
               list("arrete", "affiliation_non_determinee", TRUE, "DO1", 0L))
-verifier_egal("arrêt lu sur le bilan : prestations.montant refusé (portée colonne) : P1 et P2 arrêtés du motif du refus",
+# montant de PR1 (paiement de DO1) manquant : refus de portée ligne (#72) ; DO1, de P1, lit la
+# ligne : P1 arrêté du motif du refus ; P2 calculé (avant #72 : P1 et P2 arrêtés)
+verifier_egal("arrêt lu sur le bilan : prestations.montant de PR1 refusé (portée ligne, #72) : P1, dont DO1 lit la ligne, arrêté du motif du refus ; P2 calculé",
               { b <- b2_base_capital(paiements = data.frame(date = D("2025-03-01"), montant = 40000))
                 b$prestations$montant <- NA_real_
                 list(eng(b, p)$cellules$motif_arret, eng(b, p, P2)$cellules$motif_arret) },
-              list("manquant_obligatoire", "manquant_obligatoire"))
+              list("manquant_obligatoire", NA_character_))
 # (3.9) invariant : aucun dossier valorisé n'a instruit = NA ; une instruction illisible par sa
 # forme (partie NA) arrête P1 et P2 (refus de portée colonne de sinistres.date_instruction)
 illisible <- b2_base_capital(capital = NA)
@@ -559,7 +561,11 @@ verifier_egal("(3.17) (e) cas (c), affiliation cadres exclue pour engagement : a
                    cel(eng(base_college("GSC", c("non_cadres", "cadres", "cadres"), c(30000, 50000, 50000)), pB))),
               list(arret_af, arret_af))
 col_b <- base_college("GSC", "cadres", 30000)
-verifier_egal("(3.17) (g) college de GSC à NA : refus de colonne (garanties_souscrites, college) qui arrête P1 et P2 (règle (ii), motif de la ligne) ; college de l'affiliation à NA : P1 arrêté type_incompatible (témoin)",
+# #72 : le refus de garanties_souscrites.college est de portée ligne ; garanties_souscrites n'a pas
+# de liste de lignes lues par unité (§ 5.8) : rattachement non établi, P1 et P2 arrêtés par leur
+# famille (arret_refus_ligne()), sans identifiant ; postes_a_arreter() ne remplit pas
+# postes_arretes (calculer_provisions() le fait ; avant #72 : portée colonne, règle (ii))
+verifier_egal("(3.17) (g) college de GSC à NA : refus de portée ligne (garanties_souscrites, college) qui arrête P1 et P2 (rattachement non établi, motif de la ligne ; #72) ; college de l'affiliation à NA : P1 arrêté type_incompatible (témoin)",
               { b <- col_b; b$garanties_souscrites$college[2L] <- NA
                 v <- b2_vue(b, A)
                 rt <- ns$postes_a_arreter(cat_g, v$bilan, p$postes, ns$parties_ligne())$refus_tables
@@ -567,7 +573,7 @@ verifier_egal("(3.17) (g) college de GSC à NA : refus de colonne (garanties_sou
                 bp <- b; bp$beneficiaires$qualite <- "non_identifie"; bp$beneficiaires$id_membre <- NA_character_
                 b2 <- col_b; b2$affiliations$college <- NA   # NA logique : type de colonne incompatible
                 list(l$portee, l$motif, l$postes_arretes, cel(eng(b, pB)), cel(eng(bp, p, P2)), eng(b2, pB)$cellules$motif_arret) },
-              list("colonne", "manquant_obligatoire", "deces/capitaux_non_reclames;deces/sinistres_declares_non_regles",
+              list("ligne", "manquant_obligatoire", NA_character_,
                    list(NA_real_, NA_integer_, NA_character_, "manquant_obligatoire", NA_character_),
                    list(NA_real_, NA_integer_, NA_character_, "manquant_obligatoire", NA_character_), "type_incompatible"))
 verifier_egal("(3.17) (h) P2 (beneficiaire_non_identifie) : cas (a) arrêt affiliation_non_determinee (DO1) ; cas (c) 194 880 exact",
@@ -1149,3 +1155,82 @@ for (k in names(cles158)) {
                 c158(b158pa, p, P1, function(b, c1) { b$prestations$id_dossier <- c1; b }, cles158[[k]])$montant,
                 103936, tolerance = TOL)
 }
+
+section("engagement : arrêt par unité sur un refus de valeur de portée ligne (#72 ; spécification donnees v1.9, § 9.2 ; erratum du projet de dictionnaire 1.6, § 2 et § 11.5)")
+
+# Un poste qui lit la colonne refusée (condition (1)) n'est arrêté que si une ligne refusée est
+# lue pour une de ses unités (condition (2) : lignes lues du § 5.8, rattachées par clés ;
+# rattachement non déterminé, Kleene), avec le motif du refus et le premier dossier en cause ;
+# avant #72, tout poste qui lit la colonne était arrêté. Base : capital fixé de DO1 (100 000),
+# paiement PR1 de 10 000 ; témoin calculé.
+c72 <- function(r) list(r$cellules$montant, r$cellules$motif_arret, attr(r$cellules, "identifiant_arret"),
+                        attr(r$cellules, "refus_ligne"))
+b72 <- b2_base_capital(paiements = data.frame(date = D("2024-10-01"), montant = 10000))
+t72 <- c72(eng(b72, p))
+# garantie incapacite GS2 du même contrat, arrêt de travail SI2 et son dossier DO2, indemnité
+# journalière PRI de montant `ij` (négatif : D09, refus de portée ligne)
+inc72 <- function(b, ij) within(b, {
+  garanties_souscrites <- rbind(garanties_souscrites, b2_tab("garanties_souscrites", id_garantie_souscrite = "GS2", id_contrat = "CT1",
+    code_garantie = "incapacite", college = "ensemble", date_effet = D("2020-01-01"), type_assiette = "salaire_reference",
+    type_franchise = "continue", regle_complement = "forfaitaire", periodicite_prestation = "mensuelle", terme_prestation = "echu",
+    periodicite_cotisation = "annuelle"))
+  parametres <- rbind(parametres, b2_tab("parametres", id_garantie_souscrite = "GS2", parametre = "franchise_jours", valeur = 30))
+  sinistres <- rbind(sinistres, b2_tab("sinistres", id_sinistre = "SI2", id_assure = "AS1", nature_sinistre = "arret_travail",
+    date_survenance = D("2024-02-01"), date_declaration = D("2024-02-05"), canal_declaration = "assure", gestionnaire = "interne",
+    date_saisie = D("2024-02-06")))
+  dossiers <- rbind(dossiers, b2_tab("dossiers", id_dossier = "DO2", id_sinistre = "SI2", id_garantie_souscrite = "GS2",
+                                     date_ouverture = D("2024-02-07")))
+  prestations <- rbind(prestations, b2_tab("prestations", id_prestation = "PRI", id_dossier = "DO2", type_prestation = "indemnite_journaliere",
+    nature_mouvement = "paiement", date_reglement = D("2024-04-01"), montant = ij, date_saisie = D("2024-04-01"),
+    debut_periode = D("2024-03-01"), fin_periode = D("2024-03-31")))
+})
+verifier_egal("#72 (a) : indemnité journalière négative (D09) du dossier incapacite DO2 : la ligne n'est lue par aucune unité, P1 et P2 calculés, égaux au témoin (avant #72 : arrêtés D09) ; refus de portée ligne",
+              list(c72(eng(inc72(b72, -100), p)), c72(eng(inc72(b72, -100), p, P2)), b2_vue(inc72(b72, -100), A)$bilan$refus_tables$portee,
+                   t72[[1L]], c72(eng(inc72(b72, 100), p))),
+              list(t72, list(0, NA_character_, NULL, NULL), "ligne", 93619.6196721311, t72), tolerance = TOL)
+verifier_egal("#72 (b) : paiement PR1 de DO1 négatif (D09) : P1 arrêté (D09, DO1, ligne 1 de refus_tables), P2 calculé (DO1 est de P1 : bénéficiaire identifié)",
+              list(c72(eng(within(b72, prestations$montant[1L] <- -10000), p)),
+                   c72(eng(within(b72, prestations$montant[1L] <- -10000), p, P2))),
+              list(list(NA_real_, "D09", "DO1", 1L), list(0, NA_character_, NULL, NULL)))
+# (c) qualité du bénéficiaire BE1 de DO1 hors domaine : la partition P1 / P2 de DO1 n'est pas
+# déterminée (Kleene), DO1 est une unité possible de P1 et de P2, qui lisent la ligne : les deux
+# arrêtés, hors_domaine, DO1 ; (d) date d'effet de EV1 (fixation de DO1) hors bornes (D02c), à
+# l'extraction (2026-03-31 ; avant l'extraction, la date refusée rend la visibilité de EV1 non
+# déterminée et la règle (iii) arrête P1 et P2, règle 3 du § 6 inchangée, #105) : critère
+# beneficiaire_non_identifie (DO1 de P1, déterminé) : P1 seul arrêté ; critère sans_evenement
+# (6 mois) : la partition dépend de la date refusée, P1 et P2 arrêtés
+p72_se <- p
+p72_se$postes$deces$capitaux_non_reclames$parametres$critere <- "sans_evenement"
+p72_se$postes$deces$capitaux_non_reclames$parametres$mois_sans_evenement <- 6L
+b72d <- within(b72, evenements$date_effet[1L] <- D("2027-06-01"))
+AX72 <- D("2026-03-31")
+verifier_egal("#72 (c) et (d) : qualité de BE1 refusée : P1 et P2 arrêtés (hors_domaine, DO1) ; date d'effet de EV1 refusée (D02c) : critère beneficiaire_non_identifie, P1 seul arrêté ; critère sans_evenement, P1 et P2 arrêtés",
+              list(c72(eng(within(b72, beneficiaires$qualite[1L] <- "ami"), p)), c72(eng(within(b72, beneficiaires$qualite[1L] <- "ami"), p, P2)),
+                   b2_vue(b72d, AX72)$bilan$refus_tables$motif,
+                   c72(eng(b72d, p, arrete = AX72))[[2L]], c72(eng(b72d, p, P2, arrete = AX72))[[2L]],
+                   c72(eng(b72d, p72_se, arrete = AX72))[[2L]], c72(eng(b72d, p72_se, P2, arrete = AX72))[[2L]]),
+              list(list(NA_real_, "hors_domaine", "DO1", 1L), list(NA_real_, "hors_domaine", "DO1", 1L), "D02c",
+                   "D02c", NA_character_, "D02c", "D02c"))
+# (e) table sans liste de lignes lues par unité (garanties_souscrites, § 5.8) : rattachement non
+# établi, P1 et P2 arrêtés sans identifiant ; (f) salaire de AF1 négatif (D09) : lu pour un
+# capital reconstitué (DO1 sans fixation) : P1 arrêté (D09, DO1) après le calcul du capital ;
+# capital fixé : l'affiliation n'est pas lue, P1 calculé (témoin)
+b72f <- within(b2_base_capital(capital = NA), affiliations$salaire_reference[1L] <- -30000)
+verifier_egal("#72 (e) et (f) : type_assiette de GS1 refusé : P1 et P2 arrêtés sans identifiant ; salaire de AF1 refusé (D09) : capital reconstitué, P1 arrêté (D09, DO1) ; capital fixé, P1 calculé",
+              list(c72(eng(within(b72, garanties_souscrites$type_assiette[1L] <- "autre"), p)),
+                   c72(eng(within(b72, garanties_souscrites$type_assiette[1L] <- "autre"), p, P2)),
+                   c72(eng(b72f, p)), c72(eng(within(b72, affiliations$salaire_reference[1L] <- -30000), p))),
+              list(list(NA_real_, "hors_domaine", NA_character_, 1L), list(NA_real_, "hors_domaine", NA_character_, 1L),
+                   list(NA_real_, "D09", "DO1", 1L), t72))
+# (g) paiement PR1 négatif (D09) saisi après l'arrêté (2026-02-01, invisible à A, visibilité
+# déterminée) : la ligne n'est pas dans la vue, le calcul ne la lit pas : P1 calculé (103 936,
+# capital revalorisé sans le paiement) ; (h) date d'ouverture de DO1 hors bornes (D02c), à
+# l'extraction, critère sans_evenement (6 mois) : la partition de DO1 dépend de la date refusée,
+# P1 et P2 arrêtés (D02c, DO1)
+b72g <- within(b72, { prestations$montant[1L] <- -10000; prestations$date_saisie[1L] <- D("2026-02-01")
+                      prestations$date_reglement[1L] <- D("2026-02-01") })
+b72h <- within(b72, dossiers$date_ouverture[1L] <- D("1890-01-01"))
+verifier_egal("#72 (g) et (h) : paiement refusé invisible à l'arrêté : P1 calculé (103 936) ; date d'ouverture de DO1 refusée, critère sans_evenement, à l'extraction : P1 et P2 arrêtés (D02c, DO1)",
+              list(c72(eng(b72g, p)), c72(eng(b72h, p72_se, arrete = AX72)), c72(eng(b72h, p72_se, P2, arrete = AX72))),
+              list(list(103936, NA_character_, NULL, NULL), list(NA_real_, "D02c", "DO1", 1L), list(NA_real_, "D02c", "DO1", 1L)),
+              tolerance = TOL)

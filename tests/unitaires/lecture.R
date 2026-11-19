@@ -59,7 +59,7 @@ base <- lapply(d$tables$table, function(t) table_de(t, valeurs_de))
 names(base) <- d$tables$table
 base$extraction <- data.frame(date_extraction = as.Date("2026-12-31"),
                               debut_historique = as.Date("2017-01-01"),
-                              type_organisme = "mutuelle", version_dictionnaire = "1.5",
+                              type_organisme = "mutuelle", version_dictionnaire = "1.6",
                               devise = "EUR", stringsAsFactors = FALSE)
 base$catastrophes <- table_de("catastrophes", function(type) vide_de(type, 0L))   # aucune ligne
 base$victimes <- table_de("victimes", function(type) vide_de(type, 3L))           # colonnes vides
@@ -390,24 +390,24 @@ verifier("colonne obligatoire absente : table rendue sans elle (le contrôle des
 e <- refus_de(lire_avec("extraction", list(version_dictionnaire = "\"1.2\"", date_extraction = "31/12/2026")))
 verifier("version 1.2 : extraction_invalide, avant le type des autres colonnes",
          !is.null(e) && e$motif == "extraction_invalide" && identical(e$recu, "1.2"))
-e <- refus_de(lire_avec("extraction", list(version_dictionnaire = "\"1.4\"")))
-verifier("version 1.4, version précédente : extraction_invalide, attendu 1.5, reçu 1.4",
-         !is.null(e) && e$motif == "extraction_invalide" && identical(e$attendu, "1.5") &&
-           identical(e$recu, "1.4"))
+e <- refus_de(lire_avec("extraction", list(version_dictionnaire = "\"1.5\"")))
+verifier("version 1.5, version précédente : extraction_invalide, attendu 1.6, reçu 1.5",
+         !is.null(e) && e$motif == "extraction_invalide" && identical(e$attendu, "1.6") &&
+           identical(e$recu, "1.5"))
 verifier_refus("table extraction de deux lignes : extraction_invalide",
-               lire_avec("extraction", list(version_dictionnaire = "\"1.5\""), lignes = 2L),
+               lire_avec("extraction", list(version_dictionnaire = "\"1.6\""), lignes = 2L),
                "extraction_invalide")
-e <- refus_de(lire_avec("extraction", list(version_dictionnaire = "\"1.5\"", date_extraction = "31/12/2026")))
+e <- refus_de(lire_avec("extraction", list(version_dictionnaire = "\"1.6\"", date_extraction = "31/12/2026")))
 verifier("extraction : date illisible, refus d'appel type_incompatible (seule table contrôlée strictement à la lecture)",
          !is.null(e) && e$motif == "type_incompatible" && e$table == "extraction" && e$colonne == "date_extraction")
 e <- refus_de(lire_avec("extraction", list(version_dictionnaire = "\"\"")))
 verifier("extraction : version \"\" (chaîne vide) : extraction_invalide, reçu \"\"",
          !is.null(e) && e$motif == "extraction_invalide" && identical(e$recu, ""))
-csv_ext <- sub("\n", ",inconnue\n", csv_de("extraction", list(version_dictionnaire = "\"1.5\"")), fixed = TRUE)
+csv_ext <- sub("\n", ",inconnue\n", csv_de("extraction", list(version_dictionnaire = "\"1.6\"")), fixed = TRUE)
 csv_ext <- sub("\n$", ",\"v\"\n", csv_ext)
 verifier_refus("extraction : colonne inconnue : colonne_inconnue (refus d'appel)",
                lire_base(dossier_avec(list(extraction.csv = csv_ext))), "colonne_inconnue")
-e <- refus_de(lire_base(dossier_avec(list(extraction.csv = csv_de("extraction", list(version_dictionnaire = "\"1.5\"",
+e <- refus_de(lire_base(dossier_avec(list(extraction.csv = csv_de("extraction", list(version_dictionnaire = "\"1.6\"",
                                                                                      date_extraction = "x")),
                                           contrats.csv = sub("\"x\"", "\"x", csv_de("contrats"))))))
 verifier("extraction contrôlée une fois tous les fichiers lus : un fichier mal formé est refusé d'abord",

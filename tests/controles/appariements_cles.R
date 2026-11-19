@@ -75,6 +75,8 @@ LISTE_BLANCHE <- c(
     "code",
   "R/engagement.R | hypothese_vue | lignes %in% h [[ j ] ] $ lignes" =
     "indice",
+  "R/engagement.R | hypothese_vue | x $ colonnes %in% colonnes" =
+    "metadonnee",
   "R/engagement.R | .salaire_d03c | match ( college , cles )" =
     "code",
   "R/engagement.R | .reconstituer_capital | lien %in% parametres $ liens_conjoint_majoration" =
@@ -89,6 +91,14 @@ LISTE_BLANCHE <- c(
     "code",
   "R/engagement.R | calculer_engagement | l $ table %in% tables" =
     "metadonnee",
+  "R/engagement.R | calculer_engagement | l $ table %in% differees" =
+    "metadonnee",
+  "R/engagement.R | arret_refus_ligne | cle %in% pa $ candidats [[ i ] ]" =
+    "metadonnee",
+  "R/engagement.R | arret_refus_ligne | t %in% listees" =
+    "metadonnee",
+  "R/engagement.R | arret_refus_ligne | t %in% evaluees" =
+    "metadonnee",
   "R/risque_en_cours.R | .retrospective | a %in% dates_pas" =
     "code",
   "R/risque_en_cours.R | .retrospective | a %in% ajouter_mois ( rep ( e , n_pas ) , periode * seq_len ( n_pas ) )" =
@@ -96,6 +106,10 @@ LISTE_BLANCHE <- c(
   "R/risque_en_cours.R | provisions_collectives | match ( rownames ( s ) , ids )" =
     "cle_garantie : ids reunit contrat_g et hypothese : contrats apparies par apparier_cles() sur des garanties retenues par cle_renseignee() (gs, ct, i_gs)",
   "R/donnees.R | cles_lignes_hypothese | colonne %in% cles" =
+    "metadonnee",
+  "R/donnees.R | .inconnues_d03i | c1 %in% names ( ctx $ base [[ t ] ] )" =
+    "metadonnee",
+  "R/donnees.R | .appliquer_h_d03g | liens $ table_cible %in% cibles" =
     "metadonnee",
   "R/donnees.R | cles_lignes_hypothese | lignes %in% placees" =
     "indice",
@@ -117,20 +131,22 @@ LISTE_BLANCHE <- c(
     "code",
   "R/donnees.R | lire_declarations | names ( sa ) %in% names ( .EMPLOIS_D02C )" =
     "metadonnee",
-  "R/donnees.R | lire_declarations | paste ( ex $ motif , ex $ famille ) %in% paste ( .EXCEPTIONS_FAMILLE $ motif , .EXCEPTIONS_FAMILLE $ famille )" =
+  "R/donnees.R | lire_declarations | paste ( ex $ motif , ex $ famille ) %in% paste ( exceptions $ motif , exceptions $ famille )" =
     "metadonnee",
+  "R/donnees.R | lire_declarations | ex $ motif %in% parents" =
+    "code",
+  "R/donnees.R | lire_declarations | hy $ motif %in% motifs_s" =
+    "code",
+  "R/donnees.R | lire_declarations | hy $ motif %in% parents" =
+    "code",
   "R/donnees.R | lire_declarations | cle_s [ signalement ] %in% cle_s [ duplicated ( cle_s ) | duplicated ( cle_s , fromLast = TRUE ) ]" =
     "metadonnee",
   "R/donnees.R | .application_d03g | FAMILLES_CALCUL %in% ex $ famille [ ex $ motif == \"D03g\" ]" =
     "metadonnee",
   "R/donnees.R | .application_d03g | REFERENTIELS %in% hy $ referentiel [ hy $ motif == \"D03g\" ]" =
     "metadonnee",
-  "R/donnees.R | .motif_admet | motif %in% names ( .TRAITEMENTS_SOUS_CAS_D10 )" =
-    "metadonnee",
   "R/donnees.R | .motif_admet | match ( motif , dico $ defauts $ code )" =
     "metadonnee",
-  "R/donnees.R | .motif_admet | motif %in% dico $ defauts $ code" =
-    "code",
   "R/donnees.R | .motif_admet | t %in% eclater_champ ( x )" =
     "code",
   "R/donnees.R | .contexte | dico $ tables $ table %in% names ( donnees )" =
@@ -241,6 +257,12 @@ LISTE_BLANCHE <- c(
     "metadonnee",
   "R/donnees.R | .causes_enjeu | dr $ colonne %in% ecart $ colonne" =
     "metadonnee",
+  "R/donnees.R | .refus_ligne_lus | m [ 2L ] %in% .DATES_VISIBILITE [[ m [ 1L ] ] ]" =
+    "metadonnee",
+  "R/donnees.R | .refus_ligne_lus | tc %in% valeur" =
+    "metadonnee",
+  "R/donnees.R | .refus_p_empechee | t %in% names ( empechees )" =
+    "metadonnee",
   "R/donnees.R | .refus_p_empechee | t %in% ctx $ tables" =
     "metadonnee",
   "R/donnees.R | .refus_p_empechee | t %in% deja" =
@@ -295,6 +317,14 @@ LISTE_BLANCHE <- c(
     "a_instruire : somme_parts : beneficiaires.id_dossier \"\" regroupe par rowsum() (ok <- !is.na(dossier) seul) ; releve, #164",
   "R/donnees.R | .regle_v | dossier %in% brut [ nd ]" =
     "a_instruire : somme_parts : id_dossier \"\" des beneficiaires non determines apparie a \"\" ; releve, #164",
+  "R/donnees.R | .regle_v_parente_posterieure | liens $ table %in% ctx $ tables" =
+    "metadonnee",
+  "R/donnees.R | .regle_v_parente_posterieure | liens $ table_cible %in% ctx $ tables" =
+    "metadonnee",
+  "R/donnees.R | .regle_v_parente_posterieure | fx %in% k $ lignes" =
+    "indice",
+  "R/donnees.R | .regle_v_parente_posterieure | fx %in% couvertes" =
+    "indice",
   "R/donnees.R | .regle_v_manquants | match ( vv ( \"evenements\" , \"type_evenement\" ) , te $ type_evenement )" =
     "code",
   "R/donnees.R | .regle_v_doublons | match ( groupe , groupe )" =
@@ -315,7 +345,7 @@ LISTE_BLANCHE <- c(
     "code",
   "R/donnees.R | .garantie_en_vigueur3 | v ( \"code_garantie\" ) %in% code" =
     "code",
-  "R/donnees.R | .couverture3 | x %in% k $ lignes" =
+  "R/donnees.R | .colonne_partie | x %in% k $ lignes" =
     "indice",
   "R/donnees.R | .regle_v_ages | seq_len ( nrow ( ctx $ base [[ t ] ] ) ) %in% r $ p [ ! is.na ( age ) & ( age < mini | age > maxi ) ]" =
     "indice",
@@ -369,9 +399,9 @@ LISTE_BLANCHE <- c(
     "indice",
   "R/donnees.R | .verdict_d11 | seq_len ( ns ) %in% cv $ i [ ! cv $ certain ]" =
     "indice",
-  "R/donnees.R | .verdict_d11 | tc %in% lit_m" =
+  "R/donnees.R | .ecarter_maintien_d11 | tc %in% lit_m" =
     "metadonnee",
-  "R/donnees.R | .verdict_d11 | cause %in% z" =
+  "R/donnees.R | .ecarter_maintien_d11 | cause %in% z" =
     "code",
   "R/donnees.R | .echec_d12 | match ( types [ k ] , te $ type_evenement )" =
     "code",
@@ -421,6 +451,8 @@ LISTE_BLANCHE <- c(
     "indice",
   "R/donnees.R | .composantes_dossiers | type [ dernier_b ] %in% service" =
     "code",
+  "R/donnees.R | .rattacher_composante | type [ l ] %in% x" =
+    "code",
   "R/donnees.R | .placer | \"X\" %in% t" =
     "code",
   "R/donnees.R | .placer | ex $ famille %in% familles" =
@@ -465,6 +497,24 @@ LISTE_BLANCHE <- c(
     "indice",
   "R/donnees.R | .enjeu_elementaire | table %in% names ( .LUS_LIGNE_ENJEU )" =
     "metadonnee",
+  "R/donnees.R | .enjeu_elementaire | d %in% g_refus" =
+    "indice",
+  "R/donnees.R | .enjeu_elementaire | dd $ dossier %in% g_refus" =
+    "indice",
+  "R/donnees.R | .enjeu_elementaire | match ( i , rl $ porteur )" =
+    "indice",
+  "R/donnees.R | .enjeu_elementaire | match ( vus , rl $ porteur )" =
+    "indice",
+  "R/donnees.R | .enjeu_elementaire | match ( indet , rl $ porteur )" =
+    "indice",
+  "R/donnees.R | .enjeu_elementaire | vus %in% rl $ porteur" =
+    "indice",
+  "R/donnees.R | .enjeu_elementaire | match ( s , rl $ porteur )" =
+    "indice",
+  "R/donnees.R | .enjeu_elementaire | indet %in% rl $ porteur" =
+    "indice",
+  "R/donnees.R | .enjeu_elementaire | match ( si , rl $ porteur )" =
+    "indice",
   "R/donnees.R | .divergences_d01a | colonne %in% cle" =
     "metadonnee",
   "R/donnees.R | .divergences_d01a | k %in% k [ lignes ]" =

@@ -23,6 +23,38 @@
 .TOLERANCE_TARIF_VIE <- 1e-12
 .TAUX_DU_TARIF <- "taux_tarif"
 
+# --- Sélections communes aux deux champs -------------------------------------------
+
+# Garanties souscrites deces de P3 (indices dans la vue) : retenues, d'identifiant renseigné
+# (une garantie souscrite d'identifiant manquant ou vide n'est d'aucune population et une clé
+# manquante ou vide ne s'apparie à rien : cle_renseignee(), apparier_cles(), #154, règles (ii)
+# et (iii)), hors couverture exclue pour risque_en_cours (erratum v1.0.13 : garantie souscrite,
+# ou contrat, exclu ; garanties_couverture_exclue(), seule implémentation, appelée ici seulement).
+# Seule sélection, lue par provisions_individuelles(), provisions_collectives() et
+# calculer_risque_en_cours() avant leurs filtres propres.
+.gs_deces_p3 <- function(vue) {
+  vv <- function(t, c1) valeurs_vue(vue, t, c1)
+  gs <- which(vue$retenu$garanties_souscrites & vv("garanties_souscrites", "code_garantie") %in% "deces" &
+                cle_renseignee(vv("garanties_souscrites", "id_garantie_souscrite")))
+  gs[is.na(apparier_cles(vv("garanties_souscrites", "id_garantie_souscrite")[gs],
+                         garanties_couverture_exclue(vue, "risque_en_cours")))]
+}
+
+# Cotisations que P3 peut lire (liste des lignes lues du § 5.8, désignée par l'erratum du projet
+# de dictionnaire 1.6, § 11.5, #72) : logique sur les lignes de `cotisations`, faux pour une
+# cotisation de nature connue hors de .NATURES_PRORATA ou de fin_periode connue au plus A (`a`,
+# jours). Une valeur manquante, cachée (clés seules lisibles pour une cotisation hors de la vue,
+# E17-3) ou refusée par un refus de portée ligne (lignes_refus_ligne_vue() de `donnees`) est
+# inconnue : la cotisation est admise (lecture de Kleene). Seul filtre, lu par
+# provisions_collectives() (source S2) et calculer_risque_en_cours() (arrêt par unité).
+.cotisations_admises_p3 <- function(vue, a) {
+  nature <- valeurs_vue(vue, "cotisations", "nature_mouvement")
+  fin <- as.numeric(valeurs_vue(vue, "cotisations", "fin_periode"))
+  nature[lignes_refus_ligne_vue(vue, "cotisations", "nature_mouvement")] <- NA
+  fin[lignes_refus_ligne_vue(vue, "cotisations", "fin_periode")] <- NA
+  !(!is.na(nature) & !(nature %in% .NATURES_PRORATA)) & !(!is.na(fin) & fin <= a)
+}
+
 # --- Contrats individuels -----------------------------------------------------------
 
 # Survie depuis la date d'effet `e` (jours) aux dates `dates` (jours, au moins e, au plus la
@@ -115,7 +147,8 @@
 # ou si l'arrêté n'est pas une date de pas ou si la prime est unique),
 # nature_primes, date_effet, date_terme, date_souscription), echeancier (flux à l'arrêté,
 # taux retenu), arret (motif né de la famille : hors_axes, parametre_non_determine ; NA),
-# identifiant (premier contrat en cause), hors_axes (lignes d'indicateur
+# identifiant (contrat en cause : le plus petit des contrats à paramètre non déterminé, tri
+# radix, indépendant de l'ordre des lignes ; le premier rencontré pour les autres motifs), hors_axes (lignes d'indicateur
 # hors_axes_derniere_valeur de indicateur_hors_axes(), une par contrat extrapolé, dans l'ordre
 # des contrats ; NULL sans extrapolation), sortis (contrats sortis de la population par un
 # sinistre ou par leur date_fin au plus A, dont une ligne qui décide de la sortie porte une
@@ -139,25 +172,27 @@ provisions_individuelles <- function(vue, plan, tables, temoin) {
   vide <- list(contrats = NULL, echeancier = NULL, arret = NA_character_, identifiant = NA_character_,
                sortis = character(0))
   # garanties souscrites deces retenues, version en vigueur à l'arrêté, de contrats individuels
-  # couverture exclue (erratum v1.0.13) : garantie souscrite, ou contrat, exclu pour risque_en_cours
-  # hors de la population (garanties_couverture_exclue(), seule implémentation), avant toute lecture ;
-  # une garantie souscrite d'identifiant manquant ou vide n'est d'aucune population et une clé
-  # manquante ou vide ne s'apparie à rien (cle_renseignee(), apparier_cles(), #154, règles (ii) et (iii))
-  gs <- which(vue$retenu$garanties_souscrites & vv("garanties_souscrites", "code_garantie") %in% "deces" &
-                cle_renseignee(vv("garanties_souscrites", "id_garantie_souscrite")))
-  gs <- gs[is.na(apparier_cles(vv("garanties_souscrites", "id_garantie_souscrite")[gs],
-                               garanties_couverture_exclue(vue, "risque_en_cours")))]
+  # (.gs_deces_p3() : couverture exclue hors de la population, avant toute lecture)
+  gs <- .gs_deces_p3(vue)
+  # dates tenues pour inconnues par D02a sous H (dates_inconnues_vue(), `donnees` ; spécification
+  # `donnees` v1.9, § 9.4, #90) : version de garantie (R4) ou contrat (R1 à R3) dont la mise en
+  # vigueur ou la fin n'est pas connue ; gardés dans la population, ils arrêtent le poste
+  # (parametre_non_determine), sauf sortie par une condition connue (sinistre de l'assuré)
+  inconnue <- function(t, c1) dates_inconnues_vue(vue, t, c1)
+  g_inconnue <- (inconnue("garanties_souscrites", "date_effet") | inconnue("garanties_souscrites", "date_fin"))[gs]
   g_effet <- as.numeric(vv("garanties_souscrites", "date_effet"))[gs]
   g_fin <- as.numeric(vv("garanties_souscrites", "date_fin"))[gs]
-  gs <- gs[g_effet <= a & (is.na(g_fin) | g_fin > a)]
+  gs <- gs[g_inconnue | (g_effet <= a & (is.na(g_fin) | g_fin > a))]
   i_ct <- apparier_cles(vv("garanties_souscrites", "id_contrat")[gs], vv("contrats", "id_contrat"))
   garde <- !is.na(i_ct)
   garde[garde] <- vue$retenu$contrats[i_ct[garde]] &
     vv("contrats", "nature_contrat")[i_ct[garde]] %in% "individuel" &
-    as.numeric(vv("contrats", "date_effet"))[i_ct[garde]] <= a
+    (as.numeric(vv("contrats", "date_effet"))[i_ct[garde]] <= a | inconnue("contrats", "date_effet")[i_ct[garde]])
   gs <- gs[garde]
   i_ct <- i_ct[garde]
   if (length(gs) == 0L) return(vide)
+  date_inconnue <- (inconnue("garanties_souscrites", "date_effet") | inconnue("garanties_souscrites", "date_fin"))[gs] |
+    (inconnue("contrats", "date_effet") | inconnue("contrats", "date_terme") | inconnue("contrats", "date_fin"))[i_ct]
   id_gs <- as.character(vv("garanties_souscrites", "id_garantie_souscrite")[gs])
   id_ct <- as.character(vv("contrats", "id_contrat")[i_ct])
   assure <- as.character(vv("contrats", "id_assure")[i_ct])
@@ -197,7 +232,11 @@ provisions_individuelles <- function(vue, plan, tables, temoin) {
                as.numeric(vv("sinistres", "date_survenance")) <= a)
   # assuré du contrat et du sinistre : une clé manquante ou vide ne s'apparie à rien (#154, règle (iii))
   sinistre <- !is.na(apparier_cles(assure, s_id[s]))
-  sinistre_inconnu <- !is.na(apparier_cles(assure, s_id[vue$retenu$sinistres & exclu$sinistres]))
+  # sinistre retenu, non exclu, deces ou iad, de survenance tenue pour inconnue (D02a sous H, R8 et
+  # R9) : peut être survenu au plus A, inconnu comme un sinistre exclu
+  s_survenance <- vue$retenu$sinistres & !exclu$sinistres & vv("sinistres", "nature_sinistre") %in% c("deces", "iad") &
+    inconnue("sinistres", "date_survenance")
+  sinistre_inconnu <- !is.na(apparier_cles(assure, s_id[(vue$retenu$sinistres & exclu$sinistres) | s_survenance]))
   # hypothèses de la vue appliquées aux lignes lues pour le contrat (source S2, § 5.8, #87), sur
   # la population avant la sortie par un sinistre : la ligne de contrats du contrat, celle de
   # assures de son assuré, celles de sinistres de cet assuré, visibles ou non à A (statut).
@@ -218,15 +257,25 @@ provisions_individuelles <- function(vue, plan, tables, temoin) {
   s2 <- s2_cand(list(lecture_unites("contrats", "id_contrat", id_ct[cand]),
                      lecture_unites("assures", "id_assure", assure[cand]),
                      lecture_unites("sinistres", "id_assure", assure[cand])))
-  decide_sin <- nzchar(s2_cand(list(lecture_unites("sinistres", "id_assure", assure[cand], admises = s_decide))))
-  decide_fin <- nzchar(s2_cand(list(lecture_unites("contrats", "id_contrat", id_ct[cand]))))
+  # sortie par un sinistre : seules les hypothèses qui portent sur une colonne lue pour l'établir
+  # (assuré, nature, survenance, date de saisie) en décident (garde du point 1 de #112 étendue,
+  # #90 : D02a de R10, sur la déclaration et l'instruction, n'en décide pas ; D02b et D03g portent
+  # date_saisie ; sous R8 et R9 la survenance est tenue pour inconnue, la sortie n'est pas établie)
+  lues_sin <- c("id_assure", "nature_sinistre", "date_survenance", "date_saisie")
+  decide_sin <- nzchar(s2_cand(list(lecture_unites("sinistres", "id_assure", assure[cand], admises = s_decide,
+                                                   lues = lues_sin))))
+  # partie de fin du contrat : seules les hypothèses qui portent sur l'une de ses colonnes en
+  # décident (garde du point 1 de #112, M661 ; spécification `donnees` v1.9, § 9.4 : D02a sur
+  # date_terme, R2, ou date_debut_gestion, R3, n'en décide pas ; sur date_fin, R1, oui)
+  fin_ligne <- Filter(function(q) q$table == "contrats", parties_ligne())[[1L]]$colonnes
+  decide_fin <- nzchar(s2_cand(list(lecture_unites("contrats", "id_contrat", id_ct[cand], lues = fin_ligne))))
   # voie de sortie observée (erratum v1.0.19, réserve R6) : un sinistre de l'assuré retenu, non
   # exclu, deces ou iad, survenu au plus A, dont la ligne ne porte aucune hypothèse de la vue,
   # ou une date_fin au plus A dont la partie de fin n'en porte pas, établit la sortie sans
   # hypothèse : pas de restitution
   s_id_tous <- as.character(vv("sinistres", "id_sinistre"))
   s_place <- nzchar(hypotheses_vue_unites(vue, .REFERENTIEL_P3, .POSTE_P3, "risque_en_cours", length(s_id_tous),
-                                          list(lecture_unites("sinistres", "id_sinistre", s_id_tous))))
+                                          list(lecture_unites("sinistres", "id_sinistre", s_id_tous, lues = lues_sin))))
   sinistre_obs <- !is.na(apparier_cles(assure, s_id[s_decide & !exclu$sinistres & !s_place]))
   fin_obs <- par_fin & !decide_fin
   vide$sortis <- sort(unique(id_ct[((fin > a & sinistre & decide_sin) | (par_fin & decide_fin)) & !sinistre_obs & !fin_obs]),
@@ -234,12 +283,12 @@ provisions_individuelles <- function(vue, plan, tables, temoin) {
   en_cours <- fin > a & !sinistre
   if (!any(en_cours)) return(vide)
   k <- which(en_cours)
-  manque <- k[sinistre_inconnu[k] | is.na(capital$valeur[k]) | capital$ambigu[k] | capital$exclu[k] | is.na(age_fin$valeur[k]) |
+  manque <- k[sinistre_inconnu[k] | date_inconnue[k] | is.na(capital$valeur[k]) | capital$ambigu[k] | capital$exclu[k] | is.na(age_fin$valeur[k]) |
                 age_fin$ambigu[k] | is.na(naissance[k]) | is.infinite(fin[k]) |
                 (methode == "prospective_prime_declaree" & !is.na(periode[k]) & (is.na(prime_p$valeur[k]) | prime_p$ambigu[k])) |
                 (methode == "prospective_prime_declaree" & prime_p$exclu[k])]
   if (length(manque)) return(list(contrats = NULL, echeancier = NULL, arret = "parametre_non_determine",
-                                  identifiant = id_ct[manque[1L]]))
+                                  identifiant = sort(id_ct[manque], method = "radix")[1L]))
   # taux du tarif ; hypothèse D03h déclarée s'il manque
   tarif <- vv("garanties_souscrites", "taux_technique_tarif")[gs]
   d03h <- rep(FALSE, length(gs))
@@ -382,11 +431,12 @@ provisions_individuelles <- function(vue, plan, tables, temoin) {
 # l'arrêté ; convention instant_date, § 2.6). Statut : approximation (restituée
 # approximation_numerique, § 5.5).
 # Ordre d'évaluation d'une cotisation (erratum v1.0.16, #92) : (1) fin_periode connue et au
-# plus A : hors du calcul, quels que soient debut_periode et les traitements déclarés de D03f
-# et de D02a (l'hypothèse D03f n'est pas lue pour la ligne, décision E16-2) ; (2) borne
-# manquante : traitement déclaré de D03f ; (3) bornes connues, fin postérieure à A, période
-# inversée ou de longueur nulle (fin - début + 1 <= 0, D02a, sous conserver comme sous H) :
-# prorata non déterminé, arrêt parametre_non_determine (lecture de Kleene, MA1) ; (4) prorata.
+# plus A : hors du calcul, quels que soient debut_periode et le traitement déclaré de D03f
+# (l'hypothèse D03f n'est pas lue pour la ligne, décision E16-2) ; (2) borne manquante, ou
+# tenue pour inconnue (D02a sous H, R7 : les deux bornes sont inconnues dans la vue et D03f
+# s'enchaîne, #90) : traitement déclaré de D03f ; (3) bornes connues, fin postérieure à A,
+# période inversée ou de longueur nulle (fin - début + 1 <= 0, D02a sous conserver) : prorata
+# non déterminé, arrêt parametre_non_determine (lecture de Kleene, MA1) ; (4) prorata.
 # Période couverte manquante (D03f, erratum v1.0.15) : `exclure` pour risque_en_cours : ligne
 # hors du calcul (vue$exclu) ; hypothèse H (comptes_sociaux, poste P3 ou `tous`) appliquée à la
 # ligne : les deux bornes sont celles de periode_cotisation_regle() (`donnees`), contrat sous
@@ -413,14 +463,9 @@ provisions_collectives <- function(vue, plan) {
     structure(data.frame(id_contrat = id_contrat, montant = montant, stringsAsFactors = FALSE),
               arret = arret, identifiant = identifiant, hypothese = hypothese)
   }
-  # couverture exclue (erratum v1.0.13) : garantie souscrite, ou contrat, exclu pour risque_en_cours
-  # hors du champ (garanties_couverture_exclue(), seule implémentation), avant toute lecture du contrat ;
-  # une garantie souscrite d'identifiant manquant ou vide n'est d'aucune population et une clé
-  # manquante ou vide ne s'apparie à rien (cle_renseignee(), apparier_cles(), #154, règles (ii) et (iii))
-  gs <- which(vue$retenu$garanties_souscrites & vv("garanties_souscrites", "code_garantie") %in% "deces" &
-                cle_renseignee(vv("garanties_souscrites", "id_garantie_souscrite")))
-  gs <- gs[is.na(apparier_cles(vv("garanties_souscrites", "id_garantie_souscrite")[gs],
-                               garanties_couverture_exclue(vue, "risque_en_cours")))]
+  # garanties souscrites deces (.gs_deces_p3() : couverture exclue hors du champ, avant toute
+  # lecture du contrat)
+  gs <- .gs_deces_p3(vue)
   ct <- which(vue$retenu$contrats & !is.na(apparier_cles(vv("contrats", "id_contrat"),
                                                          vv("garanties_souscrites", "id_contrat")[gs])))
   ct <- ct[!(vv("contrats", "nature_contrat")[ct] %in% "individuel")]
@@ -462,13 +507,11 @@ provisions_collectives <- function(vue, plan) {
   # n'est pas lue (clés seules lisibles pour une cotisation cachée)
   id_champ <- sort(unique(as.character(vv("contrats", "id_contrat"))[ct]), method = "radix")
   id_gs <- as.character(vv("garanties_souscrites", "id_garantie_souscrite"))[gs]
-  c_nature <- vv("cotisations", "nature_mouvement")
-  c_fin <- as.numeric(vv("cotisations", "fin_periode"))
   s2 <- hypotheses_vue_unites(vue, .REFERENTIEL_P3, .POSTE_P3, "risque_en_cours", length(id_champ), list(
     lecture_unites("contrats", "id_contrat", id_champ),
     lecture_unites("cotisations", "id_garantie_souscrite", id_gs,
                    unite = apparier_cles(vv("garanties_souscrites", "id_contrat")[gs], id_champ),
-                   admises = !(!is.na(c_nature) & !(c_nature %in% .NATURES_PRORATA)) & !(!is.na(c_fin) & c_fin <= a))))
+                   admises = .cotisations_admises_p3(vue, a))))
   hypothese <- id_champ[nzchar(joindre_codes(c("", "D03f")[1L + !is.na(apparier_cles(id_champ, contrat[sous_h]))], s2))]
   # (4) prorata des cotisations de fin postérieure à A (bornes connues, ou par la règle H)
   garde <- fin > a
@@ -531,7 +574,10 @@ provisions_collectives <- function(vue, plan) {
 # un contrat collectif, jugement_expert sous l'hypothèse D03f ou une hypothèse de la vue),
 # nombre_dossiers 0. Poste arrêté (bilan, ou hors_axes,
 # parametre_non_determine, dont la période couverte non déterminée d'une cotisation du champ
-# (b)) : cellule `arrete`, premier contrat en cause dans l'attribut `identifiant_arret`. Un
+# (b) ; ligne de portée ligne de refus_tables dont une ligne refusée est lue pour un contrat,
+# arret_refus_ligne(), #72, lignes en cause dans l'attribut `refus_ligne`) : cellule `arrete`,
+# contrat en cause dans l'attribut `identifiant_arret` (le plus petit, tri radix, pour l'arrêt
+# par unité et pour parametre_non_determine du champ (a) ; le premier rencontré sinon). Un
 # montant NA dans le total est une erreur interne.
 calculer_risque_en_cours <- function(vue, plan, tables, catalogue, garantie, poste) {
   if (!identical(garantie, "deces") || !identical(poste, .POSTE_P3)) {
@@ -574,9 +620,45 @@ calculer_risque_en_cours <- function(vue, plan, tables, catalogue, garantie, pos
     list(cellules = cel, dossiers = dossiers, echeanciers = echeancier_vide, indicateurs = vide_ind,
          contrats = contrats_vides)
   }
-  pa <- postes_a_arreter(catalogue, vue$bilan, plan$postes, parties_ligne())$postes
+  pa_tout <- postes_a_arreter(catalogue, vue$bilan, plan$postes, parties_ligne())
+  pa <- pa_tout$postes
   motif_bilan <- pa$motif_arret[pa$garantie == garantie & pa$poste == poste]
   if (length(motif_bilan) == 1L && !is.na(motif_bilan)) return(arreter(motif_bilan, NA_character_))
+  # arrêt par les lignes de portée ligne de refus_tables (#72 ; arret_refus_ligne(), condition
+  # (2)), avant toute lecture des valeurs des contrats. Unités : contrats retenus d'une garantie
+  # souscrite deces de P3, sur-ensemble des deux champs avant leurs filtres de
+  # population (lecture de Kleene : la population dépend de valeurs que la ligne refusée peut
+  # porter) ; lignes lues du § 5.8 : ligne de contrats ; contrat individuel, ligne de assures de
+  # son assuré et lignes de sinistres de cet assuré (champ (a)) ; contrat collectif, cotisations
+  # de ses garanties souscrites deces (champ (b)) ; nature du contrat refusée : les deux
+  # (garanties souscrites deces : .gs_deces_p3(), même sélection que provisions_individuelles()
+  # et provisions_collectives()) ; cotisations lues : celles qu'admet .cotisations_admises_p3()
+  # (natures emission, annulation, regularisation ; fin_periode connue au plus A retirée ;
+  # valeur refusée tenue pour inconnue, donc admise), même filtre que la source S2 du champ (b)
+  vv <- function(t, c1) valeurs_vue(vue, t, c1)
+  gs3 <- .gs_deces_p3(vue)
+  gs_ct <- as.character(vv("garanties_souscrites", "id_contrat")[gs3])
+  ct3 <- which(vue$retenu$contrats & !is.na(apparier_cles(vv("contrats", "id_contrat"), gs_ct)))
+  id_ct3 <- as.character(vv("contrats", "id_contrat")[ct3])
+  nature <- vv("contrats", "nature_contrat")[ct3]
+  nature[lignes_refus_ligne_vue(vue, "contrats", "nature_contrat")[ct3]] <- NA
+  individuel <- ifelse(is.na(nature), NA, nature %in% "individuel")
+  assure3 <- as.character(vv("contrats", "id_assure")[ct3])
+  u_gs <- apparier_cles(gs_ct, id_ct3)
+  lect3 <- list(lecture_unites("contrats", "id_contrat", id_ct3),
+                lecture_unites("assures", "id_assure", assure3, garde = !(individuel %in% FALSE)),
+                lecture_unites("sinistres", "id_assure", assure3, garde = !(individuel %in% FALSE)),
+                lecture_unites("cotisations", "id_garantie_souscrite",
+                               as.character(vv("garanties_souscrites", "id_garantie_souscrite")[gs3]),
+                               unite = u_gs, garde = !is.na(u_gs) & !(individuel[u_gs] %in% TRUE),
+                               admises = .cotisations_admises_p3(vue, as.numeric(vue$bilan$vue$date_arrete))))
+  ar <- arret_refus_ligne(vue, pa_tout, paste(garantie, poste, sep = "/"), "risque_en_cours", length(ct3), lect3, id_ct3,
+                          unique(vapply(lect3, `[[`, "", "table")))
+  if (length(ar$lignes)) {
+    res <- arreter(ar$motif, ar$identifiant)
+    attr(res$cellules, "refus_ligne") <- ar$lignes
+    return(res)
+  }
   ind <- provisions_individuelles(vue, plan, tables, FALSE)
   if (!is.na(ind$arret)) return(arreter(ind$arret, ind$identifiant))
   col <- provisions_collectives(vue, plan)

@@ -11,6 +11,11 @@
 #      tableaux T1 a T20), types_evenements.csv (section 4 et automate), parametres.csv
 #      (section 5), defauts.csv (section 9), filiation.csv (annexe A.1), controles.csv
 #      (section 1.10, tableau sous "**Codes des controles de structure**", version 1.5) ;
+#      version 1.6 : colonnes signalement (colonne "Signalement" du tableau de la section 9,
+#      jetons joints par ";") et parent (code sans sa lettre quand ce code est une ligne du
+#      tableau, vide sinon) de defauts.csv, une ligne par sous-cas lettre ; colonne traitement
+#      (colonne "Traitement" de la section 1.10) et portee ligne_table ("ligne, ou table pour une
+#      colonne de cle") de controles.csv ;
 #   4. codes des controles de structure (ADR 0010, annotation de la cinquieme serie, (e)) :
 #      disjoints des codes de defauts.csv ; leur intersection avec MOTIFS_REFUS
 #      (R/outils.R) est exactement colonne_absente, colonne_inconnue, type_incompatible ;
@@ -24,7 +29,7 @@
 #     l'automate (etat_depuis : puces de la section 4, dans leur ordre ; etat_vers : effet)
 #     et la table v1 d'une colonne renommee (designee par la cible), la portee d'un code de
 #     controle (colonne, table, ligne ; "colonne, ou table pour une colonne de cle" donne
-#     colonne_table), sauf :
+#     colonne_table ; "ligne, ou table pour une colonne de cle" donne ligne_table), sauf :
 #   - les sous-parametres des defauts, transcrits a la main : chacun doit etre cite entre
 #     accents graves dans la cellule d'intensite, dans l'ordre de la cellule, sans porter le
 #     nom d'une table ni d'une modalite, et tout autre jeton de la cellule (hors le
@@ -38,7 +43,7 @@
 #     toujours lu comme tel, jamais comme sous-parametre : un sous-parametre de ce nom est
 #     refuse (reserve R1, M138), si bien que le texte ne peut pas en nommer un ; s'il le
 #     faisait, son oubli dans defauts.csv ne serait pas detecte ;
-#   - les regles de derivation decrivent le texte de la version 1.5 : une version nouvelle
+#   - les regles de derivation decrivent le texte de la version 1.6 : une version nouvelle
 #     peut demander de les etendre (le script echoue alors sur la forme non reconnue ou sur
 #     l'ecart, il ne valide pas en silence ce qu'il ne lit pas) ;
 #   - le sens des cellules transcrites mot pour mot (domaine, effet, objet...) n'est pas
@@ -81,16 +86,17 @@ COLONNES_CSV <- list(
   parametres.csv = c("code_garantie", "parametre", "unite", "dimension", "obligatoire",
                      "condition"),
   defauts.csv = c("code", "defaut", "tables", "colonnes", "detection", "traitements",
-                  "parametre_intensite", "sous_parametres"),
+                  "parametre_intensite", "sous_parametres", "signalement", "parent"),
   filiation.csv = c("table_de", "colonne_de", "table_v1", "colonne_v1", "statut", "motif"),
-  controles.csv = c("code", "objet", "detection", "portee", "motif_refus_appel")
+  controles.csv = c("code", "objet", "detection", "portee", "motif_refus_appel", "traitement")
 )
 # Motifs de refus d'appel qui sont aussi des codes de controle de structure (meme anomalie,
 # deux niveaux : ADR 0010, annotation de la cinquieme serie, (e)).
 MOTIFS_DE_FORME <- c("colonne_absente", "colonne_inconnue", "type_incompatible")
 # Portee d'un code de controle : cellule du texte (section 1.10) et valeur de controles.csv.
-PORTEES_TEXTE <- c("colonne", "table", "colonne, ou table pour une colonne de cl\u00e9", "ligne")
-PORTEES_CSV <- c("colonne", "table", "colonne_table", "ligne")
+PORTEES_TEXTE <- c("colonne", "table", "colonne, ou table pour une colonne de cl\u00e9", "ligne",
+                   "ligne, ou table pour une colonne de cl\u00e9")
+PORTEES_CSV <- c("colonne", "table", "colonne_table", "ligne", "ligne_table")
 # Jetons de domaine admis sans etre une modalite de leur colonne ni avoir un autre sens
 # connu (liste fermee, chacun motive) :
 #   - TRUE : valeur logique citee dans une condition (structure_cotisation_sante) ;
@@ -410,6 +416,8 @@ derive_defauts <- function(lignes, tables, colonnes, types) {
   data.frame(
     code = code, defaut = t$c2, tables = tables_de, colonnes = t$c3, detection = detection,
     traitements = traitements,
+    signalement = vapply(vide_si_tiret(t$c7), function(x) joindre(jetons(x)), ""),
+    parent = vapply(code, function(x) { s <- sub("[a-z]$", "", x); if (s != x && s %in% code) s else "" }, ""),
     parametre_intensite = vapply(t$c6, function(x) { j <- jetons(x); if (length(j)) j[1L] else "" }, ""),
     cellule_intensite = t$c6, ligne_texte = attr(t, "lignes"),
     stringsAsFactors = FALSE, row.names = NULL)
@@ -531,6 +539,7 @@ derive_controles <- function(lignes) {
     }, ""),
     portee = portee,
     motif_refus_appel = vapply(vide_si_tiret(t$c5), function(x) joindre(jetons(x)), ""),
+    traitement = t$c6,
     ligne_texte = attr(t, "lignes"), stringsAsFactors = FALSE, row.names = NULL)
 }
 
@@ -688,7 +697,8 @@ comparer("colonnes.csv", cc, colonnes_t, COLONNES_CSV$colonnes.csv, chemin("colo
 defauts_t <- derive_defauts(lignes, tables_t, colonnes_t, types_t)
 de <- csv$defauts.csv
 comparer("defauts.csv", de, defauts_t,
-         c("code", "defaut", "tables", "colonnes", "detection", "traitements", "parametre_intensite"),
+         c("code", "defaut", "tables", "colonnes", "detection", "traitements", "parametre_intensite",
+           "signalement", "parent"),
          chemin("defauts.csv"), chemin_texte)
 
 filiation_t <- derive_filiation(lignes, tables_t, colonnes_t, types_t, parametres_t)

@@ -16,8 +16,8 @@ source(file.path(racine, "tests", "b2_bases.R"))
 # <donnees>/<plan>/<arrete>.
 COUPLES_REFERENCE <- data.frame(
   couple = c("J1", "J2", "J3", "J4", "C1", "C2", "C3", "C4", "V1", "V2"),
-  donnees = c("v1-modeste-01", "v1-modeste-01", "v1-modeste-02", "v1-modeste-02", rep("construite-deces-01", 4L),
-              "v1-modeste-03", "v1-modeste-03"),
+  donnees = c("v1-modeste-04", "v1-modeste-04", "v1-modeste-05", "v1-modeste-05", rep("construite-deces-02", 4L),
+              "v1-modeste-06", "v1-modeste-06"),
   plan = c(rep("recommandees", 6L), "alternatives", "alternatives", "recommandees", "recommandees"),
   arrete = c("2025-12-31", "2024-12-31", "2025-12-31", "2024-12-31", "2025-12-31", "2025-01-01", "2025-12-31",
              "2025-01-01", "2025-12-31", "2024-12-31"),
@@ -25,7 +25,7 @@ COUPLES_REFERENCE <- data.frame(
   issue = rep("#67", 10L),
   stringsAsFactors = FALSE)
 ETATS_COUPLE <- c("a_produire", "produit")
-BASES_CONSTRUITES <- "construite-deces-01"
+BASES_CONSTRUITES <- "construite-deces-02"
 DOSSIER_REFERENCES <- file.path(racine, "tests", "reference")
 VERSION_REFERENCES <- 1L
 # Tolérance mixte (ADR 0011, point 8) : |x - r| <= EPS_REFERENCE x max(1, |r|) ; jugement
@@ -107,7 +107,7 @@ COUPLES_D07B <- c("J2", "J4", "V1", "V2")
 # Exclusion de D12 pour engagement des plans de référence (spécification `donnees` v1.6, § 8.12 ;
 # M337, visa de principe du mainteneur du 13 novembre 2026) : action `conserver` (la ligne est
 # gardée, l'enjeu restitué), déclarée dans le seul plan du couple dont le bilan détecte D12 à
-# l'arrêté (V2 : SI0181 de v1-modeste-03, suite visible commençant par une sortie au 2024-12-31),
+# l'arrêté (V2 : SI0181 de v1-modeste-06, suite visible commençant par une sortie au 2024-12-31),
 # dont le calcul est refusé sans elle (declaration_manquante), ajoutée aux exclusions du plan ;
 # les autres plans sont inchangés.
 EXCLUSION_D12_REFERENCE <- list(list(motif = "D12", famille = "engagement", action = "conserver"))
@@ -121,7 +121,7 @@ entrees_couple <- function(i) {
   arrete <- as.Date(COUPLES_REFERENCE$arrete[i])
   tables <- tables_reference(donnees)
   if (donnees %in% BASES_CONSTRUITES) {
-    base <- switch(donnees, "construite-deces-01" = b2_base_construite_deces_01())
+    base <- switch(donnees, "construite-deces-02" = b2_base_construite_deces_02())
     plan <- b2_plan_reference(nom_plan, arrete, tables)
   } else {
     stopifnot(nom_plan == "recommandees")

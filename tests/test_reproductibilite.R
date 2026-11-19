@@ -107,10 +107,9 @@ for (nom in names(JEUX_V1)) {
     }))
   }
   # date de visa renseignée (onzième série, (d) ; M188) : le contrôle bascule de lui-même quand la
-  # session renseigne la date de visa du jeu (DATE_VISA_V1, DATE_VISA_V1_03) et réécrit le jeu
+  # session renseigne la date de visa des jeux (DATE_VISA_V1_6, M677) et réécrit les jeux
   if (is.na(date_visa_v1(nom))) {
-    attendu_echec(paste0(nom, " : date_visa renseignée"),
-                  paste0(if (identical(nom, "v1-modeste-03")) "#69" else "#19", ", visa du mainteneur en attente (M188)"),
+    attendu_echec(paste0(nom, " : date_visa renseignée"), "#60, visa du mainteneur en attente (M188, M677)",
                   !is.na(m$date_visa))
   } else {
     verifier(paste0(nom, " : date_visa renseignée"), !is.na(m$date_visa))

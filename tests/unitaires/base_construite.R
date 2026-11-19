@@ -1,4 +1,4 @@
-# Tests de la base construite `construite-deces-01` et de ses plans de référence (spécification
+# Tests de la base construite `construite-deces-02` et de ses plans de référence (spécification
 # de B2, docs/specifications/b2-capital-deces-v1.md, § 7.8, critères R.1 à R.4 ; ADR 0011,
 # points 11 à 13 ; #67) sur les familles de calcul, avant calculer_provisions(). R.5 et R.7
 # (calculer_provisions()) sont dans tests/unitaires/calculer_provisions.R ; R.6 (couverture des
@@ -25,14 +25,14 @@ P2 <- "capitaux_non_reclames"
 P3 <- "provision_mathematique_temporaire_deces"
 A1 <- D("2025-12-31")
 A0 <- D("2025-01-01")
-base <- b2_base_construite_deces_01()
+base <- b2_base_construite_deces_02()
 COUPLES_C <- list(C1 = list(plan = "recommandees", arrete = A1), C2 = list(plan = "recommandees", arrete = A0),
                   C3 = list(plan = "alternatives", arrete = A1), C4 = list(plan = "alternatives", arrete = A0))
 plan_c <- function(k) b2_plan_reference(COUPLES_C[[k]]$plan, COUPLES_C[[k]]$arrete, tb)
 vue_c <- function(b, p) b2_vue(b, p$arrete, p$donnees, p$conventions)
 
-section("base construite construite-deces-01 : composition (R.1, § 7.8.1)")
-verifier("quinze tables du dictionnaire 1.5, colonnes dans l'ordre du dictionnaire",
+section("base construite construite-deces-02 : composition (R.1, § 7.8.1)")
+verifier("quinze tables du dictionnaire 1.6, colonnes dans l'ordre du dictionnaire",
          identical(names(base), names(b2_base_capital())) &&
            all(vapply(names(base), function(t) identical(names(base[[t]]), b2_dico$colonnes$colonne[b2_dico$colonnes$table == t]), NA)))
 cas <- c("R1", "R3", "R4", "R5A", "R5B")
@@ -216,3 +216,32 @@ for (k in names(COUPLES_C)) {
   verifier(paste0("(R.4) ", k, " : dossiers et contrats de la base construite = bases isolées (", paste(names(isolees), collapse = ", "),
                   ")"), all(ok))
 }
+
+# M704 (Q3 ; spécification `donnees` v1.9, § 9.6, D03i) : à l'arrêté égal à l'extraction
+# (2026-03-31, taux de revalorisation 2026 de 0,024 ajouté au plan C1), une date de D03i
+# manquante sous `conserver` arrête les postes des familles qui la conservent et lisent la
+# colonne (motif D03i), sans erreur interne (avant : stop() de facteur_revalorisation() sur
+# prestations.date_reglement) ; sous `exclure`, les postes sont calculés ; en déclaration mixte
+# (engagement exclu), seuls les postes des familles sous conserver sont arrêtés
+e_m704 <- entrees_couple(which(COUPLES_REFERENCE$couple == "C1"))
+e_m704$plan$arrete <- e_m704$base$extraction$date_extraction
+e_m704$plan$revalorisation$capital_deces$taux_par_annee <- c(e_m704$plan$revalorisation$capital_deces$taux_par_annee, `2026` = 0.024)
+m704 <- function(table, colonne, i, actions) {
+  b <- e_m704$base; b[[table]][[colonne]][i] <- NA
+  p <- e_m704$plan
+  p$donnees$exclusions <- c(p$donnees$exclusions, Map(function(f, a) list(motif = "D03i", famille = f, action = a),
+                                                     ns$FAMILLES_CALCUL, actions))
+  r <- tryCatch(calculer_provisions(b, p, e_m704$tables), error = function(e) conditionMessage(e))
+  if (is.character(r)) return(r)
+  pv <- r$provisions[r$provisions$segment == "ensemble" & r$provisions$poste != "total", ]
+  stats::setNames(ifelse(pv$statut_calcul == "arrete", pv$motif_arret, pv$statut_calcul), pv$poste)
+}
+conserver4 <- rep("conserver", 4L)
+verifier_egal("M704, C1 à l'extraction : prestations.date_reglement[1] -> P2 et P1 arrêtés (D03i) ; garanties_souscrites.date_effet[2] -> les trois ; contrats.date_effet[1] -> P3 ; cotisations.date_mouvement[1] -> P3 ; sous exclure, tous calculés ; mixte (engagement exclu) sur garanties_souscrites.date_effet[2] : P3 seul",
+              unname(lapply(list(m704("prestations", "date_reglement", 1L, conserver4), m704("garanties_souscrites", "date_effet", 2L, conserver4),
+                                 m704("contrats", "date_effet", 1L, conserver4), m704("cotisations", "date_mouvement", 1L, conserver4),
+                                 m704("prestations", "date_reglement", 1L, rep("exclure", 4L)),
+                                 m704("garanties_souscrites", "date_effet", 2L, c("exclure", "conserver", "conserver", "conserver"))),
+                            function(x) if (is.null(names(x))) x else unname(x[c(P2, P3, P1)]))),
+              list(c("D03i", "calcule", "D03i"), c("D03i", "D03i", "D03i"), c("calcule", "D03i", "calcule"),
+                   c("calcule", "D03i", "calcule"), c("calcule", "calcule", "calcule"), c("calcule", "D03i", "calcule")))

@@ -233,7 +233,7 @@ verifier_egal("témoin rétrospectif calculé seulement à la demande (temoin = 
               list(NA_real_, NA_real_, 2924.6224668679, TRUE), tolerance = TOL)
 
 verifier_egal("témoin rétrospectif : NA pour une prime unique (CTI1 de la base construite à l'arrêté 2025-01-01, avant : -1 010,1010101010), à l'effet comme après ; contrat à primes périodiques (CTI3) : recoupement de Norberg inchangé ; provisions inchangées (#80)",
-              { bc <- b2_base_construite_deces_01()
+              { bc <- b2_base_construite_deces_02()
                 r <- ns$provisions_individuelles(b2_vue(bc, A1), plan_p3(), tb, TRUE)$contrats
                 u <- r[r$id_contrat == "CTI1", ]; pe <- r[r$id_contrat == "CTI3", ]
                 bu <- b2_base_p3(); effet_u <- ns$provisions_individuelles(b2_vue(bu, D("2024-01-01")), plan_p3(D("2024-01-01")), tb, TRUE)$contrats
@@ -305,10 +305,15 @@ deux_ind <- local({ b <- b2_base_p3()
   b$parametres <- rbind(b$parametres[1:2, ], transform(b$parametres[1:2, ], id_garantie_souscrite = "GS4"), b$parametres[3:4, ])
   b$assures <- rbind(b$assures, transform(b$assures, id_assure = "AS4"))
   b })
-verifier_egal("(3.16) (k) deux contrats individuels identiques (CT2 / GS2, CT4 / GS4) : sans exclusion 9 573,2410611304 (2 x T1) exact ; capital_forfaitaire de GS4 exclu : arrêt CT4 ; de GS2 et GS4 : arrêt CT2 (premier contrat)",
+verifier_egal("(3.16) (k) deux contrats individuels identiques (CT2 / GS2, CT4 / GS4) : sans exclusion 9 573,2410611304 (2 x T1) exact ; capital_forfaitaire de GS4 exclu : arrêt CT4 ; de GS2 et GS4 : arrêt CT2 (plus petit identifiant en cause)",
               list(excl_p3(deux_ind, plan_p3()), excl_p3(deux_ind, plan_p3(), list(c("GS4", "capital_forfaitaire"))),
                    excl_p3(deux_ind, plan_p3(), list(GS2_CF, c("GS4", "capital_forfaitaire")))),
               list(calcule_p3(2 * v_t1), arret_p3("CT4"), arret_p3()), tolerance = TOL)
+# identifiant en cause indépendant de l'ordre des lignes (audit de #72, m2) : garanties souscrites
+# et contrats en ordre inverse (GS4 avant GS2) ; avant la correction, arrêt CT4 (premier rencontré)
+deux_inv <- within(deux_ind, { garanties_souscrites <- garanties_souscrites[3:1, ]; contrats <- contrats[3:1, ] })
+verifier_egal("(3.16) (l) base de (k), lignes de contrats et de garanties_souscrites en ordre inverse, capital_forfaitaire de GS2 et GS4 exclu : arrêt CT2, comme dans l'ordre direct (plus petit identifiant, tri radix)",
+              excl_p3(deux_inv, plan_p3(), list(GS2_CF, c("GS4", "capital_forfaitaire"))), arret_p3())
 
 section("risque_en_cours : assuré et sinistres exclus pour risque_en_cours (erratum v1.0.10, critère (3.18), § 5.5), #82")
 
@@ -603,3 +608,69 @@ for (k in names(cles154)) {
                        " : CT4 seul au champ, hypothèse vide (CT3 hors de l'attribut)"),
                 list(gs154(cles154[[k]]), gs154(NULL)), list(list("CT4", character(0)), list(c("CT3", "CT4"), "CT3")))
 }
+
+section("risque_en_cours : arrêt par unité sur un refus de valeur de portée ligne (#72 ; spécification donnees v1.9, § 9.2 ; erratum du projet de dictionnaire 1.6, § 11.5)")
+
+# Unités de P3 : contrats d'une garantie souscrite deces (sur-ensemble des deux champs) ; lignes
+# lues du § 5.8 : contrats, et assures et sinistres de l'assuré (individuel), cotisations des
+# garanties deces (collectif) ; nature refusée : les deux. P3 n'est arrêté que si une ligne
+# refusée est lue pour un contrat (avant #72 : dès qu'il lit la colonne). Base : CT2 individuel
+# (AS2), CT3 collectif (cotisation CO1 de 1 200), primes annuelles ; témoin calculé.
+c72 <- function(r) list(r$cellules$montant, r$cellules$motif_arret, attr(r$cellules, "identifiant_arret"),
+                        attr(r$cellules, "refus_ligne"))
+p3_72 <- b2_plan(tb)
+b3_72 <- b2_base_p3(periodicite = "annuelle", prime = 500,
+                    cotisation = data.frame(debut = D("2025-07-01"), fin = D("2026-06-30"), montant = 1200))
+t3_72 <- c72(risque(b3_72, p3_72))
+as9_72 <- within(b3_72, assures <- rbind(assures, transform(assures, id_assure = "AS9", date_naissance = D("1800-01-01"))))
+verifier_egal("#72 : P3 témoin 1 603,72713169517 ; naissance de AS2 (assuré de CT2) hors bornes (D02c) : arrêté (D02c, CT2) ; cotisation CO1 de CT3 négative (D09) : arrêté (D09, CT3) ; nature de CT2 refusée : arrêté (hors_domaine, CT2) ; naissance hors bornes de AS9, assuré d'aucun contrat : calculé, égal au témoin",
+              list(t3_72[[1L]], c72(risque(within(b3_72, assures$date_naissance[1L] <- D("1800-01-01")), p3_72)),
+                   c72(risque(within(b3_72, cotisations$montant[1L] <- -1200), p3_72)),
+                   c72(risque(within(b3_72, contrats$nature_contrat[1L] <- "zzz"), p3_72))[2:3],
+                   c72(risque(as9_72, p3_72)), b2_vue(as9_72, p3_72$arrete)$bilan$refus_tables$portee),
+              list(1603.72713169517, list(NA_real_, "D02c", "CT2", 1L), list(NA_real_, "D09", "CT3", 1L),
+                   list("hors_domaine", "CT2"), t3_72, "ligne"), tolerance = TOL)
+# nature de CT2 refusée et naissance de son assuré AS2 hors bornes : CT2 est une unité possible
+# des deux champs, les lignes de contrats et de assures sont lues : les deux lignes de
+# refus_tables arrêtent P3 (contrats, puis assures, ordre du bilan)
+verifier_egal("#72 : nature de CT2 refusée et naissance de AS2 hors bornes : P3 arrêté (hors_domaine, CT2), lignes 1 (contrats.nature_contrat) et 2 (assures.date_naissance) en cause",
+              c72(risque(within(b3_72, { contrats$nature_contrat[1L] <- "zzz"; assures$date_naissance[1L] <- D("1800-01-01") }), p3_72)),
+              list(NA_real_, "hors_domaine", "CT2", 1:2))
+# ligne refusée exclue pour la famille : CO1 sans début de période (D03f), exclue pour
+# risque_en_cours, au montant négatif (D09) : la ligne n'est pas lue (§ 5.3), P3 calculé, égal
+# à sa valeur quand le montant de CO1 est positif (1 008,65863854448)
+ex72 <- list(exclusions = data.frame(motif = "D03f", famille = ns$FAMILLES_CALCUL,
+                                     action = ifelse(ns$FAMILLES_CALCUL == "risque_en_cours", "exclure", "conserver"),
+                                     stringsAsFactors = FALSE))
+b3x_72 <- within(b3_72, cotisations$debut_periode[1L] <- NA)
+verifier_egal("#72 : cotisation CO1 de montant refusé (D09), exclue pour risque_en_cours (D03f) : non lue, P3 calculé (1 008,65863854448, comme au montant positif)",
+              list(c72(risque(within(b3x_72, cotisations$montant[1L] <- -1200), p3_72, declarations = ex72)),
+                   c72(risque(b3x_72, p3_72, declarations = ex72))[[1L]]),
+              list(list(1008.65863854448, NA_character_, NULL, NULL), 1008.65863854448), tolerance = TOL)
+# identifiant en cause de l'arrêt par unité indépendant de l'ordre des lignes (audit de #72, m2 ;
+# arret_refus_ligne(), plus petit identifiant, tri radix) : nature de CT2 et de CT3 refusée, lignes
+# de contrats dans l'ordre direct puis inverse ; avant la correction, CT2 puis CT3
+nat72 <- within(b3_72, contrats$nature_contrat <- "zzz")
+verifier_egal("#72 : nature de CT2 et de CT3 refusée : arrêt (hors_domaine, CT2), lignes de contrats dans l'ordre direct comme en ordre inverse",
+              list(c72(risque(nat72, p3_72))[2:3], c72(risque(within(nat72, contrats <- contrats[2:1, ]), p3_72))[2:3]),
+              list(list("hors_domaine", "CT2"), list("hors_domaine", "CT2")))
+# cotisations lues par P3 (liste du § 5.8 désignée par l'erratum du projet de dictionnaire 1.6,
+# § 11.5 ; avis d'actuary sur #72, R1) : natures emission, annulation, regularisation, cotisation de
+# fin_periode connue au plus A (2025-12-31) retirée ; une nature refusée est inconnue, donc admise
+# (lecture de Kleene). Cotisation CO9 ajoutée à GS3 (CT3 collectif), sans montant (manquant_obligatoire,
+# portée ligne) ou de nature hors domaine (hors_domaine). Avant la correction : les quatre cas arrêtés.
+co9_72 <- function(nature, debut, fin, mt, mouvement = debut) {
+  within(b3_72, cotisations <- rbind(cotisations, transform(cotisations, id_cotisation = "CO9", nature_mouvement = nature,
+                                                           debut_periode = D(debut), fin_periode = D(fin),
+                                                           date_mouvement = D(mouvement), montant = mt)))
+}
+verifier_egal("#72 : CO9 sans montant (manquant_obligatoire) : encaissement 2021 (nature non lue) et emission 2021 (fin_periode au plus A) : P3 calculé, égal au témoin ; emission 2025-07-01 / 2026-06-30 (lue) : arrêté (manquant_obligatoire, CT3)",
+              list(c72(risque(co9_72("encaissement", "2021-01-01", "2021-12-31", NA_real_), p3_72)),
+                   c72(risque(co9_72("emission", "2021-01-01", "2021-12-31", NA_real_), p3_72)),
+                   c72(risque(co9_72("emission", "2025-07-01", "2026-06-30", NA_real_), p3_72))),
+              list(t3_72, t3_72, list(NA_real_, "manquant_obligatoire", "CT3", 1L)), tolerance = TOL)
+verifier_egal("#72 : CO9 de nature refusée (hors_domaine), montant 100 : période 2025-07-01 / 2026-06-30, nature inconnue, admise : arrêté (hors_domaine, CT3) ; période 2021 (fin_periode au plus A) : retirée, P3 calculé, égal au témoin ; emission du 2021-01-01 de période 1800-01-01 / 1800-12-31 (bornes hors bornes, D02c) : fin_periode refusée, inconnue, admise : arrêté (D02c, CT3, lignes debut_periode et fin_periode)",
+              list(c72(risque(co9_72("zzz", "2025-07-01", "2026-06-30", 100), p3_72)),
+                   c72(risque(co9_72("zzz", "2021-01-01", "2021-12-31", 100), p3_72)),
+                   c72(risque(co9_72("emission", "1800-01-01", "1800-12-31", 100, "2021-01-01"), p3_72))),
+              list(list(NA_real_, "hors_domaine", "CT3", 1L), t3_72, list(NA_real_, "D02c", "CT3", 1:2)), tolerance = TOL)

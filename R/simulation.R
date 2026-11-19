@@ -69,8 +69,10 @@ VERSION_LOI_VRAIE <- 2L
 # restriction de D01b aux encaissements antérieurs à l'extraction change la sortie des entrées
 # encore admises dont un encaissement est daté de l'extraction ; elles sont admises sans
 # incrément, aucun jeu n'ayant été publié hors de la branche et les jeux versionnés étant
-# inchangés (décision du mainteneur, 9 novembre 2026).
-VERSION_SIMULATEUR <- 1L
+# inchangés (décision du mainteneur, 9 novembre 2026). Version 2 (dictionnaire 1.6, M678) :
+# colonne garanties_souscrites.maintien_deces, constante du simulateur (FALSE sur la garantie
+# deces d'un contrat collectif, manquante ailleurs), hors de la loi vraie.
+VERSION_SIMULATEUR <- 2L
 
 # Catalogue des défauts que le simulateur sait injecter (dictionnaire, § 9), dans l'ordre de
 # leur rang : la graine d'un défaut est `graines$defauts + rang`. `parametre` : intensité
@@ -1315,6 +1317,9 @@ print.jeu_simule <- function(x, ...) {
     terme_prestation = c(ifelse(inc, g$incapacite$terme_prestation, ifelse(inv, g$invalidite$terme_prestation, NA)), sans),
     periodicite_cotisation = c(rep(g$periodicite_cotisation, nc * 3L), ind$periodicite),
     taux_technique_tarif = c(rep(NA_real_, nc * 3L), ind$taux_tarif),
+    # maintien de la garantie décès (dictionnaire 1.6, P6) : constante du simulateur, hors de la
+    # loi vraie (M502, M514, M678 ; spécification `donnees` v1.9, § 9.7), sans tirage
+    maintien_deces = c(ifelse(dc, FALSE, NA), sans),
     clause_type_beneficiaire = c(ifelse(dc, g$deces$clause_type_beneficiaire, NA),
                                  rep("conjoint_enfants_heritiers", ni))), nc * 3L + ni)
   par_gs <- list(

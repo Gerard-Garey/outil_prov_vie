@@ -18,7 +18,7 @@ egal_mixte <- function(x, r) is.numeric(x) && length(x) == length(r) && all(abs(
 tb <- b2_tables()
 tid <- par_identifiant(tb)
 A1 <- D("2025-12-31")
-base <- b2_base_construite_deces_01()
+base <- b2_base_construite_deces_02()
 p_c1 <- b2_plan_reference("recommandees", A1, tb)
 r_c1 <- calculer_provisions(base, p_c1, tid)
 couple <- function(nom) {
@@ -103,23 +103,25 @@ verifier("V1 : total deces = P1 + P2 + P3 (mesures m24 : 541 440,13 + 552 375,52
 
 section("total arrêté et arrêt de poste (spécification de B2, § 6.1 et § 6.2 ; ADR 0010, point 11)")
 p3 <- j3$r$provisions
-verifier_egal("J3 (v1-modeste-02) : P1 et P2 arrêtés (D09), P3 calculé (0), total arrêté poste_arrete:<postes triés>, montant et nombre NA",
+# #72 (spécification `donnees` v1.9, § 9.2 ; erratum du projet de dictionnaire 1.6, § 2 et
+# § 11.5) : le refus D09 de PR00010 (indemnité journalière du dossier DO0014, garantie
+# incapacite) a la portée ligne ; aucune unité de P1 ni de P2 ne lit la ligne : P1, P2 et le
+# total sont calculés, à 0 exact (avant #72 : arrêtés D09, total poste_arrete:...)
+verifier_egal("J3 (v1-modeste-05) : P1, P2 et P3 calculés (0), total calculé (0) ; la ligne refusée PR00010 n'est lue par aucune unité (#72)",
               lapply(c("sinistres_declares_non_regles", "capitaux_non_reclames", "provision_mathematique_temporaire_deces", "total"),
                      function(po) as.list(p3[p3$poste == po, c("montant", "nombre_dossiers", "statut_calcul", "motif_arret")])),
-              list(list(montant = NA_real_, nombre_dossiers = NA_integer_, statut_calcul = "arrete", motif_arret = "D09"),
-                   list(montant = NA_real_, nombre_dossiers = NA_integer_, statut_calcul = "arrete", motif_arret = "D09"),
-                   list(montant = 0, nombre_dossiers = 0L, statut_calcul = "calcule", motif_arret = NA_character_),
-                   list(montant = NA_real_, nombre_dossiers = NA_integer_, statut_calcul = "arrete",
-                        motif_arret = "poste_arrete:capitaux_non_reclames;sinistres_declares_non_regles")))
-verifier_egal("J3 : la ligne de refus_tables du bilan porte postes_arretes (M239)",
-              j3$r$donnees$refus_tables$postes_arretes, "deces/capitaux_non_reclames;deces/sinistres_declares_non_regles")
+              rep(list(list(montant = 0, nombre_dossiers = 0L, statut_calcul = "calcule", motif_arret = NA_character_)), 4L))
+verifier_egal("J3 : la ligne de refus_tables (prestations.montant, D09) est de portée ligne et n'arrête aucun poste : postes_arretes NA (#72 ; avant : P1 et P2)",
+              as.list(j3$r$donnees$refus_tables[, c("table", "colonne", "motif", "portee", "identifiants", "postes_arretes")]),
+              list(table = "prestations", colonne = "montant", motif = "D09", portee = "ligne", identifiants = "PR00010",
+                   postes_arretes = NA_character_))
 # Arrêt né d'une famille : P1 sur un capital à reconstituer sans affiliation (affiliation_non_determinee).
 # Sans affiliation, la survenance n'est couverte par aucun contrat : D11 (S + X, spécification
 # `donnees` v1.6, § 8.7) demande l'exclusion par famille, déclarée `conserver` (la ligne reste lue).
 sans_af <- b2_base_capital(capital = NA)
 sans_af$affiliations <- sans_af$affiliations[0, ]
 p_af <- p_c1
-p_af$donnees$exclusions <- lapply(ns$FAMILLES_CALCUL, function(f) list(motif = "D11", famille = f, action = "conserver"))
+p_af$donnees$exclusions <- lapply(ns$FAMILLES_CALCUL, function(f) list(motif = "D11a", famille = f, action = "conserver"))
 r_af <- calculer_provisions(sans_af, p_af, tid)
 pa <- r_af$provisions
 pr_af <- r_af$fiche$parametres_retenus$postes
@@ -225,26 +227,40 @@ verifier("J3 : enjeu du bilan de la vue retrouvé en retirant les copies par pos
 
 # Rangée de refus (§ 6.4, point 7) : copiée vers les postes de postes_arretes de la même garantie,
 # jointure par (table, colonne, motif) ; motif_fin est une colonne de la partie de ligne de fin
-# des affiliations (§ 4.3) : P1 et P2, qui lisent cette partie, sont arrêtés (§ 6.2 (ii)) et
-# reçoivent la rangée, bien que lectures.csv ne nomme pas affiliations.motif_fin ; P3 ne la reçoit pas.
-b_mf <- base
-b_mf$affiliations$motif_fin[1L] <- "zzz"   # hors domaine : refus de portée colonne
-r_mf <- calculer_provisions(b_mf, p_c1, tid)
+# des affiliations (§ 4.3) : un poste qui lit cette partie la lit (condition (1)), bien que
+# lectures.csv ne nomme pas affiliations.motif_fin. Portée ligne (#72 ; erratum du projet de
+# dictionnaire 1.6, § 11.5) : seuls les postes dont une unité lit la ligne refusée sont arrêtés.
+# AFR5A est l'affiliation lue pour le capital reconstitué du dossier DOR5A, de P1 : P1 arrêté
+# (hors_domaine, DOR5A), postes_arretes = P1, rangées deces de la table copiées vers P1 seul ;
+# témoin AFR1 (dossier DOR1, de capital fixé : affiliation non lue) : aucun arrêt, postes_arretes
+# NA, aucune copie (avant #72 : P1 et P2 arrêtés dans les deux cas, copies vers P1 puis P2)
+mf <- function(id) {
+  b <- base
+  b$affiliations$motif_fin[b$affiliations$id_affiliation == id] <- "zzz"   # hors domaine : refus de portée ligne
+  calculer_provisions(b, p_c1, tid)
+}
+r_mf <- mf("AFR5A")
 en_mf <- r_mf$donnees$enjeu
 co_mf <- en_mf[en_mf$poste != "ensemble", ]
-verifier_egal("refus de portée colonne sur affiliations.motif_fin : P1 et P2 arrêtés (hors_domaine) ; chaque rangée deces de la table est copiée vers P1 puis P2 (ordre du catalogue), aucune vers P3 ni pour la garantie ensemble",
-              list(r_mf$donnees$refus_tables$postes_arretes,
+pr_mf <- r_mf$provisions[r_mf$provisions$segmentation == "ensemble" & r_mf$provisions$poste != "total", ]
+r_mf1 <- mf("AFR1")
+verifier_egal("refus de portée ligne sur affiliations.motif_fin de AFR5A (capital reconstitué de DOR5A, P1) : P1 arrêté (hors_domaine, DOR5A), P2 et P3 calculés ; postes_arretes = P1 ; chaque rangée deces de la table copiée vers P1 seul ; témoin AFR1 (capital fixé) : aucun arrêt, postes_arretes NA, aucune copie",
+              list(r_mf$donnees$refus_tables$portee, r_mf$donnees$refus_tables$postes_arretes,
                    any(catalogue_garanties()$lectures$table == "affiliations" & catalogue_garanties()$lectures$colonne %in% "motif_fin"),
+                   pr_mf$motif_arret, pr_mf$statut_calcul,
+                   local({ pr <- r_mf$fiche$parametres_retenus$postes
+                           ns$lire_liste(charToRaw(pr$parametres[pr$poste == "sinistres_declares_non_regles"]))$identifiant_arret }),
                    local({ u <- unique(co_mf[c("table", "colonne", "motif", "garantie")]); rownames(u) <- NULL; u }),
-                   co_mf$poste,
-                   nrow(co_mf) == 2L * sum(en_mf$poste == "ensemble" & en_mf$garantie == "deces" & en_mf$table %in% "affiliations")),
-              list("deces/capitaux_non_reclames;deces/sinistres_declares_non_regles", FALSE,
+                   unique(co_mf$poste),
+                   nrow(co_mf) == sum(en_mf$poste == "ensemble" & en_mf$garantie == "deces" & en_mf$table %in% "affiliations"),
+                   r_mf1$donnees$refus_tables$postes_arretes, unique(r_mf1$provisions$statut_calcul),
+                   sum(r_mf1$donnees$enjeu$poste != "ensemble" & r_mf1$donnees$enjeu$table %in% "affiliations")),
+              list("ligne", "deces/sinistres_declares_non_regles", FALSE,
+                   c(NA, NA, "hors_domaine"), c("calcule", "calcule", "arrete"), "DOR5A",
                    data.frame(table = "affiliations", colonne = "motif_fin", motif = "hors_domaine", garantie = "deces",
                               stringsAsFactors = FALSE),
-                   rep(c("sinistres_declares_non_regles", "capitaux_non_reclames"),
-                       sum(en_mf$poste == "ensemble" & en_mf$garantie == "deces" & en_mf$table %in% "affiliations")),
-                   TRUE))
-verifier("J3 : la rangée de refus D09 (prestations.montant d'une indemnité journalière, garantie hors du plan) n'est copiée vers aucun poste du décès, bien que P1 et P2 soient dans ses postes_arretes",
+                   "sinistres_declares_non_regles", TRUE, NA_character_, "calcule", 0L))
+verifier("J3 : la rangée de refus D09 (prestations.montant d'une indemnité journalière, garantie hors du plan) n'est copiée vers aucun poste du décès (depuis #72, postes_arretes NA)",
          !any(copies$motif == "D09") && any(en$motif == "D09" & en$action == "refus"))
 
 section("fiche de calcul, empreintes, graine (ADR 0010, points 10, 21 et 22)")
@@ -327,7 +343,7 @@ verifier("format.resultat_provie() : quatre lignes de décomptes ; print() rend 
                                                  length(sortie) == 4L }) &&
            grepl("10 cellule\\(s\\), dont 0", format(r_c1)[2L]))
 
-# --- Base construite construite-deces-01 : critères R.5 et R.7 (spécification de B2, § 7.8.4 et
+# --- Base construite construite-deces-02 : critères R.5 et R.7 (spécification de B2, § 7.8.4 et
 # § 7.8.6), et unités de P3 (élément `contrats` de calculer_risque_en_cours()). Valeurs en dur du
 # § 7.8.4, comparées élément par élément à la tolérance mixte (ADR 0011, r3).
 P1 <- "sinistres_declares_non_regles"
@@ -512,15 +528,21 @@ verifier_egal("(4.1) (c) GSC1 exclue pour engagement (D02a), D10b conserver part
               list(cel_x(r_c, P1)$montant, cel_x(r_c, P2)$montant, egal_mixte(cel_x(r_c, P3)$montant, 4275.9860504871),
                    unique(r_c$donnees$exclusions$action[r_c$donnees$exclusions$motif == "D10b"])),
               list(0, 0, TRUE, "conserver"))
-verifier("(4.1) (d) une seule implémentation : garanties_couverture_exclue() définie une fois, dans R/donnees.R ; appelée par calculer_engagement() et par provisions_individuelles() et provisions_collectives() (calculer_risque_en_cours())",
+verifier("(4.1) (d) une seule implémentation : garanties_couverture_exclue() définie une fois, dans R/donnees.R ; appelée par calculer_engagement() et, pour P3, une seule fois, dans .gs_deces_p3() (seule sélection des garanties souscrites deces de P3, audit de #72, m1), elle-même appelée par provisions_individuelles(), provisions_collectives() et calculer_risque_en_cours()",
          local({
            defs <- unlist(lapply(list.files(file.path(racine, "R"), pattern = "\\.R$", full.names = TRUE), function(f) {
              l <- readLines(f, warn = FALSE)
              if (any(grepl("^garanties_couverture_exclue <- function", l))) basename(f) else NULL
            }))
-           appel <- function(f) grepl("garanties_couverture_exclue(", paste(deparse(f), collapse = "\n"), fixed = TRUE)
-           identical(defs, "donnees.R") && appel(ns$calculer_engagement) && appel(ns$provisions_individuelles) &&
-             appel(ns$provisions_collectives)
+           appels <- function(f, g) {
+             x <- gregexpr(paste0(g, "("), paste(deparse(f), collapse = "\n"), fixed = TRUE)[[1L]]
+             sum(x > 0L)
+           }
+           p3 <- c("provisions_individuelles", "provisions_collectives", "calculer_risque_en_cours")
+           identical(defs, "donnees.R") && appels(ns$calculer_engagement, "garanties_couverture_exclue") >= 1L &&
+             appels(ns$.gs_deces_p3, "garanties_couverture_exclue") == 1L &&
+             all(vapply(p3, function(f) appels(ns[[f]], ".gs_deces_p3") == 1L &&
+                          appels(ns[[f]], "garanties_couverture_exclue") == 0L, NA))
          }))
 decl_a <- p_c1$donnees
 decl_a$exclusions <- excl_x("D02a", "engagement")
@@ -878,9 +900,9 @@ verifier_egal("(4.5) periode_cotisation_regle() : premier jour du mois du mouvem
                                                    "annuelle")), format),
               list(debut = c("2025-08-01", "2025-01-01", "2024-02-01", "2025-12-01", NA, NA, NA),
                    fin = c("2026-07-31", "2025-06-30", "2024-04-30", "2025-12-31", NA, NA, NA)))
-# (h) Limite connue #90 (partie (B), § 5.6) : D02a sous H n'est appliquée par aucun module en B2 ;
-# comportement visé : la date rejetée tenue pour manquante change P2 (126 906,734629181941 sous
-# conserver).
+# (h) C90-1 (#90 ; spécification `donnees` v1.9, § 9.4 ; T7 levé) : D02a sous H, relation R9 :
+# survenance et déclaration de SIR4 tenues pour inconnues dans la vue ; P2 lit la survenance
+# (revalorisation) : arrêt parametre_non_determine, DOR4 ; P1 inchangé (aucun dossier de SIR4).
 b_h90 <- base
 b_h90$sinistres$date_declaration[3L] <- D("2024-06-01")
 p_alt <- b2_plan_reference("alternatives", A1, tb)
@@ -890,12 +912,23 @@ p_c90 <- p_alt
 p_c90$donnees$exclusions <- rbind(p_c90$donnees$exclusions, excl_x("D02a", "aucune"))
 verifier("(4.5) (h) témoin : D02a sur sinistres.date_declaration (SIR4 au 2024-06-01), plan alternatives, D02a conserver : P2 126 906,734629181941",
          egal_mixte(cel_x(calculer_provisions(b_h90, p_c90, tid), P2)$montant, 126906.734629181941))
-attendu_echec("(4.5) (h) D02a sous H : la date rejetée est tenue pour manquante, P2 diffère de sa valeur sous conserver (126 906,734629181941)",
-              "#90",
-              !isTRUE(all.equal(cel_x(calculer_provisions(b_h90, p_h90, tid), P2)$montant, 126906.734629181941, tolerance = 1e-12)))
+# erreur interne gardée (tryCatch) : une date inconnue lue comme une date échoue à l'assertion
+r_h90 <- tryCatch(calculer_provisions(b_h90, p_h90, tid), error = identity)
+verifier("(4.5) (h) C90-1 : D02a sous H (R9, SIR4) : le calcul aboutit (arrêt du poste, jamais une erreur interne)",
+         !inherits(r_h90, "error"))
+id_arret_poste <- function(r, po) {
+  pr <- r$fiche$parametres_retenus$postes
+  ns$lire_liste(charToRaw(pr$parametres[pr$poste == po]))$identifiant_arret
+}
+verifier_egal("(4.5) (h) C90-1 : D02a sous H (R9, SIR4) : P2 arrêté (parametre_non_determine, DOR4), total arrêté ; P1 égal à sa valeur sous conserver ; hypotheses_defaut D02a, 1 ligne par référentiel",
+              list(cel_x(r_h90, P2)$montant, unique(r_h90$provisions$motif_arret[r_h90$provisions$poste == P2]), id_arret_poste(r_h90, P2),
+                   unique(r_h90$provisions$statut_calcul[r_h90$provisions$poste == "total"]),
+                   cel_x(r_h90, P1)$montant == cel_x(calculer_provisions(b_h90, p_c90, tid), P1)$montant,
+                   r_h90$donnees$hypotheses_defaut$nombre[r_h90$donnees$hypotheses_defaut$motif == "D02a"]),
+              list(NA_real_, "parametre_non_determine", "DOR4", "arrete", TRUE, c(1L, 1L)))
 
 section("période inversée ou nulle, cas limites et valeur de D03f d'une cotisation de P3 (critère (4.6), § 5.5, erratum v1.0.16, #92)")
-# Base construite (copies : b2_base_construite_deces_01() n'est pas modifiée), plan recommandees
+# Base construite (copies : b2_base_construite_deces_02() n'est pas modifiée), plan recommandees
 # à A = 2025-12-31 ; D02a déclaré conserver pour les quatre familles, plus D03f quand le cas le
 # dit ; sans segmentation, puis avec nature_contrat et contrat. Valeurs en dur : § 7.7, critère
 # (4.6) ; « avant » mesuré à 88b47f3 (m25).
@@ -930,9 +963,21 @@ for (nom_s in names(segs_45)) {
   r_46b <- calculer_provisions(b_46b, plan_45(sg, ex = d02a_c), tid)
   verifier_egal(paste0("(4.6) (b) COC1 du 2026-03-31 au 2026-01-05 (inversée), D02a conserver : même arrêt (avant : 4 850,670981993908)", et),
                 arret_46(r_46b), arret_attendu)
-  r_46c <- calculer_provisions(b_46b, plan_45(sg, h = hyp_x("D02a")), tid)
-  verifier_egal(paste0("(4.6) (c) cas (b) sous D02a H (deux référentiels, poste tous) : même arrêt", et),
-                arret_46(r_46c), arret_attendu)
+  # (c) sous D02a H, les deux bornes sont tenues pour inconnues et D03f s'enchaîne (#90, R7 ; M688) :
+  # sans D03f déclaré, refus declaration_manquante ; D03f conserver, même arrêt ; D03f H, règle du
+  # dictionnaire (période 2025-07-01 au 2026-06-30, comme (4.5) (c)) ; D03f exclure, COC1 hors du calcul
+  r_46c <- calculer_provisions(b_46b, plan_45(sg, ex = excl_x("D03f", "aucune"), h = hyp_x("D02a")), tid)
+  verifier_egal(paste0("(4.6) (c) cas (b) sous D02a H (deux référentiels, poste tous), D03f conserver : même arrêt ; sans D03f déclaré : refus declaration_manquante", et),
+                c(arret_46(r_46c), motif_de(calculer_provisions(b_46b, plan_45(sg, h = hyp_x("D02a")), tid))),
+                c(arret_attendu, "declaration_manquante"))
+  r_46c_h <- calculer_provisions(b_46b, plan_45(sg, h = c(hyp_x("D02a"), hyp_x("D03f"))), tid)
+  r_46c_x <- calculer_provisions(b_46b, plan_45(sg, ex = excl_x("D03f", "risque_en_cours"), h = hyp_x("D02a")), tid)
+  verifier(paste0("(4.6) (c) cas (b) sous D02a H : D03f H, P3 4 275,986050487058 jugement_expert, hypotheses_defaut D03f 1 ligne par référentiel ; D03f exclure pour risque_en_cours, P3 3 710,670981993908, exclusion D03f d'une ligne", et),
+           egal_mixte(c(cel_x(r_46c_h, P3)$montant, cel_x(r_46c_x, P3)$montant), c(4275.986050487058, 3710.670981993908)) &&
+             identical(cel_x(r_46c_h, P3)$statut_resultat, "jugement_expert") &&
+             identical(r_46c_h$donnees$hypotheses_defaut$nombre[r_46c_h$donnees$hypotheses_defaut$motif == "D03f"], c(1L, 1L)) &&
+             identical(r_46c_x$donnees$exclusions$nombre_lignes[r_46c_x$donnees$exclusions$motif == "D03f" &
+                                                                  r_46c_x$donnees$exclusions$action == "exclure"], 1L))
   r_46d <- calculer_provisions(b_46d, plan_45(sg, ex = d02a_c), tid)
   verifier(paste0("(4.6) (d) COC1 du 2026-03-31 au 2025-06-30 (inversée, fin au plus A) : P3 3 710,670981993908 exact, aucune unité CTC1", et),
            egal_mixte(cel_x(r_46d, P3)$montant, 3710.670981993908) && identical(cel_x(r_46d, P3)$statut_resultat, "exact") &&
@@ -993,6 +1038,203 @@ verifier("(4.6) (j) une seule constante des mois par périodicité dans R/ : MOI
              !exists(".MOIS_PERIODICITE", envir = ns, inherits = FALSE) && !exists(".MOIS_PERIODE_COTISATION", envir = ns, inherits = FALSE)
          }))
 
+section("D02a sous H : dates tenues pour inconnues lues par les familles (#90 ; spécification donnees v1.9, § 9.4)")
+# Base construite, plan recommandees à A = 2025-12-31 ; D02a déclaré en H (deux référentiels, poste
+# tous), témoin sous D02a conserver. Lecture de Kleene : un poste qui lit une date tenue pour
+# inconnue est arrêté, sauf si une condition connue décide ; jamais lu comme une date absente.
+d02a_h <- function(p, h = TRUE) {
+  if (h) p$donnees$hypotheses <- c(p$donnees$hypotheses, hyp_x("D02a"))
+  else p$donnees$exclusions <- rbind(p$donnees$exclusions, excl_x("D02a", "aucune"))
+  p
+}
+# erreur interne gardée (tryCatch) : un poste qui lirait une date inconnue comme une date échoue
+# à l'assertion qui attend son arrêt, jamais par l'arrêt du fichier
+calc_90 <- function(b, h, p = p_c1) tryCatch(calculer_provisions(b, d02a_h(p, h), tid), error = identity)
+arret_90 <- function(r, po) list(unique(r$provisions$motif_arret[r$provisions$poste == po]), id_arret_poste(r, po))
+b90 <- list(
+  # R10 : instruction de SIR5A antérieure à sa déclaration ; DOR5A ouvert, capital reconstitué
+  r10 = { b <- base; b$sinistres$date_instruction[b$sinistres$id_sinistre == "SIR5A"] <- D("2024-08-01"); b },
+  # R5 : AFR5A de fin antérieure à son début ; AFR5A2, même assuré, même contrat, couvre la survenance
+  r5 = { b <- base; a2 <- b$affiliations[b$affiliations$id_affiliation == "AFR5A", ]; a2$id_affiliation <- "AFR5A2"
+         a2$date_debut <- D("2024-01-01"); b$affiliations <- rbind(b$affiliations, a2)
+         i <- b$affiliations$id_affiliation == "AFR5A"; b$affiliations$date_fin[i] <- D("2019-06-01")
+         b$affiliations$date_saisie_fin[i] <- D("2020-02-01"); b$affiliations$motif_fin[i] <- "depart_entreprise"; b },
+  # R2 : terme de CTI1 antérieur à son effet
+  r2 = { b <- base; b$contrats$date_terme[b$contrats$id_contrat == "CTI1"] <- D("2023-12-31"); b },
+  # R9 : sinistre deces SIRI3 de l'assuré ASI3 (CTI3), déclaré avant sa survenance (2025-06-01)
+  r9 = { b <- base; s <- b$sinistres[1L, ]; s$id_sinistre <- "SIRI3"; s$id_assure <- "ASI3"; s$date_survenance <- D("2025-06-01")
+         s$date_declaration <- D("2025-05-01"); s$date_instruction <- as.Date(NA); s$date_saisie <- D("2025-05-02")
+         b$sinistres <- rbind(b$sinistres, s); b })
+r90 <- lapply(b90, function(b) list(h = calc_90(b, TRUE), c = calc_90(b, FALSE)))
+verifier("#90, R10, R5, R2, R9 sous H et sous conserver : chaque calcul aboutit (arrêt ou montant, jamais une erreur interne)",
+         !any(vapply(unlist(r90, recursive = FALSE), inherits, logical(1L), "error")))
+verifier_egal("#90, R10 sous H : instruction de SIR5A inconnue (jamais « non instruit ») : P1 arrêté (parametre_non_determine, DOR5A) ; sous conserver, P1 337 225,959101369779 calculé",
+              list(arret_90(r90$r10$h, P1), egal_mixte(cel_x(r90$r10$c, P1)$montant, 337225.959101369779)),
+              list(list("parametre_non_determine", "DOR5A"), TRUE))
+verifier_egal("#90, R5 sous H : dates de AFR5A inconnues, AFR5A peut couvrir la survenance : P1 arrêté (affiliation_non_determinee, DOR5A) ; sous conserver, AFR5A2 seule couvre, P1 337 225,959101369779 calculé",
+              list(arret_90(r90$r5$h, P1), egal_mixte(cel_x(r90$r5$c, P1)$montant, 337225.959101369779)),
+              list(list("affiliation_non_determinee", "DOR5A"), TRUE))
+verifier_egal("#90, R2 sous H : effet et terme de CTI1 inconnus : P3 arrêté (parametre_non_determine, CTI1) ; sous conserver, CTI1 hors de la population (terme au plus A), P3 1 229,553930931891",
+              list(arret_90(r90$r2$h, P3), egal_mixte(cel_x(r90$r2$c, P3)$montant, 1229.553930931891)),
+              list(list("parametre_non_determine", "CTI1"), TRUE))
+verifier_egal("#90, R9 sous H : survenance de SIRI3 inconnue, sinistre de l'assuré de CTI3 peut-être survenu au plus A : P3 arrêté (parametre_non_determine, CTI3) ; sous conserver, CTI3 sort par le sinistre",
+              list(arret_90(r90$r9$h, P3), unique(r90$r9$c$provisions$statut_calcul[r90$r9$c$provisions$poste == P3])),
+              list(list("parametre_non_determine", "CTI3"), "calcule"))
+# R13 : mise à jour EVX de DOR4 datée avant la survenance, saisie le 2025-04-01 ; dernière information
+# valide précédente : EVY (mise à jour de SIR4, sans dossier, effet 2025-03-01, saisie 2025-03-02) ;
+# critère sans_evenement (12 mois, seuil 2024-12-31) : sous H, DOR4 a un événement récent (date
+# substituée), il passe de P2 à P1 ; sous conserver (date brute 2024-06-01), il reste en P2
+ev_90 <- function(b, id, dossier, effet, saisie) {
+  e <- b$evenements[b$evenements$id_evenement == "EVR4", ]
+  e$id_evenement <- id; e$id_dossier <- dossier; e$type_evenement <- "mise_a_jour"; e$montant <- NA_real_
+  e$date_effet <- D(effet); e$date_saisie <- D(saisie)
+  b$evenements <- rbind(b$evenements, e)
+  b
+}
+b_r13 <- ev_90(ev_90(base, "EVY", NA_character_, "2025-03-01", "2025-03-02"), "EVX", "DOR4", "2024-06-01", "2025-04-01")
+p_se <- p_c1
+p_se$postes$deces$capitaux_non_reclames$parametres$critere <- "sans_evenement"
+p_se$postes$deces$capitaux_non_reclames$parametres$mois_sans_evenement <- 12L
+r_r13 <- list(h = calc_90(b_r13, TRUE, p_se), c = calc_90(b_r13, FALSE, p_se))
+v_r13 <- ns$vue_a_date(b_r13, A1, d02a_h(p_se, TRUE)$donnees, p_se$conventions)
+verifier_egal("#90, R13 sous H : date de EVX substituée par la règle écrite (2025-03-01, EVY), non tenue pour inconnue ; DOR4 en P1 (hypothèse D02a) ; sous conserver, DOR4 en P2",
+              list(format(ns$valeurs_vue(v_r13, "evenements", "date_effet")[v_r13$ctx$base$evenements$id_evenement == "EVX"]),
+                   any(ns$dates_inconnues_vue(v_r13, "evenements", "date_effet")),
+                   unlist(r_r13$h$dossiers[r_r13$h$dossiers$id_dossier == "DOR4", c("poste", "hypotheses_defaut")]),
+                   r_r13$c$dossiers$poste[r_r13$c$dossiers$id_dossier == "DOR4"]),
+              list("2025-03-01", FALSE, c(poste = P1, hypotheses_defaut = "D02a"), P2))
+# C90-5 (garde du point 1 de #112, M661) : CTI1 rejeté par R2 (terme) sous H : la partie de fin du
+# contrat n'est pas touchée (decide_fin) ; rejeté par R1 (fin saisie le 2024-02-01) : touchée ; la
+# ligne entière porte D02a dans les deux cas
+fin_ct <- Filter(function(q) q$table == "contrats", ns$parties_ligne())[[1L]]$colonnes
+b_r1 <- base
+i_r1 <- b_r1$contrats$id_contrat == "CTI1"
+b_r1$contrats$date_fin[i_r1] <- D("2023-12-01")
+b_r1$contrats$date_saisie_fin[i_r1] <- D("2024-02-01")
+b_r1$contrats$motif_fin[i_r1] <- "resiliation_adherent"
+s2_ct <- function(b, lues) {
+  v <- ns$vue_a_date(b, A1, d02a_h(p_c1, TRUE)$donnees, p_c1$conventions)
+  ns$hypotheses_vue_unites(v, "comptes_sociaux", P3, "risque_en_cours", 1L, list(ns$lecture_unites("contrats", "id_contrat", "CTI1",
+                                                                                                    lues = lues)))
+}
+verifier_egal("C90-5 : D02a sous H sur CTI1 : R2, partie de fin non touchée (\"\"), ligne entière D02a ; R1, partie de fin touchée (D02a)",
+              list(s2_ct(b90$r2, fin_ct), s2_ct(b90$r2, NULL), s2_ct(b_r1, fin_ct)), list("", "D02a", "D02a"))
+# C90-5 de bout en bout (site decide_fin de calculer_risque_en_cours()) : CTI1 rejeté par R2
+# (terme au 2023-12-31) sous H, date_fin connue au 2025-06-01, saisie le 2025-06-05 : la partie
+# de fin n'est pas touchée, la sortie par la fin est établie sans hypothèse ; P3 1 229,553930931891
+# (CTI1 hors du calcul, comme au cas (4.1) (f2)), approximation_numerique, aucune unité CTI1
+b_c905 <- b90$r2
+i_c905 <- b_c905$contrats$id_contrat == "CTI1"
+b_c905$contrats$date_fin[i_c905] <- D("2025-06-01")
+b_c905$contrats$date_saisie_fin[i_c905] <- D("2025-06-05")
+b_c905$contrats$motif_fin[i_c905] <- "resiliation_adherent"
+r_c905 <- calc_90(b_c905, TRUE)
+verifier_egal("C90-5 de bout en bout : CTI1 rejeté par R2 sous H, date_fin 2025-06-01 connue (saisie 2025-06-05) : P3 1 229,553930931891, approximation_numerique ; aucune unité CTI1 dans les échéanciers",
+              list(egal_mixte(cel_x(r_c905, P3)$montant, 1229.553930931891), cel_x(r_c905, P3)$statut_resultat,
+                   sum(r_c905$echeanciers$cle %in% "CTI1")),
+              list(TRUE, "approximation_numerique", 0L))
+# Garde par colonnes de la sortie par un sinistre (#90, point 1 de #112 étendu) : sinistre SIRI3
+# deces de ASI3 (CTI3), survenance 2025-06-01 connue, instruction au 2025-06-05 antérieure à la
+# déclaration du 2025-06-10 (R10) : D02a sous H porte sur la déclaration et l'instruction, non
+# lues pour établir la sortie ; P3 identique au cas D02a conserver, approximation_numerique, sans
+# unité CTI3 (avant : 3 611,747 en jugement_expert, CTI3 unité nulle)
+b_sir <- base
+s_sir <- b_sir$sinistres[1L, ]
+s_sir$id_sinistre <- "SIRI3"; s_sir$id_assure <- "ASI3"; s_sir$date_survenance <- D("2025-06-01")
+s_sir$date_declaration <- D("2025-06-10"); s_sir$date_instruction <- D("2025-06-05"); s_sir$date_saisie <- D("2025-06-11")
+b_sir$sinistres <- rbind(b_sir$sinistres, s_sir)
+r_sir <- list(h = calc_90(b_sir, TRUE), c = calc_90(b_sir, FALSE))
+verifier_egal("#90, sortie par un sinistre : SIRI3 rejeté par R10 sous H (survenance connue) : CTI3 sorti sans hypothèse ; P3 identique à D02a conserver, approximation_numerique ; aucune unité CTI3 dans les échéanciers ; D02a placé sur SIRI3",
+              list(identical(cel_x(r_sir$h, P3), cel_x(r_sir$c, P3)), cel_x(r_sir$h, P3)$statut_resultat,
+                   sum(r_sir$h$echeanciers$cle %in% "CTI3"),
+                   r_sir$h$donnees$controles$identifiants[r_sir$h$donnees$controles$code == "D02a"]),
+              list(TRUE, "approximation_numerique", 0L, "SIRI3"))
+# voie de sortie observée (s_place) : SIRI3 comme ci-dessus et SIRI4 deces de ASI3 (survenance
+# 2025-07-01) sans date de saisie, sous D03g (délai 0, visible) : SIRI3, dont D02a ne porte sur
+# aucune colonne lue, établit la sortie sans hypothèse ; CTI3 non restitué, P3 identique au cas
+# D02a conserver (sans la garde sur s_place : CTI3 restitué à 0, jugement_expert)
+b_sir2 <- b_sir
+s_sir2 <- s_sir
+s_sir2$id_sinistre <- "SIRI4"; s_sir2$date_survenance <- D("2025-07-01"); s_sir2$date_declaration <- D("2025-07-10")
+s_sir2$date_instruction <- D("2025-07-20"); s_sir2$date_saisie <- as.Date(NA)
+b_sir2$sinistres <- rbind(b_sir2$sinistres, s_sir2)
+p_sir2 <- p_c1
+p_sir2$donnees$hypotheses <- c(p_sir2$donnees$hypotheses, hyp_x("D03g"))
+p_sir2$donnees$seuils$d03g_delai_jours <- list(sinistres = 0)
+r_sir2 <- list(h = calc_90(b_sir2, TRUE, p_sir2), c = calc_90(b_sir2, FALSE, p_sir2))
+verifier_egal("#90, sortie observée : SIRI3 (R10 sous H) et SIRI4 sous D03g, visible : CTI3 sorti par SIRI3 sans hypothèse ; P3 identique à D02a conserver ; aucune unité CTI3 dans les échéanciers",
+              list(identical(cel_x(r_sir2$h, P3), cel_x(r_sir2$c, P3)), sum(r_sir2$h$echeanciers$cle %in% "CTI3")),
+              list(TRUE, 0L))
+# R13, candidats de la dernière information valide précédente (dictionnaire 1.6, § 4 : « la date
+# de dernière information d'un dossier se reconstitue de ces dates ») : contre-témoin, EVX de
+# DOR4 (effet 2024-06-01, saisie 2025-04-01) ; EVW, mise à jour antérieure de DOR4B, autre
+# dossier de SIR4 (garantie GSC2, collège cadres), et EVD, demande_mise_a_jour antérieure de
+# DOR4, ne sont pas candidates : repli sur l'instruction de SIR4 (2024-09-10) ; témoin : EVW
+# rattachée à DOR4 est candidate (2025-03-01)
+b_ct13 <- base
+g_ct13 <- b_ct13$garanties_souscrites[b_ct13$garanties_souscrites$id_garantie_souscrite == "GSC1", ]
+g_ct13$id_garantie_souscrite <- "GSC2"; g_ct13$college <- "cadres"
+b_ct13$garanties_souscrites <- rbind(b_ct13$garanties_souscrites, g_ct13)
+d_ct13 <- b_ct13$dossiers[b_ct13$dossiers$id_dossier == "DOR4", ]
+d_ct13$id_dossier <- "DOR4B"; d_ct13$id_garantie_souscrite <- "GSC2"
+b_ct13$dossiers <- rbind(b_ct13$dossiers, d_ct13)
+b_ct13 <- ev_90(ev_90(b_ct13, "EVW", "DOR4B", "2025-03-01", "2025-03-02"), "EVD", "DOR4", "2025-03-10", "2025-03-11")
+b_ct13$evenements$type_evenement[b_ct13$evenements$id_evenement == "EVD"] <- "demande_mise_a_jour"
+b_ct13 <- ev_90(b_ct13, "EVX", "DOR4", "2024-06-01", "2025-04-01")
+b_te13 <- ev_90(ev_90(base, "EVW", "DOR4", "2025-03-01", "2025-03-02"), "EVX", "DOR4", "2024-06-01", "2025-04-01")
+effet_evx <- function(b) {
+  v <- ns$vue_a_date(b, A1, d02a_h(p_c1, TRUE)$donnees, p_c1$conventions)
+  e <- v$ctx$base$evenements$id_evenement == "EVX"
+  list(format(ns$valeurs_vue(v, "evenements", "date_effet")[e]), ns$dates_inconnues_vue(v, "evenements", "date_effet")[e])
+}
+verifier_egal("#90, R13 contre-témoin : mise à jour d'un autre dossier du sinistre et demande_mise_a_jour du même dossier non candidates : EVX substituée par l'instruction de SIR4 (2024-09-10) ; témoin, mise à jour du même dossier : 2025-03-01",
+              list(effet_evx(b_ct13), effet_evx(b_te13)), list(list("2024-09-10", FALSE), list("2025-03-01", FALSE)))
+# R13, mise à jour de niveau sinistre (erratum 1.9.3, point (i), spécification `donnees` v1.9,
+# § 9.4) : EVX sans dossier (effet 2024-06-01, saisie 2025-04-01), rejetée par R13 sous H ; EVW,
+# mise à jour antérieure de DOR4 (effet 2025-03-01, saisie 2025-03-02), n'est pas candidate pour
+# une mise à jour de niveau sinistre (seules les mises à jour de niveau sinistre le sont) : repli
+# sur l'instruction de SIR4 (2024-09-10), non la date de EVW
+b_si13 <- ev_90(ev_90(base, "EVW", "DOR4", "2025-03-01", "2025-03-02"), "EVX", NA_character_, "2024-06-01", "2025-04-01")
+verifier_egal("#90, R13, mise à jour EVX de niveau sinistre rejetée sous H, mise à jour EVW de DOR4 saisie avant elle : EVX substituée par l'instruction de SIR4 (2024-09-10), non par EVW (2025-03-01)",
+              effet_evx(b_si13), list("2024-09-10", FALSE))
+# R13 sans valeur substituée, dossier clos (garde de Kleene du critère sans_evenement de P2) :
+# SIR4 déclaré avant sa survenance (R9 : survenance et déclaration inconnues), instruction
+# manquante ; DOR4 clos le 2024-12-01 (sans_suite) ; EVX de DOR4 (effet 2024-05-01, avant la
+# survenance brute, saisie 2025-02-01) sans candidate : date restée inconnue, peut-être récente ;
+# DOR4 sans événement récent connu, ouvert avant le seuil (2024-12-31) : partition non
+# déterminée, P1 et P2 arrêtés (parametre_non_determine, DOR4), jamais DOR4 clos en P2 à 0
+b_k13 <- base
+i_k13 <- b_k13$sinistres$id_sinistre == "SIR4"
+b_k13$sinistres$date_declaration[i_k13] <- D("2024-06-01")
+b_k13$sinistres$date_instruction[i_k13] <- as.Date(NA)
+b_k13 <- ev_90(b_k13, "EVC", "DOR4", "2024-12-01", "2024-12-02")
+b_k13$evenements$type_evenement[b_k13$evenements$id_evenement == "EVC"] <- "cloture_dossier"
+b_k13$evenements$motif[b_k13$evenements$id_evenement == "EVC"] <- "sans_suite"
+b_k13 <- ev_90(b_k13, "EVX", "DOR4", "2024-05-01", "2025-02-01")
+r_k13 <- calc_90(b_k13, TRUE, p_se)
+verifier_egal("#90, R13 sans valeur substituée, DOR4 clos, critère sans_evenement : EVX inconnue ; P1 et P2 arrêtés (parametre_non_determine, DOR4) ; P3 calculé",
+              list(effet_evx(b_k13)[[2L]], arret_90(r_k13, P1), arret_90(r_k13, P2), unique(r_k13$provisions$statut_calcul[r_k13$provisions$poste == P3])),
+              list(TRUE, list("parametre_non_determine", "DOR4"), list("parametre_non_determine", "DOR4"), "calcule"))
+# Garde du point 1 de #112 (M661) : les hypothèses de la vue D02b et D03g placées sur contrats
+# portent la seule colonne date_saisie_fin (partie de fin du contrat) ; CTI1 : date_fin
+# 2025-06-01 sans date de saisie (D03g) ; CTI3 : date_fin 2025-06-01 saisie le 2023-06-01, avant
+# l'effet (D02b) ; D02b et D03g en H, délai D03g de contrats 0
+b_g112 <- base
+for (k in c("CTI1", "CTI3")) {
+  i_g <- b_g112$contrats$id_contrat == k
+  b_g112$contrats$date_fin[i_g] <- D("2025-06-01")
+  b_g112$contrats$motif_fin[i_g] <- "resiliation_adherent"
+  b_g112$contrats$date_saisie_fin[i_g] <- if (k == "CTI1") as.Date(NA) else D("2023-06-01")
+}
+d_g112 <- p_c1$donnees
+d_g112$hypotheses <- c(d_g112$hypotheses, hyp_x("D02b"), hyp_x("D03g"))
+d_g112$seuils$d03g_delai_jours <- list(contrats = 0)
+h_g112 <- Filter(function(h) identical(h$table, "contrats") && h$motif %in% c("D02b", "D03g"),
+                 ns$vue_a_date(b_g112, A1, d_g112, p_c1$conventions)$hypotheses)
+verifier_egal("garde du point 1 de #112 : hypothèses de la vue D02b et D03g sur contrats (deux référentiels chacune) : colonnes = date_saisie_fin",
+              list(sort(vapply(h_g112, `[[`, "", "motif"), method = "radix"), unique(lapply(h_g112, `[[`, "colonnes"))),
+              list(c("D02b", "D02b", "D03g", "D03g"), list("date_saisie_fin")))
+
 section("extrapolation de mortalite_tarif sous derniere_valeur : statut et trace (critère (4.8), § 5.8, S3, #91)")
 # Cas T8 du § 7.4 de bout en bout : base de P3 (b2_base_p3()) avec date_terme de CT2 au
 # 2028-01-01, A = 2025-01-01, plan b2_plan() complété de la section donnees du plan
@@ -1038,16 +1280,68 @@ verifier("(4.8) une seule implémentation : la chaîne hors_axes_derniere_valeur
              dans(ns$provisions_individuelles, "indicateur_hors_axes(")
          }))
 
-section("échec attendu #83 (critère (4.4), § 5.3, « Limite connue »)")
-b_ge <- base   # GSC1 : effet postérieur à l'arrêté, invisible à A, ses dossiers aussi (règle 1)
+section("#83 : D10b à l'arrêté, exception de la règle 1 (critère (4.4), § 5.3 ; spécification `donnees` v1.9, § 9.3, C83-1 et C83-2)")
+b_ge <- base   # GSC1 : effet postérieur à l'arrêté, invisible à A ; ses dossiers restent dans la vue (exception de la règle 1)
 b_ge$garanties_souscrites$date_effet[1L] <- D("2026-03-01")
-attendu_echec("(4.4) GSC1 d'effet au 2026-03-01, A = 2025-12-31, sans déclaration : D10b signalé et exigé (declarations_requises), refus declaration_manquante",
-              "#83",
-              local({
-                v <- b2_vue(b_ge, A1, p_c1$donnees, p_c1$conventions)
-                any(v$bilan$signalements$code == "D10b") && any(v$bilan$declarations_requises$motif == "D10b") &&
-                  identical(motif_de(calculer_provisions(b_ge, p_c1, tid)), "declaration_manquante")
-              }))
+# C83-1 : l'échec attendu de #83 (T6, § 9.8) passe, marque retirée
+verifier("C83-1, (4.4) GSC1 d'effet au 2026-03-01, A = 2025-12-31, sans déclaration : D10b signalé et exigé (declarations_requises), refus declaration_manquante",
+         local({
+           v <- b2_vue(b_ge, A1, p_c1$donnees, p_c1$conventions)
+           any(v$bilan$signalements$code == "D10b") && any(v$bilan$declarations_requises$motif == "D10b") &&
+             identical(motif_de(calculer_provisions(b_ge, p_c1, tid)), "declaration_manquante")
+         }))
+# C83-2 : sous conserver, P1 et P2 (qui lisent les colonnes de la garantie) arrêtés
+# parametre_non_determine, premier dossier en cause DOR1, jamais calculés sur la version invisible
+# (avant #83 : P1 = P2 = 0, dossiers sortis de la vue en silence) ; P3 inchangé ; sous exclure
+# pour engagement, dossiers exclus (P1 = P2 = 0), enjeu de D10b sur les cinq dossiers
+plan_d10b <- function(actions, a = A1, base_plan = p_c1) {
+  p <- base_plan
+  p$arrete <- a
+  p$donnees$exclusions <- c(p$donnees$exclusions, lapply(seq_along(actions), function(i) {
+    list(motif = names(actions)[i], famille = ns$FAMILLES_CALCUL[(i - 1L) %% 4L + 1L], action = actions[[i]])
+  }))
+  p
+}
+d10b <- function(...) stats::setNames(list(...), rep("D10b", length(list(...))))
+cel_83 <- function(r) {
+  x <- r$provisions[r$provisions$segmentation == "ensemble", , drop = FALSE]
+  pr <- r$fiche$parametres_retenus$postes
+  ida <- vapply(x$poste, function(po) {
+    if (po == "total") return("-")
+    i <- ns$lire_liste(charToRaw(pr$parametres[pr$poste == po]))$identifiant_arret
+    if (is.null(i)) "-" else i
+  }, "", USE.NAMES = FALSE)
+  paste(x$poste, x$statut_calcul, x$motif_arret, ida)
+}
+r_83c <- calculer_provisions(b_ge, plan_d10b(d10b("conserver", "conserver", "conserver", "conserver")), tid)
+r_83x <- calculer_provisions(b_ge, plan_d10b(d10b("exclure", "conserver", "conserver", "conserver")), tid)
+verifier_egal("C83-2, conserver : P1 et P2 arrêtés parametre_non_determine (identifiant DOR1), total arrêté ; P3 calculé, 3 710,67098199391 (inchangé)",
+              list(cel_83(r_83c), r_83c$provisions$montant[r_83c$provisions$poste == P3 & r_83c$provisions$segmentation == "ensemble"]),
+              list(c("capitaux_non_reclames arrete parametre_non_determine DOR1",
+                     paste("provision_mathematique_temporaire_deces calcule NA -"),
+                     "sinistres_declares_non_regles arrete parametre_non_determine DOR1",
+                     "total arrete poste_arrete:capitaux_non_reclames;sinistres_declares_non_regles -"), 3710.67098199391),
+              tolerance = EPS)
+verifier_egal("C83-2, exclure pour engagement : P1 = P2 = 0 calculés, aucun dossier ; exclusion D10b (engagement, exclure) de cinq lignes et cinq dossiers ; enjeu D10b de engagement non nul sur les cinq dossiers (capital_fixe 300 000, ensemble)",
+              { pv <- r_83x$provisions[r_83x$provisions$segmentation == "ensemble", ]
+                ex <- r_83x$donnees$exclusions
+                en <- r_83x$donnees$enjeu
+                en <- en[en$motif == "D10b" & en$famille == "engagement" & en$poste == "ensemble" & en$garantie == "ensemble" &
+                           en$composante == "capital_fixe", ]
+                list(pv$montant[pv$poste %in% c("sinistres_declares_non_regles", "capitaux_non_reclames")],
+                     pv$statut_calcul[pv$poste %in% c("sinistres_declares_non_regles", "capitaux_non_reclames")], nrow(r_83x$dossiers),
+                     with(ex[ex$motif == "D10b" & ex$famille == "engagement", ], paste(action, nombre_lignes, nombre_dossiers)),
+                     en$montant, en$nombre_dossiers) },
+              list(c(0, 0), c("calcule", "calcule"), 0L, "exclure 5 5", 3e5, 5L), tolerance = 0)
+# C83-12 (spécification `donnees` v1.9, § 4.2, note v1.9.2, et § 9.3, bloc « Erratum 1.9.2 »,
+# (iv)) : axe garantie de l'enjeu d'un dossier dont la garantie souscrite n'est pas retenue, lu
+# sur la version extraite (GSC1, deces) : rangée deces de l'enjeu D10b (engagement, ensemble)
+verifier_egal("C83-12, exclure pour engagement : enjeu D10b de engagement, rangée deces (poste ensemble) : paiements_cumules 40 000, capital_fixe 300 000, cinq dossiers, cause NA",
+              { en <- r_83x$donnees$enjeu
+                en <- en[en$motif == "D10b" & en$famille == "engagement" & en$poste == "ensemble" & en$garantie == "deces" &
+                           en$composante %in% c("paiements_cumules", "capital_fixe"), ]
+                list(en$composante, en$montant, en$nombre_dossiers, en$cause) },
+              list(c("paiements_cumules", "capital_fixe"), c(4e4, 3e5), c(5L, 5L), c(NA_character_, NA_character_)), tolerance = 0)
 detecte_d10b <- function(b, a) {
   v <- b2_vue(b, a, p_c1$donnees, p_c1$conventions)
   s <- v$bilan$signalements[v$bilan$signalements$code == "D10b", ]
@@ -1058,6 +1352,64 @@ b_ge2 <- base
 b_ge2$garanties_souscrites$date_effet[1L] <- D("2025-01-01")
 verifier("(4.4) témoins : D10b détecté (signalement, 5 dossiers DOR1;DOR3;DOR4;DOR5A;DOR5B ; exclusion exigée pour chaque famille) pour GSC1 d'effet au 2026-03-01 à A = 2026-03-31, et d'effet au 2025-01-01 à A = 2025-12-31",
          detecte_d10b(b_ge, D("2026-03-31")) && detecte_d10b(b_ge2, A1))
+# Aucun poste calculé sur une garantie invisible ou inconnue sans arrêt ni signalement, aucune
+# erreur interne (§ 9.3 (1) et (2)) : CTC1 d'effet au 2026-03-01 (GSC1, d'effet au 2020-01-01,
+# masquée par son contrat ; D10b non détecté) ; D11a (sinistres hors couverture) déclaré : sous
+# conserver, P1 et P2 arrêtés parametre_non_determine (DOR1 ; avant #83 : 0, en silence),
+# parente_posterieure sur garanties_souscrites, affiliations et cotisations ; sous exclure de D11a
+# pour engagement, sinistres exclus (cascade aux dossiers), P1 = P2 = 0
+b_ct <- base
+b_ct$contrats$date_effet[b_ct$contrats$id_contrat == "CTC1"] <- D("2026-03-01")
+d11a <- function(...) stats::setNames(list(...), rep("D11a", length(list(...))))
+r_ct <- lapply(list(conserver = d11a("conserver", "conserver", "conserver", "conserver"),
+                    exclure = d11a("exclure", "conserver", "conserver", "conserver")),
+               function(x) calculer_provisions(b_ct, plan_d10b(x), tid))
+verifier_egal("#83, contrat d'effet postérieur à A : sous conserver (D11a), P1 et P2 arrêtés parametre_non_determine (DOR1), parente_posterieure sur GSC1, AFR1;AFR3;AFR4;AFR5A;AFR5B et COC1;COC2 ; sous exclure (D11a, engagement), P1 et P2 calculés",
+              list(cel_83(r_ct$conserver)[c(1L, 3L)],
+                   with(r_ct$conserver$donnees$controles[r_ct$conserver$donnees$controles$code == "parente_posterieure", ], paste(table, identifiants)),
+                   cel_83(r_ct$exclure)[c(1L, 3L)], motif_de(calculer_provisions(b_ct, p_c1, tid))),
+              list(c("capitaux_non_reclames arrete parametre_non_determine DOR1", "sinistres_declares_non_regles arrete parametre_non_determine DOR1"),
+                   c("garanties_souscrites GSC1", "affiliations AFR1;AFR3;AFR4;AFR5A;AFR5B", "cotisations COC1;COC2"),
+                   c("capitaux_non_reclames calcule NA -", "sinistres_declares_non_regles calcule NA -"), "declaration_manquante"))
+# Garantie de date d'effet manquante (D03i, inconnue) : ses dossiers restent dans la vue
+# (exception) ; sous conserver de D03i, arrêt D03i (M703, M704) ; sous exclure de D03i pour
+# engagement, la garantie exclue sort ses dossiers de la population (couverture exclue étendue
+# aux lignes non retenues, dossiers_garantie_invisible()) : P1 = P2 = 0, comme avant #83
+b_gi <- base
+b_gi$garanties_souscrites$date_effet[1L] <- as.Date(NA)
+d03i <- function(...) stats::setNames(list(...), rep("D03i", length(list(...))))
+r_gi_x <- calculer_provisions(b_gi, plan_d10b(d03i("exclure", "conserver", "conserver", "conserver")), tid)
+# C83-8 : enjeu des composantes 1 et 2 de D03i (engagement, ensemble) NA, cause
+# visibilite_non_determinee (garantie de visibilité non déterminée : rattachement non déterminé)
+verifier_egal("C83-8, #83, GSC1 d'effet manquant (D03i) à A : sous conserver, P1 et P2 arrêtés D03i ; sous exclure pour engagement, P1 et P2 calculés (0), sans arrêt parametre_non_determine ; enjeu D03i (engagement, ensemble, ensemble) de paiements_cumules et capital_fixe NA, cause visibilite_non_determinee",
+              list(cel_83(calculer_provisions(b_gi, plan_d10b(d03i("conserver", "conserver", "conserver", "conserver")), tid))[c(1L, 3L)],
+                   cel_83(r_gi_x)[c(1L, 3L)],
+                   { en <- r_gi_x$donnees$enjeu
+                     en <- en[en$motif == "D03i" & en$famille == "engagement" & en$poste == "ensemble" & en$garantie == "ensemble" &
+                                en$composante %in% c("paiements_cumules", "capital_fixe"), ]
+                     list(en$composante, en$montant, en$cause) }),
+              list(c("capitaux_non_reclames arrete D03i -", "sinistres_declares_non_regles arrete D03i -"),
+                   c("capitaux_non_reclames calcule NA -", "sinistres_declares_non_regles calcule NA -"),
+                   list(c("paiements_cumules", "capital_fixe"), c(NA_real_, NA_real_),
+                        c("visibilite_non_determinee", "visibilite_non_determinee"))))
+# À l'arrêté égal à l'extraction (vue totale) : GSC1 visible, D10b détecté, aucun
+# parente_posterieure ; sous conserver, P1 et P2 calculés sur la version extraite ; sous exclure,
+# 0 ; sans déclaration, declaration_manquante (taux de revalorisation 2026 ajouté au plan)
+p_ext <- p_c1
+p_ext$revalorisation$capital_deces$taux_par_annee[["2026"]] <- p_ext$revalorisation$capital_deces$taux_par_annee[["2025"]]
+E_ge <- D("2026-03-31")
+r_ext <- lapply(list(conserver = d10b("conserver", "conserver", "conserver", "conserver"),
+                     exclure = d10b("exclure", "exclure", "exclure", "exclure")),
+                function(x) calculer_provisions(b_ge, plan_d10b(x, E_ge, p_ext), tid))
+verifier_egal("#83, A = extraction : aucun parente_posterieure ; conserver : P1 et P2 calculés (339 221,59765386011 et 104 551,07331506848) ; exclure : 0 ; sans déclaration : declaration_manquante",
+              list(vapply(r_ext, function(r) sum(r$donnees$controles$code == "parente_posterieure"), 0L),
+                   r_ext$conserver$provisions$montant[r_ext$conserver$provisions$segmentation == "ensemble" &
+                                                        r_ext$conserver$provisions$poste %in% c("sinistres_declares_non_regles", "capitaux_non_reclames")],
+                   r_ext$exclure$provisions$montant[r_ext$exclure$provisions$segmentation == "ensemble" &
+                                                      r_ext$exclure$provisions$poste %in% c("sinistres_declares_non_regles", "capitaux_non_reclames")],
+                   motif_de(calculer_provisions(b_ge, plan_d10b(list(), E_ge, p_ext), tid))),
+              list(c(conserver = 0L, exclure = 0L), c(104551.07331506848, 339221.59765386011), c(0, 0), "declaration_manquante"),
+              tolerance = EPS)
 
 section("somme des montants (.somme_montants(), garde interne)")
 verifier("(.somme_montants) un montant NA est une erreur interne ; sans NA, somme ordonnée (2 + 1 = 3)",

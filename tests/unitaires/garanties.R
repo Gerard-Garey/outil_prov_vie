@@ -126,7 +126,7 @@ verifier_egal("dossier introuvable", motif_de(lire_catalogue(file.path(tempdir()
 section("garanties : postes_a_arreter() (M239 ; spécification de B2, § 6.2, critère 3.8, #66)")
 
 # Bilans construits (seules les colonnes lues par postes_a_arreter() comptent) et bilan de
-# v1-modeste-02 aux deux arrêtés.
+# v1-modeste-05 aux deux arrêtés.
 cat_g <- catalogue_garanties()
 postes_b2 <- list(deces = list(capitaux_non_reclames = list(), provision_mathematique_temporaire_deces = list(),
                                sinistres_declares_non_regles = list()))
@@ -168,13 +168,19 @@ verifier_egal("règle (iii) : partie de ligne seule (sinistres.date_instruction,
               arrets(bilan_de(list("sinistres", "date_instruction", "D02c", "colonne"),
                               list("sinistres", "date_instruction", "D02c", "sinistres.date_instruction")))$postes$motif_arret,
               c("D02c", NA, "D02c"))
-j2 <- lire_jeu(file.path(racine, "inst", "extdata", "jeux", "v1-modeste-02"))
-verifier_egal("(3.8) v1-modeste-02 aux deux arrêtés : refus D09 sur prestations.montant (portée colonne) : P1 et P2 arrêtés (D09), P3 non ; postes_arretes de la ligne",
+j2 <- lire_jeu(file.path(racine, "inst", "extdata", "jeux", "v1-modeste-05"))
+# #72 (spécification `donnees` v1.9, § 9.2 ; erratum du projet de dictionnaire 1.6, § 11.5) : le
+# refus D09 sur prestations.montant est de portée ligne ; postes_a_arreter() n'arrête aucun poste
+# sur une telle ligne et en rend les candidats (P1 et P2 lisent la colonne, condition (1)),
+# arrêtés par leur famille si une de leurs unités lit la ligne (avant #72 : P1 et P2 arrêtés D09,
+# postes_arretes de la ligne)
+verifier_egal("(3.8) v1-modeste-05 aux deux arrêtés : refus D09 sur prestations.montant (portée ligne, #72) : aucun poste arrêté par postes_a_arreter(), postes_arretes NA ; candidats P1 et P2",
               lapply(as.Date(c("2024-12-31", "2025-12-31")), function(a) {
                 x <- arrets(controler_base(j2$base, a, j2$declarations$declarations, j2$declarations$conventions))
-                list(x$postes$motif_arret, x$refus_tables$postes_arretes)
+                list(x$postes$motif_arret, x$refus_tables$portee, x$refus_tables$postes_arretes, lapply(x$candidats, sort, method = "radix"))
               }),
-              rep(list(list(c("D09", NA, "D09"), "deces/capitaux_non_reclames;deces/sinistres_declares_non_regles")), 2L))
+              rep(list(list(rep(NA_character_, 3L), "ligne", NA_character_,
+                            list(c("deces/capitaux_non_reclames", "deces/sinistres_declares_non_regles")))), 2L))
 verifier_egal("postes_a_arreter() : bilan sans refus : aucun poste arrêté ; colonnes du bilan inchangées hors postes_arretes",
               { b <- bilan_de(list(character(0), character(0), character(0), character(0)))
                 x <- arrets(b); list(x$postes$motif_arret, names(x$refus_tables), nrow(x$refus_tables)) },

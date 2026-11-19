@@ -1,6 +1,6 @@
 # Projet de dictionnaire de la base brute fictive : version `1.6`
 
-> *Rédigé par l'agent actuary-approfondi (IA) le 12 novembre 2026, sur la branche de documents seuls `claude/dictionnaire-1-6` (PR #103 ; `docs/feuille-de-route.md`, § 1.10 ; ADR 0012, point 4 ; M299, M500). Squelette posé par la session de la branche le même jour. Lecture de l'art. 143-3 du règlement ANC 2015-11 par l'agent regulatory (IA) le 12 novembre 2026, reprise au § 6 ; lecture de la loi n° 89-1009, art. 2, 7, 7-1 et 10, par le même agent le même jour, reprise au § 1.2 et au § 9. Reprise du § 1.2 par l'agent actuary (IA) le même jour. Statut : **projet visé** par le mainteneur le 12 novembre 2026 (M516, `docs/feuille-de-route.md`, § 4.3), réponses Q1 à Q14 consignées en M501 à M514.*
+> *Rédigé par l'agent actuary-approfondi (IA) le 12 novembre 2026, sur la branche de documents seuls `claude/dictionnaire-1-6` (PR #103 ; `docs/feuille-de-route.md`, § 1.10 ; ADR 0012, point 4 ; M299, M500). Squelette posé par la session de la branche le même jour. Lecture de l'art. 143-3 du règlement ANC 2015-11 par l'agent regulatory (IA) le 12 novembre 2026, reprise au § 6 ; lecture de la loi n° 89-1009, art. 2, 7, 7-1 et 10, par le même agent le même jour, reprise au § 1.2 et au § 9. Reprise du § 1.2 par l'agent actuary (IA) le même jour. Statut : **projet visé** par le mainteneur le 12 novembre 2026 (M516, `docs/feuille-de-route.md`, § 4.3), réponses Q1 à Q14 consignées en M501 à M514. Erratum daté du 18 novembre 2026, visé le même jour (M654) : § 11.*
 
 ## 0. Objet, portée, statut
 
@@ -520,3 +520,378 @@ Les points sans effet sur aucun couple, chacun fondé sur la mesure citée dans 
 La lecture de `regulatory` du 12 novembre 2026 (loi n° 89-1009, art. 2, 7, 7-1 et 10) est reprise au § 1.2 et au § 9, et le § 1.2 est rédigé sous la forme retenue par M502. Réponses du mainteneur du même jour : **Q13, option (b)** (contrôle renvoyé au recensement du poste « maintien de la garantie décès », issue **#106** ; M513) ; **Q14, option (a)** (`FALSE` en `1.6`, base à `TRUE` exigée à la spécification de ce poste ; M514). Commentaire de `regulatory` déposé sur #14, point 4 (M515).
 
 **Visa.** Projet visé par le mainteneur le 12 novembre 2026 (M516).
+
+## 11. Erratum du 18 novembre 2026 (étape 0a de la transcription, Bdr-b2)
+
+> *Rédigé par l'agent actuary-approfondi (IA) le 18 novembre 2026, à l'étape 0a de la branche `claude/transcription-dictionnaire-1-6` (PR #165 ; `docs/feuille-de-route.md`, § 1.16 ; M648 à M653). Statut : **visé** par le mainteneur le 18 novembre 2026 (M654 ; il amende un texte visé, M516), réponses aux questions QE-1 à QE-13 consignées en M654 à M665, lectures de 0b et arbitrages en M666 à M672 (§ 11.13). L'erratum amende les sections citées sans les réécrire : ce qu'il ne cite pas reste en vigueur. Seul le § 3 est remplacé en entier (§ 11.4). Les questions QE-1 à QE-13 (§ 11.12) sont soldées à ce visa ; Q-5, Q-22 et Q-23 de la feuille de route (§ 4.4) le sont avec elles (M652).*
+
+### 11.1 Conditions de mesure et statuts
+
+- R 4.3.3 ; `provie` 0.12.0 installé par `R CMD INSTALL` depuis `git archive a5e8970`, dans une bibliothèque du scratchpad. La tête `addbf92` de la branche ne diffère de `a5e8970` que par `docs/feuille-de-route.md` (`git diff --stat a5e8970 addbf92`).
+- Couples : `entrees_couple()` et `calculer_couple()` de `tests/references.R`, sous `options(warn = 2)`.
+- Scripts du scratchpad, non versés :
+  - `couples.R` : les dix calculs ;
+  - `etat2.R` et `etat3.R` : provisions et bilans ;
+  - `j34sub.R` : mesure substitutive de #72 ;
+  - `bases.R` : P6, collèges, blancs, enfants nés après la survenance ;
+  - `masq.R` : lignes masquées par leur parente (#83) ;
+  - `c5.R` : atteignabilité de C-5.
+- Les jeux, le simulateur, `tests/b2_bases.R` et `tests/jeux_v1.R` sont inchangés depuis `7d53a05` : `git diff --stat 7d53a05 a5e8970 -- inst/extdata/jeux/ tests/b2_bases.R tests/jeux_v1.R` est vide, et `git log 7d53a05..a5e8970 -- R/simulation.R` aussi. Les mesures du projet sur les bases (§ 1.2) restent donc valables.
+- Statuts :
+  - **mesuré** : une commande a été exécutée et sa sortie est citée ;
+  - **lu** : lecture du code ou d'un fichier à l'emplacement cité ; résultat exact de lecture, sans exécution ;
+  - **prévision** : jugement d'expert sur un code qui n'existe pas encore ;
+  - **jugement d'expert** : règle proposée, avec son motif, l'alternative écartée et son effet.
+
+### 11.2 Renvois remis contre `a5e8970`
+
+- **Dictionnaire.** Les renvois « dict. :NNN » restent valables :
+  - `git diff --stat d2aa8ca a5e8970 -- docs/specifications/dictionnaire-base-v1.md inst/extdata/dictionnaire/` est vide (mesuré) ;
+  - contrôle par `sed -n` des lignes :13, :109, :121, :162, :180, :282, :326, :337, :344, :387, :451, :684, :740, :741, :755, :757 à :759, :762 et :815 : les contenus sont ceux que cite le projet (mesuré).
+- **Code, tests, spécification `donnees`** (lu, par `grep -n` et `sed -n` sur l'archive de `a5e8970`) :
+
+| Cité par le projet (`d2aa8ca` / `7d53a05`) | À `a5e8970` | Objet |
+|---|---|---|
+| `R/donnees.R:1681-1683` (§ 1.2, § 10.2) | `R/donnees.R:2086-2094` | règle `hors_domaine` de `taux_technique_tarif` (admission sur un décès collectif) |
+| — | `R/donnees.R:3788-3800` | D03h : ligne `non_lisible` (:3791), condition `requis` (:3797-3798) |
+| `R/donnees.R:139`, `:155`, `:159`, `:159-160` (§ 1.3) | `.EXCEPTIONS_FAMILLE` :144-146 ; `.MOTIFS_SIGNALEMENT` :161 ; `.TRAITEMENTS_SOUS_CAS_D10` :165-166 | listes à dériver de `defauts.csv` |
+| `R/donnees.R:2580-2591` (§ 4) | liste `filles` de D02b, `R/donnees.R:3132-3143` | paires `prestations` → `dossiers` et `prestations` → `rentes` absentes |
+| `R/donnees.R:3256` (§ 5.2) | `.regle_v_ordre_dates()`, `R/donnees.R:3806` ; D02a sur `contrats` (R1 à R3) :3828-3832 | relations de D02a |
+| `R/risque_en_cours.R:284` (§ 7) | `.hypothese_d03h()`, `R/risque_en_cours.R:333` (expression :336) | décimal |
+| `R/simulation.R:697-701` (§ 1.2) | `R/simulation.R:701` (`origine = length(arrets)`) | décès issu d'un arrêt |
+| `R/outils.R:15` | inchangé | `VERSION_DICTIONNAIRE_ATTENDUE` |
+| `R/outils.R:548-553` (§ 6) | `R/outils.R:549-554` (`CONVENTIONS_AGE` :554) | conventions d'âge |
+| `tests/references.R:18-28`, `:37`, `:73`, `:85-86` | :17-26, :36, :75, :86-87 | couples, exclusions de la fiche, `conventions$age`, seuils |
+| `tests/jeux_v1.R:134-140`, `:166-173` | :134-141 (seuils) ; :162-175 (déclarations de `v1-modeste-02`, hypothèses :166-173) | plans des jeux |
+| `tests/unitaires/calculer_provisions.R:646-660` (#90) | :881-895 (échec attendu :893-895) | critère de #90 |
+| `tests/unitaires/calculer_provisions.R:662-671` (#83) | :1041-1050 | critère de #83 |
+| `fiche.txt:118` (C1) | inchangé (`versions/dictionnaire character 1.5`) | version |
+| `module-donnees-v1.md:231`, `:525`, `:576`, `:889`, `:893-898`, `:897` | :325, :622, :673, :1040, :1044-1049, :1048 | spécification `donnees` (v1.8) |
+| D11 (« non implémenté », § 3) | `.regle_v_couverture()` :5282 ; `.verdict_d11()` :5305 ; `.maintien_d11()` :5413 ; `.couverture3()` :4256 | D11 implémenté (Bdr-b1) |
+| — | `postes_a_arreter()`, `R/garanties.R:252` ; appelants `R/calculer_provisions.R:89`, `R/engagement.R:752`, `R/risque_en_cours.R:577` | règle d'arrêt (#72) |
+
+### 11.3 § 1 (#60) : corrections et compléments
+
+**(a) § 1.2, P6.**
+- La règle visée est inchangée. Le site d'admission devient `R/donnees.R:2086-2094`.
+- D03h :
+  - la ligne `non_lisible` (`R/donnees.R:3791`) est retirée ;
+  - la condition `requis` (:3797-3798) est étendue à la garantie `deces` d'un contrat collectif à `maintien_deces` = `TRUE`.
+- La cause `non_lisible` n'a plus de producteur après P6 et le § 11.4 : ses deux seuls producteurs sont :3791 et :5295 (lu, `grep -n CAUSE_NON_LISIBLE`). La constante et son rang (`R/donnees.R:124`, `:7106`) sont gardés dans la liste fermée des causes (jugement d'expert : la retirer changerait l'ordre des rangs sans motif de fond).
+- Bases remesurées (`bases.R`, mesuré) :
+  - garanties `deces` collectives à `taux_technique_tarif` manquant : 5 sur 5 (`v1-modeste-01`), 5 sur 5 (`v1-modeste-02`), 1 sur 1 (`construite-deces-01`), 6 sur 6 (`v1-modeste-03`), comme au projet ;
+  - garanties `deces` individuelles : 0, 0, 2 et 200, aucune à taux manquant.
+- Lien avec D11 : § 11.4.
+
+**(b) § 1.3, grammaire de `defauts.csv`.**
+- **D12 réservé à plusieurs familles.** La valeur `famille:<famille>` ne suffit plus. D12 est traité S pour `triangle`, `risque_en_cours` et `regle_comptable` (point 11 du § 7 de la spécification `donnees`, M335 ; `.EXCEPTIONS_FAMILLE`, `R/donnees.R:144-146`, lu).
+  - La cellule `signalement` devient une liste jointe par « ; », comme les autres champs multivalués (`.eclater()`).
+  - Chaque élément suit la grammaire du § 1.3. `aucun`, `alternatif`, `cumulatif` et `extraction` sont seuls dans leur cellule.
+  - D03a : `famille:triangle`. D12 : `famille:triangle;famille:risque_en_cours;famille:regle_comptable`.
+- **Lignes de sous-cas ajoutées :**
+  - `D11a`, `D11b`, `D11c` : `traitements` `S;X`, `signalement` `cumulatif`, `parent` `D11` (§ 11.4) ;
+  - sous QE-8 (a) : `D07a` (`H;S`, `alternatif`, détection `exacte`), `D07b` (`X;S`, `alternatif`, `presomptive`), `D07c` (`H;S`, `alternatif`, `exacte`), `parent` `D07`.
+- Sous QE-8 (a), la phrase « D07, D02c et D09 … Leur lettrage n'est pas proposé » est remplacée pour D07 seulement (motif : #124, point 1, § 11.8).
+- **Critère d'égalité des listes dérivées.** Elles égalent les listes de `a5e8970`, à deux changements près : les sous-cas D11 et, sous QE-8 (a), D07 remplacé par D07a, D07b et D07c dans `.MOTIFS_SIGNALEMENT`.
+
+**(c) § 1.7, P16 (texte de D07 (c)).**
+- « rente d'éducation en service » devient « rente d'éducation non éteinte (en service ou suspendue : statut de service, spécification `donnees` § 8.0 bis, point 3) ».
+- « à `age_limite_etudes` si `situation` ∈ {`scolarise`, `apprenti`} » se complète par « et si le paramètre existe ».
+- Ces deux corrections alignent le texte sur le code, lu à `R/donnees.R:4425-4432`. L'écart était déjà relevé par le handoff 6868051739 de la PR #114.
+- « Effet attendu » : D07 est implémenté, et aucune ligne D07 ne figure dans les bilans des dix couples (mesuré, § 11.10). L'effet reste nul.
+
+**(d) § 1.9, P18.** La phrase « `loi_vraie.txt` des jeux change » n'est vraie que si D03i entre dans `DEFAUTS_SIMULES` (`R/simulation.R:97-104` : douze défauts simulés, lu). Recommandation : ne simuler ni D03i ni les sous-paramètres `college_errone` et `affiliations_simultanees` dans cette branche, l'injection des défauts non simulés étant suivie par #117. La loi vraie reste alors inchangée sur ces points (prévision).
+
+**(e) Points du § 7 de la spécification `donnees` qui amendent le projet** (M335, M611) :
+
+| Point | Transcription |
+|---|---|
+| 7 (v1.6) : matrice de D10e | transcrit (§ 9, D10 (e) ; T11) |
+| 8 (v1.6) : `D14.tables` = `famille;sinistres` | transcrit (CSV seul ; `defauts.csv$tables` n'est lu que par la validation du dictionnaire, `R/dictionnaire.R:332`, lu : aucun résultat) |
+| 9 | rien |
+| 10 : sous-cas du maintien de D11 avec P6 | § 11.4 |
+| 11 : D12 traité S pour `risque_en_cours` et `regle_comptable` | § 11.3 (b) |
+| 12 : D07 (a) par `famille.date_deces` | non transcrit (non décidé) |
+| point 7 (v1.7) : phrase du § 1.6 sur la chaîne vide | transcrit (QE-2) |
+| point 8 (v1.8, M611) : phrase du § 1.3 | transcrit, avec « ou vide » (QE-2) |
+
+Texte du point 8 proposé pour le § 1.3 (dict. :88) :
+
+> « Dans une clé composite, un manquant d'une composante dont l'absence est une valeur (colonne `C` hors condition, `F`, ou manquant traité par un défaut de la liste) compte comme une valeur ; une composante dont l'absence est refusée, ou vide (chaîne `""`, code `chaine_vide`, § 1.6), n'identifie aucune ligne et n'entre pas dans la détection D01a. »
+
+- Motif : la règle (i) de la spécification `donnees` v1.8 (§ 2.2, B.4, Q-B2 (b), M396) écarte aussi la composante `""`. La phrase de M611 sans « ou vide » contredirait la spécification et le code en vigueur depuis #143.
+- Le cinquième tiret du § 1.3 se complète : « Une clé étrangère non manquante **et non vide** doit exister… ». Une clé `""` garde son seul code `chaine_vide` (M396).
+- Effet : aucun (le code est déjà conforme).
+
+**(f) Chaînes et clés faites de blancs (#164, M650), sous QE-3 (b).**
+- **État à `a5e8970`** :
+  - `cle_renseignee(" ")` et `cle_renseignee("\t")` valent `TRUE` ;
+  - `apparier_cles(c(" ", "", "\t"), c("x", " ", "", "\t"))` vaut `2 NA 4` ;
+  - `.chaine_vide(" ")` vaut `FALSE` (mesuré) ;
+  - la lecture des fichiers garde les blancs (`strip.white = FALSE`, `R/lecture.R:134` et `:142`, lu).
+- **Texte proposé, § 1.6**, après la phrase sur `""` :
+
+  > « Une chaîne faite seulement de blancs (espace U+0020, tabulation U+0009, saut de ligne U+000A, tabulation verticale U+000B, saut de page U+000C, retour chariot U+000D) est une chaîne vide au sens du présent paragraphe : même code `chaine_vide`, même règle ; pour une clé, celle de la clé manquante (§ 1.3). Une valeur qui contient un autre caractère est lue telle quelle, blancs compris : le moteur ne retire aucun blanc et compare les identifiants caractère pour caractère. »
+
+  Le § 1.10, ligne `chaine_vide`, devient « Chaîne `""`, ou faite seulement de blancs (§ 1.6), … ».
+- **Motif** (jugement d'expert) : celui de M396. Une clé faite de blancs n'identifie rien, comme `""`, et apparier deux blancs inventerait un lien. Le code dédié donne un diagnostic plus juste que l'orpheline D04b qu'elle produit aujourd'hui. La classe de caractères est fermée et ne dépend pas de la locale.
+- **Alternatives écartées** :
+  - (a) statu quo déclaré : le blanc est une valeur, et les conséquences passent par D01a et D04. Coût nul, mais deux anomalies sans code propre ;
+  - (c) refuser aussi les blancs de tête ou de fin. Écartée : une extraction à largeur fixe, bourrée de façon cohérente aux deux bouts du lien, serait refusée en bloc alors qu'elle se lit juste.
+- **Sites à reprendre** (lu) : `.chaine_vide()` (`R/donnees.R:1999`) ; la règle `chaine_vide` (:1907-1908) ; la comparaison à `""` de :2590 ; `cle_renseignee()` et `apparier_cles()` (:2019-2022) en héritent par `.cle_manquante()`. Le script `tests/controles/appariements_cles.R` sert au recensement.
+- **Effet** : aucun sur les dix couples. Les quatre bases ne comptent aucune cellule `character` vide, faite de blancs ou contenant un blanc (6439, 6440, 250 et 33 494 cellules ; mesuré, `bases.R`).
+- **Place** : le commit de #60.
+
+**(g) Domaine de `college` (Q-5), sous QE-4 (a).**
+- T4 `college` (dict. :326) devient : « Code opaque du collège de personnel, sans blanc (§ 1.6), ni « ; », ni « = » ; `ensemble` s'il n'y a pas de collège (toujours `ensemble` pour un contrat individuel) ».
+- Un collège qui contient un blanc, « ; » ou « = » est `hors_domaine` (refus R), règle écrite dans `donnees` à côté de la règle du collège d'un contrat individuel (`R/donnees.R:2095-2100`).
+- Motif : la forme de D03c (M315) refuse déjà un blanc dans un collège (`R/engagement.R:385`). Mesuré : `.salaire_d03c("A B=100", …)` rend `plan_invalide`. Un collège admis par le domaine mais indéclarable sous D03c serait une contradiction (commentaire 6836953391 de #99).
+- Note pour #99 : la forme de D03c emploie `[[:space:]]`, classe liée à la locale. Seule la locale C est mesurée (U+00A0 n'y est pas un blanc). Il faudra l'aligner sur la classe explicite du § 1.6.
+- Effet : aucun. Le seul collège des quatre bases est `ensemble`, dans `garanties_souscrites` comme dans `affiliations` (mesuré).
+
+**(h) § 7 (formes des valeurs `H`, #99).** Sous QE-12 (a), le texte `1.6` reprend les formes du § 7. La phrase « `valider_plan()` la contrôle » devient « son contrôle par `valider_plan()` vient avec #99 (ligne « plan et valeurs `H` », M600) ». Le § 7 n'a donc aucun effet de code dans cette branche. Les lignes du § 8 du projet sur « la section `donnees` du plan (valeurs `H` alignées) » et « `hypotheses_defaut$valeur` (6 et 10 rangées) » de J3 et J4 passent à #99 (§ 11.10).
+
+**(i) § 1.11, version.** Le changement de version renomme aussi les jeux et la base construite (ADR 0011, point 22). Le chemin de chaque couple (`<donnees>/<plan>/<arrete>`, `tests/references.R`) change donc dans l'arbre des références.
+
+### 11.4 § 3 réécrit : #81, D11 étendu au collège (remplace le § 3 du projet)
+
+**État à `a5e8970`** (lu ; mesuré pour les couples). D11 est implémenté (Bdr-b1, #34 ; spécification `donnees` § 8.7, v1.6.3 à v1.8). Le « Préalable » du projet est caduc.
+- Pièces : règle V `.regle_v_couverture()` (`R/donnees.R:5282`) ; verdict `.verdict_d11()` (:5305) ; sous-cas du maintien `.maintien_d11()` (:5413) ; couverture `.couverture3()` (:4256, sans collège).
+- Constat sur `sinistres.date_survenance`, traitements S et X (deux constats de même clé).
+- Sous-cas du maintien : sinistre non détecté et ligne (D11, `sinistres`, NA) `non_lisible` (:5295, :5401).
+- Sous-cas illisible : sinistre écarté, cause directe (:5366-5397).
+- Contrat du dossier lu par `.joindre()` (:5317-5318) ; manquant ou vide, il ne couvre pas la survenance (#157, :5329).
+- Dans les dix couples, aucune ligne D11 dans aucune table du bilan (mesuré, § 11.10) : D11 s'exécute sans détection.
+
+**D11a** = l'actuel D11 de `.verdict_d11()`, renommé : constat, déclarations, lignes de `controles_non_executes`. La règle est inchangée, à deux points près : C-5, et le sous-cas du maintien lu avec P6.
+
+**Sous-cas du maintien en `1.6`** (point 10 du § 7 de la spécification `donnees` ; jugement d'expert, QE-5 ; lecture de l'art. 7-1 à confirmer par `regulatory` en 0b, QE-13).
+- **Condition.** Un sinistre `deces` non couvert relève du sous-cas si l'assuré a un sinistre `arret_travail`, retenu ou non déterminé, qui réunit trois conditions :
+  - il est survenu pendant une affiliation à un contrat collectif en cause, de fin connue et antérieure au décès (règles de la v1.6.3, inchangées) ;
+  - la garantie `deces` de ce contrat, au collège de cette affiliation, porte `maintien_deces` = `TRUE` dans sa version en vigueur à la survenance de l'arrêt, lue par la fonction unique « garantie souscrite en vigueur à la survenance » (§ 8.0 bis, point 4, de la spécification `donnees`) ;
+  - l'arrêt est en cours au sens de QE-6.
+- **Valeur de `maintien_deces` :**
+  - `FALSE`, ou pas de garantie `deces` à ce collège : hors sous-cas ;
+  - inconnue (refusée, version non déterminée) : sous-cas inconnu, sinistre écarté avec la cause directe, départagée (§ 3.1 de la spécification `donnees`). `garanties_souscrites.maintien_deces` rejoint les colonnes lues par le sous-cas.
+- **Sous-cas vrai :** sinistre non détecté, couvert par le maintien. Aucune ligne `non_lisible` n'est écrite.
+- **Contrat individuel :** hors sous-cas. La colonne y est manquante par son domaine (§ 1.2), et le maintien de l'art. 7-1 est collectif.
+- **Lecture de `evenements` :** seulement pour un contrat en cause à `maintien_deces` = `TRUE` ou inconnu.
+- **Motif.** La colonne déclare l'existence de la clause (§ 1.2). La clause déclarée couvre le décès survenu pendant l'arrêt, quelle que soit la lecture de I1 (obligation de la clause) et de I3 / P9 (portée de la provision de l'engagement, al. 2 : § 1.2 du projet). Ni l'une ni l'autre ne décide si un décès donné est couvert.
+- **Alternatives écartées :**
+  - garder `non_lisible` sous `TRUE` jusqu'à #14, point 4 : une ligne non exécutée sans motif de données ;
+  - garder les contrats individuels dans le sous-cas : une ligne `non_lisible` permanente.
+- **Effet.** Aucun sur les dix couples : aucune ligne D11 n'y figure, et les quatre bases sont à `FALSE` (M502, prévision).
+
+**Arrêt en cours** (#128, point 1 ; QE-6 (a)).
+- Un arrêt est en cours à la date t si le dernier événement de son sinistre de type `sortie` ou `rechute`, de date d'effet ≤ t, dans l'ordre du § 4.2 (`.dernier_evenement()`), n'est pas une `sortie`. Sans tel événement, l'arrêt est en cours.
+- Le sous-cas exige l'arrêt en cours **à la fin de la couverture et au décès**. Cette condition remplace « aucune `sortie` de date d'effet ≤ la fin de la couverture » (v1.6.3).
+- Un événement non déterminé, ou une date inconnue, rend le verdict inconnu (index sur `evenements`).
+- Motif : la v1.6.3 manque la rechute entre une sortie et la fin (#128). Elle tient aussi pour couvert un décès survenu après une sortie postérieure à la fin. Avec P6, sous `TRUE`, le sous-cas décide de la détection.
+- Alternative écartée : exiger la continuité, c'est-à-dire aucune `sortie` dans [fin ; décès], même suivie d'une rechute. La base ne dit pas si une rechute continue l'arrêt au sens du contrat.
+- Jugement d'expert ; effet nul sur les couples.
+
+**D11b** (table `dossiers`, colonne `id_garantie_souscrite`).
+- Le dossier est posé sur une garantie souscrite de couple (`id_contrat`, `college`) ;
+- aucune affiliation de l'assuré à ce contrat dans ce collège ne couvre la survenance ;
+- une affiliation au même contrat dans un autre collège la couvre ;
+- le sous-cas du maintien, restreint aux affiliations du collège du dossier, n'est pas vrai.
+- D11a et D11b sont disjoints, car D11b exige la couverture par le même contrat.
+- Couverture évaluée par `.couverture3()`, étendue d'un argument facultatif de collège : une seule implémentation (§ 8.0 bis, point 5, de la spécification `donnees`). Contrat et collège du dossier lus selon C-5.
+- Contrat individuel : hors champ.
+- Logique à trois valeurs comme D11a (cause γ).
+
+**D11c** (table `affiliations`, colonne `college`).
+- Deux affiliations d'un même assuré au même contrat, dans deux collèges distincts, dont les périodes de couverture se chevauchent : bornes incluses (§ 1.4), fin ouverte infinie, fin connue à A.
+- Une composante de clé manquante ou vide met la ligne hors du contrôle (forme « chevauchement », #121, M396).
+- Lignes non déterminées : verdict inconnu, cause γ.
+
+**C-5 de #164** (M650 ; commit de #81 ; QE-11).
+- `contrat_d` est lu par `.joindre3()` (`R/donnees.R:1473`) au lieu de `.joindre()` (:1969-1971, première occurrence), puis normalisé par `.cle3()`.
+- Occurrences concordantes : inchangé.
+- Occurrences divergentes (garantie souscrite en double, contrats différents ou manquants) : le contrat est inconnu, de domaine les valeurs des occurrences.
+  - L'atome « le contrat ne couvre pas la survenance » s'évalue pour chaque valeur ; un contrat manquant ne couvre pas (#157).
+  - Si les valeurs concordent, le verdict est connu. Sinon il est inconnu, avec un index sur les lignes des occurrences de `garanties_souscrites` (cause candidate D01a, lecture existentielle de #131).
+  - Sous-cas du maintien : les contrats en cause sont toutes les valeurs renseignées du domaine.
+- Même règle pour le collège lu par D11b.
+- Atteignabilité : aucune base n'atteint ce cas (mesuré, `c5.R`, base construite, A = 2025-12-31) :
+  - garantie `GSC1` en double, `NA` puis `CTC1` : `garanties_souscrites` refusée en portée table (D01a, `manquant_obligatoire`), D11 non exécuté, cause `manquant_obligatoire` ;
+  - `CTC1` puis `CTC1` : refus D01a et `chevauchement`, D11 non exécuté, cause `chevauchement`.
+  - Ces deux mesures confirment deux des six cas de l'audit (commentaire 6958746793 de #164).
+- Tests par appel interne :
+  - (`NA`, contrat couvrant) : inconnu, cause D01a ;
+  - (contrat, même contrat) : connu ;
+  - (`NA`, `NA`) : vrai.
+- Effet : dix couples `identical()` hors `fiche$empreintes$code` (aucune garantie en double dans les couples, prévision).
+
+**Q-22** (QE-7 (a)). La lecture grossière de la v1.6.3 est gardée : le sous-cas illisible écarte avec la cause directe. P6 réduit sa portée, puisque `evenements` n'est plus lu pour un contrat en cause à `maintien_deces` = `FALSE`. La lecture fine (« non clos » certain par les colonnes lisibles) relève de la règle générale des règles V sous une colonne refusée (M169). Elle est renvoyée à #105 par un commentaire, et non traitée comme une exception propre à D11.
+
+**Codes, déclarations, défauts.**
+- Codes `D11a`, `D11b`, `D11c` au bilan. Déclarations par sous-cas, comme pour D10 (lignes de sous-cas de `defauts.csv`, `parent` `D11`, listes dérivées).
+- Intensité `hors_couverture`, sous-paramètres `college_errone` (D11b) et `affiliations_simultanees` (D11c), au dictionnaire. Ils ne sont pas simulés (§ 11.3 (d)).
+- Aucun plan de référence ne déclare D11 (`grep D11 tests/references.R tests/b2_bases.R tests/jeux_v1.R` : 0 ; mesuré).
+- Détection exacte, hors portabilité (une affiliation de portabilité couvre comme toute affiliation, dict. :388).
+
+**Remplace.**
+- dict. :759 : trois lignes, avec la mention « hors maintien de la garantie décès » remplacée par un renvoi au sous-cas lu avec `maintien_deces` ;
+- dict. :387 (`affiliations.college`, colonne « Défauts » : `D04b, D11`) ;
+- dict. :451 (`dossiers.id_garantie_souscrite` : ajout de `D11`) ;
+- dict. :709 (§ 8, « Maintien de la garantie décès ») : renvoi à D11a.
+
+**Traitement.** S + X par famille pour les trois sous-cas (M508), avec les motifs du projet pour D11b et D11c.
+
+**Effet sur les dix couples.** Aucun, ni sur les provisions ni sur les bilans (prévision fondée sur des mesures) :
+- aucune ligne D11 ;
+- seul collège : `ensemble` ;
+- 0 paire d'affiliations chevauchantes et 0 couple (assuré, contrat) à plusieurs affiliations (500, 500, 5 et 1499 affiliations ; mesuré) ;
+- bases à `maintien_deces` = `FALSE` ;
+- aucun D01a.
+
+La prévision du projet (« la rangée `D11 … non_implemente` devient `D11a` ») est caduque. Les bilans des tests unitaires qui portent D11 changent de code : tableau avant / après au commit de #81.
+
+### 11.5 § 2 (#72) : compléments
+
+- **Constat remesuré** (`etat2.R`). La seule rangée de `refus_tables` de J3 et de J4 est `prestations.montant`, D09, portée `colonne`, `PR00010`, `postes_arretes` = `deces/capitaux_non_reclames;deces/sinistres_declares_non_regles`. `PR00010` est une `indemnite_journaliere` de −487,92 du dossier `DO0014`, garantie `GS005`, `incapacite`.
+- **Mesure substitutive remesurée** (`j34sub.R`, signe de `PR00010` rétabli, toutes choses égales par ailleurs). P1, P2, P3 et le total valent 0, `exact`, 0 dossier, statut `calcule`, à J3 comme à J4. La substitution retire aussi le constat D09 (`refus_tables` 0, enjeu 90 rangées toutes calculées) : ce n'est pas l'effet de la règle sur le bilan.
+- **Enjeu remesuré** (`etat3.R`). 94 rangées dans J3 et dans J4. Par motif : D01b 26 calculées ; D02a 8 de cause D09 ; D04b 16 calculées ; D09 2 de cause D09 ; `ensemble` 32 calculées et 10 de cause D09.
+- **Critère « famille de calcul » (feuille de route, § 2, seuil « macro », (ii)) : établi** (lu).
+  - `postes_a_arreter(catalogue, bilan, postes, parties)` (`R/garanties.R:252`) ne reçoit aucune unité. Ses règles (i) à (iii) arrêtent par table, colonne ou partie de ligne.
+  - Les lignes lues par unité ne sont construites que dans les familles : `lecture_unites()` (`R/engagement.R:339`), `.lectures_dossiers()` (:352) ; lectures de P3 (`R/risque_en_cours.R:217-229`).
+  - La condition (2) de l'option (i) (« au moins une ligne refusée est lue pour une de ses unités ») ne peut donc pas s'évaluer dans `postes_a_arreter()` seule, ni à `R/calculer_provisions.R:89`, où les arrêts sont calculés avant les familles.
+  - #72 modifie donc `calculer_engagement()` (`R/engagement.R:733`, arrêt lu à :752) et `calculer_risque_en_cours()` (`R/risque_en_cours.R:536`, :577), fonctions communes à toutes les garanties de leur famille (ADR 0005). Le critère est atteint.
+  - #72 touche aussi `donnees` : portée `ligne` dans `refus_tables`, modalité `ligne_table` de `controles.csv`, composante de l'enjeu `NA` seulement sur une valeur refusée.
+- Le reste du § 2 est inchangé ; l'option (ii) est renvoyée à #105 (M507).
+
+### 11.6 § 4 (#83) : compléments
+
+- Sites : liste `filles` de D02b `R/donnees.R:3132-3143` ; D10b dans `.regle_v_garanties()` (:4035, `hors_vigueur` :4040-4046) ; échec attendu `tests/unitaires/calculer_provisions.R:1041-1050`.
+- **Mesure remesurée** (`masq.R` ; visibilité simplifiée sur les données brutes, « date de saisie ≤ A », sans logique à trois valeurs). Dans les dix couples, toutes ces lignes valent 0 :
+  - dossiers visibles à garantie souscrite d'effet > A ;
+  - versions à contrat d'effet > A ;
+  - affiliations saisies ≤ A à contrat d'effet > A ;
+  - cotisations ≤ A à garantie d'effet > A ;
+  - prestations saisies ou réglées avant l'ouverture de leur dossier ou la saisie de leur rente.
+- **Constat connexe** (lu). `hors_vigueur` lit la garantie souscrite par `.joindre()` (:4043-4045), comme C-5. D03h lit la nature du contrat de même (:3796). Proposition QE-11 : même lecture que C-5 dans le commit qui réécrit chacune de ces règles (D10b : #83 ; D03h : P6, dans #60). Cas latent (refus D01a de portée table) ; aucun effet sur les couples.
+- `.regle_v_garanties()` porte aussi le site D10c relevé par #164 (`sinistre %in% avec_deces`), rangé en B3 : #83 n'y touche pas.
+
+### 11.7 § 5 (#90) : compléments
+
+- **Q-23, R11** (QE-10 (a) ; amende le § 5.3, M510).
+  - R11 n'est plus évalué sur une ligne de `famille` de `lien` = `enfant` dont la naissance est postérieure à la survenance du sinistre rattaché, quel que soit le délai. R11 reste évalué pour les autres liens.
+  - La règle couvre l'enfant déclaré `a_naitre` puis né (§ 5.3 : `a_naitre` n'existe que pour un enfant, `colonnes.csv`, `famille.situation`, lu) et l'enfant posthume saisi directement comme né, que D14 compte à naître sans borne de délai (M343). Elle remplace la règle du § 5.3, qu'elle englobe, sans recherche de version antérieure.
+  - Motif : avec #90, sous `H`, R11 tiendrait pour inconnue la naissance juste d'un enfant posthume, et D03a lui substituerait une valeur par défaut (valeur fabriquée sur une donnée juste) ; sous X, l'enfant serait exclu. La population est celle de D14 (M343).
+  - D02c ne signale pas cet enfant : son âge à la survenance vaut `NA` (`calculer_age()`, `R/outils.R:577`, `ok <- … jour >= naissance`, lu). La suite d'un âge `NA` dans D02c n'est pas mesurée.
+  - Alternatives : (b) le § 5.3 tel que visé ; (c) une borne de 300 jours, qui demande une lecture de `regulatory` et rouvre M343.
+  - Effet : aucun (0 ligne de `famille` née après la survenance et 0 `a_naitre` dans les quatre bases ; mesuré, `bases.R`).
+- **Garde du point 1 de #112** (QE-9 (a)). **Nécessaire**, mais pour une autre cause que celle que prévoyait l'issue.
+  - La `1.6` ne donne aucune colonne de saisie de ligne à une table à partie de ligne. Les seules colonnes nouvelles sont `maintien_deces` (T4) ; D03g étendu vise `dossiers`, `catastrophes`, `victimes` ; D02b étendu vise `prestations`. Aucune de ces tables n'est dans `.PARTIES_LIGNE` (`R/donnees.R:2807-2810` : `contrats`, `affiliations`, `sinistres` ; lu).
+  - En revanche, #90 place dans `vue$hypotheses` les lignes rejetées sous D02a (§ 5.1 ; `.MOTIFS_HYPOTHESE_VUE`, `R/engagement.R:274`, porte « D02a quand #90 l'appliquera »), y compris celles de `contrats` (R1 à R3, `R/donnees.R:3828-3832`). R2 et R3 portent sur des dates de ligne (`date_effet`, `date_terme`, `date_debut_gestion`), non sur la partie de fin.
+  - Or `decide_fin` (`R/risque_en_cours.R:222`) lit toute hypothèse de la ligne de `contrats` comme portant sur la partie de fin. Le test de garde de la première forme de #112 échouerait par construction.
+  - Forme retenue : chaque entrée de `vue$hypotheses` porte ses colonnes ; `decide_fin` ne retient que les entrées dont une colonne est dans la partie de fin.
+  - Commit de #90 ; aucun effet sur les couples. `vue$hypotheses` est interne : `donnees$vue` du résultat ne porte que `date_arrete`, `date_extraction`, `visibilite_non_determinee` et `provisoire` (mesuré).
+  - Le point 2 de #112 reste à la ligne « plan et valeurs `H` ».
+- Effet de #90 : aucun sur les couples. D02a n'est déclaré qu'en `exclusions` dans les plans de J3 et J4, jamais en `hypotheses` (mesuré) ; aucun autre couple ne porte D02a. Échec attendu `tests/unitaires/calculer_provisions.R:881-895`.
+
+### 11.8 #124 et #128 (M633)
+
+- **#124, point 1** (QE-8 (a)) : **versé**, par le lettrage D07a, D07b, D07c (§ 11.3 (b)).
+  - Un plan peut alors déclarer H pour (a) et (c) et un signalement pour (b), avec la mécanique des sous-cas de D10.
+  - Sans lettrage, il faudrait une version `1.7` du dictionnaire.
+  - Effet : aucun sur les couples. Aucun constat ni aucune déclaration D07 dans les bilans et les plans de référence ; seul le seuil `d07b_mois` y figure, dont le nom est gardé (mesuré).
+- **#124, point 2 : renvoyé.** C'est une extension de code de la source (ii) de D07 (a) par `famille.id_assure_membre`. Le texte de D07 (a) (« sur un autre dossier du même bénéficiaire », dict. :755) la permet sans amendement. Rangement à proposer par `architect` : B3, lot `donnees`.
+- **#128, point 1 : versé** (QE-6, § 11.4).
+- **#128, point 2 : renvoyé** (D10f et plusieurs rentes de conjoint). Les colonnes nécessaires existent (`famille.lien`, `conjoint_vise`) : correction de code, sans amendement du dictionnaire. Rangement à proposer : B3.
+- Ni #124 ni #128 ne se ferment dans cette branche, faute d'avoir tous leurs points faits (M633). Aucun `Closes`.
+
+### 11.9 D07 (c) et D14 ne sont pas réécrits (confirmation, #163 en B3)
+
+Lu.
+- Les points de la transcription qui touchent D07 (c) ou D14 sont du texte ou du CSV : P16 (§ 11.3 (c)), `D07.tables`, `D14.tables`.
+- La colonne `tables` de `defauts.csv` n'est lue que par la validation du dictionnaire (`R/dictionnaire.R:332`).
+- D07 (c) lit déjà `conventions$limite_age` (`R/donnees.R:788` ; M155).
+- Sous QE-8 (a), seule la chaîne de code « D07 » change dans `.regle_v_limite_age()` (:4448), comme dans les règles de D07 (a) et (b).
+- **Critère d'acceptation pour la revue finale** : `git diff main...HEAD -- R/donnees.R` ne touche pas le corps de `.parametre_garantie()` (:4657), `.famille_en_jeu()` (:4702), `.enfant_eteint()` (:4683), `.candidats_d07c()` (:4633) ni `.verdict_d14()` (:5710). Sous QE-8 (a), seul le code de constat est renommé dans `.regle_v_limite_age()`.
+
+### 11.10 § 8 remesuré : effet sur les dix couples
+
+État mesuré à `a5e8970` (`etat2.R`, `etat3.R` ; cellules `deces`, `comptes_sociaux`, segment `ensemble`) :
+- **J1, J2** : P1, P2, P3 et total à 0 `exact`.
+- **J3, J4** : P1 et P2 arrêtés, motif D09 ; P3 à 0 `exact` ; total arrêté (`poste_arrete:capitaux_non_reclames;sinistres_declares_non_regles`).
+- **Totaux de C1 à V2** (égaux, à l'affichage, aux valeurs du § 0 du projet) : C1 445 437,945 ; C2 479 136,113 ; C3 469 931,440 ; C4 506 119,162 ; V1 1 653 405,323 ; V2 1 203 438,556.
+- **`controles_non_executes`** :
+  - 7 rangées dans J1, J2, C1 à C4, V1 et V2 : `D03h garanties_souscrites NA non_lisible`, plus six `non_implemente` (D09 × 5, D03d) ;
+  - 9 rangées dans J3 et J4, avec en plus `D01b prestations` et `prestations_ecartees prestations.montant`, de cause D09.
+- **Rangée `D03h … non_lisible`** : présente dans 10 couples sur 10.
+- **Aucune ligne** D07, D11 ou D14 dans aucun bilan.
+- **J3 / J4** : 14 / 14 `controles`, 12 / 12 `exclusions`, 6 / 10 `hypotheses_defaut`, 7 / **5** `signalements`, 94 / 94 `enjeu`. Le § 0 du projet disait « mêmes tables » pour J4 : J4 compte 5 signalements.
+- **V2** : constat D12 (`EV00429`).
+
+| Couple | Fiche (prévision) | Provisions | Bilan | Visa |
+|---|---|---|---|---|
+| J1, J2 | `versions/dictionnaire` 1.5 → 1.6 ; `empreintes/donnees/extraction` et `…/garanties_souscrites` (P6) ; chemin du couple (jeu renommé) | inchangées, 0 `exact` (mesuré avant ; prévision après) | `controles_non_executes` 7 → 6 rangées (D03h `non_lisible` retirée, P6 ; prévision) ; aucune rangée D11 avant ni après (mesuré avant) | `actuary` |
+| J3, J4 | idem ; la section `donnees` du plan **ne change pas** dans cette branche (§ 11.3 (h), #99) | **P1, P2, total : d'arrêté (D09) à 0 `exact`** (#72 ; mesure substitutive remesurée) ; P3 0 `exact` inchangé | `refus_tables` : `portee` `ligne`, `postes_arretes` vide (prévision) ; `enjeu` : sur les 20 rangées de cause D09, les 8 de D02a et une partie des 10 `ensemble` deviennent calculées, les 2 de D09 restent `NA` (prévision) ; `controles_non_executes` 9 → 8 (D03h ; `D01b` et `prestations_ecartees` de cause D09 gardées, E3) ; `hypotheses_defaut$valeur` inchangées (6 et 10 rangées : #99) | **mainteneur** (total) |
+| C1 à C4 | idem J1 (base construite renommée ; `GSC1` à `maintien_deces` = `FALSE`) | inchangées (prévision ; mesures : aucun D02a, aucune ligne masquée, collège `ensemble` seul, aucun D01a) | D03h comme J1 | `actuary` |
+| V1, V2 | idem J1 | inchangées (mêmes mesures) | D03h comme J1 ; D12 de V2 inchangé | `actuary` |
+
+Sans effet sur aucun couple, chaque point s'appuyant sur une mesure de la présente section : #81 (§ 11.4), #83 (§ 11.6), #90 (§ 11.7), #162, #32, Q-5, les blancs, C-5, #124 point 1, #128 point 1.
+
+**Condition de la prévision, critère pour 0c.** Les jeux régénérés doivent être identiques, colonne à colonne, aux jeux actuels, à deux exceptions près : `garanties_souscrites.maintien_deces` (ajoutée) et `extraction.version_dictionnaire` (1.6). Cette égalité se vérifie par un script au commit de #60. Si le flux pseudo-aléatoire du simulateur était décalé, les provisions de V1 et V2 seraient à remesurer et à soumettre au visa.
+
+### 11.11 Points pour les étapes 0b et 0c
+
+- **0b** (QE-13) : lecture de l'art. 7-1 de la loi n° 89-1009 par `regulatory`, pour le sous-cas du maintien de D11a (spécification `donnees` § 8.7 : « `regulatory` à consulter à ce moment-là »). Trois points :
+  - le maintien vise-t-il un décès survenu pendant la période d'arrêt, ce qui fonde « en cours au décès » ?
+  - I1 et I3 / P9 sont-ils sans effet sur la couverture d'un décès donné quand la clause est déclarée ?
+  - la phrase « hors maintien de la garantie décès » de dict. :759 peut-elle devenir un renvoi au sous-cas ?
+  - Si QE-10 (c) était retenue, il faudrait aussi lire le Code civil (présomption de conception).
+- **0c** :
+  - alignement de la spécification `donnees` en v1.9 (`vue_empechee`, #72, #83, #90, D11a à D11c, R11, `non_lisible`). Le projet le demande (§ 10.2), mais `docs/specifications/module-donnees-v1.md` manque à la liste « Fichiers attendus » du § 1.16 ; qui le rédige et quand reste à fixer ;
+  - égalité des jeux régénérés (§ 11.10) ;
+  - dans les tests, les déclarations D11 et, sous QE-8 (a), D07 sont à renommer ;
+  - D03i et les sous-paramètres de D11 ne sont pas simulés (§ 11.3 (d)).
+
+### 11.12 Questions au mainteneur (soldées au visa de l'erratum)
+
+1. **QE-1** — Visa de l'erratum.
+2. **QE-2** — Phrases du § 1.3 (point 8 avec « ou vide », M611 ; clé étrangère « non manquante et non vide ») et du § 1.6 (point 7, v1.7) ?
+3. **QE-3** — Chaînes faites de blancs : (a) statu quo déclaré ; **(b) chaîne vide, code `chaine_vide`, règle de la clé manquante (recommandé)** ; (c) refuser aussi les blancs de tête ou de fin.
+4. **QE-4 (Q-5)** — Domaine de `college` : **(a) « sans blanc, ni « ; », ni « = » » (recommandé)** ; (b) « sans « ; » ni « = » » (M511 tel quel).
+5. **QE-5** — Sous-cas du maintien lu avec P6 : **(a) `FALSE` : hors sous-cas ; `TRUE` : couvert ; inconnu : écarté ; contrats individuels hors sous-cas ; version en vigueur à la survenance de l'arrêt (recommandé)** ; (b) `non_lisible` gardé sous `TRUE` jusqu'à #14, point 4.
+6. **QE-6 (#128, point 1)** — **(a) arrêt en cours à la fin de la couverture et au décès (recommandé)** ; (b) définition de la v1.6.3, et #128 renvoyée entière.
+7. **QE-7 (Q-22)** — **(a) lecture grossière gardée, lecture fine renvoyée à #105 par un commentaire (recommandé)** ; (b) lecture fine pour D11 dans cette branche.
+8. **QE-8 (#124, #128)** — **(a) #124 point 1 versé par lettrage de D07 ; #124 point 2 et #128 point 2 renvoyés (recommandé)** ; (b) #124 renvoyée entière.
+9. **QE-9 (#112, point 1)** — **(a) garde nécessaire, sous la forme « colonnes portées par chaque entrée de `vue$hypotheses` », dans le commit de #90 (recommandé)** ; (b) pas de garde.
+10. **QE-10 (Q-23)** — **(a) R11 exclut tout enfant né après la survenance, sans borne (recommandé)** ; (b) § 5.3 tel que visé ; (c) borne de 300 jours (rouvre M343).
+11. **QE-11 (C-5)** — **(a) `.joindre3()` dans `.verdict_d11()` (commit de #81), et même lecture pour D03h (commit de #60) et pour D10b (commit de #83) (recommandé)** ; (b) C-5 seul, les deux autres renvoyés à une issue.
+12. **QE-12 (§ 7, #99)** — **(a) formes reprises au texte `1.6`, contrôle renvoyé à #99 (recommandé)** ; (b) § 7 hors de la `1.6`.
+13. **QE-13** — Ajouter à 0b la lecture de l'art. 7-1 pour D11 : **(a) oui (recommandé)** ; (b) non.
+
+### 11.13 Visa et lectures de l'étape 0b
+
+*Ajouté par la session le 18 novembre 2026, après les réponses du mainteneur.*
+
+- **Visa.** Erratum visé le 18 novembre 2026 (M654) ; option recommandée retenue pour chacune des questions QE-1 à QE-13 : QE-3 (b), toutes les autres (a) (M654 à M665, `docs/feuille-de-route.md`, § 4.5). Q-5 (QE-4), Q-22 (QE-7) et Q-23 (QE-10) sont soldées (M652).
+- **Domaine de `maintien_deces` (§ 1.2), lecture de `regulatory` du 18 novembre 2026** (étape 0b ; art. 7-1 de la loi n° 89-1009 lu sur Légifrance et recoupé par la session sur le XML LEGI de la DILA, `LEGIARTI000006756630`, en vigueur depuis le 18 juillet 2001) :
+  - « salariés garantis collectivement » devient « assurés ou adhérents garantis collectivement dans les conditions de son art. 2 » (M666 ; ne préjuge pas I2) ;
+  - « régime couvrant les risques décès, incapacité de travail et invalidité, en un ou plusieurs contrats » devient « dans le cadre d'un ou de plusieurs contrats, conventions ou bulletins d'adhésion comportant la couverture des risques décès, incapacité de travail et invalidité » ;
+  - « chez cet organisme d'assurance ou un autre » est **gardé, écrit comme interprétation** (jurisprudence, Cass. 2e civ., 21 septembre 2023, n° 21-22.197), et non comme texte de l'art. 7-1 (M667) ; sa formulation attend la lecture de l'arrêt par `regulatory` ;
+  - § 9 : la différence de rédaction avec le JO papier porte sur la **deuxième phrase** de l'al. 1 (« sans effet » / « en effet »), non sur la première, qui fonde P6.
+  - ~~Aucun extrait de l'art. 7-1 ni de l'art. 2 n'est mis entre guillemets dans le texte `1.6` tant que la lecture n'est pas au statut « vérifié ».~~ Remplacé par la règle des guillemets ci-dessous (M672).
+- **Lecture complémentaire de `regulatory` du 18 novembre 2026** (M665, M667) :
+  - art. 7-1 (`LEGIARTI000006756630`, version unique en vigueur depuis le 18 juillet 2001) : XML LEGI de la DILA, archive complète, SHA-256 du fichier `73892e8e3bf522d0455eae8fec0d061977f7a61a819279c60fad356e89a43cdf` ; statut **vérifié sur la consolidation** ; pour la 2e phrase de l'al. 1, seul le JO fait foi (fac-similé du JO n° 164 du 18 juillet 2001 non lu) ;
+  - art. 2 (`LEGIARTI000027563152`, en vigueur depuis le 17 juin 2013) : XML LEGI, SHA-256 du fichier `041d5d46d4e7ce774ba54fef4b0fc986d4a0c20626bba34d0d82b3b53f6bf2cf`, tiré d'une archive tronquée dont l'empreinte n'est pas contrôlable (XML bien formé, concordant avec Légifrance) ; statut **vérifié sur la consolidation**, sous cette réserve ;
+  - art. 10 (`LEGIARTI000023031417`) : l'art. 7-1 n'y figure pas ; la phrase « art. 10 sans effet sur P6 » est conforme ;
+  - Cass. 2e civ., 21 septembre 2023, n° 21-22.197 (JURITEXT000048104711, ECLI FR:CCASS:2023:C200863, publié au Bulletin) : lecture indirecte sur Légifrance, statut **`revue requise`** ; il fonde, comme interprétation jurisprudentielle, l'extension à un autre organisme (M667).
+- **Domaine de `maintien_deces` à transcrire** (remplace la formulation du § 1.2 et celle des trois premières puces ci-dessus ; « à un règlement » rétabli) :
+
+  > la garantie `deces` de ce contrat collectif comporte une clause de maintien de la garantie décès en cas d'incapacité de travail ou d'invalidité, imposée par la loi n° 89-1009, art. 7-1, al. 1 (assurés ou adhérents garantis collectivement dans les conditions de son art. 2, dans le cadre d'un ou de plusieurs contrats, conventions ou bulletins d'adhésion à un règlement comportant la couverture des risques décès, incapacité de travail et invalidité ; selon la jurisprudence, l'obligation vaut aussi quand l'employeur a souscrit les garanties incapacité de travail et invalidité auprès d'un autre organisme d'assurance que celui qui couvre le décès, le maintien ayant un caractère autonome : interprétation jurisprudentielle, Cass. 2e civ., 21 septembre 2023, n° 21-22.197, publié au Bulletin), ou stipulée par le contrat ; requise pour `deces` d'un contrat collectif, manquante ailleurs
+
+- **dict. :759, colonne de détection des trois lignes D11a à D11c** (amende le § 11.4, « Remplace ») :
+
+  > exacte, hors portabilité et hors sous-cas du maintien de la garantie décès (décès pendant un arrêt de travail en cours, survenu pendant une affiliation dont la garantie `deces` porte `maintien_deces` = `TRUE` : sous-cas du maintien de D11a)
+
+- **Motif du sous-cas du maintien (§ 11.4), complété** (M669, M670, M671) :
+  - la clause déclarée couvre le décès survenu avant le terme de la période d'incapacité ou d'invalidité (art. 7-1, al. 1, 2e phrase) ; I1 décide de l'obligation de la clause, non de ce qu'elle couvre, et I3 / P9 de la provision de l'engagement (al. 2) : ni l'une ni l'autre ne décide si un décès donné est couvert, la valeur déclarée de `maintien_deces` étant prise telle quelle (sa cohérence avec I1 : #106) ;
+  - **interprétation 1 (M669)** : le terme de la période, défini par le contrat qui couvre le décès et absent de la base, est lu comme la fin de l'arrêt au sens de QE-6 (le `passage_invalidite` ne rompt pas la période ; une `sortie`, quel que soit son motif, y met fin) : jugement d'expert. Écarts possibles : `sortie` de motif `fin_droits`, ou terme défini autrement par le contrat ; l'erreur va dans le sens d'un décès détecté D11a, signalé et exclu (S + X), visible au bilan, mais non prudent en comptes sociaux si le décès est couvert. Un paramètre déclaré des motifs de `sortie` qui mettent fin à la période est renvoyé au recensement du poste « maintien de la garantie décès » (#106, #14, point 4) ;
+  - **interprétation 2 (M670)** : la fin d'une affiliation individuelle est assimilée à la résiliation ou au non-renouvellement du contrat (lecture déclarée, non texte ; déjà retenue par la v1.6.3 et par `.maintien_d11()`) ; la clause déclarée en décide ;
+  - **limite connue C1 (M671)** : un décès couvert par le maintien dont l'arrêt est assuré chez un autre organisme (base sans sinistre `arret_travail`) est détecté D11a, signalé et exclu ; sans effet en `1.6` ; suivi par l'issue #166.
+- **Règle des guillemets (M672)** : l'art. 7-1, al. 1, 1re phrase, l'al. 2 et l'art. 2 peuvent être cités entre guillemets dans le texte `1.6`, chaque extrait portant la mention « consolidation LEGI, `LEGIARTI…`, version en vigueur depuis le …, lue le 18 novembre 2026 » et le statut « vérifié sur la consolidation », jamais « vérifié » seul (pour l'art. 2, avec la réserve de l'archive tronquée) ; la 2e phrase de l'al. 1 et l'arrêt de 2023 restent sans guillemets jusqu'à la lecture du fac-similé du JO et à une lecture directe de l'arrêt.

@@ -31,9 +31,18 @@ TYPES_DICTIONNAIRE <- c("character", "integer", "numeric", "Date", "logical")   
 # types_evenements.programmable, motif compris).
 FUTUR_ADMIS_VALEURS <- c("TRUE", "FALSE", "programmable")
 
-# Valeurs de controles.csv, portee (section 1.10 du texte, version 1.5) : colonne, table,
-# colonne_table (colonne, ou table pour une colonne de clé), ligne (signalement).
-PORTEES_CONTROLES <- c("colonne", "table", "colonne_table", "ligne")
+# Valeurs de controles.csv, portee (section 1.10 du texte, version 1.6) : colonne, table,
+# colonne_table (colonne, ou table pour une colonne de clé), ligne (signalement), ligne_table
+# (ligne, ou table pour une colonne de clé : refus de valeur, #72 ; lue comme colonne_table
+# jusqu'au commit de #72, spécification `donnees` v1.9, § 9.8, T1).
+PORTEES_CONTROLES <- c("colonne", "table", "colonne_table", "ligne", "ligne_table")
+# Valeurs de controles.csv, traitement (section 1.10 du texte, version 1.6 ; P17) : R (refus)
+# ou S (signalement).
+.TRAITEMENTS_CONTROLES <- c("R", "S")
+# Valeurs de defauts.csv, signalement (section 9 du texte, version 1.6 ; P7, M690) : une valeur
+# seule dans sa cellule (.VALEURS_SIGNALEMENT), ou des éléments `famille:<famille>` joints par
+# « ; », distincts ; cellule vide pour un défaut parent (code à sous-cas lettrés) et pour lui seul.
+.VALEURS_SIGNALEMENT <- c("aucun", "alternatif", "cumulatif", "extraction")
 
 # Points de code tenus pour des blancs (objet absent de controles.csv) : tabulation à retour
 # chariot, espace, U+0085, U+00A0, U+1680, U+2000 à U+200B, U+2028, U+2029, U+202F, U+205F,
@@ -54,12 +63,14 @@ COLONNES_DICTIONNAIRE <- list(                                                  
                            "motifs"),
   parametres.csv = c("code_garantie", "parametre", "unite", "dimension", "obligatoire",
                      "condition"),
+  # Version 1.6 : signalement et parent (P7, P8 ; sous-cas lettrés en lignes, après leur parent).
   defauts.csv = c("code", "defaut", "tables", "colonnes", "detection", "traitements",
-                  "parametre_intensite", "sous_parametres"),
+                  "parametre_intensite", "sous_parametres", "signalement", "parent"),
   filiation.csv = c("table_de", "colonne_de", "table_v1", "colonne_v1", "statut", "motif"),
   # Version 1.5 : colonnes du tableau du texte (section 1.10), et non celles proposées par
-  # l'annotation de la cinquième série de l'ADR, (e) (code, portee, description, section).
-  controles.csv = c("code", "objet", "detection", "portee", "motif_refus_appel")
+  # l'annotation de la cinquième série de l'ADR, (e) (code, portee, description, section) ;
+  # version 1.6 : traitement (P17).
+  controles.csv = c("code", "objet", "detection", "portee", "motif_refus_appel", "traitement")
 )
 
 # --- Lecture du dictionnaire -----------------------------------------------------
@@ -225,6 +236,19 @@ dictionnaire <- function() {
     # Une modalit\u00e9 d\u00e9clar\u00e9e deux fois fausse tout contr\u00f4le qui lit le domaine de la colonne
     # (un domaine (A, A) n'a qu'une valeur, mais sa longueur est 2 : #145) ; la premi\u00e8re est nomm\u00e9e.
     mod_i <- .eclater(col$modalites[i])
+    # Une modalité vide ou entourée d'espaces (`F;;M`, `A; F`, `A;`) allonge le domaine d'une valeur que
+    # la base ne porte pas telle quelle (#162) ; refus avant celui du doublon, dont le message serait
+    # tronqué pour deux modalités vides. Lue sur la chaîne brute, car strsplit() perd le dernier élément vide.
+    # Blancs : classe fermée U+0020, U+0009 à U+000D (M655), que trimws() par défaut ne couvre pas en entier
+    # (U+000B et U+000C) ; U+00A0 reste une modalité admise.
+    if (col$modalites[i] != "") {
+      brutes <- strsplit(paste0(col$modalites[i], ";"), ";", fixed = TRUE)[[1L]]
+      mal_formees <- brutes[brutes != trimws(brutes, whitespace = "[ \t\n\v\f\r]") | !nzchar(brutes)]
+      if (length(mal_formees)) {
+        echec("colonnes.csv", i, sprintf("modalit\u00e9 vide ou entour\u00e9e d'espaces dans %s.%s : \u00ab%s\u00bb",
+                                         col$table[i], col$colonne[i], mal_formees[1L]))
+      }
+    }
     if (anyDuplicated(mod_i)) {
       echec("colonnes.csv", i, sprintf("modalit\u00e9 en double dans %s.%s : %s", col$table[i],
                                        col$colonne[i], mod_i[anyDuplicated(mod_i)]))
@@ -335,6 +359,34 @@ dictionnaire <- function() {
     tr <- .eclater(def$traitements[i])
     if (length(tr) == 0L || !all(tr %in% c("R", "X", "H", "S"))) echec("defauts.csv", i, "traitements : R, X, H ou S (section 1.10)")
     if (!grepl("^[a-z_]+$", def$parametre_intensite[i])) echec("defauts.csv", i, "param\u00e8tre d'intensit\u00e9 absent")
+    # parent (version 1.6, P8) : le code sans sa lettre quand ce code est une ligne du fichier,
+    # placée avant ; vide sinon. Deux messages : valeur de la colonne, place de la ligne parente
+    sans_lettre <- sub("^(D[0-9]{2})[a-z]$", "\\1", codes_defauts[i])
+    attendu <- if (sans_lettre != codes_defauts[i] && sans_lettre %in% codes_defauts) sans_lettre else ""
+    if (def$parent[i] != attendu) {
+      echec("defauts.csv", i, paste0("parent : code sans sa lettre s'il est une ligne du fichier, vide sinon, attendu (\u00ab",
+                                     attendu, "\u00bb), re\u00e7u \u00ab", def$parent[i], "\u00bb"))
+    }
+    if (attendu != "" && match(attendu, codes_defauts) > i) {
+      echec("defauts.csv", i, paste0("parent : la ligne du parent (\u00ab", attendu,
+                                     "\u00bb) est plac\u00e9e apr\u00e8s celle de son sous-cas"))
+    }
+  }
+  # signalement (version 1.6, P7 ; M690) : vide si et seulement si le code a des sous-cas
+  # (parent d'une ligne) ; sinon une valeur de .VALEURS_SIGNALEMENT seule, ou des éléments
+  # famille:<famille> distincts (la famille est contrôlée contre FAMILLES_CALCUL par le module
+  # donnees, qui la lit)
+  for (i in seq_len(nrow(def))) {
+    s <- def$signalement[i]
+    el <- .eclater(s)
+    a_sous_cas <- codes_defauts[i] %in% def$parent
+    forme <- (length(el) == 1L && el %in% .VALEURS_SIGNALEMENT) ||
+      (length(el) >= 1L && all(grepl("^famille:[a-z_]+$", el)) && !anyDuplicated(el) && !grepl(";$", s))
+    if (a_sous_cas && s != "") echec("defauts.csv", i, "signalement d'un d\u00e9faut \u00e0 sous-cas : vide attendu")
+    if (!a_sous_cas && !forme) {
+      echec("defauts.csv", i, paste0("signalement : ", paste(.VALEURS_SIGNALEMENT, collapse = ", "),
+                                     " seul, ou famille:<famille> joints par \u00ab ; \u00bb, attendu (\u00ab", s, "\u00bb)"))
+    }
   }
 
   # filiation.csv
@@ -348,10 +400,10 @@ dictionnaire <- function() {
     }
   }
 
-  # controles.csv (version 1.5, section 1.10) : au moins un code ; codes distincts et bien
+  # controles.csv (version 1.6, section 1.10) : au moins un code ; codes distincts et bien
   # formés (minuscules et soulignés, donc disjoints des codes D.. de defauts.csv) ; objet
   # renseigné (pas seulement des blancs, Unicode compris) ; détection sans
-  # valeur répétée ; motif de refus d'appel vide ou élément de MOTIFS_REFUS. Lien de même nom entre un code et le refus
+  # valeur répétée ; traitement R ou S (P17) ; motif de refus d'appel vide ou élément de MOTIFS_REFUS. Lien de même nom entre un code et le refus
   # d'appel (ADR 0010, sixième série, (a) ; réserve m2 de l'audit de #31) : un code qui est
   # aussi un élément de MOTIFS_REFUS porte ce motif en motif_refus_appel, et un motif de
   # refus d'appel renseigné est celui du code ; l'intersection des codes avec MOTIFS_REFUS
@@ -374,6 +426,10 @@ dictionnaire <- function() {
     }
     if (!(ctl$portee[i] %in% PORTEES_CONTROLES)) {
       echec("controles.csv", i, paste0("port\u00e9e hors de ", paste(PORTEES_CONTROLES, collapse = ", "), " : ", ctl$portee[i]))
+    }
+    if (!(ctl$traitement[i] %in% .TRAITEMENTS_CONTROLES)) {
+      echec("controles.csv", i, paste0("traitement hors de ", paste(.TRAITEMENTS_CONTROLES, collapse = ", "), " : ",
+                                       ctl$traitement[i]))
     }
     motif <- ctl$motif_refus_appel[i]
     if (motif != "" && !(motif %in% MOTIFS_REFUS)) {
