@@ -393,10 +393,56 @@ verifier("C60b-1 : les trois tables de D03g ajoutées sont des noms admis de seu
          all(c("dossiers", "catastrophes", "victimes") %in% ns$.TABLES_D03G) && is.null(ns[[".GARDE_T3"]]) &&
            !ns$.absence_refusee("O", "D02b;D03g") && !ns$.absence_refusee("O", "D02a;D02c;D03i") &&
            ns$.absence_refusee("O", "D02a"))
-r_t8 <- cb(avec(function(b) { b$famille$date_naissance[1L] <- D("2025-01-11"); b }))
-attendu_echec("T8 (#90) : enfant ME1 né le lendemain de la survenance de SI1 (R11, M662) : pas de D02a",
-              "#90, R11 sans enfant né après la survenance (spécification donnees v1.9, § 9.4 et § 9.8, T8)",
-              nrow(ligne(r_t8$controles, "D02a", "famille")) == 0L)
+# C90-3 et C90-6 (R11, M662 ; spécification `donnees` v1.9, § 9.4 ; T8 levé, #90) : un enfant né
+# après la survenance du sinistre rattaché n'est pas rejeté, quel que soit le délai ; un autre
+# lien l'est (conjoint : situation sans objet, NA)
+r_t8 <- lapply(list(enfant = "enfant", conjoint = "conjoint"), function(l) {
+  cb(avec(function(b) {
+    b$famille$date_naissance[1L] <- D("2025-01-11"); b$famille$lien[1L] <- l
+    if (l != "enfant") b$famille$situation[1L] <- NA
+    b
+  }))
+})
+verifier_egal("C90-3, C90-6 (R11, M662, T8 levé) : ME1 né le lendemain de la survenance de SI1 : enfant, pas de D02a ; conjoint, D02a sur famille.date_naissance (ME1)",
+              lapply(r_t8, function(r) ligne(r$controles, "D02a", "famille")$identifiants),
+              list(enfant = character(0), conjoint = "ME1|2025-02-01"))
+# C90-2 (R9 sous H ; spécification `donnees` v1.9, § 9.4, #90) : déclaration de SI1 antérieure à sa
+# survenance, à A0 ; sous H, survenance et déclaration tenues pour inconnues dans la vue (NA,
+# dates_inconnues_vue()), les autres dates lues ; visibilité inchangée (retenu, parties et
+# visibilite_non_determinee identical() avec D02a conserver) ; la ligne est une hypothèse de la
+# vue de motif D02a, colonnes de la relation
+hyp_d02a <- data.frame(motif = "D02a", referentiel = ns$REFERENTIELS, poste = "tous", valeur = "regle", stringsAsFactors = FALSE)
+excl_d02a <- data.frame(motif = "D02a", famille = ns$FAMILLES_CALCUL, action = "conserver", stringsAsFactors = FALSE)
+b_r9 <- avec(function(b) { b$sinistres$date_declaration[1L] <- D("2025-01-05"); b })
+v_r9 <- list(h = ns$vue_a_date(b_r9, A0, list(hypotheses = hyp_d02a), NULL),
+             c = ns$vue_a_date(b_r9, A0, list(exclusions = excl_d02a), NULL))
+lire_r9 <- function(v) lapply(c("date_survenance", "date_declaration", "date_instruction"),
+                              function(c1) as.character(ns$valeurs_vue(v, "sinistres", c1)[1L]))
+verifier_egal("C90-2 (R9 sous H) : survenance et déclaration de SI1 inconnues (NA), instruction lue ; sous conserver, les trois lues ; retenu, parties et visibilite_non_determinee identiques ; hypothèse D02a de colonnes date_survenance et date_declaration",
+              list(lire_r9(v_r9$h), lire_r9(v_r9$c), ns$dates_inconnues_vue(v_r9$h, "sinistres", "date_declaration"),
+                   identical(v_r9$h$retenu, v_r9$c$retenu), identical(v_r9$h$parties, v_r9$c$parties),
+                   identical(v_r9$h$bilan$vue$visibilite_non_determinee, v_r9$c$bilan$vue$visibilite_non_determinee),
+                   unique(lapply(v_r9$h$hypotheses, `[[`, "colonnes"))),
+              list(list(NA_character_, NA_character_, "2025-02-01"), list("2025-01-10", "2025-01-05", "2025-02-01"), c(TRUE, FALSE),
+                   TRUE, TRUE, TRUE, list(c("date_survenance", "date_declaration"))))
+# C90-4 (R8 sous H, sans D03a déclaré ; M688) : naissance de AS1 postérieure à ses deux
+# survenances ; la naissance est inconnue dans la vue et D03a, qui s'enchaîne, est exigée comme
+# pour une ligne de ce défaut (exclusion par famille hors triangle, hypothèse par référentiel),
+# sans constat D03a ; déclaré `exclure`, la ligne de assures est exclue
+b_r8 <- avec(function(b) { b$assures$date_naissance[1L] <- D("2025-02-01"); b })
+r_r8 <- controler_base(b_r8, A, list(hypotheses = hyp_d02a))
+dr_r8 <- ligne(r_r8$declarations_requises, "D03a", champ = "motif")
+excl_d03a <- data.frame(motif = "D03a", famille = setdiff(ns$FAMILLES_CALCUL, "triangle"), action = "exclure",
+                        stringsAsFactors = FALSE)
+v_r8 <- ns$vue_a_date(b_r8, A, list(hypotheses = hyp_d02a, exclusions = excl_d03a), NULL)
+verifier_egal("C90-4 (R8 sous H) : D02a sur sinistres.date_survenance (SI1, SI2) ; D03a exigée (exclusions : engagement, risque_en_cours, regle_comptable ; hypotheses : deux référentiels ; 1 ligne), sans constat D03a ; D03a exclure : AS1 exclue pour engagement, naissance de AS1 inconnue",
+              list(ligne(r_r8$controles, "D02a", "sinistres")$identifiants, paste(dr_r8$rubrique, dr_r8$cle, dr_r8$nombre_lignes),
+                   nrow(ligne(r_r8$controles, "D03a")), v_r8$exclu$engagement$assures,
+                   format(ns$valeurs_vue(v_r8, "assures", "date_naissance")), nrow(v_r8$bilan$declarations_requises[
+                     v_r8$bilan$declarations_requises$motif == "D03a", ])),
+              list("SI1;SI2", c("exclusions engagement 1", "exclusions risque_en_cours 1", "exclusions regle_comptable 1",
+                                "hypotheses comptes_sociaux 1", "hypotheses solvabilite_2 1"),
+                   0L, c(TRUE, FALSE), c(NA, "1960-01-01"), 0L))
 # C60b-2 (P18 (b), T2 levé ; S-3 (a), M686) : date d'effet de visibilité manquante, D03i,
 # détection exacte, X par famille à tout arrêté ; sous `conserver` à A0, ligne de visibilité non
 # déterminée de motif D03i, d'origine « table.colonne », cause (γ) D03i d'une règle V qu'elle
@@ -1418,7 +1464,8 @@ ob <- avec(function(b) {
   b$affiliations$date_fin <- D("2014-12-31"); b$affiliations$motif_fin <- "depart_entreprise"; b$affiliations$date_saisie_fin <- D("2015-01-06")
   b$ayants_droit_sante$fin_couverture <- D("2014-01-01"); b$prestations$debut_periode[1L] <- D("2024-07-01")
   b$sinistres$date_declaration[1L] <- D("2025-01-05"); b$sinistres$date_instruction[1L] <- D("2025-01-03")
-  b$famille$date_naissance <- D("2025-03-01"); b$assures$date_naissance[1L] <- D("2024-04-01")
+  b$famille$date_naissance <- D("2025-03-01"); b$famille$lien <- "conjoint"; b$famille$situation <- NA_character_
+  b$assures$date_naissance[1L] <- D("2024-04-01")
   b$evenements$date_effet[1L] <- D("2024-03-02"); b })
 r <- cb(ob)
 x <- ligne(r$controles, "D02a", NULL)
@@ -1722,7 +1769,11 @@ verifier("enjeu : une prestation orpheline n'a pas de garantie (non_rattache) ; 
          "non_rattache" %in% ligne(r$enjeu, "D04a", "prestations", NULL, "motif")$garantie &&
            !any(cb(avec(function(b) { b$designations$id_affiliation <- "AFX"; b }))$enjeu$table %in% "designations") &&
            "D04b" %in% cb(avec(function(b) { b$designations$id_affiliation <- "AFX"; b }))$declarations_requises$motif)
-d2 <- avec(function(b) { b$garanties_souscrites$date_effet[3L] <- D("2025-06-01"); b$famille$date_naissance <- D("2025-03-01"); b })
+# ME1 conjoint (situation NA) : un enfant né après la survenance n'est plus rejeté (R11, M662, #90)
+d2 <- avec(function(b) {
+  b$garanties_souscrites$date_effet[3L] <- D("2025-06-01"); b$famille$date_naissance <- D("2025-03-01")
+  b$famille$lien <- "conjoint"; b$famille$situation <- NA_character_; b
+})
 r <- cb(d2)
 x <- r$enjeu[r$enjeu$famille == "engagement" & r$enjeu$garantie == "ensemble" & r$enjeu$composante == "paiements_cumules", ]
 verifier_egal("critère 5 (§ 4.6) : dossier touché par D02a (famille) et D10b compté une fois dans la rangée ensemble",

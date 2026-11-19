@@ -339,8 +339,13 @@ vue_a_date <- function(donnees, arrete, declarations, conventions) {
   .construire_vue(ctx)
   .regle_v(ctx)
   bilan <- .bilan(ctx)
-  structure(list(bilan = bilan, retenu = ctx$retenu, parties = .visibilite_a(ctx, "vue")$parties,
-                 exclu = .exclu_vue(ctx), hypotheses = ctx$placement$hypotheses, ctx = ctx),
+  parties <- .visibilite_a(ctx, "vue")$parties
+  exclu <- .exclu_vue(ctx)
+  # D02a sous H : dates rejetées tenues pour inconnues dans la vue lue par les familles, après le
+  # bilan et la visibilité, calculés sur les dates brutes (spécification `donnees` v1.9, § 9.4)
+  .appliquer_d02a(ctx)
+  structure(list(bilan = bilan, retenu = ctx$retenu, parties = parties, exclu = exclu,
+                 hypotheses = ctx$placement$hypotheses, ctx = ctx),
             class = "vue_provie")
 }
 
@@ -461,7 +466,9 @@ cles_lignes_hypothese <- function(vue, table, lignes, colonne) {
 #     antérieure à la réouverture), ouvert sinon, à la date d'effet de la réouverture ; les
 #     autres types sont sans effet ;
 #   instruit : logique de Kleene, NA si la partie sinistres.date_instruction vaut NA dans
-#     `vue$parties`, sinon partie ET date d'instruction présente (spécification de B2, § 4.3).
+#     `vue$parties` ou si l'instruction est tenue pour inconnue par D02a sous H (R10,
+#     dates_inconnues_vue()), sinon partie ET date d'instruction présente (spécification de B2,
+#     § 4.3 ; spécification `donnees` v1.9, § 9.4).
 # Sans point : appelée hors du module par la famille « engagement », non exportée.
 etats_a_date <- function(vue, garanties, famille) {
   if (!inherits(vue, "vue_provie")) stop("etats_a_date() : `vue` doit \u00eatre un objet vue_provie", call. = FALSE)
@@ -539,6 +546,8 @@ etats_a_date <- function(vue, garanties, famille) {
   partie <- vue$parties$sinistres[i_sin]
   instruction <- .valeurs(ctx, "sinistres", "date_instruction")[i_sin]
   instruit <- ifelse(is.na(partie), NA, partie & !is.na(instruction))
+  # instruction tenue pour inconnue par D02a sous H (R10) : inconnue, jamais « non instruit »
+  instruit[dates_inconnues_vue(vue, "sinistres", "date_instruction")[i_sin] %in% TRUE] <- NA
   res <- data.frame(id_sinistre = id_sinistre, id_dossier = id_dossier, etat = etat, date_entree_etat = date_entree,
                     categorie_invalidite = rep(NA_character_, n), montant_en_vigueur = montant,
                     etat_dossier = etat_dossier, date_etat_dossier = structure(as.numeric(date_etat), class = "Date"),
@@ -3716,6 +3725,13 @@ parties_ligne <- function() lapply(.PARTIES_LIGNE, function(p) list(table = p$ta
 .valeurs_vue <- function(ctx, table, colonne) {
   x <- .valeurs(ctx, table, colonne)
   if (table == "extraction") return(x)
+  # D02a sous H (.appliquer_d02a(), après le bilan) : date rejetée tenue pour inconnue, ou
+  # substituée par la règle écrite de R13
+  d <- ctx$d02a[[table]][[colonne]]
+  if (!is.null(d)) {
+    x[d$masque] <- NA
+    if (!is.null(d$valeur)) x[d$masque] <- d$valeur[d$masque]
+  }
   masque <- !ctx$retenu[[table]]
   if (!.vue_totale(ctx)) {
     for (p in .PARTIES_LIGNE) {
@@ -4119,7 +4135,7 @@ parties_ligne <- function() lapply(.PARTIES_LIGNE, function(p) list(table = p$ta
   .regle_vue(ctx, "D03f", "prestations", NA_character_,
              paste0("prestations.", c("type_prestation", "debut_periode", "fin_periode")), "X;H", "exacte", function() {
     type <- vv("prestations", "type_prestation")
-    type %in% c("indemnite_journaliere", "arrerage") &
+    type %in% .TYPES_PERIODE_D03F &
       (is.na(vv("prestations", "debut_periode")) | is.na(vv("prestations", "fin_periode")))
   })
   .regle_vue(ctx, "D03f", "cotisations", NA_character_, paste0("cotisations.", c("debut_periode", "fin_periode")),
@@ -4148,6 +4164,137 @@ parties_ligne <- function() lapply(.PARTIES_LIGNE, function(p) list(table = p$ta
     })
   })
   invisible(NULL)
+}
+
+# D02a sous H (annexe B du dictionnaire 1.6 ; spécification `donnees` v1.9, § 9.4 ; M510,
+# M661, M662, #90) : dates de la table tenues pour inconnues dans la vue, par table et par
+# colonne du constat (relations R1 à R13) ; « les deux » dates de la relation, sauf règle
+# écrite (R8 : la survenance, la naissance de l'assuré étant portée par .inconnues_d02a() ; R11
+# : la seule naissance du membre ; R12 et R13 : la seule date de l'événement).
+.DATES_D02A <- list(
+  contrats = list(date_fin = c("date_effet", "date_fin"), date_terme = c("date_effet", "date_terme"),
+                  date_debut_gestion = c("date_effet", "date_debut_gestion")),
+  garanties_souscrites = list(date_fin = c("date_effet", "date_fin")),
+  affiliations = list(date_fin = c("date_debut", "date_fin")),
+  ayants_droit_sante = list(fin_couverture = c("debut_couverture", "fin_couverture")),
+  prestations = list(fin_periode = c("debut_periode", "fin_periode")),
+  cotisations = list(fin_periode = c("debut_periode", "fin_periode")),
+  sinistres = list(date_survenance = "date_survenance", date_declaration = c("date_survenance", "date_declaration"),
+                   date_instruction = c("date_declaration", "date_instruction")),
+  famille = list(date_naissance = "date_naissance"),
+  evenements = list(date_effet = "date_effet"))
+# Types de prestations dont la période manquante relève de D03f (.regle_v_manquants()) : seules
+# leurs périodes rejetées (R7) enchaînent D03f ; une autre prestation garde la lecture de Kleene.
+.TYPES_PERIODE_D03F <- c("indemnite_journaliere", "arrerage")
+
+# Dates tenues pour inconnues et défauts de manquant enchaînés du constat D02a `k` placé en H
+# (.placer()) : `inconnues`, liste de list(table, colonnes, lignes) ; `enchaines`, constats à
+# placer comme ceux du défaut qui s'enchaîne (annexe B : D03a pour la naissance de l'assuré, R8,
+# et pour celle du membre, R11 ; D03f pour les deux bornes de la période, R7, sur une ligne que
+# D03f viserait), sur les seules lignes rejetées, traitement X;H de ce défaut.
+.inconnues_d02a <- function(ctx, k) {
+  colonnes <- .DATES_D02A[[k$table]][[k$colonne]]
+  if (is.null(colonnes)) {
+    stop(paste0("erreur interne de provie : .inconnues_d02a() : relation de D02a sans dates (", k$table, ".", k$colonne,
+                ")"), call. = FALSE)
+  }
+  inconnues <- list(list(table = k$table, colonnes = colonnes, lignes = k$lignes))
+  enchaines <- list()
+  enchainer <- function(code, table, colonne, lignes) {
+    if (length(lignes) == 0L) return(invisible(NULL))
+    enchaines[[length(enchaines) + 1L]] <<- list(code = code, table = table, colonne = colonne, detection = "exacte",
+                                                 traitement = "X;H", lignes = lignes)
+  }
+  if (k$table == "sinistres" && k$colonne == "date_survenance" && !is.null(ctx$base$assures)) {
+    # R8 : naissance de l'assuré inconnue dans toutes ses lectures (fait de la personne à source unique)
+    as <- which(!is.na(apparier_cles(.valeurs(ctx, "assures", "id_assure"), .valeurs(ctx, "sinistres", "id_assure")[k$lignes])))
+    if (length(as)) inconnues[[2L]] <- list(table = "assures", colonnes = "date_naissance", lignes = as)
+    enchainer("D03a", "assures", "date_naissance", as)
+  }
+  if (k$table == "famille") enchainer("D03a", "famille", "date_naissance", k$lignes)
+  if (k$table == "cotisations") enchainer("D03f", "cotisations", NA_character_, k$lignes)
+  if (k$table == "prestations") {
+    enchainer("D03f", "prestations", NA_character_,
+              k$lignes[.valeurs(ctx, "prestations", "type_prestation")[k$lignes] %in% .TYPES_PERIODE_D03F])
+  }
+  list(inconnues = inconnues, enchaines = enchaines)
+}
+
+# Application de D02a sous H à la vue, après le bilan (les règles V et l'enjeu lisent les dates
+# brutes ; la visibilité, calculée sur les dates brutes, n'est pas modifiée) : ctx$d02a[[table]]
+# [[colonne]] = list(masque, valeur) ; `masque` : lignes dont la date est tenue pour inconnue
+# (placement$inconnues) ; `valeur` : date substituée par la règle écrite de R13 (mise à jour
+# hors de [survenance, extraction] : dernière information valide précédente, c'est-à-dire la
+# date d'effet de la mise_a_jour retenue, de date d'effet non rejetée, de date de saisie
+# renseignée strictement antérieure à la sienne, la plus récemment saisie (départage : effet le
+# plus tardif), prise pour une mise à jour de niveau dossier parmi celles du même dossier et
+# celles de niveau sinistre (sans id_dossier) du même sinistre, pour une mise à jour de niveau
+# sinistre parmi celles de niveau sinistre du même sinistre (dictionnaire 1.6, § 4 : « la date
+# de dernière information d'un dossier se reconstitue de ces dates » ; une demande_mise_a_jour
+# ou un autre type n'en est pas une) ; à défaut l'instruction, à défaut la survenance, lues dans
+# la vue), NA sinon. Les exclusions par famille ne sont pas lues. .valeurs_vue() les lit ;
+# dates_inconnues_vue() rend les lignes restées inconnues.
+.appliquer_d02a <- function(ctx) {
+  res <- list()
+  for (e in ctx$placement$inconnues) {
+    for (c1 in e$colonnes) {
+      m <- res[[e$table]][[c1]]$masque
+      if (is.null(m)) m <- rep(FALSE, NROW(ctx$base[[e$table]]))
+      m[e$lignes] <- TRUE
+      res[[e$table]][[c1]] <- list(masque = m, valeur = NULL)
+    }
+  }
+  ctx$d02a <- res
+  m <- res$evenements$date_effet$masque
+  if (is.null(m)) return(invisible(NULL))
+  vv <- function(t, c1) .valeurs_vue(ctx, t, c1)
+  type <- vv("evenements", "type_evenement")
+  maj <- which(m & type %in% "mise_a_jour")
+  valeur <- rep(NA_real_, length(m))
+  if (length(maj)) {
+    sin <- as.character(vv("evenements", "id_sinistre"))
+    dos <- as.character(vv("evenements", "id_dossier"))
+    saisie <- as.numeric(vv("evenements", "date_saisie"))
+    effet <- as.numeric(vv("evenements", "date_effet"))   # rejetées : NA (masque appliqué) ; non retenues : NA
+    valide <- which(type %in% "mise_a_jour" & !is.na(effet) & !is.na(saisie) & cle_renseignee(sin))
+    for (i in maj) {
+      j <- integer(0)
+      if (!is.na(saisie[i]) && cle_renseignee(sin[i])) {
+        j <- valide[!is.na(apparier_cles(sin[valide], sin[i])) & saisie[valide] < saisie[i]]
+        niveau_sinistre <- !cle_renseignee(dos[j])
+        j <- j[niveau_sinistre | (cle_renseignee(dos[i]) & !is.na(apparier_cles(dos[j], dos[i])))]
+      }
+      if (length(j)) {
+        j <- j[order(-saisie[j], -effet[j], method = "radix")][1L]
+        valeur[i] <- effet[j]
+      }
+    }
+    reste <- maj[is.na(valeur[maj])]
+    if (length(reste)) {
+      i_sin <- apparier_cles(sin[reste], vv("sinistres", "id_sinistre"))
+      instruction <- as.numeric(vv("sinistres", "date_instruction"))[i_sin]
+      survenance <- as.numeric(vv("sinistres", "date_survenance"))[i_sin]
+      valeur[reste] <- ifelse(is.na(instruction), survenance, instruction)
+    }
+  }
+  ctx$d02a$evenements$date_effet$valeur <- structure(valeur, class = "Date")
+  invisible(NULL)
+}
+
+# Lignes de la table `table` (toutes les lignes de la base, retenues ou non) dont la date
+# `colonne` est tenue pour inconnue dans la vue `vue` (objet vue_a_date()) par D02a sous H
+# (annexe B du dictionnaire 1.6 ; spécification `donnees` v1.9, § 9.4, #90), hors date
+# substituée par la règle écrite de R13 : valeurs_vue() y rend NA, qui ne vaut ni fin ouverte,
+# ni fait non survenu, ni instruction pendante. Seule lecture de ce statut par les familles de
+# calcul (lecture de Kleene : une condition connue décide si elle le peut, sinon le poste est
+# arrêté) ; tout FALSE sans D02a placé en H. Sans point : appelée par les familles engagement et
+# risque_en_cours ; non exportée.
+dates_inconnues_vue <- function(vue, table, colonne) {
+  if (!inherits(vue, "vue_provie")) stop("dates_inconnues_vue() : `vue` doit \u00eatre un objet vue_provie", call. = FALSE)
+  ctx <- vue$ctx
+  d <- ctx$d02a[[table]][[colonne]]
+  if (is.null(d)) return(rep(FALSE, NROW(ctx$base[[table]])))
+  if (is.null(d$valeur)) d$masque else d$masque & is.na(d$valeur)
 }
 
 # D02a : ordre des dates violé (dictionnaire, § 9), sur la vue ; la colonne du constat est
@@ -4201,13 +4348,17 @@ parties_ligne <- function() lapply(.PARTIES_LIGNE, function(p) list(table = p$ta
              function() apres(vv("sinistres", "date_survenance"), vv("sinistres", "date_declaration")))
   .regle_vue(ctx, "D02a", "sinistres", "date_instruction", "sinistres.date_declaration", t, "exacte",
              function() apres(vv("sinistres", "date_declaration"), vv("sinistres", "date_instruction")))
-  # famille : naissance après la survenance du sinistre rattaché (hors enfant à naître)
+  # famille : naissance après la survenance du sinistre rattaché, hors enfant (R11 de l'annexe
+  # B du dictionnaire 1.6, M662 : un enfant né après la survenance, déclaré à naître puis né ou
+  # saisi directement comme né, n'est pas rejeté, quel que soit le délai ; un enfant à naître
+  # n'est jamais rejeté ; spécification `donnees` v1.9, § 9.4, #90)
   .regle_vue(ctx, "D02a", "famille", "date_naissance",
-             c("famille.situation", "famille.id_sinistre", "sinistres.id_sinistre", "sinistres.date_survenance"), t,
+             c("famille.situation", "famille.lien", "famille.id_sinistre", "sinistres.id_sinistre",
+               "sinistres.date_survenance"), t,
              "exacte", function() {
     survenance <- .joindre(ctx, "sinistres", "id_sinistre", "date_survenance", .valeurs_vue(ctx, "famille", "id_sinistre"))
     apres(vv("famille", "date_naissance"), as.numeric(survenance)) &
-      !(.valeurs_vue(ctx, "famille", "situation") %in% "a_naitre")
+      !(.valeurs_vue(ctx, "famille", "situation") %in% "a_naitre") & !(.valeurs_vue(ctx, "famille", "lien") %in% "enfant")
   })
   # evenements : premier état d'un sinistre (entrée en incapacité ou en invalidité) à une
   # autre date que la survenance ; mise à jour hors de [survenance, extraction]
@@ -6767,7 +6918,16 @@ parties_ligne <- function() lapply(.PARTIES_LIGNE, function(p) list(table = p$ta
 # par famille, ou `hypotheses_defaut` par référentiel en H et `signalements` (une fois) si
 # un référentiel est en S. Non couvert, chaque déclaration est placée et chaque famille et
 # chaque référentiel sans déclaration va dans `declarations_requises` (traitements admis :
-# ceux du constat). Motifs de la règle P (D02b, D03g), appliqués à la vue : une déclaration
+# ceux du constat). Chaque hypothèse placée porte ses colonnes (`colonnes` ; garde du point 1
+# de #112, M661) : colonne du constat pour D02b et D03g, dates tenues pour inconnues de la
+# table pour D02a (.DATES_D02A). D02a placé en H (annexe B du dictionnaire 1.6 ; spécification
+# `donnees` v1.9, § 9.4, #90) : les dates rejetées vont dans `inconnues` (list(table, colonnes,
+# lignes) ; R8 : aussi la naissance de l'assuré, dans toutes ses lignes de `assures`), lues par
+# .appliquer_d02a() après le bilan ; le défaut de manquant qui s'enchaîne (D03a pour R8 et R11,
+# D03f pour R7 sur une ligne qu'il viserait, .inconnues_d02a()) est placé pour ces lignes
+# comme pour une ligne de ce défaut (exclusion, hypothèse ou déclaration requise, sans forme
+# nouvelle : M688), sans compter dans sa détection ni dans ses signalements.
+# Motifs de la règle P (D02b, D03g), appliqués à la vue : une déclaration
 # n'est placée que si elle est appliquée (D02b : hypothèse pour les deux référentiels ;
 # D03g : .application_d03g()), et le délai de D03g manquant va dans `declarations_requises`
 # (rubrique `seuils`, clé d03g_delai_jours$<table>) tant que l'exclusion ne couvre pas le
@@ -6788,10 +6948,16 @@ parties_ligne <- function() lapply(.PARTIES_LIGNE, function(p) list(table = p$ta
   exclusions <- list()
   hypotheses <- list()
   requises <- list()
+  inconnues <- list()
   signales <- rep(FALSE, length(constats))
   ajouter <- function(liste, x) { liste[[length(liste) + 1L]] <- x; liste }
-  for (n in seq_along(constats)) {
-    k <- constats[[n]]
+  # constats à placer : ceux du bilan, puis les défauts de manquant enchaînés à D02a sous H
+  # (ajoutés en fin de file ; jamais signalés)
+  a_placer <- constats
+  n <- 0L
+  while (n < length(a_placer)) {
+    n <- n + 1L
+    k <- a_placer[[n]]
     t <- eclater_champ(k$traitement)
     base_ecart <- list(table = k$table, colonne = k$colonne, motif = k$code)
     if (identical(t, "R")) {
@@ -6865,11 +7031,18 @@ parties_ligne <- function() lapply(.PARTIES_LIGNE, function(p) list(table = p$ta
       }
       if (length(lignes_h) == 0L) h_k <- h_k[0L, ]
     }
+    colonnes_h <- if (k$code == "D02a") .DATES_D02A[[k$table]][[k$colonne]] else k$colonne
     for (i in seq_len(nrow(h_k))) {
       hypotheses <- ajouter(hypotheses, list(motif = k$code, referentiel = h_k$referentiel[i], poste = h_k$poste[i],
-                                             valeur = h_k$valeur[i], table = k$table, lignes = lignes_h))
+                                             valeur = h_k$valeur[i], table = k$table, lignes = lignes_h,
+                                             colonnes = colonnes_h))
     }
-    if (nrow(s_k) > 0L) signales[n] <- TRUE
+    if (k$code == "D02a" && nrow(h_k) > 0L) {
+      d02a <- .inconnues_d02a(ctx, k)
+      inconnues <- c(inconnues, d02a$inconnues)
+      a_placer <- c(a_placer, d02a$enchaines)
+    }
+    if (nrow(s_k) > 0L && n <= length(constats)) signales[n] <- TRUE
     if (axe_r && !x_ok && !r_ok) {
       for (r in setdiff(REFERENTIELS, referentiels_declares)) {
         requises <- ajouter(requises, list(rubrique = "hypotheses", motif = k$code, cle = r, traitements_admis = k$traitement,
@@ -6882,7 +7055,8 @@ parties_ligne <- function() lapply(.PARTIES_LIGNE, function(p) list(table = p$ta
                                          traitements_admis = NA_character_, table = k$table, lignes = lignes))
     }
   }
-  list(exclusions = exclusions, hypotheses = hypotheses, requises = requises, ecarts = ecarts, signales = signales)
+  list(exclusions = exclusions, hypotheses = hypotheses, requises = requises, ecarts = ecarts, signales = signales,
+       inconnues = inconnues)
 }
 
 # Agrège des lignes brutes de placement par les colonnes `cles` : une ligne par clé, avec le

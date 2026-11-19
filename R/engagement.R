@@ -255,12 +255,15 @@ parametre_vue <- function(vue, nom, gs, famille = NULL) {
 # 0010, point 9) pour le référentiel `referentiel` et chaque ligne de `lignes` (indices) de la
 # table `table`, lue par le poste `poste` : hypothèse du poste de préférence à celle de `tous`,
 # puis la première placée (spécification de B2, § 5.5, D03h ; § 5.9, D03c) ; NA pour une ligne
-# sans hypothèse appliquée. Ne contrôle pas la forme de la valeur, propre à chaque motif (refus
+# sans hypothèse appliquée. `colonnes` : NULL (toute hypothèse de la ligne), ou colonnes de la
+# table lues par le poste : seules comptent les hypothèses dont une colonne (`colonnes` de
+# l'entrée de vue$hypotheses) en fait partie (garde du point 1 de #112, M661 ; spécification
+# `donnees` v1.9, § 9.4). Ne contrôle pas la forme de la valeur, propre à chaque motif (refus
 # plan_invalide du lecteur). Sans point : seule sélection d'une hypothèse par ligne, lue aussi
 # par `risque_en_cours` (D03h) ; non exportée.
-hypothese_vue <- function(vue, motif, referentiel, table, lignes, poste) {
+hypothese_vue <- function(vue, motif, referentiel, table, lignes, poste, colonnes = NULL) {
   h <- Filter(function(x) x$motif == motif && x$referentiel == referentiel && x$table == table &&
-                x$poste %in% c(poste, "tous"), vue$hypotheses)
+                x$poste %in% c(poste, "tous") && (is.null(colonnes) || any(x$colonnes %in% colonnes)), vue$hypotheses)
   res <- rep(NA_character_, length(lignes))
   postes <- vapply(h, `[[`, "", "poste")
   # priorité décroissante ; affectées de la plus faible à la plus forte, qui l'emporte
@@ -270,8 +273,8 @@ hypothese_vue <- function(vue, motif, referentiel, table, lignes, poste) {
 }
 
 # Motifs des hypothèses appliquées par la vue (spécification de B2, § 5.8, source S2 : D02b,
-# D03g ; D02a quand #90 l'appliquera).
-.MOTIFS_HYPOTHESE_VUE <- c("D02b", "D03g")
+# D03g ; D02a, dates rejetées tenues pour inconnues, spécification `donnees` v1.9, § 9.4, #90).
+.MOTIFS_HYPOTHESE_VUE <- c("D02a", "D02b", "D03g")
 
 # Codes des hypothèses appliquées par la vue (source S2 du § 5.8, erratum v1.0.17, #87 ;
 # décisions E16-4, E17-1 et E17-3) aux lignes lues pour chacune des `n` unités d'un poste de la
@@ -294,7 +297,7 @@ hypotheses_vue_unites <- function(vue, referentiel, poste, famille, n, lectures)
     if (is.null(exclu)) exclu <- rep(FALSE, nt)
     par_cle <- split(seq_along(l$cles), l$cles)
     for (m in .MOTIFS_HYPOTHESE_VUE) {
-      placees <- which(!is.na(hypothese_vue(vue, m, referentiel, l$table, seq_len(nt), poste)))
+      placees <- which(!is.na(hypothese_vue(vue, m, referentiel, l$table, seq_len(nt), poste, l$lues)))
       placees <- placees[!exclu[placees] & (if (is.null(l$admises)) TRUE else l$admises[placees])]
       if (length(placees) == 0L || length(l$cles) == 0L) next
       k <- lapply(l$colonnes, function(c1) as.character(cles_lignes_hypothese(vue, l$table, placees, c1)))
@@ -331,14 +334,16 @@ joindre_codes <- function(...) {
 # dictionnaire, ou deux pour une clé composée), `cles` (clé lue, colonnes jointes par un retour
 # chariot, une par couple), `unite` (indice de l'unité de chaque couple ; par défaut, une clé
 # par unité), `garde` (couples retenus : l'unité lit la table), `admises` (NULL, ou logique sur
-# les lignes de la table : lignes que le poste peut lire). Une clé manquante ou vide ne rattache
+# les lignes de la table : lignes que le poste peut lire), `lues` (NULL : la ligne entière ; ou
+# colonnes lues : seules comptent les hypothèses qui portent sur l'une d'elles, hypothese_vue(),
+# garde du point 1 de #112). Une clé manquante ou vide ne rattache
 # rien (cle_renseignee(), #158) ; pour une clé composée, l'appelant donne NA dès qu'une composante
 # est manquante ou vide (la clé jointe par « \r » n'est jamais vide). Rend un élément de
 # `lectures` de hypotheses_vue_unites(). Sans point : lue aussi par `risque_en_cours` (P3) ; non
 # exportée.
-lecture_unites <- function(table, colonnes, cles, unite = seq_along(cles), garde = TRUE, admises = NULL) {
+lecture_unites <- function(table, colonnes, cles, unite = seq_along(cles), garde = TRUE, admises = NULL, lues = NULL) {
   g <- rep_len(garde, length(cles)) & cle_renseignee(cles)
-  list(table = table, colonnes = colonnes, cles = as.character(cles[g]), unite = unite[g], admises = admises)
+  list(table = table, colonnes = colonnes, cles = as.character(cles[g]), unite = unite[g], admises = admises, lues = lues)
 }
 
 # Lignes lues pour chaque dossier de `etats` (source S2 du § 5.8, liste des lignes lues de P1
@@ -468,10 +473,13 @@ lecture_unites <- function(table, colonnes, cles, unite = seq_along(cles), garde
   af_college <- as.character(vv("affiliations", "college"))
   af_debut <- as.numeric(vv("affiliations", "date_debut"))
   af_fin <- as.numeric(vv("affiliations", "date_fin"))
+  # dates tenues pour inconnues par D02a sous H (R5 ; dates_inconnues_vue(), spécification
+  # `donnees` v1.9, § 9.4, #90) : couverture de la survenance inconnue, jamais une fin ouverte
+  af_inconnue <- dates_inconnues_vue(vue, "affiliations", "date_debut") | dates_inconnues_vue(vue, "affiliations", "date_fin")
   af_fin[is.na(af_fin)] <- Inf
   salaire <- vv("affiliations", "salaire_reference")
   # clé (assuré, contrat) composée seulement si ses deux composantes sont renseignées (#158)
-  af_ok <- which(cle_renseignee(af_assure) & cle_renseignee(af_contrat) & !is.na(af_debut) &
+  af_ok <- which(cle_renseignee(af_assure) & cle_renseignee(af_contrat) & (!is.na(af_debut) | af_inconnue) &
                    !vue$exclu$engagement$affiliations)
   par_cle <- split(af_ok, paste(af_assure[af_ok], af_contrat[af_ok], sep = "\r"))
   cle_dossier <- rep(NA_character_, length(a_calculer))
@@ -482,8 +490,13 @@ lecture_unites <- function(table, colonnes, cles, unite = seq_along(cles), garde
   ii <- rep(seq_along(a_calculer), lengths(cand))
   kk <- unlist(cand, use.names = FALSE)
   couvre <- af_debut[kk] <= survenance[a_calculer][ii] & af_fin[kk] >= survenance[a_calculer][ii]
+  # affiliation de dates inconnues (Kleene) : peut couvrir la survenance ; de collège égal ou
+  # inconnu, elle rend l'affiliation non déterminée
+  couvre_inconnu <- af_inconnue[kk] & (is.na(af_college[kk]) | (af_college[kk] == as.character(college[a_calculer][ii])) %in% TRUE)
+  couvre[af_inconnue[kk]] <- FALSE
   college_inconnu <- is.na(college[a_calculer]) |
-    tabulate(ii[couvre & is.na(af_college[kk])], nbins = length(a_calculer)) > 0L
+    tabulate(ii[couvre & is.na(af_college[kk])], nbins = length(a_calculer)) > 0L |
+    tabulate(ii[couvre_inconnu], nbins = length(a_calculer)) > 0L
   couvre <- couvre & (af_college[kk] == as.character(college[a_calculer][ii])) %in% TRUE
   nb <- tabulate(ii[couvre], nbins = length(a_calculer))
   k1 <- rep(NA_integer_, length(a_calculer))
@@ -510,6 +523,12 @@ lecture_unites <- function(table, colonnes, cles, unite = seq_along(cles), garde
   me0 <- ifelse(is.na(me$valeur), 0, me$valeur)
   base <- assiette * taux$valeur
   instruit <- etats$instruit
+  # instruction tenue pour inconnue par D02a sous H (R10 ; etats_a_date() rend NA) : structure du
+  # plan ou famille réelle, non déterminé ; arrêt parametre_non_determine
+  instr_inconnue <- dates_inconnues_vue(vue, "sinistres", "date_instruction")[i_sin] %in% TRUE
+  res$arret[a_calculer[is.na(instruit[a_calculer]) & instr_inconnue[a_calculer]]] <- "parametre_non_determine"
+  a_calculer <- a_calculer[is.na(res$arret[a_calculer])]
+  if (length(a_calculer) == 0L) return(res)
   if (anyNA(instruit[a_calculer])) {
     i <- a_calculer[is.na(instruit[a_calculer])][1L]
     stop("erreur interne de provie : dossier \u00e0 reconstituer dont l'instruction est inconnue (", etats$id_dossier[i],
@@ -796,14 +815,30 @@ calculer_engagement <- function(vue, plan, tables, catalogue, garantie, poste) {
     e <- which(vue$retenu$evenements & !exclu$evenements)
     recent <- as.numeric(valeurs_vue(vue, "evenements", "date_effet")[e]) > seuil
     actifs <- valeurs_vue(vue, "evenements", "id_dossier")[e][recent %in% TRUE]
+    # événement de date tenue pour inconnue par D02a sous H (R12, R13 sans valeur substituée) :
+    # peut être récent ; le critère est inconnu pour un dossier sans événement récent connu
+    inconnus <- valeurs_vue(vue, "evenements", "id_dossier")[e][dates_inconnues_vue(vue, "evenements", "date_effet")[e]]
     ouverture <- as.numeric(valeurs_vue(vue, "dossiers", "date_ouverture"))[apparier_cles(etats$id_dossier,
                                                                                          valeurs_vue(vue, "dossiers", "id_dossier"))]
-    non_reclame <- non_reclame | (is.na(apparier_cles(etats$id_dossier, actifs)) & (ouverture <= seuil) %in% TRUE)
+    sans_ev <- is.na(apparier_cles(etats$id_dossier, actifs)) & (ouverture <= seuil) %in% TRUE
+    sans_ev[sans_ev & !is.na(apparier_cles(etats$id_dossier, inconnus))] <- NA
+    non_reclame <- non_reclame | sans_ev
   }
+  # partition non déterminée (Kleene : un critère connu vrai décide) : P1 et P2 arrêtés
+  if (anyNA(non_reclame)) return(arreter("parametre_non_determine", etats$id_dossier[is.na(non_reclame)][1L]))
   etats <- etats[if (poste == "capitaux_non_reclames") non_reclame else !non_reclame, , drop = FALSE]
   # dossiers clos du poste : hors du calcul ; restitués à 0 sous une hypothèse de la vue (S2)
   clos <- etats[etats$etat_dossier %in% "clos", , drop = FALSE]
   etats <- etats[!(etats$etat_dossier %in% "clos"), , drop = FALSE]
+  # dates du sinistre tenues pour inconnues par D02a sous H (dates_inconnues_vue(), `donnees` ;
+  # spécification `donnees` v1.9, § 9.4, #90) : la survenance (R8, R9) est lue par toute méthode
+  # (revalorisation, reconstitution) ; la déclaration (R9, R10), par l'horizon de dépôt d'un
+  # décès de 2015 ou après. Arrêt parametre_non_determine, premier dossier en cause
+  i_s <- apparier_cles(etats$id_sinistre, valeurs_vue(vue, "sinistres", "id_sinistre"))
+  date_inconnue <- dates_inconnues_vue(vue, "sinistres", "date_survenance")[i_s] %in% TRUE |
+    (.HORIZONS[[methode]] == "depot" & dates_inconnues_vue(vue, "sinistres", "date_declaration")[i_s] %in% TRUE &
+       (as.numeric(etats$date_entree_etat) >= as.numeric(.DEBUT_DEPOT_LEGAL)) %in% TRUE)
+  if (any(date_inconnue)) return(arreter("parametre_non_determine", etats$id_dossier[date_inconnue][1L]))
   # couverture de taux_par_annee : chaque année de la survenance la plus ancienne à l'arrêté
   rv <- .revalorisation_plan(plan)
   if (nrow(etats) > 0L) {
@@ -822,9 +857,12 @@ calculer_engagement <- function(vue, plan, tables, catalogue, garantie, poste) {
   calc <- capital_deces_dossier(vue, plan, etats, methode, parametres, prestations, poste)
   arret <- which(!is.na(calc$arret))
   if (length(arret)) return(arreter(calc$arret[arret[1L]], calc$id_dossier[arret[1L]]))
-  # invariant (spécification de B2, § 4.3) : aucun dossier valorisé à instruction inconnue
-  if (anyNA(etats$instruit)) {
-    stop("erreur interne de provie : dossier valoris\u00e9 \u00e0 instruction inconnue (", etats$id_dossier[is.na(etats$instruit)][1L],
+  # invariant (spécification de B2, § 4.3) : aucun dossier valorisé à instruction inconnue par sa
+  # partie de ligne ; une instruction tenue pour inconnue par D02a sous H (R10) n'est lue que pour
+  # un capital reconstitué, arrêté plus haut (.reconstituer_capital())
+  nd_instr <- is.na(etats$instruit) & !(dates_inconnues_vue(vue, "sinistres", "date_instruction")[i_s] %in% TRUE)
+  if (any(nd_instr)) {
+    stop("erreur interne de provie : dossier valoris\u00e9 \u00e0 instruction inconnue (", etats$id_dossier[nd_instr][1L],
          ")", call. = FALSE)
   }
   # codes des sources S1 (D03c) et S2 (hypothèses de la vue, hypotheses_vue_unites()) du

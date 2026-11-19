@@ -75,6 +75,8 @@ LISTE_BLANCHE <- c(
     "code",
   "R/engagement.R | hypothese_vue | lignes %in% h [[ j ] ] $ lignes" =
     "indice",
+  "R/engagement.R | hypothese_vue | x $ colonnes %in% colonnes" =
+    "metadonnee",
   "R/engagement.R | .salaire_d03c | match ( college , cles )" =
     "code",
   "R/engagement.R | .reconstituer_capital | lien %in% parametres $ liens_conjoint_majoration" =
