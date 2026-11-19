@@ -50,10 +50,10 @@ donnees/controles/colonne	character
 donnees/controles/detection	character
 donnees/controles/nombre	integer
 donnees/controles/identifiants	character
-donnees/controles_non_executes/code	character	D03i	parente_posterieure	D03i	D09	D03d	D09	parente_posterieure	D11c	D11b	D03g	D09	D02b	D09	D03i	D09	parente_posterieure	D03i
-donnees/controles_non_executes/table	character	contrats	garanties_souscrites	garanties_souscrites	parametres	assures	affiliations	affiliations	affiliations	dossiers	dossiers	evenements	prestations	prestations	prestations	cotisations	cotisations	cotisations
-donnees/controles_non_executes/colonne	character	date_effet	\N	date_effet	\N	situation_familiale	\N	\N	college	id_garantie_souscrite	date_ouverture	\N	\N	\N	date_reglement	\N	\N	date_mouvement
-donnees/controles_non_executes/cause	character	non_implemente	non_implemente	non_implemente	non_implemente	non_implemente	non_implemente	non_implemente	non_implemente	non_implemente	non_implemente	non_implemente	non_implemente	non_implemente	non_implemente	non_implemente	non_implemente	non_implemente
+donnees/controles_non_executes/code	character	D09	D03d	D09	D09	D09	D09
+donnees/controles_non_executes/table	character	parametres	assures	affiliations	evenements	prestations	cotisations
+donnees/controles_non_executes/colonne	character	\N	situation_familiale	\N	\N	\N	\N
+donnees/controles_non_executes/cause	character	non_implemente	non_implemente	non_implemente	non_implemente	non_implemente	non_implemente
 donnees/refus_tables/table	character
 donnees/refus_tables/colonne	character
 donnees/refus_tables/motif	character

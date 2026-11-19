@@ -109,8 +109,8 @@ empreintes/donnees/cotisations	character	f48d48c9487ab8b9c273cbdcead78350
 empreintes/fichiers	null
 empreintes/tables/mortalite_fictive_b2	character	f369ecb1265f41af1a1f0a073c49f85a
 empreintes/tables/tme_fictive_b2	character	ea69e98196b4c00655e931bbaefbdbc6
-empreintes/resultat	character	18de843b9588557a9ed75bacd433e83f
-empreintes/code	character	0ee1eded4fed9e02f58997abf1c154df
+empreintes/resultat	character	c92c9f6899389fa52c30d03233084e92
+empreintes/code	character	68637685c74bf039e3ea351f83a18a81
 empreintes/representation	character	provie-resultat-1
 versions/r	character	4.3.3
 versions/provie	character	0.12.0
