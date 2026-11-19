@@ -103,16 +103,18 @@ verifier("V1 : total deces = P1 + P2 + P3 (mesures m24 : 541 440,13 + 552 375,52
 
 section("total arrêté et arrêt de poste (spécification de B2, § 6.1 et § 6.2 ; ADR 0010, point 11)")
 p3 <- j3$r$provisions
-verifier_egal("J3 (v1-modeste-05) : P1 et P2 arrêtés (D09), P3 calculé (0), total arrêté poste_arrete:<postes triés>, montant et nombre NA",
+# #72 (spécification `donnees` v1.9, § 9.2 ; erratum du projet de dictionnaire 1.6, § 2 et
+# § 11.5) : le refus D09 de PR00010 (indemnité journalière du dossier DO0014, garantie
+# incapacite) a la portée ligne ; aucune unité de P1 ni de P2 ne lit la ligne : P1, P2 et le
+# total sont calculés, à 0 exact (avant #72 : arrêtés D09, total poste_arrete:...)
+verifier_egal("J3 (v1-modeste-05) : P1, P2 et P3 calculés (0), total calculé (0) ; la ligne refusée PR00010 n'est lue par aucune unité (#72)",
               lapply(c("sinistres_declares_non_regles", "capitaux_non_reclames", "provision_mathematique_temporaire_deces", "total"),
                      function(po) as.list(p3[p3$poste == po, c("montant", "nombre_dossiers", "statut_calcul", "motif_arret")])),
-              list(list(montant = NA_real_, nombre_dossiers = NA_integer_, statut_calcul = "arrete", motif_arret = "D09"),
-                   list(montant = NA_real_, nombre_dossiers = NA_integer_, statut_calcul = "arrete", motif_arret = "D09"),
-                   list(montant = 0, nombre_dossiers = 0L, statut_calcul = "calcule", motif_arret = NA_character_),
-                   list(montant = NA_real_, nombre_dossiers = NA_integer_, statut_calcul = "arrete",
-                        motif_arret = "poste_arrete:capitaux_non_reclames;sinistres_declares_non_regles")))
-verifier_egal("J3 : la ligne de refus_tables du bilan porte postes_arretes (M239)",
-              j3$r$donnees$refus_tables$postes_arretes, "deces/capitaux_non_reclames;deces/sinistres_declares_non_regles")
+              rep(list(list(montant = 0, nombre_dossiers = 0L, statut_calcul = "calcule", motif_arret = NA_character_)), 4L))
+verifier_egal("J3 : la ligne de refus_tables (prestations.montant, D09) est de portée ligne et n'arrête aucun poste : postes_arretes NA (#72 ; avant : P1 et P2)",
+              as.list(j3$r$donnees$refus_tables[, c("table", "colonne", "motif", "portee", "identifiants", "postes_arretes")]),
+              list(table = "prestations", colonne = "montant", motif = "D09", portee = "ligne", identifiants = "PR00010",
+                   postes_arretes = NA_character_))
 # Arrêt né d'une famille : P1 sur un capital à reconstituer sans affiliation (affiliation_non_determinee).
 # Sans affiliation, la survenance n'est couverte par aucun contrat : D11 (S + X, spécification
 # `donnees` v1.6, § 8.7) demande l'exclusion par famille, déclarée `conserver` (la ligne reste lue).
@@ -225,26 +227,40 @@ verifier("J3 : enjeu du bilan de la vue retrouvé en retirant les copies par pos
 
 # Rangée de refus (§ 6.4, point 7) : copiée vers les postes de postes_arretes de la même garantie,
 # jointure par (table, colonne, motif) ; motif_fin est une colonne de la partie de ligne de fin
-# des affiliations (§ 4.3) : P1 et P2, qui lisent cette partie, sont arrêtés (§ 6.2 (ii)) et
-# reçoivent la rangée, bien que lectures.csv ne nomme pas affiliations.motif_fin ; P3 ne la reçoit pas.
-b_mf <- base
-b_mf$affiliations$motif_fin[1L] <- "zzz"   # hors domaine : refus de portée colonne
-r_mf <- calculer_provisions(b_mf, p_c1, tid)
+# des affiliations (§ 4.3) : un poste qui lit cette partie la lit (condition (1)), bien que
+# lectures.csv ne nomme pas affiliations.motif_fin. Portée ligne (#72 ; erratum du projet de
+# dictionnaire 1.6, § 11.5) : seuls les postes dont une unité lit la ligne refusée sont arrêtés.
+# AFR5A est l'affiliation lue pour le capital reconstitué du dossier DOR5A, de P1 : P1 arrêté
+# (hors_domaine, DOR5A), postes_arretes = P1, rangées deces de la table copiées vers P1 seul ;
+# témoin AFR1 (dossier DOR1, de capital fixé : affiliation non lue) : aucun arrêt, postes_arretes
+# NA, aucune copie (avant #72 : P1 et P2 arrêtés dans les deux cas, copies vers P1 puis P2)
+mf <- function(id) {
+  b <- base
+  b$affiliations$motif_fin[b$affiliations$id_affiliation == id] <- "zzz"   # hors domaine : refus de portée ligne
+  calculer_provisions(b, p_c1, tid)
+}
+r_mf <- mf("AFR5A")
 en_mf <- r_mf$donnees$enjeu
 co_mf <- en_mf[en_mf$poste != "ensemble", ]
-verifier_egal("refus de portée colonne sur affiliations.motif_fin : P1 et P2 arrêtés (hors_domaine) ; chaque rangée deces de la table est copiée vers P1 puis P2 (ordre du catalogue), aucune vers P3 ni pour la garantie ensemble",
-              list(r_mf$donnees$refus_tables$postes_arretes,
+pr_mf <- r_mf$provisions[r_mf$provisions$segmentation == "ensemble" & r_mf$provisions$poste != "total", ]
+r_mf1 <- mf("AFR1")
+verifier_egal("refus de portée ligne sur affiliations.motif_fin de AFR5A (capital reconstitué de DOR5A, P1) : P1 arrêté (hors_domaine, DOR5A), P2 et P3 calculés ; postes_arretes = P1 ; chaque rangée deces de la table copiée vers P1 seul ; témoin AFR1 (capital fixé) : aucun arrêt, postes_arretes NA, aucune copie",
+              list(r_mf$donnees$refus_tables$portee, r_mf$donnees$refus_tables$postes_arretes,
                    any(catalogue_garanties()$lectures$table == "affiliations" & catalogue_garanties()$lectures$colonne %in% "motif_fin"),
+                   pr_mf$motif_arret, pr_mf$statut_calcul,
+                   local({ pr <- r_mf$fiche$parametres_retenus$postes
+                           ns$lire_liste(charToRaw(pr$parametres[pr$poste == "sinistres_declares_non_regles"]))$identifiant_arret }),
                    local({ u <- unique(co_mf[c("table", "colonne", "motif", "garantie")]); rownames(u) <- NULL; u }),
-                   co_mf$poste,
-                   nrow(co_mf) == 2L * sum(en_mf$poste == "ensemble" & en_mf$garantie == "deces" & en_mf$table %in% "affiliations")),
-              list("deces/capitaux_non_reclames;deces/sinistres_declares_non_regles", FALSE,
+                   unique(co_mf$poste),
+                   nrow(co_mf) == sum(en_mf$poste == "ensemble" & en_mf$garantie == "deces" & en_mf$table %in% "affiliations"),
+                   r_mf1$donnees$refus_tables$postes_arretes, unique(r_mf1$provisions$statut_calcul),
+                   sum(r_mf1$donnees$enjeu$poste != "ensemble" & r_mf1$donnees$enjeu$table %in% "affiliations")),
+              list("ligne", "deces/sinistres_declares_non_regles", FALSE,
+                   c(NA, NA, "hors_domaine"), c("calcule", "calcule", "arrete"), "DOR5A",
                    data.frame(table = "affiliations", colonne = "motif_fin", motif = "hors_domaine", garantie = "deces",
                               stringsAsFactors = FALSE),
-                   rep(c("sinistres_declares_non_regles", "capitaux_non_reclames"),
-                       sum(en_mf$poste == "ensemble" & en_mf$garantie == "deces" & en_mf$table %in% "affiliations")),
-                   TRUE))
-verifier("J3 : la rangée de refus D09 (prestations.montant d'une indemnité journalière, garantie hors du plan) n'est copiée vers aucun poste du décès, bien que P1 et P2 soient dans ses postes_arretes",
+                   "sinistres_declares_non_regles", TRUE, NA_character_, "calcule", 0L))
+verifier("J3 : la rangée de refus D09 (prestations.montant d'une indemnité journalière, garantie hors du plan) n'est copiée vers aucun poste du décès (depuis #72, postes_arretes NA)",
          !any(copies$motif == "D09") && any(en$motif == "D09" & en$action == "refus"))
 
 section("fiche de calcul, empreintes, graine (ADR 0010, points 10, 21 et 22)")
@@ -512,15 +528,21 @@ verifier_egal("(4.1) (c) GSC1 exclue pour engagement (D02a), D10b conserver part
               list(cel_x(r_c, P1)$montant, cel_x(r_c, P2)$montant, egal_mixte(cel_x(r_c, P3)$montant, 4275.9860504871),
                    unique(r_c$donnees$exclusions$action[r_c$donnees$exclusions$motif == "D10b"])),
               list(0, 0, TRUE, "conserver"))
-verifier("(4.1) (d) une seule implémentation : garanties_couverture_exclue() définie une fois, dans R/donnees.R ; appelée par calculer_engagement() et par provisions_individuelles() et provisions_collectives() (calculer_risque_en_cours())",
+verifier("(4.1) (d) une seule implémentation : garanties_couverture_exclue() définie une fois, dans R/donnees.R ; appelée par calculer_engagement() et, pour P3, une seule fois, dans .gs_deces_p3() (seule sélection des garanties souscrites deces de P3, audit de #72, m1), elle-même appelée par provisions_individuelles(), provisions_collectives() et calculer_risque_en_cours()",
          local({
            defs <- unlist(lapply(list.files(file.path(racine, "R"), pattern = "\\.R$", full.names = TRUE), function(f) {
              l <- readLines(f, warn = FALSE)
              if (any(grepl("^garanties_couverture_exclue <- function", l))) basename(f) else NULL
            }))
-           appel <- function(f) grepl("garanties_couverture_exclue(", paste(deparse(f), collapse = "\n"), fixed = TRUE)
-           identical(defs, "donnees.R") && appel(ns$calculer_engagement) && appel(ns$provisions_individuelles) &&
-             appel(ns$provisions_collectives)
+           appels <- function(f, g) {
+             x <- gregexpr(paste0(g, "("), paste(deparse(f), collapse = "\n"), fixed = TRUE)[[1L]]
+             sum(x > 0L)
+           }
+           p3 <- c("provisions_individuelles", "provisions_collectives", "calculer_risque_en_cours")
+           identical(defs, "donnees.R") && appels(ns$calculer_engagement, "garanties_couverture_exclue") >= 1L &&
+             appels(ns$.gs_deces_p3, "garanties_couverture_exclue") == 1L &&
+             all(vapply(p3, function(f) appels(ns[[f]], ".gs_deces_p3") == 1L &&
+                          appels(ns[[f]], "garanties_couverture_exclue") == 0L, NA))
          }))
 decl_a <- p_c1$donnees
 decl_a$exclusions <- excl_x("D02a", "engagement")

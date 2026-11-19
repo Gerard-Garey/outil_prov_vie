@@ -91,6 +91,14 @@ LISTE_BLANCHE <- c(
     "code",
   "R/engagement.R | calculer_engagement | l $ table %in% tables" =
     "metadonnee",
+  "R/engagement.R | calculer_engagement | l $ table %in% differees" =
+    "metadonnee",
+  "R/engagement.R | arret_refus_ligne | cle %in% pa $ candidats [[ i ] ]" =
+    "metadonnee",
+  "R/engagement.R | arret_refus_ligne | t %in% listees" =
+    "metadonnee",
+  "R/engagement.R | arret_refus_ligne | t %in% evaluees" =
+    "metadonnee",
   "R/risque_en_cours.R | .retrospective | a %in% dates_pas" =
     "code",
   "R/risque_en_cours.R | .retrospective | a %in% ajouter_mois ( rep ( e , n_pas ) , periode * seq_len ( n_pas ) )" =
@@ -248,6 +256,10 @@ LISTE_BLANCHE <- c(
   "R/donnees.R | .causes_enjeu | d $ colonne %in% ecart $ colonne" =
     "metadonnee",
   "R/donnees.R | .causes_enjeu | dr $ colonne %in% ecart $ colonne" =
+    "metadonnee",
+  "R/donnees.R | .refus_ligne_lus | m [ 2L ] %in% .DATES_VISIBILITE [[ m [ 1L ] ] ]" =
+    "metadonnee",
+  "R/donnees.R | .refus_ligne_lus | tc %in% valeur" =
     "metadonnee",
   "R/donnees.R | .refus_p_empechee | t %in% names ( empechees )" =
     "metadonnee",
@@ -439,6 +451,8 @@ LISTE_BLANCHE <- c(
     "indice",
   "R/donnees.R | .composantes_dossiers | type [ dernier_b ] %in% service" =
     "code",
+  "R/donnees.R | .rattacher_composante | type [ l ] %in% x" =
+    "code",
   "R/donnees.R | .placer | \"X\" %in% t" =
     "code",
   "R/donnees.R | .placer | ex $ famille %in% familles" =
@@ -483,6 +497,24 @@ LISTE_BLANCHE <- c(
     "indice",
   "R/donnees.R | .enjeu_elementaire | table %in% names ( .LUS_LIGNE_ENJEU )" =
     "metadonnee",
+  "R/donnees.R | .enjeu_elementaire | d %in% g_refus" =
+    "indice",
+  "R/donnees.R | .enjeu_elementaire | dd $ dossier %in% g_refus" =
+    "indice",
+  "R/donnees.R | .enjeu_elementaire | match ( i , rl $ porteur )" =
+    "indice",
+  "R/donnees.R | .enjeu_elementaire | match ( vus , rl $ porteur )" =
+    "indice",
+  "R/donnees.R | .enjeu_elementaire | match ( indet , rl $ porteur )" =
+    "indice",
+  "R/donnees.R | .enjeu_elementaire | vus %in% rl $ porteur" =
+    "indice",
+  "R/donnees.R | .enjeu_elementaire | match ( s , rl $ porteur )" =
+    "indice",
+  "R/donnees.R | .enjeu_elementaire | indet %in% rl $ porteur" =
+    "indice",
+  "R/donnees.R | .enjeu_elementaire | match ( si , rl $ porteur )" =
+    "indice",
   "R/donnees.R | .divergences_d01a | colonne %in% cle" =
     "metadonnee",
   "R/donnees.R | .divergences_d01a | k %in% k [ lignes ]" =

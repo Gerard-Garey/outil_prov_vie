@@ -1175,9 +1175,10 @@ lire_declarations <- function(declarations, dico) {
   invisible(NULL)
 }
 
-# Refus de valeur (M199) : constat R de portée effective colonne, hors écart de forme.
+# Refus de valeur (M199) : constat R de portée effective autre que table (`ligne` depuis #72),
+# hors écart de forme.
 .refus_de_valeur <- function(dico, k) {
-  k$traitement == "R" && !(k$code %in% .CODES_FORME) && .portee_effective(dico, k$code, k$table, k$colonne) == "colonne"
+  k$traitement == "R" && !(k$code %in% .CODES_FORME) && .portee_effective(dico, k$code, k$table, k$colonne) != "table"
 }
 
 # Valeur inconnue de D03i (M701 ; spécification `donnees` v1.9, § 9.6) : pour toute règle autre
@@ -1265,7 +1266,7 @@ lire_declarations <- function(declarations, dico) {
   # lignes refusées pour leur valeur, par colonne lue dont le refus de valeur ne bloque pas
   admet <- if (!partiel) {
     setdiff(vue, valeur)
-  } else if (regle_b && !is.na(colonne) && .portee_effective(ctx$dico, code, table, colonne) == "colonne") {
+  } else if (regle_b && !is.na(colonne) && .portee_effective(ctx$dico, code, table, colonne) != "table") {
     setdiff(lit, paste(table, colonne, sep = "."))
   } else {
     lit
@@ -1387,19 +1388,23 @@ lire_declarations <- function(declarations, dico) {
 }
 
 # Portée effective d'un refus R (§ 1.10 du dictionnaire ; ADR 0010, sixième série, (b) 1) :
-# `colonne_table` (et tout défaut D.. de portée non fixée) devient `table` pour une colonne
-# de la clé primaire ou qui porte une référence, `colonne` sinon ; `ligne_table` (dictionnaire
-# 1.6, #72) est lue comme `colonne_table` jusqu'au commit de #72 (état transitoire T1,
-# spécification `donnees` v1.9, § 9.8) ; D10 (a) porte sur la
-# table de la table fille (spécification, § 2.4) ; toute anomalie de evaluations_gestion
-# refuse la table seule (dictionnaire, § 7.5).
+# `colonne_table` devient `table` pour une colonne de la clé primaire ou qui porte une
+# référence, `colonne` sinon ; `ligne_table` (dictionnaire 1.6, #72) et tout défaut D.. de
+# portée non fixée (D02c sur une date, D09 de signe) deviennent `table` pour une telle colonne,
+# `ligne` sinon (refus de valeur identifié par ligne : spécification `donnees` v1.9, § 9.2 ;
+# T1 levé) ; D10 (a) porte sur la table de la table fille (spécification, § 2.4) ; toute
+# anomalie de evaluations_gestion refuse la table seule (dictionnaire, § 7.5). Dans `donnees`,
+# `colonne` et `ligne` se lisent de même (portée autre que `table` : refus de colonne, règles B,
+# P et V, vue) ; seuls l'enjeu par porteur (.refus_ligne_porteurs()) et l'arrêt des postes,
+# hors de `donnees`, distinguent `ligne`.
 .portee_effective <- function(dico, code, table, colonne) {
   if (table == "evaluations_gestion" || code == "D10a" || is.na(colonne)) return("table")
   portee <- dico$controles$portee[dico$controles$code == code]
   if (length(portee) == 1L && portee %in% c("table", "colonne")) return(portee)
   cle <- eclater_champ(dico$tables$cle_primaire[dico$tables$table == table])
   ref <- dico$colonnes$reference[dico$colonnes$table == table & dico$colonnes$colonne == colonne]
-  if (colonne %in% cle || (length(ref) == 1L && nzchar(ref))) "table" else "colonne"
+  if (colonne %in% cle || (length(ref) == 1L && nzchar(ref))) return("table")
+  if (identical(portee, "colonne_table")) "colonne" else "ligne"
 }
 
 # --- Règle B à trois valeurs : graphe, strates, verdict -----------------------------
@@ -1560,6 +1565,8 @@ lire_declarations <- function(declarations, dico) {
 # contrôlée, les colonnes refusables lues, dans l'ordre du registre.
 .lectures_regle_b <- function(dico, registre = .regles_b(dico), portee = .portees_registre(dico, registre)) {
   soi <- vapply(registre, function(k) paste(k$table, k$colonne, sep = "."), "")
+  # portée colonne : toute portée autre que table (`colonne` ou `ligne`, #72)
+  portee[portee != "table"] <- "colonne"
   refusables <- unique(soi[portee == "colonne" & vapply(registre, `[[`, "", "traitement") == "R"])
   lus <- lapply(seq_along(registre), function(i) setdiff(intersect(registre[[i]]$lit, refusables), soi[i]))
   concernee <- lengths(lus) > 0L
@@ -2126,7 +2133,7 @@ lire_declarations <- function(declarations, dico) {
 .regle_condition <- function(ctx, table, colonne, lit, requis, entrees, defaut_manquant = FALSE) {
   tc <- paste(table, colonne, sep = ".")
   verdict <- function(code, test) {
-    y <- .entree3(ctx, tc, connue = .portee_effective(ctx$dico, code, table, colonne) == "colonne")
+    y <- .entree3(ctx, tc, connue = .portee_effective(ctx$dico, code, table, colonne) != "table")
     .verdict3(c(list(y = y), entrees()), function(x) test(requis(x), x$y))
   }
   if (!defaut_manquant) {
@@ -2953,7 +2960,11 @@ apparier_cles <- function(x, table) {
   c1 <- ctx$refus_pv$colonnes[[table]]
   visibilite <- colonne %in% .DATES_VISIBILITE[[table]] && !is.null(.lignes_refusees(ctx, table, colonne)) &&
     !(valeur && .vue_totale(ctx))
-  propres <- if (!is.null(c1) && colonne %in% names(c1) && !visibilite) c1[[colonne]]
+  # un refus de portée ligne n'empêche pas la composante : seul le porteur qui lit une ligne
+  # refusée est sans valeur (.refus_ligne_porteurs() ; spécification `donnees` v1.9, § 9.2, #72)
+  propres <- if (!is.null(c1) && colonne %in% names(c1) && !visibilite) {
+    setdiff(c1[[colonne]], .codes_refus_ligne(ctx, table, colonne))
+  }
   propre <- !is.null(ecart) && identical(ecart$action, "refus") && !is.na(ecart$table) &&
     .portee_effective(ctx$dico, ecart$motif, ecart$table, ecart$colonne) == "table"
   d <- ctx$refus_pv$directs[[table]]
@@ -2975,6 +2986,72 @@ apparier_cles <- function(x, table) {
   dr <- ctx$refus_pv$directs[[r]]
   autre <- !is.null(dr) && any(!(dr$code == ecart$motif & dr$colonne %in% ecart$colonne))
   if (autre) unique(c(causes, "refus_induit")) else causes
+}
+
+# Refus de portée ligne de `table.colonne` (.portee_effective() ; spécification `donnees` v1.9,
+# § 9.2, #72) : refus de valeur rangés dans `refus_valeur`, hors valeurs inconnues de D03i
+# (traitées X, elles gardent la lecture de la colonne entière, M701). `.codes_refus_ligne()` :
+# leurs motifs, sans doublon.
+.refus_ligne_de <- function(ctx, table, colonne) {
+  Filter(function(x) x$code != "D03i", .refus_valeur_de(ctx, table, colonne))
+}
+.codes_refus_ligne <- function(ctx, table, colonne) {
+  unique(vapply(.refus_ligne_de(ctx, table, colonne), `[[`, "", "code"))
+}
+
+# Lignes refusées de portée ligne lues par une composante de l'enjeu (spécification `donnees`
+# v1.9, § 9.2, #72) : pour chaque colonne de `lus` (« table.colonne »), une rangée (tc, code,
+# ligne) par ligne refusée, sous la règle d'éligibilité de .causes_enjeu() (le refus de valeur
+# d'une colonne de visibilité lue pour la visibilité seule n'est pas lu ; `valeur` : colonnes
+# lues aussi comme valeur, lues à l'extraction).
+.refus_ligne_lus <- function(ctx, lus, valeur = character(0)) {
+  res <- list()
+  for (tc in unique(lus)) {
+    m <- strsplit(tc, ".", fixed = TRUE)[[1L]]
+    r <- .refus_ligne_de(ctx, m[1L], m[2L])
+    if (length(r) == 0L) next
+    if (m[2L] %in% .DATES_VISIBILITE[[m[1L]]] && !(tc %in% valeur && .vue_totale(ctx))) next
+    for (x in r) res[[length(res) + 1L]] <- data.frame(tc = rep(tc, length(x$lignes)), code = rep(x$code, length(x$lignes)),
+                                                        ligne = x$lignes, stringsAsFactors = FALSE)
+  }
+  if (length(res)) do.call(rbind, res) else data.frame(tc = character(0), code = character(0), ligne = integer(0),
+                                                       stringsAsFactors = FALSE)
+}
+
+# Cause de portée ligne de chaque porteur d'une composante de l'enjeu (spécification `donnees`
+# v1.9, § 9.2, #72 ; « Cause d'une composante de l'enjeu », § 3.1) : un porteur est sans valeur
+# s'il lit une ligne refusée de `rf` (.refus_ligne_lus()), rattachée à lui par
+# `rattacher(table, lignes)` (data.frame (ligne, porteur) : paires de rattachement par clés
+# connues, y compris un rattachement possible quand il dépend d'une valeur refusée, Kleene) ;
+# sa cause est la plus petite des motifs qu'il lit, dans l'ordre (rang, position), publiée sur
+# la première colonne qui la porte dans l'ordre du dictionnaire (.cause_colonnes()). Rend un
+# data.frame (porteur, cause, table, colonne), un porteur par ligne, trié par porteur.
+.refus_ligne_porteurs <- function(ctx, rf, rattacher) {
+  vide <- data.frame(porteur = integer(0), cause = character(0), table = character(0), colonne = character(0),
+                     stringsAsFactors = FALSE)
+  if (nrow(rf) == 0L) return(vide)
+  t <- sub("\\..*$", "", rf$tc)
+  paires <- list()
+  for (u in unique(t)) {
+    x <- rf[t == u, , drop = FALSE]
+    p <- rattacher(u, unique(x$ligne))
+    if (nrow(p) == 0L) next
+    j <- .paires(as.character(x$ligne), as.character(p$ligne))
+    if (nrow(j) > 0L) paires[[length(paires) + 1L]] <- data.frame(porteur = p$porteur[j$j], tc = x$tc[j$i], code = x$code[j$i],
+                                                                  stringsAsFactors = FALSE)
+  }
+  if (length(paires) == 0L) return(vide)
+  pp <- do.call(rbind, paires)
+  res <- lapply(split(pp, pp$porteur), function(z) {
+    lus <- unique(z$tc)
+    cz <- .cause_colonnes(ctx, lus, lapply(lus, function(tc) unique(z$code[z$tc == tc])))
+    data.frame(porteur = z$porteur[1L], cause = cz[["cause"]], table = cz[["table"]], colonne = cz[["colonne"]],
+               stringsAsFactors = FALSE)
+  })
+  res <- do.call(rbind, res)
+  res <- res[order(res$porteur, method = "radix"), , drop = FALSE]
+  rownames(res) <- NULL
+  res
 }
 
 # --- Règle P et vue à une date ---------------------------------------------------------
@@ -3865,7 +3942,11 @@ parties_ligne <- function() lapply(.PARTIES_LIGNE, function(p) list(table = p$ta
 # (rang, position) (.cause_retenue() : cause directe, rang 3, avant declaration_absente, rang
 # 6 ; à rang égal, ordre des codes du dictionnaire), indépendante de l'ordre de
 # vue$visibilite_non_determinee (spécification `donnees` v1.6, § 3.1, départage à rang égal,
-# #59). Une ligne écartée sans élément qui l'explique est une erreur interne.
+# #59). Ligne retenue de valeur refusée (index « table.colonne » d'une colonne qui n'est pas une
+# partie de ligne, ou ligne sans inscription : date d'effet d'un événement retenu,
+# .arret_en_cours3() ; audit de la reprise de #81, #72) : le motif du refus de valeur de la
+# colonne (.refus_valeur_de()). Une ligne écartée sans élément qui l'explique est une erreur
+# interne.
 .cause_nd <- function(ctx, index, lignes, code, table) {
   liens <- .liens_regle1(ctx$dico)
   liens <- liens[liens$table %in% ctx$tables & liens$table_cible %in% ctx$tables, , drop = FALSE]
@@ -3916,6 +3997,11 @@ parties_ligne <- function() lapply(.PARTIES_LIGNE, function(p) list(table = p$ta
     m <- strsplit(tc, ".", fixed = TRUE)[[1L]]
     x <- inscriptions(m[1L], if (length(m) > 1L) m[2L] else NA_character_, l)
     for (r in x$parente) ascendantes(m[1L], r)
+    # lignes sans inscription d'une colonne : valeur refusée d'une ligne retenue
+    if (length(m) > 1L) {
+      seules <- setdiff(l, c(x$propre, x$parente))
+      for (k in .refus_valeur_de(ctx, m[1L], m[2L])) if (length(intersect(k$lignes, seules)) > 0L) causes <- c(causes, k$code)
+    }
   }
   if (length(causes) == 0L) stop("erreur interne de provie : r\u00e8gle V : ligne \u00e9cart\u00e9e sans \u00e9l\u00e9ment non ",
                                  "d\u00e9termin\u00e9 qui l'explique (", code, ", ", table, ")", call. = FALSE)
@@ -4295,6 +4381,26 @@ dates_inconnues_vue <- function(vue, table, colonne) {
   d <- ctx$d02a[[table]][[colonne]]
   if (is.null(d)) return(rep(FALSE, NROW(ctx$base[[table]])))
   if (is.null(d$valeur)) d$masque else d$masque & is.na(d$valeur)
+}
+
+# Lignes de `table` dont la valeur de `colonne` est refusée par un refus de portée ligne
+# (refus R de valeur identifié par ligne sur une colonne non clé, .portee_effective() ;
+# spécification `donnees` v1.9, § 9.2, #72), de motif `motif` (NULL : tout motif) : vecteur
+# logique sur les lignes de la table, tout FALSE sans tel refus (une valeur inconnue de D03i,
+# traitée X, n'en est pas un). La valeur y reste lisible par valeurs_vue() (elle n'est pas
+# corrigée) : un lecteur qui la lit pour une de ses unités arrête son poste (règle d'arrêt
+# par unité, erratum du projet de dictionnaire 1.6, § 11.5) ; ce sont aussi les lignes de la
+# ligne de refus_tables de même table, colonne et motif. Sans point : appelée par les familles
+# engagement et risque_en_cours ; non exportée.
+lignes_refus_ligne_vue <- function(vue, table, colonne, motif = NULL) {
+  if (!inherits(vue, "vue_provie")) stop("lignes_refus_ligne_vue() : `vue` doit \u00eatre un objet vue_provie", call. = FALSE)
+  ctx <- vue$ctx
+  res <- rep(FALSE, NROW(ctx$base[[table]]))
+  for (k in ctx$constats) {
+    if (k$traitement != "R" || k$table != table || !identical(k$colonne, colonne) || (!is.null(motif) && k$code != motif)) next
+    if (.portee_effective(ctx$dico, k$code, k$table, k$colonne) == "ligne") res[k$lignes] <- TRUE
+  }
+  res
 }
 
 # D02a : ordre des dates violé (dictionnaire, § 9), sur la vue ; la colonne du constat est
@@ -6132,7 +6238,10 @@ dates_inconnues_vue <- function(vue, table, colonne) {
 # M669). Inconnu si un événement de ces types non déterminé, ou retenu de date d'effet inconnue
 # (refus de valeur de portée ligne, décision du mainteneur du 19/11/2026), de date d'effet dans
 # la borne ou inconnue, qui peut suivre le dernier retenu (.peut_suivre()), est d'un verdict
-# différent (index : ces événements). Rend un .k3() aligné sur les éléments.
+# différent (index : ces événements, sous « evenements » pour un événement non déterminé, sous
+# « evenements.date_effet » pour un événement retenu de date d'effet refusée, dont .cause_nd()
+# retient le motif du refus ; audit de la reprise de #81, #72). Rend un .k3() aligné sur les
+# éléments.
 .arret_en_cours3 <- function(ctx, s, t, strict = FALSE) {
   n <- length(s)
   res <- .k3(rep(TRUE, n))
@@ -6151,10 +6260,13 @@ dates_inconnues_vue <- function(vue, table, colonne) {
   k <- which(possible & !(dans(effet[ev]) %in% FALSE))
   k <- k[.peut_suivre(ctx, ev[k], dernier[p$i[k]])]
   k <- k[(type[ev[k]] %in% "rechute") != res$v[p$i[k]]]
+  nd_ev <- .nd_vue(ctx, "evenements")
   for (z in split(k, p$i[k])) {
     i <- p$i[z[1L]]
     res$v[i] <- NA
-    res <- .k3_index(res, "evenements", i, ev[z], n)
+    e <- ev[z]
+    if (any(nd_ev[e])) res <- .k3_index(res, "evenements", i, e[nd_ev[e]], n)
+    if (any(!nd_ev[e])) res <- .k3_index(res, "evenements.date_effet", i, e[!nd_ev[e]], n)
   }
   res
 }
@@ -7015,6 +7127,58 @@ dates_inconnues_vue <- function(vue, table, colonne) {
   res
 }
 
+# Rattachement à un dossier d'une ligne refusée de portée ligne lue par la composante
+# `composante` (1 à 4) de l'enjeu (spécification `donnees` v1.9, § 9.2, #72) : lignes que la
+# composante lit pour le dossier, par les clés de .composantes_dossiers() (prestations et
+# rentes du dossier, connues à l'arrêté ; événements du dossier, ou du sinistre pour une sortie
+# de l'indemnité journalière, ou des rentes du dossier ; garantie souscrite du dossier pour les
+# composantes qui lisent la garantie), un événement comptant s'il peut entrer dans la valeur :
+# type de la composante et date d'effet au plus l'arrêté, ou l'un d'eux refusé (inconnu,
+# lecture de Kleene). Rend la fonction rattacher(table, lignes) de .refus_ligne_porteurs().
+.rattacher_composante <- function(ctx, composante, d03g = FALSE) {
+  v <- function(t, c1) .valeurs(ctx, t, c1)
+  a <- as.numeric(ctx$arrete)
+  service <- c("ouverture_service", "modification_montant")
+  vers <- function(l, cle, cle_dossier) {
+    p <- .paires(cle, v("dossiers", cle_dossier))
+    data.frame(ligne = l[p$i], porteur = p$j)
+  }
+  function(table, lignes) {
+    if (table == "dossiers") return(data.frame(ligne = lignes, porteur = lignes))
+    if (table == "garanties_souscrites") {
+      p <- .paires(v("dossiers", "id_garantie_souscrite"), v("garanties_souscrites", "id_garantie_souscrite")[lignes])
+      return(data.frame(ligne = lignes[p$j], porteur = p$i))
+    }
+    l <- lignes[.connus(ctx, table, d03g)[lignes] %in% TRUE]
+    if (table %in% c("prestations", "rentes")) return(vers(l, v(table, "id_dossier")[l], "id_dossier"))
+    if (table != "evenements") return(data.frame(ligne = integer(0), porteur = integer(0)))
+    type <- v("evenements", "type_evenement")
+    effet <- as.numeric(v("evenements", "date_effet"))
+    type_i <- .inconnu(ctx, "evenements", "type_evenement")
+    l <- l[(!is.na(effet[l]) & effet[l] <= a) | .inconnu(ctx, "evenements", "date_effet")[l]]
+    de_type <- function(x) l[type[l] %in% x | type_i[l]]
+    if (composante == "capital_fixe") {
+      lk <- de_type("fixation_capital")
+      return(vers(lk, v("evenements", "id_dossier")[lk], "id_dossier"))
+    }
+    if (composante == "ij_en_vigueur") {
+      lk <- de_type(c(service, "fin_service"))
+      lx <- de_type("sortie")
+      return(unique(rbind(vers(lk, v("evenements", "id_dossier")[lk], "id_dossier"),
+                          vers(lx, v("evenements", "id_sinistre")[lx], "id_sinistre"))))
+    }
+    if (composante == "rente_annuelle_en_vigueur") {
+      lk <- de_type(c(service, "fin_service"))
+      kr <- .connus(ctx, "rentes", d03g) %in% TRUE
+      q <- .paires(v("evenements", "id_rente")[lk], v("rentes", "id_rente"))
+      q <- q[kr[q$j], , drop = FALSE]
+      pr <- .paires(v("rentes", "id_dossier")[q$j], v("dossiers", "id_dossier"))
+      return(unique(data.frame(ligne = lk[q$i[pr$i]], porteur = pr$j)))
+    }
+    data.frame(ligne = integer(0), porteur = integer(0))
+  }
+}
+
 # Composantes 1 à 4 de chaque dossier à l'arrêté (spécification, § 4.3) : `garantie`
 # (code_garantie, ou non_rattache), `valeurs` (liste nommée par
 # composante d'un vecteur par dossier, NA : aucune valeur ; une composante sans objet pour la
@@ -7469,6 +7633,8 @@ dates_inconnues_vue <- function(vue, table, colonne) {
                          stringsAsFactors = FALSE)
   cause_rattachement <- NULL
   lien_g <- FALSE
+  # dossiers dont le code de garantie est refusé de portée ligne (#72) : garantie inconnue
+  g_refus <- integer(0)
   if (table %in% c(.TABLES_DOSSIER, "prestations")) {
     r <- .rattacher(ctx, table)
     cause_rattachement <- r$cause
@@ -7487,6 +7653,13 @@ dates_inconnues_vue <- function(vue, table, colonne) {
       lien_g <- identical(ecart$action, "refus") && ecart$motif %in% .MOTIFS_LIEN_ECART &&
         paste(ecart$table, ecart$colonne, sep = ".") %in% cd$lus_g
       garantie <- if (is.null(cause_de(cd$lus_g)) && !lien_g) cd$garantie[d] else rep("non_rattache", length(d))
+      # code de garantie refusé de portée ligne (spécification `donnees` v1.9, § 9.2, #72) : la
+      # garantie du dossier est inconnue, non_rattache ; ses composantes 2 à 4 sont sans valeur
+      if (!lien_g) {
+        g_refus <- .refus_ligne_porteurs(ctx, .refus_ligne_lus(ctx, cd$lus_g),
+                                         .rattacher_composante(ctx, "garantie", d03g))$porteur
+        garantie[d %in% g_refus] <- "non_rattache"
+      }
       # écart D01a de dossiers : un dossier dont les doubles divergent sur une colonne de dossiers
       # que lit sa garantie (id_garantie_souscrite) est non_rattache, et non la garantie de
       # l'occurrence retenue (spécification `donnees` v1.7, § 2.2, B.4, lignes de l'écart D01a, #131)
@@ -7528,23 +7701,41 @@ dates_inconnues_vue <- function(vue, table, colonne) {
           empecher("dossiers", composante, COMPOSANTES_ENJEU$unite[k], cz)
           next
         }
+        # dossier qui lit une ligne refusée de portée ligne : sans valeur, cause le motif du refus
+        # (#72) ; une garantie inconnue par son code refusé peut porter les composantes 2 à 4
         s <- applicable[[composante]]
+        if (k > 1L) s <- s | dd$dossier %in% g_refus
         i <- dd$dossier[s]
         indet <- is.na(dd$connu[s]) | cd$indetermine[[composante]][i]
-        ajouter("dossiers", i, dd$garantie[s], dd$connu[s], composante, COMPOSANTES_ENJEU$unite[k], valeurs_k[[composante]][i],
-                ifelse(indet, .CAUSE_VISIBILITE, NA_character_), ifelse(indet, "dossiers", NA_character_))
+        rl <- .refus_ligne_porteurs(ctx, .refus_ligne_lus(ctx, lus_k[[composante]], .LUS_VALEUR_ENJEU),
+                                    .rattacher_composante(ctx, composante, d03g))
+        j <- match(i, rl$porteur)
+        r <- !is.na(j)
+        valeur <- valeurs_k[[composante]][i]
+        valeur[r] <- NA_real_
+        ajouter("dossiers", i, dd$garantie[s], dd$connu[s], composante, COMPOSANTES_ENJEU$unite[k], valeur,
+                ifelse(r, rl$cause[j], ifelse(indet, .CAUSE_VISIBILITE, NA_character_)),
+                ifelse(r, rl$table[j], ifelse(indet, "dossiers", NA_character_)), rl$colonne[j])
       }
     }
   }
   lus_gd <- c("dossiers.id_dossier", "dossiers.id_garantie_souscrite", "garanties_souscrites.id_garantie_souscrite",
               "garanties_souscrites.code_garantie")
   cause_gd <- cause_de(lus_gd)
+  # garanties souscrites de code refusé de portée ligne (#72) : garantie inconnue, non_rattache
+  gs_refus <- .valeurs(ctx, "garanties_souscrites", "id_garantie_souscrite")[
+    .refus_ligne_lus(ctx, "garanties_souscrites.code_garantie")$ligne]
   garantie_dossier <- function(id) {
     if (!is.null(cause_gd) || !is.null(.cause_lecture(ctx, lus_gd, forme_seule = TRUE))) return(rep("non_rattache", length(id)))
-    g <- .joindre(ctx, "garanties_souscrites", "id_garantie_souscrite", "code_garantie",
-                  .joindre(ctx, "dossiers", "id_dossier", "id_garantie_souscrite", id))
+    gs <- .joindre(ctx, "dossiers", "id_dossier", "id_garantie_souscrite", id)
+    g <- .joindre(ctx, "garanties_souscrites", "id_garantie_souscrite", "code_garantie", gs)
+    g[!is.na(apparier_cles(gs, gs_refus))] <- NA
     ifelse(is.na(g), "non_rattache", g)
   }
+  # porteur ligne (evenements, prestations, cotisations) qui lit une valeur refusée de portée
+  # ligne de sa propre ligne : sans valeur, cause le motif du refus (#72)
+  refus_ligne <- function(t) .refus_ligne_porteurs(ctx, .refus_ligne_lus(ctx, paste(t, .LUS_LIGNE_ENJEU[[t]], sep = ".")),
+                                                   function(u, l) data.frame(ligne = l, porteur = l))
   connus <- .connus(ctx, table, d03g)
   vus <- lignes[connus[lignes] %in% TRUE]
   indet <- lignes[is.na(connus[lignes])]
@@ -7569,16 +7760,28 @@ dates_inconnues_vue <- function(vue, table, colonne) {
       }
       x <- unite_de(vus)
       montant <- v("evenements", "montant")[vus]
-      s <- !is.na(x$unite) & !is.na(montant)
+      rl <- refus_ligne("evenements")
+      # ligne refusée de portée ligne (#72) : sans valeur dans son unité ; de type refusé, son
+      # unité est inconnue : sans valeur dans chacune
+      type_i <- .inconnu(ctx, "evenements", "type_evenement")
+      jv <- match(vus, rl$porteur)
+      s <- !is.na(x$unite) & !is.na(montant) & is.na(jv)
       y <- unite_de(indet)
-      si <- !is.na(y$unite) & !is.na(v("evenements", "montant")[indet])
+      ji <- match(indet, rl$porteur)
+      si <- !is.na(y$unite) & !is.na(v("evenements", "montant")[indet]) & is.na(ji)
       for (k in 8:10) {
         u <- COMPOSANTES_ENJEU$unite[k]
         su <- s & x$unite == u
         ajouter("evenements", vus[su], x$g[su], rep(TRUE, sum(su)), "montant_evenement", u, montant[su])
+        sr <- !is.na(jv) & ((x$unite == u) %in% TRUE | type_i[vus])
+        ajouter("evenements", vus[sr], x$g[sr], rep(TRUE, sum(sr)), "montant_evenement", u, rep(NA_real_, sum(sr)),
+                rl$cause[jv[sr]], rl$table[jv[sr]], rl$colonne[jv[sr]])
         si_u <- si & y$unite == u
         ajouter("evenements", indet[si_u], y$g[si_u], rep(NA, sum(si_u)), "montant_evenement", u, rep(NA_real_, sum(si_u)),
                 .CAUSE_VISIBILITE, "evenements")
+        sr <- !is.na(ji) & ((y$unite == u) %in% TRUE | type_i[indet])
+        ajouter("evenements", indet[sr], y$g[sr], rep(NA, sum(sr)), "montant_evenement", u, rep(NA_real_, sum(sr)),
+                rl$cause[ji[sr]], rl$table[ji[sr]], rl$colonne[ji[sr]])
       }
     }
   }
@@ -7588,10 +7791,16 @@ dates_inconnues_vue <- function(vue, table, colonne) {
     if (!is.null(cause)) {
       empecher("prestations", "prestations_ecartees", "euro", cause)
     } else {
+      rl <- refus_ligne("prestations")
+      jv <- match(vus, rl$porteur)
+      montant <- v("prestations", "montant")[vus]
+      montant[!is.na(jv)] <- NA_real_
       ajouter("prestations", vus, garantie_dossier(v("prestations", "id_dossier")[vus]), rep(TRUE, length(vus)),
-              "prestations_ecartees", "euro", v("prestations", "montant")[vus])
+              "prestations_ecartees", "euro", montant, rl$cause[jv], rl$table[jv], rl$colonne[jv])
+      ji <- match(indet, rl$porteur)
       ajouter("prestations", indet, garantie_dossier(v("prestations", "id_dossier")[indet]), rep(NA, length(indet)),
-              "prestations_ecartees", "euro", rep(NA_real_, length(indet)), .CAUSE_VISIBILITE, "prestations")
+              "prestations_ecartees", "euro", rep(NA_real_, length(indet)),
+              ifelse(is.na(ji), .CAUSE_VISIBILITE, rl$cause[ji]), ifelse(is.na(ji), "prestations", rl$table[ji]), rl$colonne[ji])
     }
   }
   if (table == "cotisations") {
@@ -7602,9 +7811,14 @@ dates_inconnues_vue <- function(vue, table, colonne) {
       if (!is.null(cause_de(lus_gc)) || !is.null(.cause_lecture(ctx, lus_gc, forme_seule = TRUE))) {
         return(rep("non_rattache", length(l)))
       }
-      g <- .joindre(ctx, "garanties_souscrites", "id_garantie_souscrite", "code_garantie", v("cotisations", "id_garantie_souscrite")[l])
+      gs <- v("cotisations", "id_garantie_souscrite")[l]
+      g <- .joindre(ctx, "garanties_souscrites", "id_garantie_souscrite", "code_garantie", gs)
+      g[!is.na(apparier_cles(gs, gs_refus))] <- NA
       ifelse(is.na(g), "non_rattache", g)
     }
+    rl <- if (is.null(cause)) refus_ligne("cotisations")
+    # nature refusée de portée ligne (#72) : composante inconnue, sans valeur dans chacune
+    nature_i <- .inconnu(ctx, "cotisations", "nature_mouvement")
     for (k in 6:7) {
       composante <- COMPOSANTES_ENJEU$composante[k]
       if (!is.null(cause)) {
@@ -7612,11 +7826,16 @@ dates_inconnues_vue <- function(vue, table, colonne) {
         next
       }
       natures <- if (k == 6L) c("emission", "annulation", "regularisation") else "encaissement"
-      s <- vus[v("cotisations", "nature_mouvement")[vus] %in% natures]
-      ajouter("cotisations", s, garantie_cotisation(s), rep(TRUE, length(s)), composante, "euro", v("cotisations", "montant")[s])
-      si <- indet[v("cotisations", "nature_mouvement")[indet] %in% natures]
+      s <- vus[v("cotisations", "nature_mouvement")[vus] %in% natures | (nature_i[vus] & vus %in% rl$porteur)]
+      js <- match(s, rl$porteur)
+      montant <- v("cotisations", "montant")[s]
+      montant[!is.na(js)] <- NA_real_
+      ajouter("cotisations", s, garantie_cotisation(s), rep(TRUE, length(s)), composante, "euro", montant,
+              rl$cause[js], rl$table[js], rl$colonne[js])
+      si <- indet[v("cotisations", "nature_mouvement")[indet] %in% natures | (nature_i[indet] & indet %in% rl$porteur)]
+      ji <- match(si, rl$porteur)
       ajouter("cotisations", si, garantie_cotisation(si), rep(NA, length(si)), composante, "euro", rep(NA_real_, length(si)),
-              .CAUSE_VISIBILITE, "cotisations")
+              ifelse(is.na(ji), .CAUSE_VISIBILITE, rl$cause[ji]), ifelse(is.na(ji), "cotisations", rl$table[ji]), rl$colonne[ji])
     }
   }
   el <- if (length(elements)) do.call(rbind, elements) else NULL

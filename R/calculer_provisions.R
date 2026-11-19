@@ -66,8 +66,9 @@ POSTE_TOTAL <- "total"
 # canonisé (le calcul lit le plan canonique, celui de la fiche) ; tables par usage, empreintes
 # contrôlées ; vue à l'arrêté et bilan ; refus declaration_manquante si une déclaration est
 # requise ; postes arrêtés par le bilan (postes_arretes des lignes de refus_tables) ; postes de
-# la famille engagement, puis risque_en_cours ; segments ; cellules par segment et totaux ;
-# enjeu par poste ; fiche ; empreintes du résultat et du code. Refus d'appel (refus_provie) :
+# la famille engagement, puis risque_en_cours (une ligne de portée ligne n'arrête que les postes
+# dont une unité la lit : postes_arretes complété par .postes_arretes_ligne(), #72) ; segments ;
+# cellules par segment et totaux ; enjeu par poste ; fiche ; empreintes du résultat et du code. Refus d'appel (refus_provie) :
 # ceux du plan, des tables, de la vue et declaration_manquante ; un poste arrêté ne refuse rien
 # (cellule `arrete`, ADR 0010, point 11). Rend un objet resultat_provie (CHAMPS_RESULTAT de
 # `rapport`) : provisions et dossiers triés par leurs clés, échéanciers selon
@@ -100,6 +101,9 @@ calculer_provisions <- function(donnees, plan, tables = list(), provenance = NUL
   segments <- segments_vue(vue, cp$perimetre$segmentations, garanties)
   # agregats
   provisions <- .agreger(postes_plan, sorties, segments, names(cp$perimetre$segmentations), cp, catalogue)
+  # postes arrêtés par leur famille sur une ligne de portée ligne de refus_tables (attribut
+  # `refus_ligne` de la cellule, #72 ; arret_refus_ligne()) : ajoutés à postes_arretes
+  arrets$refus_tables <- .postes_arretes_ligne(arrets$refus_tables, postes_plan, sorties)
   # enjeu
   bilan <- vue$bilan
   bilan$refus_tables <- arrets$refus_tables
@@ -307,6 +311,7 @@ print.resultat_provie <- function(x, ...) {
   for (i in seq_len(nrow(postes_plan))) {
     cel <- sorties[[i]]$cellules[COLONNES_CELLULES]
     attr(cel, "identifiant_arret") <- NULL
+    attr(cel, "refus_ligne") <- NULL
     rownames(cel) <- NULL
     ajouter(cel)
   }
@@ -401,6 +406,26 @@ print.resultat_provie <- function(x, ...) {
   res
 }
 
+# postes_arretes des lignes de portée ligne de refus_tables (spécification `donnees` v1.9,
+# § 9.2 ; erratum du projet de dictionnaire 1.6, § 11.5, #72) : postes arrêtés par la règle
+# (iii) (postes_a_arreter()) et postes dont la famille a été arrêtée par la ligne (attribut
+# `refus_ligne` de la cellule, indices dans refus_tables), « garantie/poste » joints par « ; »,
+# triés ; NA si aucun. Les autres lignes sont rendues inchangées.
+.postes_arretes_ligne <- function(refus_tables, postes_plan, sorties) {
+  ajout <- vector("list", nrow(refus_tables))
+  for (i in seq_len(nrow(postes_plan))) {
+    for (j in attr(sorties[[i]]$cellules, "refus_ligne")) {
+      ajout[[j]] <- c(ajout[[j]], paste(postes_plan$garantie[i], postes_plan$poste[i], sep = "/"))
+    }
+  }
+  for (j in which(lengths(ajout) > 0L)) {
+    deja <- if (is.na(refus_tables$postes_arretes[j])) character(0) else
+      strsplit(refus_tables$postes_arretes[j], ";", fixed = TRUE)[[1L]]
+    refus_tables$postes_arretes[j] <- paste(sort(unique(c(deja, ajout[[j]])), method = "radix"), collapse = ";")
+  }
+  refus_tables
+}
+
 # Somme des montants d'un poste calculé ou de ses cellules (sum(sort()), ordre fixé) : un
 # montant NA y est une erreur de programmation (un poste calculé n'a que des montants finis ;
 # sort() écarterait le NA en silence).
@@ -415,8 +440,8 @@ print.resultat_provie <- function(x, ...) {
 # par poste de cette garantie au périmètre (ordre du catalogue), selon son action ; la copie
 # porte le code du poste, les autres colonnes inchangées (sans partage entre postes) :
 #   - `refus` : postes de la même garantie nommés dans `postes_arretes` des lignes de
-#     `refus_tables` (complété par postes_a_arreter()) de mêmes `table`, `colonne` et `motif`
-#     (prédicat de l'arrêt, § 6.2, parties de ligne comprises) ;
+#     `refus_tables` (complété par postes_a_arreter() et .postes_arretes_ligne()) de mêmes
+#     `table`, `colonne` et `motif` (prédicat de l'arrêt, § 6.2, parties de ligne comprises) ;
 #   - `exclure` : postes dont la famille est celle de la rangée (toute famille pour la famille
 #     `ensemble`) qui lisent une colonne quelconque de la table de la rangée (lectures.csv) :
 #     l'exclusion écarte la ligne entière ;

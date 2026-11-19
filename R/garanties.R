@@ -244,9 +244,14 @@ methodes_poste <- function(x, poste, colonne) {
 #       une colonne de T ;
 #   (ii) ligne de refus_tables de portée colonne sur (T, c) : postes qui lisent (T, c) ; si c
 #       est une colonne d'une partie de ligne de T, postes qui lisent une colonne de la partie ;
+#       ligne de portée ligne (refus de valeur identifié par ligne, spécification `donnees`
+#       v1.9, § 9.2 ; erratum du projet de dictionnaire 1.6, § 11.5, #72) : aucun arrêt ici ;
+#       les postes qui lisent (T, c) (partie de ligne comprise, condition (1)) en sont les
+#       candidats (`candidats`), arrêtés par leur famille si une ligne refusée est lue pour une
+#       de leurs unités (condition (2), arret_refus_ligne()) ;
 #   (iii) ligne de vue$visibilite_non_determinee de motif de refus (motif R : code de
-#       controles.csv de portée autre que ligne, défaut traité R, sous-cas D10a ou D10h ; ni
-#       D02b, ni D03g, ni parente_non_determinee) sur T : ligne entière (colonne NA), postes
+#       controles.csv de portée autre que ligne, ligne_table compris, défaut traité R, sous-cas
+#       D10a ou D10h ; ni D02b, ni D03g, ni parente_non_determinee) sur T : ligne entière (colonne NA), postes
 #       qui lisent T ou une table descendante de T (clés étrangères simples de colonnes.csv) ;
 #       partie de ligne (colonne renseignée), postes qui lisent une colonne de la partie de T
 #       qui contient `colonne` (§ 4.3 : une partie inconnue n'arrête que ses lecteurs ; la
@@ -260,7 +265,10 @@ methodes_poste <- function(x, poste, colonne) {
 # motif_arret = motif de la première ligne qui l'arrête dans l'ordre du bilan (refus_tables,
 # puis visibilite_non_determinee), NA si le poste n'est pas arrêté ; refus_tables :
 # refus_tables du bilan, `postes_arretes` rempli : « garantie/poste » joints par « ; », triés,
-# NA si la ligne n'arrête aucun poste du plan).
+# NA si la ligne n'arrête aucun poste du plan (pour une ligne de portée ligne, les seuls postes
+# arrêtés par la règle (iii) ; ceux qu'arrête leur famille sont ajoutés par
+# calculer_provisions()) ; candidats : liste alignée sur refus_tables, « garantie/poste » des
+# postes du plan candidats d'une ligne de portée ligne, NULL pour toute autre ligne).
 postes_a_arreter <- function(catalogue, bilan, postes, parties) {
   dico <- dictionnaire()
   g <- rep(names(postes), lengths(postes))
@@ -312,10 +320,15 @@ postes_a_arreter <- function(catalogue, bilan, postes, parties) {
     motif[nouveaux] <<- m
     if (!is.na(ligne_rt)) porte[[ligne_rt]] <<- c(porte[[ligne_rt]], touches)
   }
+  candidats <- vector("list", nrow(rt))
   for (i in seq_len(nrow(rt))) {
     touches <- if (rt$portee[i] == "table" || is.na(rt$colonne[i])) lit_table(rt$table[i]) else
       lit_colonne(rt$table[i], rt$colonne[i])
-    arreter(touches, rt$motif[i], i)
+    if (identical(rt$portee[i], "ligne")) {
+      candidats[i] <- list(intersect(touches, cles))
+    } else {
+      arreter(touches, rt$motif[i], i)
+    }
   }
   for (i in seq_len(nrow(nd))) {
     arret_x <- nd$motif[i] %in% .MOTIFS_ND_ARRET_X
@@ -335,5 +348,5 @@ postes_a_arreter <- function(catalogue, bilan, postes, parties) {
     if (length(x) == 0L) NA_character_ else paste(sort(unique(x), method = "radix"), collapse = ";")
   }, "")
   list(postes = data.frame(garantie = g, poste = p, motif_arret = unname(motif), stringsAsFactors = FALSE),
-       refus_tables = rt)
+       refus_tables = rt, candidats = candidats)
 }

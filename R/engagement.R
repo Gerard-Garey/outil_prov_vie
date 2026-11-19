@@ -314,6 +314,71 @@ hypotheses_vue_unites <- function(vue, referentiel, poste, famille, n, lectures)
   joindre_codes(vapply(par_unite, paste, "", collapse = ";", USE.NAMES = FALSE))
 }
 
+# Unités d'un poste qui lisent une ligne refusée de portée ligne (règle d'arrêt par unité,
+# condition (2) : spécification `donnees` v1.9, § 9.2 ; erratum du projet de dictionnaire 1.6,
+# § 2 et § 11.5, #72) : `lectures` (éléments de lecture_unites() : lignes lues par unité du § 5.8
+# de la spécification de B2), `table`, `refusees` (logique sur les lignes de `table`,
+# lignes_refus_ligne_vue() de `donnees`). Une ligne refusée compte si elle est retenue à
+# l'arrêté (une ligne hors de la vue n'est pas lue par le calcul ; ses clés ne sont pas
+# lisibles, valeurs_vue()), non exclue pour la famille `famille` et admise par la lecture ; elle
+# est rattachée à une unité par ses clés (une clé manquante ou vide ne rattache rien,
+# cle_renseignee(), #158). Rend un logique de longueur `n`. Sans point : seule détection de la
+# condition (2), lue aussi par `risque_en_cours` (P3) ; non exportée.
+refus_ligne_unites <- function(vue, famille, n, lectures, table, refusees) {
+  res <- rep(FALSE, n)
+  exclu <- vue$exclu[[famille]][[table]]
+  if (is.null(exclu)) exclu <- rep(FALSE, length(refusees))
+  for (l in lectures) {
+    if (l$table != table || length(l$cles) == 0L) next
+    k <- which(refusees & vue$retenu[[table]] & !exclu & (if (is.null(l$admises)) TRUE else l$admises))
+    if (length(k) == 0L) next
+    cles <- lapply(l$colonnes, function(c1) as.character(valeurs_vue(vue, table, c1)[k]))
+    connue <- Reduce(`&`, lapply(cles, cle_renseignee))
+    cle <- do.call(paste, c(cles, sep = "\r"))[connue]
+    res[l$unite[!is.na(apparier_cles(l$cles, cle))]] <- TRUE
+  }
+  res
+}
+
+# Arrêt d'un poste par les lignes de portée ligne de refus_tables (règle d'arrêt par unité ;
+# spécification `donnees` v1.9, § 9.2 ; erratum du projet de dictionnaire 1.6, § 11.5, #72) :
+# `pa` (postes_a_arreter() : refus_tables et candidats, condition (1) : le poste lit la colonne),
+# `cle` (« garantie/poste »), `famille`, `n` unités d'identifiants `ids`, `lectures` (lignes lues
+# par unité, lecture_unites()) ; `listees` : tables pour lesquelles la famille établit les lignes
+# lues par unité ; `evaluees` : celles qu'établissent les `lectures` de cet appel (les autres
+# tables listées sont évaluées par un autre appel). Une ligne candidate arrête le poste si une de
+# ses lignes refusées est lue pour une unité (refus_ligne_unites()) ; sur une table hors de
+# `listees`, le rattachement à une unité n'est pas établi : elle l'arrête (`repli`), sans
+# identifiant. Rend list(lignes : indices dans refus_tables des lignes qui arrêtent le poste,
+# dans l'ordre du bilan ; motif : motif de la première, NA sans arrêt ; identifiant : plus petit
+# identifiant des unités en cause pour cette ligne (tri radix : indépendant de l'ordre des lignes
+# de la base), NA sans arrêt ou sans rattachement établi). Sans point : seule
+# implémentation de l'arrêt par unité, lue aussi par `risque_en_cours` (P3) ; non exportée.
+arret_refus_ligne <- function(vue, pa, cle, famille, n, lectures, ids, listees, evaluees = listees, repli = TRUE) {
+  rt <- pa$refus_tables
+  lignes <- integer(0)
+  identifiant <- character(0)
+  for (i in seq_len(nrow(rt))) {
+    if (!(cle %in% pa$candidats[[i]])) next
+    t <- rt$table[i]
+    if (!(t %in% listees)) {
+      if (repli) {
+        lignes <- c(lignes, i)
+        identifiant <- c(identifiant, NA_character_)
+      }
+      next
+    }
+    if (!(t %in% evaluees)) next
+    u <- refus_ligne_unites(vue, famille, n, lectures, t, lignes_refus_ligne_vue(vue, t, rt$colonne[i], rt$motif[i]))
+    if (any(u)) {
+      lignes <- c(lignes, i)
+      identifiant <- c(identifiant, sort(as.character(ids[u]), method = "radix")[1L])
+    }
+  }
+  list(lignes = lignes, motif = if (length(lignes)) rt$motif[lignes[1L]] else NA_character_,
+       identifiant = if (length(lignes)) identifiant[1L] else NA_character_)
+}
+
 # Codes d'hypothèse d'unités (§ 5.3 et § 5.8) : chaque argument est un character de même
 # longueur (une valeur par unité, codes joints par « ; », "" sans code), sources S1 et S2
 # réunies (« ou ») ; rend, par unité, les codes uniques, triés (method = "radix"), joints par
@@ -733,9 +798,12 @@ statut_methode_catalogue <- function(catalogue, garantie, poste, champ, methode)
 # capitaux_non_reclames). Rend list(cellules, dossiers, echeanciers, indicateurs) aux formes
 # de l'ADR 0010, point 6 (COLONNES_CELLULES, COLONNES_DOSSIERS, COLONNES_ECHEANCIERS,
 # COLONNES_INDICATEURS de `tables`). Poste arrêté (postes_a_arreter() sur le bilan de la vue ;
-# motifs nés de la famille : affiliation_non_determinee, parametre_non_determine,
-# assiette_non_determinee, famille_non_determinee) : cellule `arrete`, montant et nombre de
-# dossiers NA, aucun dossier ni échéancier ; le premier dossier en cause est l'attribut `identifiant_arret` de la cellule.
+# ligne de portée ligne de refus_tables dont une ligne refusée est lue pour une unité de la
+# population, arret_refus_ligne(), #72 : motif du refus, plus petit dossier en cause (tri radix), lignes en
+# cause dans l'attribut `refus_ligne` de la cellule ; motifs nés de la famille :
+# affiliation_non_determinee, parametre_non_determine, assiette_non_determinee,
+# famille_non_determinee) : cellule `arrete`, montant et nombre de dossiers NA, aucun dossier ni
+# échéancier ; le dossier en cause retenu est l'attribut `identifiant_arret` de la cellule.
 # Population (§ 5.3, § 5.4) : dossiers de etats_a_date(vue, "deces", "engagement") non exclus pour la
 # famille engagement, de garantie souscrite hors de garanties_couverture_exclue(vue,
 # "engagement") (erratum v1.0.13) ; P2 = ceux qui remplissent le critère du plan (réunion), P1 =
@@ -761,14 +829,18 @@ calculer_engagement <- function(vue, plan, tables, catalogue, garantie, poste) {
   ligne_cat <- catalogue$postes[catalogue$postes$code_garantie == garantie & catalogue$postes$poste == poste, , drop = FALSE]
   frais <- plan$frais[[garantie]][[poste]][[.REFERENTIEL_B2]]$taux_chargement_psap
   indicateurs <- if (poste == "sinistres_declares_non_regles") .indicateur_mixte(plan, garantie) else .indicateurs_vides()
-  arreter <- function(motif, identifiant) {
+  # `refus_ligne` : lignes de portée ligne de refus_tables qui arrêtent le poste (attribut de
+  # la cellule, lu par calculer_provisions() pour postes_arretes, #72)
+  arreter <- function(motif, identifiant, refus_ligne = integer(0)) {
     cel <- .cellule(garantie, poste, ligne_cat$famille, ligne_cat$provision_comptes_sociaux, NA_real_, NA_integer_,
                     methode, statut_methode, NA_character_, motif)
     attr(cel, "identifiant_arret") <- identifiant
+    if (length(refus_ligne)) attr(cel, "refus_ligne") <- refus_ligne
     list(cellules = cel, dossiers = .dossiers_vides(), echeanciers = .echeancier_vide(), indicateurs = indicateurs)
   }
   # arrêt de poste lu sur le bilan (M239)
-  pa <- postes_a_arreter(catalogue, vue$bilan, plan$postes, parties_ligne())$postes
+  pa_tout <- postes_a_arreter(catalogue, vue$bilan, plan$postes, parties_ligne())
+  pa <- pa_tout$postes
   motif_bilan <- pa$motif_arret[pa$garantie == garantie & pa$poste == poste]
   if (length(motif_bilan) == 1L && !is.na(motif_bilan)) return(arreter(motif_bilan, NA_character_))
   # dossier de la population dont la garantie souscrite n'est pas retenue à l'arrêté (exception
@@ -802,28 +874,52 @@ calculer_engagement <- function(vue, plan, tables, catalogue, garantie, poste) {
   # une hypothèse de la vue est une unité restituée à 0, au poste de la partition du § 5.4)
   garde <- !exclu$dossiers[i_dos] & !couverture_exclue
   etats <- etats[garde, , drop = FALSE]
-  # partition P1 / P2 selon le critère de P2 (réunion des critères déclarés)
+  # partition P1 / P2 selon le critère de P2 (réunion des critères déclarés) ; une valeur
+  # refusée de portée ligne (lignes_refus_ligne_vue(), #72) y est inconnue (Kleene)
+  refusee <- function(t, c1) lignes_refus_ligne_vue(vue, t, c1)
   p2 <- plan$postes[[garantie]]$capitaux_non_reclames$parametres
   non_reclame <- rep(FALSE, nrow(etats))
   if ("beneficiaire_non_identifie" %in% p2$critere) {
     b <- which(vue$retenu$beneficiaires & !exclu$beneficiaires)
-    ni <- valeurs_vue(vue, "beneficiaires", "id_dossier")[b][valeurs_vue(vue, "beneficiaires", "qualite")[b] %in% "non_identifie"]
-    non_reclame <- non_reclame | !is.na(apparier_cles(etats$id_dossier, ni))
+    b_dos <- valeurs_vue(vue, "beneficiaires", "id_dossier")[b]
+    q_inc <- refusee("beneficiaires", "qualite")[b]
+    ni <- b_dos[!q_inc & valeurs_vue(vue, "beneficiaires", "qualite")[b] %in% "non_identifie"]
+    crit <- !is.na(apparier_cles(etats$id_dossier, ni))
+    crit[!crit & !is.na(apparier_cles(etats$id_dossier, b_dos[q_inc]))] <- NA
+    non_reclame <- non_reclame | crit
   }
   if ("sans_evenement" %in% p2$critere) {
     seuil <- ajouter_mois(a, -as.integer(p2$mois_sans_evenement))
     e <- which(vue$retenu$evenements & !exclu$evenements)
+    effet_inc <- dates_inconnues_vue(vue, "evenements", "date_effet")[e] | refusee("evenements", "date_effet")[e]
     recent <- as.numeric(valeurs_vue(vue, "evenements", "date_effet")[e]) > seuil
-    actifs <- valeurs_vue(vue, "evenements", "id_dossier")[e][recent %in% TRUE]
-    # événement de date tenue pour inconnue par D02a sous H (R12, R13 sans valeur substituée) :
-    # peut être récent ; le critère est inconnu pour un dossier sans événement récent connu
-    inconnus <- valeurs_vue(vue, "evenements", "id_dossier")[e][dates_inconnues_vue(vue, "evenements", "date_effet")[e]]
-    ouverture <- as.numeric(valeurs_vue(vue, "dossiers", "date_ouverture"))[apparier_cles(etats$id_dossier,
-                                                                                         valeurs_vue(vue, "dossiers", "id_dossier"))]
-    sans_ev <- is.na(apparier_cles(etats$id_dossier, actifs)) & (ouverture <= seuil) %in% TRUE
-    sans_ev[sans_ev & !is.na(apparier_cles(etats$id_dossier, inconnus))] <- NA
+    actifs <- valeurs_vue(vue, "evenements", "id_dossier")[e][recent %in% TRUE & !effet_inc]
+    # événement de date tenue pour inconnue par D02a sous H (R12, R13 sans valeur substituée) ou
+    # refusée de portée ligne : peut être récent ; le critère est inconnu pour un dossier sans
+    # événement récent connu
+    inconnus <- valeurs_vue(vue, "evenements", "id_dossier")[e][effet_inc]
+    i_ouv <- apparier_cles(etats$id_dossier, valeurs_vue(vue, "dossiers", "id_dossier"))
+    ouverture <- as.numeric(valeurs_vue(vue, "dossiers", "date_ouverture"))[i_ouv]
+    ancien <- (ouverture <= seuil) %in% TRUE
+    ancien[refusee("dossiers", "date_ouverture")[i_ouv]] <- NA
+    sans_ev <- is.na(apparier_cles(etats$id_dossier, actifs)) & ancien
+    sans_ev[sans_ev %in% TRUE & !is.na(apparier_cles(etats$id_dossier, inconnus))] <- NA
     non_reclame <- non_reclame | sans_ev
   }
+  # arrêt par les lignes de portée ligne de refus_tables (#72 ; arret_refus_ligne(), condition
+  # (2)), avant toute lecture des valeurs des unités : unités de la population du poste avant le
+  # filtre des dossiers clos, dont celles de partition non déterminée (Kleene : elles sont
+  # unités possibles de P1 et de P2) ; lignes lues du § 5.8 hors capital reconstitué (affiliations
+  # et famille, lues après le calcul du capital)
+  cle_poste <- paste(garantie, poste, sep = "/")
+  dans_poste <- !((if (poste == "capitaux_non_reclames") non_reclame else !non_reclame) %in% FALSE)
+  unites <- etats[dans_poste, , drop = FALSE]
+  lect_unites <- .lectures_dossiers(vue, unites, rep(FALSE, nrow(unites)))
+  listees <- unique(vapply(lect_unites, `[[`, "", "table"))
+  differees <- c("affiliations", "famille")
+  ar <- arret_refus_ligne(vue, pa_tout, cle_poste, "engagement", nrow(unites), lect_unites, unites$id_dossier, listees,
+                          setdiff(listees, differees))
+  if (length(ar$lignes)) return(arreter(ar$motif, ar$identifiant, ar$lignes))
   # partition non déterminée (Kleene : un critère connu vrai décide) : P1 et P2 arrêtés
   if (anyNA(non_reclame)) return(arreter("parametre_non_determine", etats$id_dossier[is.na(non_reclame)][1L]))
   etats <- etats[if (poste == "capitaux_non_reclames") non_reclame else !non_reclame, , drop = FALSE]
@@ -855,6 +951,12 @@ calculer_engagement <- function(vue, plan, tables, catalogue, garantie, poste) {
   }
   prestations <- which(vue$retenu$prestations & !exclu$prestations)
   calc <- capital_deces_dossier(vue, plan, etats, methode, parametres, prestations, poste)
+  # arrêt par une ligne refusée de portée ligne lue pour un capital reconstitué (affiliations, et
+  # famille si le dossier est instruit, § 5.8 ; #72), avant les arrêts nés du calcul
+  ar <- arret_refus_ligne(vue, pa_tout, cle_poste, "engagement", nrow(etats),
+                          Filter(function(l) l$table %in% differees, .lectures_dossiers(vue, etats, calc$reconstitue)),
+                          etats$id_dossier, listees, differees, repli = FALSE)
+  if (length(ar$lignes)) return(arreter(ar$motif, ar$identifiant, ar$lignes))
   arret <- which(!is.na(calc$arret))
   if (length(arret)) return(arreter(calc$arret[arret[1L]], calc$id_dossier[arret[1L]]))
   # invariant (spécification de B2, § 4.3) : aucun dossier valorisé à instruction inconnue par sa

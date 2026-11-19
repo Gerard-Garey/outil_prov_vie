@@ -386,7 +386,8 @@ for (arrete in list(A, A0)) {
 # hors de la population des règles V : aucune ligne de controles_non_executes pour son propre
 # verdict (D02a sur prestations.fin_periode la détecte quand elle est visible) ; les autres
 # lignes non exécutées sont celles du bilan avec déclarations, plus les seuils de D02c et la
-# composante paiements_cumules de l'enjeu (inchangées à 325555f), et D07 (b) sans son seuil
+# composante paiements_cumules de l'enjeu (inchangées à 325555f ; retirée par #72 : le refus D09
+# de PR00010 est de portée ligne, le dossier de PR00027 ne lit pas cette ligne), et D07 (b) sans son seuil
 # d07b_mois (un dossier incapacite en service, spécification `donnees` v1.6, § 8.2 ; le bilan
 # avec déclarations le porte, avec_d07b()), et D12 (cause (γ) declaration_absente, D02b) : sans
 # l'hypothèse de D02b, l'entree_incapacite EV00059 de SI0028 est non déterminée, et la sortie
@@ -394,14 +395,14 @@ for (arrete in list(A, A0)) {
 r_sans <- controler_base(j2$base, A0, conventions = j2$declarations$conventions)
 r_avec <- bilan_de(j2, A0)
 cles_ne <- function(r) with(r$controles_non_executes, paste(code, table, colonne, cause))
-verifier_egal("W8 (#40) : v1-modeste-05 sans déclaration au 2024-12-31 : PR00027 non déterminée (D03g), aucune ligne (D02a, prestations) dans controles_non_executes ; lignes non exécutées = celles avec déclarations, plus D02c (declaration_absente) et paiements_cumules (D09, inchangé) ; D02a sur PR00039 seule",
+verifier_egal("W8 (#40) : v1-modeste-05 sans déclaration au 2024-12-31 : PR00027 non déterminée (D03g), aucune ligne (D02a, prestations) dans controles_non_executes ; lignes non exécutées = celles avec déclarations, plus D02c (declaration_absente), D07b et D12 (plus paiements_cumules depuis #72 : refus D09 de PR00010 de portée ligne) ; D02a sur PR00039 seule",
               list(with(r_sans$vue$visibilite_non_determinee, identifiants[table == "prestations"]),
                    nrow(r_sans$controles_non_executes[r_sans$controles_non_executes$code == "D02a", ]),
                    setdiff(cles_ne(r_sans), cles_ne(r_avec)),
                    r_sans$controles$identifiants[r_sans$controles$code == "D02a"]),
               list("PR00027", 0L, c("D02c assures NA declaration_absente", "D02c famille NA declaration_absente",
-                                    "D07b dossiers NA declaration_absente", "D12 evenements type_evenement declaration_absente",
-                                    "paiements_cumules prestations montant D09"), "PR00039"))
+                                    "D07b dossiers NA declaration_absente", "D12 evenements type_evenement declaration_absente"),
+                   "PR00039"))
 
 section("lecture : ecrire_jeu() et lire_jeu() (ADR 0010, point 20)")
 dossier <- tempfile("jeu-")
