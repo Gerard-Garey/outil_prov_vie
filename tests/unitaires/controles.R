@@ -988,6 +988,46 @@ if (nzchar(Sys.which("bash"))) {
   verifier("paquets_java.sh : liste APRES vide, statut 2 et aucun [OK]", identical(r$statut, 2L) && !any(startsWith(r$sortie, "[OK]")))
   r <- .lancer_paquets(character(0))
   verifier("paquets_java.sh : sans argument, usage et statut 2", identical(r$statut, 2L))
+  # Fichier de motifs lu sans être exécuté (#139, Q-33) : copie du script et d'un fichier de motifs
+  # de contenu `motifs` dans un dossier temporaire ; rend list(statut, sortie, marque) où `marque`
+  # dit si la commande `touch` placée dans le fichier de motifs a été exécutée.
+  .essai_motifs <- function(motifs, apres = c(AVANT, "tex-gyre", "libpdfbox-java")) {
+    d <- tempfile("motifs-")
+    dir.create(d)
+    on.exit(unlink(d, recursive = TRUE), add = TRUE)
+    file.copy(.script_paquets, file.path(d, "paquets_java.sh"))
+    writeLines(sub("@MARQUE@", file.path(d, "marque"), motifs, fixed = TRUE), file.path(d, "paquets_java_motifs.sh"), sep = "\n")
+    writeLines(AVANT, file.path(d, "avant.txt"))
+    writeLines(apres, file.path(d, "apres.txt"))
+    r <- tryCatch({
+      sortie <- suppressWarnings(system2("bash", c(shQuote(file.path(d, "paquets_java.sh")), shQuote(file.path(d, "avant.txt")),
+                                                  shQuote(file.path(d, "apres.txt"))), stdout = TRUE, stderr = TRUE))
+      statut <- attr(sortie, "status")
+      list(statut = if (is.null(statut)) 0L else statut, sortie = sortie)
+    }, error = function(e) list(statut = NA_integer_, sortie = paste0("[ECHEC] lancement impossible : ", conditionMessage(e))))
+    r$marque <- file.exists(file.path(d, "marque"))
+    r
+  }
+  r <- .essai_motifs(c("touch @MARQUE@", "-java$"))
+  verifier("#139 : une commande dans le fichier de motifs n'est pas exécutée (touch sans effet) et fait échouer, statut 2, ligne 1",
+           !r$marque && identical(r$statut, 2L) && any(grepl("ligne 1 :", r$sortie, fixed = TRUE)))
+  r <- .essai_motifs(c("-java$", "x=1; touch @MARQUE@"))
+  verifier("#139 : commande après un motif valide, ligne 2 refusée, rien d'exécuté, statut 2",
+           !r$marque && identical(r$statut, 2L) && any(grepl("ligne 2 :", r$sortie, fixed = TRUE)))
+  r <- .essai_motifs(c("MOTIFS=(", "  '-java$'", ")"))
+  verifier("#139 : ancien format MOTIFS=(...) refusé, statut 2", identical(r$statut, 2L))
+  r <- .essai_motifs(c("$(touch@{IFS}@MARQUE@)"))
+  verifier("#139 : substitution de commande dans une ligne : refusée sans exécution, statut 2", !r$marque && identical(r$statut, 2L))
+  r <- .essai_motifs(c("-java$", "^(abc"))
+  verifier("#139 : ERE invalide, ligne 2, statut 2", identical(r$statut, 2L) && any(grepl("ligne 2 :", r$sortie, fixed = TRUE)))
+  r <- .essai_motifs(c("# seulement un commentaire", ""))
+  verifier("#139 : fichier sans aucun motif refusé, statut 2 (le contrôle n'est pas neutralisé)",
+           identical(r$statut, 2L) && any(grepl("aucun motif", r$sortie, fixed = TRUE)))
+  r <- .essai_motifs(c("# commentaire", "", "   # commentaire indenté", "-java$\r", "^zulu"))
+  verifier("#139 : commentaires, lignes vides et \\r final admis, motif appliqué (libpdfbox-java refusé, statut 1)",
+           .refuse(r, "libpdfbox-java") && !r$marque)
+  r <- .essai_motifs(c("# commentaire", "^zulu"), apres = c(AVANT, "libpdfbox-java"))
+  verifier("#139 : seuls les motifs du fichier s'appliquent (un seul motif, libpdfbox-java accepté), statut 0", .passe(r))
   # --lister avec un dpkg-query factice : en échec (statut non nul, aucune liste) ou muet (statut 2).
   d_faux <- tempfile("faux-dpkg-")
   dir.create(d_faux)
