@@ -1692,7 +1692,7 @@ calcul. Il ne peut appeler que \code{dictionnaire} et
 \endhead
 \code{controler\_base()} & \code{donnees}, \code{arrete}, \code{declarations = NULL}, \code{conventions = NULL} & Contrôle la base entière et la vue à la date d'arrêté, sans rien modifier, sous les déclarations du sous-schéma \code{donnees} du plan et la section \code{conventions} du plan, et rend le bilan en onze éléments (section~\ref{sec:donnees-bilan})\fsp; chaque contrôle prévu et reporté figure dans les contrôles non exécutés avec la cause \code{non\_implemente}\fsp; refuse l'appel pour un arrêté absent ou mal formé, une liste mal formée, une table inconnue ou obligatoire absente, une anomalie de la table \code{extraction}, un arrêté postérieur à l'extraction, une déclaration ou une convention mal formée ou hors de sa liste fermée. \\
 \code{eclater\_champ()} & \code{x} & Éclate un champ «~a;b~» d'un CSV du dictionnaire en vecteur de chaînes (vide pour une chaîne vide ou \code{NA}). Non exportée, appelée aussi par \code{plan}. \\
-\code{lire\_declarations()} & \code{declarations}, \code{dico} & Contrôle le sous-schéma \code{donnees} du plan (rubriques, motifs, familles, référentiels, seuils, \code{evaluations\_gestion}) et le rend, \code{exclusions} et \code{hypotheses} mises en \code{data.frame}\fsp; refus \code{plan\_invalide}. Non exportée, appelée aussi par \code{valider\_plan()}. \\
+\code{lire\_declarations()} & \code{declarations}, \code{dico} & Contrôle le sous-schéma \code{donnees} du plan (rubriques, motifs, familles, référentiels, seuils, \code{evaluations\_gestion}) et le rend, \code{exclusions} et \code{hypotheses} mises en \code{data.frame}\fsp; refus \code{plan\_invalide}, dont celui d'une hypothèse de D02a, D02b ou D03g déclarée pour un autre poste que \code{tous}, de valeurs différentes entre ses lignes (référentiels) ou en signalement (M717 pour D02a). Non exportée, appelée aussi par \code{valider\_plan()}. \\
 \code{vue\_a\_date()} & \code{donnees}, \code{arrete}, \code{declarations}, \code{conventions} & Construit une fois la vue à l'arrêté (classe \code{vue\_provie}), seule lecture de la base par les familles de calcul~: bilan de \code{controler\_base()}, lignes retenues, parties de ligne connues, lignes exclues par famille de calcul, hypothèses par défaut appliquées\fsp; mêmes refus d'appel que \code{controler\_base()}. Non exportée. \\
 \code{valeurs\_vue()} & \code{vue}, \code{table}, \code{colonne} & Rend les valeurs d'une colonne dans la vue\fsp; \code{NA} signifie «~hors de la vue~» ou, sous l'hypothèse de D02a, «~tenue pour inconnue~», jamais «~absente~»\fsp; une date d'effet de \code{mise\_a\_jour} rejetée y est remplacée par la règle écrite de R13. Non exportée. \\
 \code{cles\_lignes\_hypothese()} & \code{vue}, \code{table}, \code{lignes}, \code{colonne} & Rend la valeur de la base d'une colonne d'identifiant (\code{id\_*}, clé primaire ou clé étrangère) pour des lignes placées sous une hypothèse de la vue, visibles ou non à l'arrêté, désignées par \code{lignes}, vecteur numérique d'indices entiers, finis et positifs\fsp; tout autre appel (dont un \code{lignes} logique, \code{TRUE} par exemple) est une erreur interne\fsp; seul rattachement d'une ligne cachée à son unité, pour un statut, jamais lu pour un montant. Non exportée, appelée par \code{engagement}. \\
@@ -1825,7 +1825,14 @@ il va dans \code{declarations\_requises}.
 
 \textbf{Hypothèse par défaut de D02a} (dictionnaire de la base,
 version~1.6, §~9 et annexe~B\fsp; spécification, version~1.9, §~9.4, et
-erratum~1.9.3\fsp; issue~90). Sous l'hypothèse déclarée pour D02a (dates
+erratum~1.9.3\fsp; issue~90). L'hypothèse de D02a se déclare, comme
+celles de D02b et de D03g, pour le poste \code{tous}, avec la même valeur
+pour les deux référentiels, et jamais en signalement~; toute autre
+déclaration est refusée (\code{plan\_invalide}\fsp; décision du mainteneur
+M717, revue finale de la PR~165). Motif~: la vue est une seule pour tous
+les postes et les deux référentiels, et une hypothèse déclarée pour un
+seul poste tenait les dates rejetées pour inconnues dans toute la vue.
+Sous l'hypothèse déclarée pour D02a (dates
 d'une ligne dans un ordre incohérent), chaque date rejetée est
 \textbf{tenue pour inconnue} dans la vue, selon sa relation (R1 à R13 de
 l'annexe~B), et jamais pour manquante~: elle ne vaut ni fin ouverte, ni
