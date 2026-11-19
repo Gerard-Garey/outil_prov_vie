@@ -1083,6 +1083,12 @@ if (nzchar(Sys.which("bash"))) {
   r <- .essai_couloir(c("```text", "+ R/a.R", "```"))
   verifier("couloir.sh : un bloc sous une autre chaîne d'information n'est pas un couloir, [INFO], statut 0",
            .passe(r) && any(startsWith(r$sortie, "[INFO]")))
+  r <- .essai_couloir(c("```Couloir br/a", "+ R/a.R", "```"))
+  verifier("couloir.sh : une coquille de casse dans la chaîne d'information est un [ECHEC] mal formée, statut 1 (#135)",
+           identical(r$statut, 1L) && any(grepl("^\\[ECHEC\\] .*\\.md:1 : cha.+ne d'information .+ mal form", r$sortie)))
+  r <- .essai_couloir(c("~~~couloir br/a", "+ R/a.R", "~~~"))
+  verifier("couloir.sh : un bloc ouvert par « ~~~couloir » est un [ECHEC] mal formée, statut 1 (#135)",
+           identical(r$statut, 1L) && any(grepl("^\\[ECHEC\\] .*\\.md:1 : cha.+ne d'information .+ mal form", r$sortie)))
   r <- .lancer_couloir(c("--branche=sans/bloc", paste0("--fiche=", shQuote(file.path(racine, "docs", "feuille-de-route.md")))))
   verifier("couloir.sh : la feuille de route du dépôt se lit sans erreur de forme ; branche sans bloc : [INFO], statut 0",
            .passe(r) && any(startsWith(r$sortie, "[INFO]")))
