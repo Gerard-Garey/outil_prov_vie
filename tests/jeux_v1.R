@@ -130,9 +130,6 @@ LOI_VRAIE_V1 <- list(
 GRAINES_V1 <- list(population = 190101L, famille = 190102L, sinistres = 190103L, information = 190104L,
                    defauts = 190200L)
 DATE_EXTRACTION_V1 <- as.Date("2025-12-31")
-# Date du visa du mainteneur (M188) : visa donné le 9 novembre 2026, avec retouches (phrase
-# d'usage, id_sinistre_origine) ; les jeux sont écrits à cette date (commande en tête de fichier).
-DATE_VISA_V1 <- as.Date("2026-11-09")
 # Date du visa du mainteneur des jeux du dictionnaire 1.6 (M677, M188) : visa donné le 18/11/2026 ; NA tant que le visa n'est
 # pas donné (date_visa du manifeste non renseignée, échec attendu de tests/test_reproductibilite.R,
 # renvoi #60) ; la session la renseigne et réécrit les trois jeux (commande en tête de fichier).
@@ -269,8 +266,6 @@ LOI_VRAIE_V1_03 <- local({
 # jeu (.ESSAIS_V1_03).
 GRAINES_V1_03 <- list(population = 190301L, famille = 190302L, sinistres = 190303L, information = 190304L,
                       individuels = 190305L, suites_deces = 190306L, defauts = 190400L)
-# Date du visa du mainteneur (M188) : visa donné le 11 novembre 2026 ; le jeu est écrit à cette date.
-DATE_VISA_V1_03 <- as.Date("2026-11-11")
 
 # Phrase d'usage et limites (spécification de B2, § 7.9.1 et § 7.9.5).
 .USAGE_V1_03 <- paste(
