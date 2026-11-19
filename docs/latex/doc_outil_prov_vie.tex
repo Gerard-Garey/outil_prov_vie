@@ -1393,14 +1393,26 @@ discordante, qui n'est pas de l'UTF-8 ou dont les colonnes ne sont pas
 celles attendues, et toute référence interne invalide~: table, colonne,
 type, défaut, motif ou paramètre cité qui n'existe pas où il est cité,
 valeur hors de sa liste fermée, référence mal formée, code de contrôle
-répété ou sans objet\fsp; une modalité déclarée deux fois pour une même
-colonne de \code{colonnes.csv}, le message nommant la table, la colonne et
-la première modalité répétée (issue~145). Motif de ce dernier refus~: un
-domaine qui répète une modalité, (\code{A}, \code{A}) par exemple, n'a
-qu'une valeur mais en compte deux, ce qui fausserait tout contrôle qui lit
-le domaine de la colonne, dont le chevauchement en lecture
-existentielle (section~\ref{sec:donnees-bilan})\fsp; le dictionnaire
-embarqué n'a aucune modalité en double.
+répété ou sans objet\fsp; une modalité vide ou entourée de blancs dans la
+liste des modalités d'une colonne de \code{colonnes.csv}, en queue de liste
+comprise (\code{F;;M}, \code{;F;M}, \code{F;M;}, «~\code{F; M}~»), le
+message nommant la ligne, la table, la colonne et la première modalité mal
+formée (issue~162)\fsp; une modalité déclarée deux fois pour une même
+colonne, le message nommant la table, la colonne et la première modalité
+répétée (issue~145). Les blancs sont ceux d'une classe fermée~: l'espace
+(U+0020) et les caractères de contrôle U+0009 à U+000D (tabulation, saut
+de ligne, tabulation verticale, saut de page, retour chariot)\fsp; l'espace
+insécable (U+00A0) n'en fait pas partie, et une modalité qui en porte
+reste admise. Le refus de la modalité mal formée est évalué avant celui du
+doublon, dont le message serait sinon tronqué pour deux modalités vides
+(\code{F;;;M}). Motif de ces deux refus~: une modalité vide ou entourée de
+blancs allonge le domaine d'une valeur que la base ne porte pas telle
+quelle, et un domaine qui répète une modalité, (\code{A}, \code{A}) par
+exemple, n'a qu'une valeur mais en compte deux\fsp; l'un et l'autre
+fausseraient tout contrôle qui lit le domaine de la colonne, dont le
+chevauchement en lecture existentielle
+(section~\ref{sec:donnees-bilan}). Le dictionnaire embarqué n'a aucune
+modalité mal formée ni aucune modalité en double.
 
 \textbf{Contrôle des types d'une base.} \code{controler\_types(donnees)}
 est la porte stricte~: elle ne convertit rien et lève un refus d'appel au
