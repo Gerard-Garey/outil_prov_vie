@@ -6103,10 +6103,39 @@ du dictionnaire est retiré et remplacé par un jeu de numéro suivant
 (décision M189). La batterie de reproductibilité rejoue chaque jeu
 versionné à partir de ses seuls fichiers et le compare au jeu relu, champ à
 champ, hors de la version du package qui l'a produit, contrôlée à part (au
-plus la version installée)\fsp; elle compare aussi les empreintes, et
-vérifie que les entrées du jeu sont celles du script de provenance
-\code{tests/jeux\_v1.R}, qui porte en commentaire le statut et la
-justification de chaque paramètre. Trois jeux sont versionnés, écrits
+plus la version installée)\fsp; elle vérifie que les entrées du jeu sont
+celles du script de provenance \code{tests/jeux\_v1.R}, qui porte en
+commentaire le statut et la justification de chaque paramètre.
+
+Elle compare aussi les octets du jeu réécrit (par \code{ecrire\_jeu()}) à
+ceux du jeu versionné, quelle que soit la version du package, en deux
+vérifications par jeu~: les lignes de \code{empreintes.md5} hors de celle
+de \code{manifeste.txt}, seul fichier qui porte la version, puis les
+octets de \code{manifeste.txt} hors de la seule valeur de la ligne
+\code{version\_provie}, dont la clé, le type et la place restent comparés,
+comme les fins de ligne et la fin de fichier. Trois témoins, sur le
+manifeste du premier jeu altéré en mémoire, vérifient que la seule valeur
+de la version n'est pas comparée, qu'une valeur altérée ailleurs fait
+différer les octets, à version différente comprise, et que la fin de
+fichier compte. Chaque empreinte est en outre contrôlée par
+\code{lire\_jeu()} et, si la commande existe, par \code{md5sum -c}. Aucune
+comparaison d'octets n'est ainsi sautée quand la version du package est
+relevée (décision M733, issue~181)~: la comparaison de
+\code{empreintes.md5} entier, qui ne tournait qu'à version égale et ne
+tournait donc plus, les trois jeux portant la version~0.12.0 et le package
+la version~0.14.0, est retirée\fsp; à version égale, elle découle des deux
+comparaisons précédentes, le jeu réécrit portant la version installée.
+Limites~: une altération du seul manifeste versionné n'est pas vue par la
+comparaison de ses octets, puisque le jeu réécrit est tiré des entrées lues
+dans ce même manifeste~; elle l'est par la comparaison au jeu que rend le
+script de provenance et par \code{lire\_liste()}, qui refuse un manifeste
+non canonique, et la comparaison d'octets protège contre un défaut du
+simulateur ou du sérialiseur. La présence et la place de la ligne de
+\code{manifeste.txt} dans \code{empreintes.md5} ne sont pas comparées
+octet à octet. Seule la première ligne \code{version\_provie} est masquée,
+sans effet tant que \code{lire\_liste()} refuse un chemin dupliqué.
+
+Trois jeux sont versionnés, écrits
 sous le dictionnaire~1.6 et la version~2 du simulateur, à la place des
 jeux \code{v1-modeste-01} à \code{-03}, retirés (M189\fsp; ils restent
 lisibles dans l'historique du dépôt, au commit \code{a5e8970})\fsp; visés
@@ -6417,8 +6446,9 @@ Trois batteries se lancent depuis la racine du dépôt, dans cet ordre~:
 \item La \textbf{batterie de reproductibilité} vérifie les aller-retours
   identiques du sérialiseur de listes, la graine locale et la restauration
   de l'état global du générateur, puis rejoue chaque jeu versionné de
-  \code{inst/extdata/jeux/} à partir de ses seuls fichiers
-  (section~\ref{sec:simulation-jeu}). Pour chaque couple de référence,
+  \code{inst/extdata/jeux/} à partir de ses seuls fichiers et compare
+  les octets du jeu réécrit à ceux du jeu versionné, hors de la seule
+  valeur de la version du package (section~\ref{sec:simulation-jeu}). Pour chaque couple de référence,
   elle vérifie ensuite que deux calculs rendent des objets identiques, que
   le rejeu de la fiche redonne le résultat, et compare le résultat à la
   référence~; elle contrôle enfin l'arbre des références, la plateforme de
