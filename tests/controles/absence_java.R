@@ -24,12 +24,12 @@
 #      (YAML, shell, Dockerfile, Makefile) que s'il commence un mot hors guillemets ; JSON,
 #      lock et js : aucun commentaire retire (cote sur).
 #      Exclusions, la seule justification etant celle-ci : le present script
-#      (tests/controles/absence_java.R de la racine examinee), qui porte la liste ;
-#      tests/controles/paquets_java_motifs.sh (#120, M360), fichier de motifs de noms de paquets
-#      systeme qu'il INTERDIT (noms de JDK ecrits en clair : le balayage le prendrait pour
-#      une installation d'environnement Java) ; son script, paquets_java.sh, reste balaye
-#      (il ne cite aucun nom Java) ; .git/ et
-#      .claude/worktrees/ (copies de travail, hors du depot suivi). Les temoins versionnes de
+#      (tests/controles/absence_java.R de la racine examinee), qui porte la liste ; .git/ et
+#      .claude/worktrees/ (copies de travail, hors du depot suivi). Le fichier de motifs de noms
+#      de paquets systeme, tests/controles/paquets_java_motifs.txt (noms de JDK ecrits en clair,
+#      qu'il INTERDIT), n'est plus une exclusion nominative depuis #180 : son extension .txt est
+#      hors de EXTENSIONS, il n'est pas balaye ; son script, paquets_java.sh, reste balaye (il ne
+#      cite aucun nom Java). Les temoins versionnes de
 #      tests/unitaires/controles.R ne sont PAS exclus : ils fabriquent les noms interdits
 #      (paste0("r", "Java")) et n'ecrivent jamais un nom interdit en clair ; ne pas elargir
 #      les exclusions pour eux. La documentation (docs/) n'est balayee que par ses fichiers
@@ -136,10 +136,11 @@ if (.n_echec == avant) {
 }
 
 # --- 2. Balayage des fichiers ------------------------------------------------------------
-# DESCRIPTION est traitee plus haut (declarations) ; le present script et paquets_java_motifs.sh sont exclus par leur chemin
+# DESCRIPTION est traitee plus haut (declarations) ; le present script est exclu par son chemin
 # relatif a la racine examinee (et non par celui du script qui tourne : sur une copie du
-# depot, la copie du script serait sinon balayee).
-EXCLUS <- c("tests/controles/absence_java.R", "tests/controles/paquets_java_motifs.sh")
+# depot, la copie du script serait sinon balayee). paquets_java_motifs.txt n'a pas besoin d'etre
+# exclu : son extension n'est pas dans EXTENSIONS (#180).
+EXCLUS <- c("tests/controles/absence_java.R")
 DOSSIERS_EXCLUS <- c(".git/", ".claude/worktrees/")
 EXTENSIONS <- "\\.(R|Rmd|yml|yaml|sh|json|toml|lock|js|dockerfile)$"
 NOMS <- "^(NAMESPACE|Dockerfile(\\..*)?|Makefile|\\.Rprofile|Rprofile\\.site|\\.Renviron|Renviron\\.site|Brewfile|Aptfile)$"

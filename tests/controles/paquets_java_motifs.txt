@@ -1,0 +1,31 @@
+# Motifs de noms de paquets Java, LUS LIGNE A LIGNE (jamais executes) par
+# tests/controles/paquets_java.sh (#139, Q-33, M370) : ce fichier n'est pas un script, d'ou
+# son extension .txt (#180, Q-78). Format : un motif par ligne (ERE bash, appliquee au nom
+# complet du paquet, suffixe :arch retire) ; lignes vides et lignes commencant par # (apres
+# espaces) admises ; \r final retire. Un motif n'a que des caracteres de
+# [A-Za-z0-9._^$|()*+?{},[]-] (ni espace, ni guillemet, ni barre oblique) ; toute ligne qui n'a
+# pas la forme d'un motif (autres caracteres, commande a plusieurs mots, ancien format
+# MOTIFS=(...), ERE invalide) est une erreur de forme (statut 2) ; un fichier sans motif aussi.
+# Une commande d'un seul mot a la forme d'un motif : elle est lue comme un motif, jamais executee.
+# Noms de paquets Debian et Ubuntu :
+#   *-java, *-java-* (libreoffice-java-common), java-* (java-common), *-jni, default-jre*,
+#   default-jdk*, OpenJDK (^openjd) et OpenJFX (^openjf), temurin-*, zulu*, jarwrapper*, gcj-*.
+# « openjade » n'est pas attrape (^openjd et ^openjf, et non ^openj).
+# HORS BALAYAGE de tests/controles/absence_java.R (#180, Q-78) : ce fichier INTERDIT des noms de
+# paquets d'environnements Java et n'en installe aucun ; l'extension .txt n'est pas dans
+# EXTENSIONS d'absence_java.R, qui ne le balaie donc pas (il n'est plus une exclusion nominative,
+# comme l'etait le nom en .sh jusqu'a #180). Ajouter .txt a EXTENSIONS demanderait de retablir
+# une exclusion. paquets_java.sh, lui, reste balaye.
+# Un ajout de motif se fait ici, avec sa raison, et son temoin (tests/unitaires/controles.R).
+
+-java$
+-java-
+^java-
+-jni$
+^default-j(re|dk)
+^openjd
+^openjf
+^temurin-
+^zulu
+^jarwrapper
+^gcj-

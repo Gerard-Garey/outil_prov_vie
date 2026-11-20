@@ -1063,11 +1063,17 @@ verifier("#136 : un commentaire `# zero_compense` sans motif en fin de ligne n'e
 # --- paquets_java.sh (#120 ; #95, point 5) --------------------------------------------------
 # Script bash : appelé par bash (system2), les listes avant / après sont des fichiers texte. Les
 # noms de paquets Java interdits par absence_java.R sont fabriqués comme ailleurs dans ce fichier
-# (absence_java.R le balaie). Seul le fichier de motifs, tests/controles/paquets_java_motifs.sh,
-# est une exclusion déclarée d'absence_java.R ; paquets_java.sh reste balayé.
+# (absence_java.R le balaie). Le fichier de motifs, tests/controles/paquets_java_motifs.txt, n'est
+# plus une exclusion nominative d'absence_java.R depuis #180 : son extension .txt est hors du
+# balayage ; paquets_java.sh reste balayé.
 section("contrôles : paquets_java.sh, paquets système installés (#120)")
-r <- cas_java(list("tests/controles/paquets_java_motifs.sh" = c(paste0("^", JDK))))
-verifier("#120 : tests/controles/paquets_java_motifs.sh, exclusion déclarée : un nom de JDK en clair passe", .passe(r))
+r <- cas_java(list("tests/controles/paquets_java_motifs.txt" = c(paste0("^", JDK))))
+verifier("#180 : tests/controles/paquets_java_motifs.txt, hors balayage par son extension : un nom de JDK en clair passe", .passe(r))
+# L'ancien nom (en .sh) est composé : le dépôt ne le cite plus en clair.
+ancien <- paste0("tests/controles/paquets_java_motifs", ".sh")
+r <- cas_java(setNames(list(c(paste0("^", JDK))), ancien))
+verifier("#180 : l'ancien nom du fichier de motifs (en .sh) n'est plus exclu : un nom de JDK en clair y est refusé, :1",
+         .echoue_en(r, ancien, 1L, JDK))
 r <- cas_java(list("tests/controles/paquets_java.sh" = c(paste0("MOTIFS=('^", JDK, "')"))))
 verifier("#120 : le script paquets_java.sh reste balayé : un nom de JDK en clair y est refusé, :1",
          .echoue_en(r, "tests/controles/paquets_java.sh", 1L, JDK))
@@ -1134,18 +1140,26 @@ if (nzchar(Sys.which("bash"))) {
   verifier("paquets_java.sh : sans argument, usage et statut 2", identical(r$statut, 2L))
   # Fichier de motifs lu sans être exécuté (#139, Q-33) : copie du script et d'un fichier de motifs
   # de contenu `motifs` dans un dossier temporaire ; rend list(statut, sortie, marque) où `marque`
-  # dit si la commande `touch` placée dans le fichier de motifs a été exécutée.
-  .essai_motifs <- function(motifs, apres = c(AVANT, "tex-gyre", "libpdfbox-java")) {
+  # dit si la commande `touch` placée dans le fichier de motifs a été exécutée. `commande` : nom
+  # d'une commande factice, déposée dans le dossier (en tête du PATH), qui crée `marque` si elle
+  # est exécutée : pour une commande d'un seul mot, que `touch` ne sait pas rendre observable.
+  .essai_motifs <- function(motifs, apres = c(AVANT, "tex-gyre", "libpdfbox-java"), commande = NULL) {
     d <- tempfile("motifs-")
     dir.create(d)
     on.exit(unlink(d, recursive = TRUE), add = TRUE)
+    env <- character(0)
+    if (!is.null(commande)) {
+      .deposer(file.path(d, commande), c("#!/bin/sh", paste0("touch '", file.path(d, "marque"), "'")))
+      Sys.chmod(file.path(d, commande), "0755")
+      env <- paste0("PATH=", shQuote(paste0(d, ":", Sys.getenv("PATH"))))
+    }
     file.copy(.script_paquets, file.path(d, "paquets_java.sh"))
-    writeLines(sub("@MARQUE@", file.path(d, "marque"), motifs, fixed = TRUE), file.path(d, "paquets_java_motifs.sh"), sep = "\n")
+    writeLines(sub("@MARQUE@", file.path(d, "marque"), motifs, fixed = TRUE), file.path(d, "paquets_java_motifs.txt"), sep = "\n")
     writeLines(AVANT, file.path(d, "avant.txt"))
     writeLines(apres, file.path(d, "apres.txt"))
     r <- tryCatch({
       sortie <- suppressWarnings(system2("bash", c(shQuote(file.path(d, "paquets_java.sh")), shQuote(file.path(d, "avant.txt")),
-                                                  shQuote(file.path(d, "apres.txt"))), stdout = TRUE, stderr = TRUE))
+                                                  shQuote(file.path(d, "apres.txt"))), stdout = TRUE, stderr = TRUE, env = env))
       statut <- attr(sortie, "status")
       list(statut = if (is.null(statut)) 0L else statut, sortie = sortie)
     }, error = function(e) list(statut = NA_integer_, sortie = paste0("[ECHEC] lancement impossible : ", conditionMessage(e))))
@@ -1172,6 +1186,28 @@ if (nzchar(Sys.which("bash"))) {
            .refuse(r, "libpdfbox-java") && !r$marque)
   r <- .essai_motifs(c("# commentaire", "^zulu"), apres = c(AVANT, "libpdfbox-java"))
   verifier("#139 : seuls les motifs du fichier s'appliquent (un seul motif, libpdfbox-java accepté), statut 0", .passe(r))
+  # Commande d'un seul mot (en-tête du script, #180) : elle a la forme d'un motif, elle est lue comme
+  # un motif et jamais exécutée ; la commande factice, sur le PATH, laisserait `marque` si elle l'était.
+  r <- .essai_motifs(c("essaimarque"), apres = c(AVANT, "essaimarque-x"), commande = "essaimarque")
+  verifier("#180 : commande d'un seul mot dans le fichier de motifs, lue comme motif et jamais exécutée : essaimarque-x refusé, statut 1, aucune marque",
+           .refuse(r, "essaimarque-x") && !r$marque)
+  # Fichier de motifs absent : seul l'ancien nom (en .sh, composé : le dépôt ne le cite plus en clair)
+  # est déposé à côté de la copie du script, il n'est pas lu.
+  d_ancien <- tempfile("ancien-")
+  dir.create(d_ancien)
+  file.copy(.script_paquets, file.path(d_ancien, "paquets_java.sh"))
+  writeLines("-java$", file.path(d_ancien, paste0("paquets_java_motifs", ".sh")))
+  writeLines(AVANT, file.path(d_ancien, "avant.txt"))
+  writeLines(c(AVANT, "libpdfbox-java"), file.path(d_ancien, "apres.txt"))
+  r <- tryCatch({
+    sortie <- suppressWarnings(system2("bash", c(shQuote(file.path(d_ancien, "paquets_java.sh")), shQuote(file.path(d_ancien, "avant.txt")),
+                                                shQuote(file.path(d_ancien, "apres.txt"))), stdout = TRUE, stderr = TRUE))
+    statut <- attr(sortie, "status")
+    list(statut = if (is.null(statut)) 0L else statut, sortie = sortie)
+  }, error = function(e) list(statut = NA_integer_, sortie = paste0("[ECHEC] lancement impossible : ", conditionMessage(e))))
+  unlink(d_ancien, recursive = TRUE)
+  verifier("#180 : fichier de motifs absent (seul l'ancien nom en .sh présent, non lu), statut 2 et « fichier de motifs illisible »",
+           identical(r$statut, 2L) && any(grepl("fichier de motifs illisible", r$sortie, fixed = TRUE)))
   # --lister avec un dpkg-query factice : en échec (statut non nul, aucune liste) ou muet (statut 2).
   d_faux <- tempfile("faux-dpkg-")
   dir.create(d_faux)

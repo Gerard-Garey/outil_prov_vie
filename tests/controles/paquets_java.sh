@@ -23,12 +23,13 @@
 #  ::error:: en plus. Statut 0 (aucun paquet Java installe), 1 (au moins un [ECHEC]),
 #  2 (usage, fichier illisible, liste vide, fichier de motifs absent ou de forme invalide).
 #
-#  Motifs : tests/controles/paquets_java_motifs.sh (noms de paquets Debian et Ubuntu), LU
+#  Motifs : tests/controles/paquets_java_motifs.txt (noms de paquets Debian et Ubuntu), LU
 #  ligne a ligne et jamais execute (#139) : un motif (ERE bash) par ligne, lignes vides et
-#  commentaires # admis. Toute autre ligne (commande, caracteres hors forme d'un motif, ERE
-#  invalide) et un fichier sans motif sont une erreur de forme (statut 2). Le present
-#  fichier ne cite aucun nom Java : il est balaye par absence_java.R ; seul le fichier de motifs
-#  en est une exclusion declaree.
+#  commentaires # admis. Toute ligne qui n'a pas la forme d'un motif (caracteres hors de la
+#  forme d'un motif, commande a plusieurs mots, ERE invalide) et un fichier sans motif sont une
+#  erreur de forme (statut 2) ; une commande d'un seul mot (reboot) a la forme d'un motif : elle
+#  est lue comme un motif, jamais executee (#180). Le present fichier ne cite aucun nom Java : il
+#  est balaye par absence_java.R ; le fichier de motifs, d'extension .txt, ne l'est pas.
 #
 #  Limite qui demeure : le controle se fait PAR NOM DE PAQUET. Un paquet Java d'un autre
 #  nom (JDK d'un tiers, bibliotheque dont le nom ne dit rien de Java) passe au travers,
@@ -64,7 +65,7 @@ for f in "$avant" "$apres"; do
   fi
 done
 
-fichier_motifs="$(dirname "${BASH_SOURCE[0]}")/paquets_java_motifs.sh"
+fichier_motifs="$(dirname "${BASH_SOURCE[0]}")/paquets_java_motifs.txt"
 if [ ! -r "$fichier_motifs" ]; then
   echo "[ECHEC] fichier de motifs illisible : $fichier_motifs" >&2
   exit 2
