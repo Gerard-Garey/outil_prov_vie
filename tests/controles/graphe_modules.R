@@ -12,9 +12,10 @@
 #      evalq, eval.parent, parse, str2lang, str2expression, source, sys.source,
 #      getFromNamespace, getExportedValue, asNamespace, getNamespace, loadNamespace,
 #      requireNamespace, attachNamespace, as.environment (acces a un espace de noms ou a un
-#      environnement par son nom), environment (sous ses trois formes, M236 : e <-
-#      environment(), environment(f) <- e, environment(f) ; interdite meme sans argument,
-#      decision du mainteneur du 10 novembre 2026), introspection de pile et d'environnement
+#      environnement par son nom), dynGet et .GlobalEnv (#137), environment (sous ses
+#      trois formes, M236 : e <- environment(), environment(f) <- e, environment(f) ;
+#      interdite meme sans argument, decision du mainteneur du 10 novembre 2026) et sa forme
+#      appel `environment<-`(f, e), avec ou sans base:: (#137), introspection de pile et d'environnement
 #      (M403, M411 et M412, dans l'esprit de M236 : parent.frame, sys.function, parent.env,
 #      topenv, sys.call, sys.frame, sys.frames, sys.calls, sys.parent, sys.on.exit,
 #      match.call, globalenv), provie:: et provie::: ; assign() au premier niveau d'un
@@ -24,7 +25,10 @@
 #      ADR 0007, point 9) et globalenv() dans la fonction avec_graine() du module outils
 #      (graine locale et retablissement de .Random.seed, ADR 0010, point 21) ; chacune
 #      porte sur ce module et cette fonction, non sur tout le fichier, et elle est perimee
-#      (ECHEC, a retirer) si l'emploi disparait, le fichier du module etant present.
+#      (ECHEC, a retirer) si l'emploi disparait, le fichier du module etant present ; elle est
+#      refusee (ECHEC sur la ligne de l'emploi) si son nom est aussi la cible d'une affectation
+#      locale dans la meme fonction de premier niveau (`globalenv <- f ; globalenv()`, #137) :
+#      l'exception couvre l'appel de la fonction de base, non celui d'une variable locale ;
 #      Ces noms sont interdits aussi sans appel (#109) : toute reference (symbole hors
 #      position d'appel, ex. `g <- parent.frame`, `lapply(1, sys.call)`, `do.call(get, l)`,
 #      `base::get`) est un [ECHEC] au meme titre que l'appel, sauf champ (`x$get`), nom
@@ -66,14 +70,12 @@
 # argument formel repris) produit une fausse arete, a lever en renommant le nom local.
 # Limites connues (reserves d'audit non corrigees, suivies par la question Q-32 / Q-33 de la
 # feuille de route ; chacune mesuree sur une racine fictive) :
-#   - m3 : dynGet et .GlobalEnv ne sont pas dans APPELS_DYNAMIQUES et passent
-#     (`dynGet("a")`, `.GlobalEnv` : statut 0) ; la forme affectation `environment(f) <- e` est
-#     attrapee (environment est dans la liste), mais la forme appel `environment<-`(f, e),
-#     avec ou sans `base::`, ne l'est pas (statut 0) ;
-#   - une variable locale qui porte le nom d'une exception declaree est couverte par elle :
-#     `avec_graine <- function(graine, expr, f) { globalenv <- f; do.call(globalenv, list()) }`
-#     passe (statut 0), comme `{ globalenv <- f; globalenv() }` (vrai de l'appel direct, et
-#     desormais de la forme do.call).
+#   - m3 (#137) : les noms interdits ecrits en chaine ne sont pas vus (`"dynGet"` hors position
+#     d'appel, comme `lapply(1, "sys.call")` plus haut) ; aucune chaine de R/ ne porte ces noms ;
+#   - homonyme d'une exception (#137) : seule la cible d'une affectation locale (<-, =, ->,
+#     ->>) rend l'exception inapplicable ; un argument formel ou une variable de for de meme
+#     nom (`function(graine, expr, globalenv) globalenv()` dans avec_graine) reste couvert par
+#     elle (statut 0).
 # Usage, depuis la racine du depot : Rscript tests/controles/graphe_modules.R
 # Un argument facultatif designe une autre racine (copie du depot, pour les temoins).
 # Sortie : lignes [OK] / [ECHEC] fichier:ligne ; statut 1 au moindre [ECHEC].
@@ -147,7 +149,7 @@ APPELS_DYNAMIQUES <- c("match.fun", "get", "get0", "mget", "eval", "evalq", "eva
                        "loadNamespace", "requireNamespace", "attachNamespace", "as.environment",
                        "environment", "parent.frame", "sys.function", "parent.env", "topenv",
                        "sys.call", "sys.frame", "sys.frames", "sys.calls", "sys.parent",
-                       "sys.on.exit", "match.call", "globalenv")
+                       "sys.on.exit", "match.call", "globalenv", "dynGet", ".GlobalEnv", "environment<-")
 
 # --- Analyse d'un fichier --------------------------------------------------------------
 # Rend list(defs, jetons, assign_haut) : defs = noms definis au premier niveau ; jetons =
@@ -353,6 +355,13 @@ for (m in names(analyses)) {
         EXCEPTIONS_INTROSPECTION$fonction %in% j$def[r]
       if (any(declaree)) {
         introspections_vues <- c(introspections_vues, which(declaree))
+        # #137 : le nom est aussi la cible d'une affectation locale de la meme fonction de
+        # premier niveau (`globalenv <- f`) : l'appel ou la reference peut viser la variable.
+        if (any(!is.na(j$def) & j$def == j$def[r] & j$texte == texte & j$local &
+                  j$token %in% c("SYMBOL", "STR_CONST"))) {
+          echec(sprintf("exception declaree inapplicable : `%s` est aussi la cible d'une affectation locale dans `%s` (#137) ; renommer la variable locale",
+                        texte, j$def[r]), chemin, j$ligne[r])
+        }
       } else if (appel_dyn) {
         echec(sprintf("appel dynamique interdit : %s()", texte), chemin, j$ligne[r])
       } else {
