@@ -224,7 +224,7 @@ jobs:
           bash tests/controles/paquets_java.sh --lister > "$RUNNER_TEMP/paquets-apres.txt"
           # Contrôle partagé avec le hook des sessions cloud (issue #120) : le script est
           # tests/controles/paquets_java.sh, ses motifs sont dans
-          # tests/controles/paquets_java_motifs.sh, sa limite (un contrôle par nom de paquet)
+          # tests/controles/paquets_java_motifs.txt, sa limite (un contrôle par nom de paquet)
           # dans son en-tête et ses témoins dans tests/unitaires/controles.R.
           bash tests/controles/paquets_java.sh "$RUNNER_TEMP/paquets-avant.txt" "$RUNNER_TEMP/paquets-apres.txt"
       - name: Compilation (pdfLaTeX, trois passes)
