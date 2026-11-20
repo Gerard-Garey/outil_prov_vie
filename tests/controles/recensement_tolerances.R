@@ -34,31 +34,33 @@
 # pas evaluable sans les donnees des tests, constante litterale 0 de l'expression (une expression non
 # evaluable peut en cacher d'autres : le critere est syntaxique, il n'est pas exhaustif). Dans un appel
 # non evaluable, les arguments qui ne sont pas des valeurs ne comptent pas : indices de `[` et `[[`,
-# times, length.out et each de rep(), digits de round() et signif(), longueur de character(0) ; numeric(n)
-# et double(n) avec n litteral > 0 comptent n zeros. Pour un appel dont les arguments ne s'apparient pas,
-# l'attendu est lu par position (3e argument sans nom) ou sous son nom.
+# times, length.out et each de rep() (ils multiplient les zeros de l'objet : voir plus bas), digits de round()
+# et signif(), longueur de character(0) ; numeric(n) et double(n) avec n litteral > 0 comptent n zeros
+# (n hors de l'entier R : plafonne a .Machine$integer.max, 2147483647, comme tout decompte qui deborde).
 # Un zero obtenu par compensation (ecart de passage, total moins la somme de ses parties), que le
 # harnais compare a tolerance absolue declaree, reste a tolerance, dans son propre appel : la ligne qui
-# precede l'appel porte la marque `# zero_compense : <motif>`, et l'appel est compte a part (ZERO DE
-# COMPENSATION DECLARE), hors de la rubrique des zeros a corriger ; un appel marque qui contient plus
-# d'un zero reel est liste a part (A PLUSIEURS ZEROS), et une marque sur un appel sans zero, ou sans
-# appel de verifier_egal() a la ligne suivante, sous MARQUES ORPHELINES. Ces rubriques sont informatives.
+# precede l'appel porte, seule sur sa ligne, la marque `# zero_compense : <motif>` (un commentaire en fin de
+# ligne n'est pas une marque), et l'appel est compte a part (ZERO DE COMPENSATION DECLARE), hors de la
+# rubrique des zeros a corriger ; un appel marque qui contient plus d'un zero reel est liste a part (A
+# PLUSIEURS ZEROS), et une marque sur un appel sans zero, ou sans appel de verifier_egal() a la ligne
+# suivante, sous MARQUES ORPHELINES. Ces rubriques sont informatives. Le motif est exige : une marque
+# sans motif (`# zero_compense`, `# zero_compense :` ou motif d'espaces), ou sans les deux-points, est un
+# [ECHEC] a son fichier:ligne (statut 1) et ne compte pas comme une marque.
+# Un rep(0, k) ou rep_len(0, k) compte k zeros si k est litteral (times, each) et evaluable comme entier R
+# (k fois les zeros de l'objet, produit plafonne a .Machine$integer.max s'il deborde) ; non evaluable
+# (rep(0, k)), hors de l'entier R (3e9) ou length.out > 1, il compte "plusieurs" zeros (au moins 2 : le
+# decompte ne distingue que 0, 1 ou plusieurs) : l'appel marque qui le porte est liste sous A PLUSIEURS ZEROS.
+# Pour un appel dont les arguments ne s'apparient pas (argument en trop), l'attendu est lu par
+# l'appariement de R (match.call sur la signature de verifier_egal()), sous son nom ou en position, les
+# arguments nommes etant ecartes avant les autres ; une `...` transmise n'est pas developpee : les arguments
+# sans nom qui la suivent sont ignores.
 # Les appels directs de all.equal(tolerance = ...) dans verifier() ne passent pas par
 # verifier_egal() : ils sont listes a part, memes criteres.
-# Sortie informative : lignes [INFO] ; [ECHEC] seulement si un fichier n'est pas analysable ou si
-# le recensement des appels n'est pas coherent (statut 1). Aucune ligne [ECHEC] pour un signalement.
-# Limites connues (reserves d'audit non corrigees, suivies par la question Q-32 / Q-33 de la
-# feuille de route ; chacune mesuree sur une racine fictive) :
-#   - r1 : un commentaire `# zero_compense` en fin de ligne (`x <- 1  # zero_compense : m`) est
-#     pris pour une marque : l'appel de la ligne suivante est range sous ZERO DE COMPENSATION
-#     DECLARE ;
-#   - r2 : rep(0, k), avec k non evaluable, ne compte qu'un zero (c(0, 0) en compte deux) : un
-#     appel marque qui porte rep(0, k) n'est pas liste sous A PLUSIEURS ZEROS ;
-#   - r3 : pour un appel dont les arguments ne s'apparient pas (argument en trop, `...`),
-#     `attendu` est lu par position, comme 3e argument sans nom : si des arguments nommes
-#     (`nom =`, `obtenu =`) sont en tete, il manque, et ses zeros ne sont pas comptes ;
-#   - le motif d'une marque n'est pas controle : `# zero_compense` sans motif compte comme une
-#     marque.
+# Sortie informative : lignes [INFO] ; [ECHEC] seulement si un fichier n'est pas analysable, si
+# le recensement des appels n'est pas coherent ou si une marque `# zero_compense` n'a pas de motif
+# (statut 1). Aucune ligne [ECHEC] pour un signalement.
+# Les reserves r1 a r3 d'audit de #111 (marque en fin de ligne, rep(0, k) non evaluable, attendu lu par
+# position) et le motif non controle sont corrigees par #136 (Q-32 (a)).
 # Usage, depuis la racine du depot : Rscript tests/controles/recensement_tolerances.R
 # Un argument facultatif designe une autre racine. Code ASCII, R de base seulement.
 
@@ -76,6 +78,8 @@ echec <- function(message, chemin = NA_character_) {
 
 RAPPORT_ORDRES <- 10
 EFFET_RELATIF <- 1.5e-7
+MARQUE <- "^#[[:space:]]*zero_compense([[:space:]]|:|$)"
+MARQUE_AVEC_MOTIF <- "^#[[:space:]]*zero_compense[[:space:]]*:[[:space:]]*[^[:space:]]"
 
 # Fichiers R de tests/ (tests/reference/ exclu : jeux de donnees, pas du code de test).
 fichiers <- sort(list.files(file.path(racine, "tests"), pattern = "\\.R$", recursive = TRUE, full.names = TRUE),
@@ -125,11 +129,44 @@ zeros_feuilles <- function(x) {
 }
 
 # Nombre de constantes litterales 0 (reelles) d'une expression (a defaut de pouvoir l'evaluer) ; un 0 qui
-# n'est pas une valeur n'est pas compte : arguments de longueur ou d'indice (voir l'en-tete). rep(0, k) compte
-# pour une constante. Les appels de FONCTIONS_SANS_ZERO (entiers, caracteres, logiques) ne portent aucun zero reel.
+# n'est pas une valeur n'est pas compte : arguments de longueur ou d'indice (voir l'en-tete). rep(0, k) et
+# rep_len(0, k) : voir zeros_repetes() (k zeros si k est litteral ou une constante du fichier et dans l'entier R ;
+# "plusieurs", soit 2, sinon : non evaluable ou hors de l'entier R ; un decompte qui deborde est plafonne par plafonner()).
+# Les appels de FONCTIONS_SANS_ZERO (entiers, caracteres, logiques) ne portent aucun zero reel.
 FONCTIONS_SANS_ZERO <- c("character", "integer", "logical", "seq_len")
 FONCTIONS_PREMIER_ARGUMENT <- c("[", "[[", "rep", "rep_len", "round", "signif")
-zeros_litteraux <- function(e) {
+# Decompte en double, plafonne a l'entier maximal : as.integer() d'un double hors de portee, ou la somme de
+# plusieurs entiers qui deborde, leve un avertissement (options(warn = 2) : arret). Le decompte ne distingue
+# que 0, 1 ou plusieurs zeros, le plafond n'y change rien.
+plafonner <- function(x) as.integer(min(x, .Machine$integer.max))
+# Zeros d'un appel de rep() ou rep_len() dont l'objet porte z zeros litteraux : times et each litteraux
+# multiplient (rep(0, 3) : 3 zeros) ; une repetition non evaluable (rep(0, k)), length.out > 1 ou un appel
+# qui ne s'apparie pas comptent au moins 2 zeros ("plusieurs zeros" : le zero n'est pas unique) ; une
+# repetition nulle (times = 0, length.out = 0) n'en porte aucun.
+zeros_repetes <- function(e, z, constantes) {
+  if (z == 0L) return(0L)
+  plusieurs <- max(2L, z)
+  signature <- if (identical(as.character(e[[1L]]), "rep_len")) function(x, length.out) NULL
+               else function(x, times, length.out, each) NULL
+  m <- tryCatch(match.call(signature, e, envir = emptyenv()), error = function(err) NULL)
+  if (is.null(m)) return(plusieurs)
+  entier <- function(arg) {
+    r <- evaluer(arg, constantes)
+    if (r$ok && is.numeric(r$valeur) && length(r$valeur) == 1L && is.finite(r$valeur) && r$valeur >= 0 &&
+        r$valeur <= .Machine$integer.max) as.integer(r$valeur)
+    else NA_integer_  # hors de l'entier R : NA, donc plusieurs zeros (le decompte ne distingue que 0, 1 ou plusieurs)
+  }
+  if (!is.null(m$length.out)) {
+    n <- entier(m$length.out)
+    return(if (is.na(n)) plusieurs else if (n == 0L) 0L else if (n == 1L) 1L else plusieurs)
+  }
+  fois <- if (is.null(m$times)) 1L else entier(m$times)
+  chacun <- if (is.null(m$each)) 1L else entier(m$each)
+  if (is.na(fois) || is.na(chacun)) return(plusieurs)
+  plafonner(as.numeric(z) * as.numeric(fois) * as.numeric(chacun))
+}
+
+zeros_litteraux <- function(e, constantes) {
   if (is.double(e)) return(sum(is.finite(e) & e == 0))
   if (is.call(e) && is.symbol(e[[1L]])) {
     f <- as.character(e[[1L]])
@@ -142,7 +179,8 @@ zeros_litteraux <- function(e) {
       k <- which(nm == "x")
       if (length(k) == 0L) k <- which(nm == "")[1L]
       if (is.na(k[1L]) || identical(a[[k[1L]]], quote(expr = ))) return(0L)
-      return(zeros_litteraux(a[[k[1L]]]))
+      z <- zeros_litteraux(a[[k[1L]]], constantes)
+      return(if (f %in% c("rep", "rep_len")) zeros_repetes(e, z, constantes) else z)
     }
     if (f %in% c("numeric", "double", "vector")) {
       # n zeros reels pour une longueur litterale n > 0 (vector : mode numeric ou double seulement)
@@ -151,12 +189,12 @@ zeros_litteraux <- function(e) {
       if (is.null(m)) return(0L)
       if (f == "vector" && !(is.character(m$mode) && m$mode %in% c("numeric", "double"))) return(0L)
       n <- m$length
-      return(if (is.numeric(n) && length(n) == 1L && is.finite(n) && n > 0) as.integer(n) else 0L)
+      return(if (is.numeric(n) && length(n) == 1L && is.finite(n) && n > 0) plafonner(n) else 0L)
     }
   }
   if (is.call(e) || is.expression(e)) {
-    return(sum(vapply(seq_along(e), function(i) if (identical(e[[i]], quote(expr = ))) 0L else zeros_litteraux(e[[i]]),
-                      integer(1L))))
+    return(plafonner(sum(vapply(seq_along(e), function(i) if (identical(e[[i]], quote(expr = ))) 0 else as.numeric(zeros_litteraux(e[[i]], constantes)),
+                                numeric(1L)))))
   }
   0L
 }
@@ -164,7 +202,7 @@ zeros_litteraux <- function(e) {
 # Nombre de zeros d'une expression attendue : valeur evaluee si elle l'est, sinon constantes litterales.
 compter_zeros <- function(expr, constantes) {
   r <- evaluer(expr, constantes)
-  if (r$ok) zeros_feuilles(r$valeur) else zeros_litteraux(expr)
+  if (r$ok) zeros_feuilles(r$valeur) else zeros_litteraux(expr, constantes)
 }
 
 # Evaluation sans effet de bord : l'environnement a pour parent emptyenv() et ne contient que les
@@ -192,7 +230,7 @@ seuil_petites <- function(tol) min(1, tol / EFFET_RELATIF)
 classer <- function(expr, constantes, tol = NA_real_) {
   r <- evaluer(expr, constantes)
   if (!r$ok) {
-    n <- if (is.na(tol) || tol > 0) zeros_litteraux(expr) else 0L
+    n <- if (is.na(tol) || tol > 0) zeros_litteraux(expr, constantes) else 0L
     return(list(classe = "indetermine", detail = "", petites = FALSE, min_abs = NA_real_, zeros = n > 0L, n_zeros = n))
   }
   n <- if (is.na(tol) || tol > 0) zeros_feuilles(r$valeur) else 0L
@@ -207,15 +245,20 @@ classer <- function(expr, constantes, tol = NA_real_) {
        n_zeros = n)
 }
 
-# Argument attendu d'un appel de verifier_egal() dont les arguments ne s'apparient pas : sous son nom, ou
-# 3e argument sans nom si aucun `...` ne le precede (NULL sinon).
-attendu_par_position <- function(a) {
-  if (!is.null(a[["attendu"]])) return(a[["attendu"]])
+# Argument attendu d'un appel de verifier_egal() dont les arguments ne s'apparient pas (argument en trop, `...`),
+# lu par l'appariement de R (match.call sur la signature de verifier_egal(), complete de `...` pour recevoir
+# l'argument en trop) : sous son nom, ou en position, les arguments nommes etant ecartes avant les autres. Une
+# `...` transmise ne se developpe pas sans execution : les arguments sans nom qui la suivent sont ignores
+# (NULL si l'attendu n'est pas connu).
+attendu_apparie <- function(a) {
   args <- as.list(a)[-1L]
   nm <- if (is.null(names(args))) rep("", length(args)) else names(args)
-  sans_nom <- args[nm == ""]
-  if (length(sans_nom) < 3L || any(vapply(sans_nom[1:3], function(x) identical(x, quote(...)), logical(1L)))) return(NULL)
-  sans_nom[[3L]]
+  points <- which(vapply(args, function(x) identical(x, quote(...)), logical(1L)))
+  garde <- if (length(points) == 0L) rep(TRUE, length(args)) else (seq_along(args) < points[1L] | nm != "") & !seq_along(args) %in% points
+  appel <- as.call(c(list(a[[1L]]), args[garde]))
+  m <- tryCatch(match.call(function(nom, obtenu, attendu, tolerance = 0, ...) NULL, appel, envir = emptyenv()),
+                error = function(e) NULL)
+  if (is.null(m)) NULL else m$attendu
 }
 
 resoudre_tolerance <- function(expr, constantes) {
@@ -246,10 +289,23 @@ for (chemin in fichiers) {
     echec("non analysable", rel(chemin))
     next
   }
-  # marques `# zero_compense` : lignes des commentaires qui la portent
+  # marques `# zero_compense : <motif>` : lignes des commentaires qui la portent ; une marque occupe sa ligne seule
+  # (un commentaire en fin de ligne n'en est pas une, #136 r1) et son motif est exige (#136, M725) : une marque
+  # sans motif est un [ECHEC], elle ne compte pas
   d <- getParseData(exprs)
-  marques_fichier <- if (is.null(d)) integer(0) else
-    d$line1[d$token == "COMMENT" & grepl("^#[[:space:]]*zero_compense([[:space:]]|:|$)", d$text)]
+  marques_fichier <- integer(0)
+  if (!is.null(d)) {
+    code <- d[d$terminal & d$token != "COMMENT", ]
+    com <- d[d$token == "COMMENT" & grepl(MARQUE, d$text), ]
+    seule <- vapply(seq_len(nrow(com)), function(i) !any(code$line1 <= com$line1[i] & code$line2 >= com$line1[i]), logical(1L))
+    com <- com[seule, ]
+    avec_motif <- grepl(MARQUE_AVEC_MOTIF, com$text)
+    for (l in com$line1[!avec_motif]) {
+      echec("marque `# zero_compense` sans motif (forme exigee : `# zero_compense : <motif>`, motif non vide)",
+            paste0(rel(chemin), ":", l))
+    }
+    marques_fichier <- com$line1[avec_motif]
+  }
   marques[[length(marques) + 1L]] <- data.frame(fichier = rep(rel(chemin), length(marques_fichier)), ligne = marques_fichier,
                                                 stringsAsFactors = FALSE)
   # constantes numeriques litterales des affectations de premier niveau
@@ -283,7 +339,7 @@ for (chemin in fichiers) {
       if (is.null(m)) {
         tol <- if (is.null(a[["tolerance"]])) NA_real_ else resoudre_tolerance(a[["tolerance"]], constantes)
         if (!is.na(tol) && tol == 0) next
-        att <- if (jeton == "verifier_egal") attendu_par_position(a) else NULL
+        att <- if (jeton == "verifier_egal") attendu_apparie(a) else NULL
         n <- if (!is.null(att) && (is.na(tol) || tol > 0)) compter_zeros(att, constantes) else 0L
         cl <- list(classe = "indetermine", detail = "arguments non appariables", petites = FALSE, min_abs = NA_real_,
                    zeros = n > 0L, n_zeros = n)

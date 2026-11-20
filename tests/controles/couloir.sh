@@ -5,11 +5,15 @@
 # unitaire (git peut manquer dans l'image du job « Tests (R 4.3.3) »).
 #
 # Le couloir d'une branche est un bloc de code délimité de sa fiche (docs/feuille-de-route.md),
-# dont la chaîne d'information est « couloir <nom de la branche> ». Lignes du bloc :
+# dont la chaîne d'information est « couloir <nom de la branche> » (barrière de trois accents
+# graves ou plus ; « couloir » en minuscules, un seul nom). Toute chaîne d'information qui
+# commence par « couloir », casse et barrière « ~~~ » comprises, sans avoir exactement cette
+# forme, est un [ECHEC] (sinon le bloc n'est pas lu et le couloir n'est pas contrôlé, sans rien
+# dire). Lignes du bloc :
 #   + <motif>              fichiers inclus
 #   - <motif>              fichiers exclus (prime sur « + »)
 #   = <chemin> : <Mnnn>    point de contact (ADR 0012, point 5) : fichier exact et décision M ;
-#                          doit figurer dans les deux fiches
+#                          doit figurer dans les deux fiches (contrôlé en mode intersection)
 #   # ...                  commentaire ; ligne vide admise ; toute autre ligne : [ECHEC] de forme
 # Motifs : chemins relatifs à la racine ; « * » = tout caractère sauf « / » ; « ** » = tout
 # caractère, « / » compris ; un motif terminé par « / » vaut tout le sous-arbre ; aucune autre
@@ -26,11 +30,16 @@
 # (défaut docs/feuille-de-route.md).
 #   Mode couloir : `git diff --name-only --no-renames <base>...HEAD` ; échec pour tout fichier
 #     hors couloir, hors recouvrements maîtrisés et hors points de contact. Une branche sans bloc
-#     (branche unique, dont Bo2 ; branche détachée ou main) : [INFO] et statut 0.
+#     (branche unique, dont Bo2 ; branche détachée ou main) : [INFO] et statut 0 ; chaque bloc de
+#     la fiche dont la branche n'existe pas (origin/<nom> ou locale) est alors signalé en [INFO]
+#     (jamais en [ECHEC] : la fiche précède la branche, et le bloc d'une branche fusionnée puis
+#     supprimée y reste ; l'[INFO] met en évidence une faute dans le nom de la branche).
 #   Mode intersection : fichiers touchés par les deux branches (HEAD et origin/<autre>, chacune
 #     contre <base>) ; échec si l'intersection contient autre chose que des recouvrements
 #     maîtrisés ou des points de contact déclarés dans les deux fiches (remplace les deux
-#     commandes de l'ADR 0012, point 23). Seul le mode couloir tourne sur la CI : l'intersection
+#     commandes de l'ADR 0012, point 23). La fiche de l'autre branche est lue dans sa référence
+#     (`git show origin/<autre>:<fiche>`, à défaut la branche locale), celle de la courante dans
+#     le fichier du répertoire de travail. Seul le mode couloir tourne sur la CI : l'intersection
 #     dépend de l'état de l'autre branche au moment du push, que seule la session connaît.
 # Sortie : lignes [OK] / [ECHEC] / [INFO] ; statut 0 (conforme), 1 (au moins un [ECHEC]),
 # 2 (usage, fiche ou git illisible).
@@ -43,11 +52,20 @@
 #   - un point de contact est admis par son chemin : le script ne lit ni les lignes concernées
 #     ni la décision M citée (« branche qui écrit en premier ») ;
 #   - le script signale une sortie de couloir, il ne la tranche pas (point 9) ;
-#   - les fiches des deux branches sont lues dans le fichier de la branche courante ; une fiche
-#     de l'autre branche plus récente que ce fichier n'est pas vue ;
+#   - en mode couloir (seul mode de la CI), un point de contact déclaré dans la seule fiche
+#     courante est admis : la fiche de l'autre branche n'est pas lue (la CI ne connaît pas son
+#     nom), et le fichier n'est peut-être touché que par la courante ; la déclaration dans les
+#     deux fiches n'est exigée qu'en mode intersection, sur les fichiers touchés par les deux ;
+#   - en mode intersection, la fiche de l'autre branche est celle de sa référence au dernier
+#     `git fetch` : un ajout poussé depuis n'est pas vu avant le fetch ; une fiche absente de la
+#     référence (ou un chemin de fiche absolu) donne le statut 2 ;
 #   - l'intersection est un contrôle local avant push (motif : ci-dessus), pas un contrôle de CI ;
-#   - une coquille dans la chaîne d'information (« couloirs <branche> », « couloir<branche> ») ne
-#     fait pas un couloir : le bloc n'est pas lu, la branche est vue sans bloc ([INFO], statut 0) ;
+#   - une ouverture « couloir » est une ouverture de bloc : une barrière orpheline de même sorte
+#     et de longueur au plus égale qui l'avale est signalée (ORPH) ; une barrière orpheline d'une
+#     autre sorte (« ~~~ » autour d'un bloc « ``` ») ou plus longue est lue comme l'exemple
+#     imbriqué qu'elle est peut-être, et le bloc avalé n'est pas lu ([INFO], statut 0) ;
+#   - le signalement d'un bloc dont la branche n'existe pas n'est qu'une [INFO], et seulement
+#     pour une branche contrôlée sans bloc ;
 #   - un chemin qui porte un guillemet, une barre oblique inverse ou un caractère de contrôle
 #     est cité par git même avec core.quotePath=false : il ne correspond à aucun motif ;
 #   - un bloc malformé n'est signalé que pour la branche contrôlée (et l'autre en mode
@@ -75,6 +93,7 @@ C_MOINS=""
 C_CONTACTS=""
 A_CONTACTS=""
 NB_BLOCS=0
+BLOCS_FICHE=""
 
 # Motif valide : non vide, sans espace, relatif à la racine, sans autre syntaxe que « * »,
 # « ** » et le « / » final.
@@ -177,73 +196,98 @@ lire_bloc() {
   return "$statut"
 }
 
-# Cherche dans la fiche $1 le bloc de couloir de la branche $2 ; remplit NB_BLOCS et, par
-# lire_bloc, C_PLUS, C_MOINS, C_CONTACTS. Rend 1 (avec des [ECHEC]) si un bloc est mal formé,
-# non fermé, en double, ou si une chaîne d'information « couloir » est mal formée ; 0 sinon (y
-# compris sans bloc). Les blocs d'une autre chaîne d'information (« text » : l'exemple du
-# § 1.12) ne sont jamais lus comme couloir.
+# Cherche dans la fiche $1 le bloc de couloir de la branche $2 ; $3 : libellé de la fiche dans
+# les messages (défaut : $1). Remplit NB_BLOCS, BLOCS_FICHE (branches de tous les blocs de forme
+# exacte de la fiche, un par ligne) et, par lire_bloc, C_PLUS, C_MOINS, C_CONTACTS. Rend 1 (avec
+# des [ECHEC]) si un bloc est mal formé, non fermé, en double, si une chaîne d'information qui
+# commence par « couloir » (casse et barrière « ~~~ » comprises) n'a pas exactement la forme
+# « ```couloir <nom> », ou si un bloc de même barrière en avale l'ouverture d'un bloc « couloir »
+# (barrière orpheline, bloc non fermé) ; 0 sinon (y compris sans bloc). Les blocs d'une autre
+# chaîne d'information (« text » : l'exemple du § 1.12) ne sont jamais lus comme couloir.
 charger_couloir() {
-  local fiche="$1" branche="$2" type num contenu bloc="" statut=0 lignes_ouv="" sortie_awk
+  local fiche="$1" branche="$2" libelle="${3:-$1}" type num contenu bloc="" statut=0 lignes_ouv="" sortie_awk
   NB_BLOCS=0
+  BLOCS_FICHE=""
   C_PLUS=""; C_MOINS=""; C_CONTACTS=""
   if [ ! -f "$fiche" ] || [ ! -r "$fiche" ]; then
-    echo "[ECHEC] fiche illisible ou n'est pas un fichier : $fiche" >&2
+    echo "[ECHEC] fiche illisible ou n'est pas un fichier : $libelle" >&2
     return 2
   fi
   sortie_awk=$(awk -v branche="$branche" '
     function trim(s) { sub(/^[ \t]+/, "", s); sub(/[ \t]+$/, "", s); return s }
     { sub(/\r$/, ""); ligne = $0 }
+    {
+      est_bar = 0
+      if (match(ligne, /^[ \t]*(```+|~~~+)/)) {
+        bar = substr(ligne, 1, RLENGTH); sub(/^[ \t]*/, "", bar)
+        reste = trim(substr(ligne, RLENGTH + 1))
+        pc = substr(bar, 1, 1); pn = length(bar); est_bar = 1
+      }
+    }
     !dedans {
-      if (match(ligne, /^[ \t]*```+/)) {
-        ouv = substr(ligne, 1, RLENGTH); sub(/^[ \t]*/, "", ouv); nb = length(ouv)
-        info = trim(substr(ligne, RLENGTH + 1))
-        dedans = 1; cible = 0
-        if (info ~ /^couloir([ \t]|$)/) {
-          reste = trim(substr(info, 8))
-          if (reste == "" || reste ~ /[ \t]/) { print "MAL\t" NR "\t" info }
-          else if (reste == branche) { cible = 1; print "OUV\t" NR "\t" }
+      if (est_bar) {
+        car = pc; nb = pn; ouvligne = NR; dedans = 1; cible = 0
+        if (tolower(reste) ~ /^couloir/) {
+          if (car == "`" && reste ~ /^couloir[ \t]+[^ \t]+$/) {
+            nom = reste; sub(/^couloir[ \t]+/, "", nom)
+            print "NOM\t" NR "\t" nom
+            if (nom == branche) { cible = 1; print "OUV\t" NR "\t" }
+          } else print "MAL\t" NR "\t" bar reste
         }
       }
       next
     }
     {
-      if (match(ligne, /^[ \t]*```+[ \t]*$/)) {
-        f = trim(ligne)
-        if (length(f) >= nb) { if (cible) print "FER\t" NR "\t"; dedans = 0; cible = 0; next }
+      if (est_bar && pc == car && pn >= nb) {
+        if (reste == "") { if (cible) print "FER\t" NR "\t"; dedans = 0; cible = 0; next }
+        if (tolower(reste) ~ /^couloir/) { print "ORPH\t" NR "\t" ouvligne; next }
       }
       if (cible) print "LIG\t" NR "\t" ligne
     }
     END { if (dedans && cible) print "NONFERME\t" NR "\t" }
-  ' "$fiche") || { echo "[ECHEC] lecture de $fiche par awk impossible" >&2; return 2; }
+  ' "$fiche") || { echo "[ECHEC] lecture de $libelle par awk impossible" >&2; return 2; }
   while IFS=$'\t' read -r type num contenu; do
     case "$type" in
       MAL)
-        echo "[ECHEC] $fiche:$num : chaîne d'information « $contenu » mal formée (« couloir <nom de la branche> » attendu)"
+        echo "[ECHEC] $libelle:$num : chaîne d'information « $contenu » mal formée (« \`\`\`couloir <nom de la branche> » attendu : « couloir » en minuscules, un seul nom, barrière en accents graves) ; sans cela le bloc n'est pas lu et la branche est vue sans couloir"
         statut=1 ;;
+      ORPH)
+        echo "[ECHEC] $libelle:$num : ouverture de bloc « couloir » à l'intérieur du bloc ouvert ligne $contenu (barrière orpheline ou bloc non fermé) ; sans cela le bloc n'est pas lu et la branche est vue sans couloir"
+        statut=1 ;;
+      NOM) BLOCS_FICHE+="$contenu"$'\n' ;;
       OUV) NB_BLOCS=$((NB_BLOCS + 1)); lignes_ouv+="$num " ;;
       NONFERME)
-        echo "[ECHEC] $fiche : bloc « couloir $branche » non fermé"
+        echo "[ECHEC] $libelle : bloc « couloir $branche » non fermé"
         statut=1 ;;
       LIG) bloc+="$num"$'\t'"$contenu"$'\n' ;;
     esac
   done <<<"$sortie_awk"
   if [ "$NB_BLOCS" -gt 1 ]; then
-    echo "[ECHEC] $fiche : $NB_BLOCS blocs « couloir $branche » (lignes ${lignes_ouv% }) ; un seul bloc par branche"
+    echo "[ECHEC] $libelle : $NB_BLOCS blocs « couloir $branche » (lignes ${lignes_ouv% }) ; un seul bloc par branche"
     return 1
   fi
   if [ "$NB_BLOCS" -eq 1 ]; then
-    lire_bloc "$fiche" "$bloc" || statut=1
+    lire_bloc "$libelle" "$bloc" || statut=1
   fi
   return "$statut"
 }
 
 # Mode couloir : $1 fiche, $2 branche, $3 nom d'une fonction qui écrit les fichiers touchés
-# (un par ligne). Statut 0 sans bloc ([INFO]), 1 au moindre [ECHEC].
+# (un par ligne), $4 (facultatif) nom d'une fonction qui dit si une branche existe. Statut 0
+# sans bloc ([INFO]), 1 au moindre [ECHEC]. Sans bloc pour la branche, chaque bloc de la fiche
+# dont la branche n'existe pas est signalé en [INFO] (jamais en [ECHEC] : la fiche précède la
+# branche, et le bloc d'une branche fusionnée puis supprimée reste dans la fiche).
 lancer_couloir() {
-  local fiche="$1" branche="$2" fournisseur="$3" liste f n=0 echecs=0 maitrises=0 contacts=0
+  local fiche="$1" branche="$2" fournisseur="$3" existe="${4:-}" liste f n=0 echecs=0 maitrises=0 contacts=0 b
   charger_couloir "$fiche" "$branche" || return $?
   if [ "$NB_BLOCS" -eq 0 ]; then
     echo "[INFO] aucun bloc « couloir $branche » dans $fiche : branche sans couloir déclaré, rien à contrôler"
+    if [ -n "$existe" ]; then
+      while IFS= read -r b; do
+        [ -n "$b" ] || continue
+        "$existe" "$b" || echo "[INFO] bloc « couloir $b » dans $fiche : aucune branche $b (fiche écrite avant la branche, branche fusionnée et supprimée, ou faute dans le nom de $branche)"
+      done <<<"$BLOCS_FICHE"
+    fi
     return 0
   fi
   liste=$("$fournisseur") || return 2
@@ -265,18 +309,35 @@ lancer_couloir() {
   echo "[OK] $branche : $n fichier(s) touché(s), tous dans le couloir ($maitrises recouvrement(s) maîtrisé(s), $contacts point(s) de contact)"
 }
 
-# Mode intersection : $1 fiche, $2 branche courante, $3 autre branche, $4 et $5 : fonctions qui
-# écrivent les fichiers touchés par la courante et par l'autre.
+# Mode intersection : $1 fiche (celle de la branche courante), $2 branche courante, $3 autre
+# branche, $4 et $5 : fonctions qui écrivent les fichiers touchés par la courante et par l'autre,
+# $6 : fonction qui écrit la fiche de l'autre branche (celle de sa référence, pas celle de la
+# courante : un point de contact ajouté depuis par l'autre branche n'est vu que là).
 lancer_intersection() {
-  local fiche="$1" branche="$2" autre="$3" liste_c liste_a inter f n=0 echecs=0 maitrises=0 contacts=0
+  local fiche_a statut=0
+  fiche_a=$(mktemp)
+  "$6" > "$fiche_a" || { rm -f "$fiche_a"; return 2; }
+  intersection_avec_fiche "$1" "$2" "$3" "$4" "$5" "$fiche_a" || statut=$?
+  rm -f "$fiche_a"
+  return "$statut"
+}
+
+# Corps du mode intersection ; $6 : fichier qui contient la fiche de l'autre branche.
+# Le libellé de la fiche de l'autre branche cite la référence effectivement lue (REF_AUTRE, posée au
+# point d'entrée par ref_autre : origin/<autre>, ou la branche locale à défaut), non le chemin de
+# l'arbre de travail : ses numéros de ligne viennent de git show. Sans REF_AUTRE (témoins, qui
+# tournent sans git), origin/<autre>.
+intersection_avec_fiche() {
+  local fiche="$1" branche="$2" autre="$3" liste_c liste_a inter f n=0 echecs=0 maitrises=0 contacts=0 fiche_a="$6" libelle_a
   charger_couloir "$fiche" "$branche" || return $?
   if [ "$NB_BLOCS" -eq 0 ]; then
     echo "[INFO] aucun bloc « couloir $branche » dans $fiche : aucun point de contact déclaré par $branche"
   fi
   A_CONTACTS="$C_CONTACTS"
-  charger_couloir "$fiche" "$autre" || return $?
+  libelle_a="fiche de $autre (${REF_AUTRE:-origin/$autre}:$FICHE)"
+  charger_couloir "$fiche_a" "$autre" "$libelle_a" || return $?
   if [ "$NB_BLOCS" -eq 0 ]; then
-    echo "[INFO] aucun bloc « couloir $autre » dans $fiche : aucun point de contact déclaré par $autre"
+    echo "[INFO] aucun bloc « couloir $autre » dans la $libelle_a : aucun point de contact déclaré par $autre"
   fi
   # Ici C_CONTACTS : contacts de l'autre ; A_CONTACTS : contacts de la courante.
   liste_c=$("$4") || return 2
@@ -312,12 +373,27 @@ fichiers_touches() {  # $1 : tête
   }
 }
 fichiers_courante() { fichiers_touches HEAD; }
-fichiers_autre() {
+# Référence de l'autre branche : origin/<autre>, à défaut la branche locale (pas encore poussée).
+ref_autre() {
   if git rev-parse --verify -q "origin/$AUTRE^{commit}" > /dev/null; then
-    fichiers_touches "origin/$AUTRE"
+    echo "origin/$AUTRE"
   else
-    fichiers_touches "$AUTRE"
+    echo "$AUTRE"
   fi
+}
+fichiers_autre() { fichiers_touches "$(ref_autre)"; }
+# La fiche de l'autre branche, lue dans sa référence (chemin de la fiche relatif à la racine).
+fiche_autre() {
+  local ref
+  ref=$(ref_autre)
+  git show "$ref:$FICHE" || {
+    echo "[ECHEC] git show $ref:$FICHE impossible (chemin relatif à la racine du dépôt attendu ; git fetch origin $AUTRE)" >&2
+    return 2
+  }
+}
+# Une branche existe-t-elle (origin/<b> ou locale) ?
+branche_existe() {
+  git rev-parse --verify -q "origin/$1^{commit}" > /dev/null 2>&1 || git rev-parse --verify -q "$1^{commit}" > /dev/null 2>&1
 }
 
 # --- Témoins -------------------------------------------------------------------------------
@@ -325,6 +401,12 @@ LISTE_TEMOIN=""
 LISTE_TEMOIN_AUTRE=""
 liste_temoin() { printf '%s\n' "$LISTE_TEMOIN"; }
 liste_temoin_autre() { printf '%s\n' "$LISTE_TEMOIN_AUTRE"; }
+FICHE_TEMOIN_AUTRE=""
+ABSENT_TEMOIN=""
+BRANCHES_TEMOIN=""
+fiche_temoin_autre() { cat "$FICHE_TEMOIN_AUTRE"; }
+fiche_temoin_absente() { echo "[ECHEC] fiche de l'autre branche absente (témoin)" >&2; return 2; }
+branche_temoin_existe() { grep -qxF -- "$1" <<<"$BRANCHES_TEMOIN"; }
 
 # Témoins négatifs, sans git : fiches et listes de fichiers construites. Un fichier hors couloir,
 # un fichier exclu, un motif hors grammaire, un bloc en double ou non fermé, un point de contact
@@ -335,14 +417,21 @@ temoins() {
   d=$(mktemp -d)
   trap 'rm -rf "$d"' RETURN
   fiche="$d/fiche.md"
-  # attendre <nom> <statut attendu> <sous-chaîne attendue de la sortie ou vide> <commande...>
+  FICHE_TEMOIN_AUTRE="$fiche"
+  # attendre <nom> <statut attendu> <sous-chaîne attendue de la sortie ou vide> <commande...> ;
+  # ABSENT_TEMOIN (sous-chaîne qui ne doit pas figurer dans la sortie) est lu puis remis à vide.
   attendre() {
     local nom="$1" attendu="$2" motif="$3"
     shift 3
     n=$((n + 1))
     statut=0
     sortie=$("$@" 2>&1) || statut=$?
-    if [ "$statut" -ne "$attendu" ]; then
+    local absent="$ABSENT_TEMOIN"
+    ABSENT_TEMOIN=""
+    if [ -n "$absent" ] && grep -qF -- "$absent" <<<"$sortie"; then
+      echo "[ECHEC] témoin « $nom » : « $absent » présent dans la sortie ($(tr '\n' '|' <<<"$sortie"))"
+      echecs=$((echecs + 1))
+    elif [ "$statut" -ne "$attendu" ]; then
       echo "[ECHEC] témoin « $nom » : statut $statut au lieu de $attendu ($(tr '\n' '|' <<<"$sortie"))"
       echecs=$((echecs + 1))
     elif [ -n "$motif" ] && ! grep -qF -- "$motif" <<<"$sortie"; then
@@ -442,27 +531,80 @@ temoins() {
   LISTE_TEMOIN=$'R/a.R\nDESCRIPTION\ntests/references.R'
   LISTE_TEMOIN_AUTRE=$'R/b.R\nDESCRIPTION\ntests/references.R\nCONTEXT.md'
   attendre "intersection : recouvrement maîtrisé et point de contact des deux fiches admis" 0 "[OK] intersection de br/a et br/b : 2 fichier(s)" \
-    lancer_intersection "$fiche" br/a br/b liste_temoin liste_temoin_autre
+    lancer_intersection "$fiche" br/a br/b liste_temoin liste_temoin_autre fiche_temoin_autre
   LISTE_TEMOIN=$'R/a.R\nR/x.R'
   LISTE_TEMOIN_AUTRE=$'R/b.R\nR/x.R'
   attendre "intersection : fichier commun hors recouvrement et hors contact refusé (témoin négatif)" 1 "[ECHEC] R/x.R : touché par br/a et br/b, ni recouvrement" \
-    lancer_intersection "$fiche" br/a br/b liste_temoin liste_temoin_autre
+    lancer_intersection "$fiche" br/a br/b liste_temoin liste_temoin_autre fiche_temoin_autre
   LISTE_TEMOIN=$'R/commun.R'
   LISTE_TEMOIN_AUTRE=$'R/commun.R'
   attendre "intersection : point de contact déclaré d'un seul côté refusé" 1 "dans une seule des deux fiches" \
-    lancer_intersection "$fiche" br/a br/b liste_temoin liste_temoin_autre
+    lancer_intersection "$fiche" br/a br/b liste_temoin liste_temoin_autre fiche_temoin_autre
   LISTE_TEMOIN=$'R/a.R'
   LISTE_TEMOIN_AUTRE=$'R/b.R'
-  attendre "intersection vide : statut 0" 0 "0 fichier(s) communs" lancer_intersection "$fiche" br/a br/b liste_temoin liste_temoin_autre
+  attendre "intersection vide : statut 0" 0 "0 fichier(s) communs" lancer_intersection "$fiche" br/a br/b liste_temoin liste_temoin_autre fiche_temoin_autre
   LISTE_TEMOIN=$'R/a.R'
   attendre "intersection avec une branche sans bloc : [INFO], aucun contact" 0 "[INFO] aucun bloc « couloir br/z »" \
-    lancer_intersection "$fiche" br/a br/z liste_temoin liste_temoin_autre
+    lancer_intersection "$fiche" br/a br/z liste_temoin liste_temoin_autre fiche_temoin_autre
   LISTE_TEMOIN=$'tests/references.R'
   LISTE_TEMOIN_AUTRE=$'tests/references.R'
   attendre "intersection avec une branche sans bloc : un contact d'un seul côté refusé" 1 "dans une seule des deux fiches" \
-    lancer_intersection "$fiche" br/a br/z liste_temoin liste_temoin_autre
+    lancer_intersection "$fiche" br/a br/z liste_temoin liste_temoin_autre fiche_temoin_autre
+  # Coquilles de la chaîne d'information (Q-30) : chacune rend le couloir illisible, donc [ECHEC].
+  LISTE_TEMOIN=$'R/a.R'
+  local info
+  for info in 'couloirs br/a' 'Couloir br/a' 'COULOIR br/a' 'couloirbr/a' 'couloir  br/a br/b' 'couloir'; do
+    printf '%s\n' '```'"$info" '+ R/a.R' '```' > "$fiche"
+    attendre "coquille « $info » : [ECHEC], pas [INFO]" 1 "mal formée" lancer_couloir "$fiche" br/a liste_temoin
+  done
+  printf '%s\n' '~~~couloir br/a' '+ R/a.R' '~~~' > "$fiche"
+  attendre "coquille : barrière « ~~~ » avant « couloir »" 1 "mal formée" lancer_couloir "$fiche" br/a liste_temoin
+  printf '%s\n' '```' 'orpheline' '```couloir br/a' '+ R/a.R' '```' > "$fiche"
+  attendre "coquille : barrière orpheline qui avale le bloc" 1 "bloc ouvert ligne 1" lancer_couloir "$fiche" br/a liste_temoin
+  printf '%s\n' '```couloir br/b' '+ R/b.R' '```' '```couloirs br/a' '+ R/a.R' '```' > "$fiche"
+  attendre "coquille sur une autre branche que la contrôlée : [ECHEC] aussi" 1 "mal formée" lancer_couloir "$fiche" br/b liste_temoin
+  printf '%s\n' '~~~markdown' '```couloir br/a' '+ R/a.R' '```' '~~~' > "$fiche"
+  attendre "bloc « couloir » imbriqué sous une barrière d'une autre sorte : exemple, non lu" 0 "[INFO] aucun bloc" lancer_couloir "$fiche" br/a liste_temoin
+  printf '%s\n' '```couloir br/a' '+ R/a.R' '```' > "$fiche"
+  attendre "forme exacte : lue (aucune fausse coquille)" 0 "[OK] br/a : 1 fichier(s)" lancer_couloir "$fiche" br/a liste_temoin
+  # Bloc d'une branche qui n'existe pas : [INFO] seulement (la fiche précède la branche ; le bloc
+  # d'une branche fusionnée puis supprimée reste dans la fiche).
+  printf '%s\n' '```couloir br/z' '+ R/z.R' '```' > "$fiche"
+  BRANCHES_TEMOIN=$'br/a'
+  attendre "bloc d'une branche absente, branche contrôlée sans bloc : [INFO], statut 0" 0 "[INFO] bloc « couloir br/z » dans $fiche : aucune branche br/z" \
+    lancer_couloir "$fiche" br/a liste_temoin branche_temoin_existe
+  BRANCHES_TEMOIN=$'br/a\nbr/z'
+  ABSENT_TEMOIN="aucune branche br/z"
+  attendre "bloc d'une branche présente : aucun signalement" 0 "[INFO] aucun bloc « couloir br/a »" lancer_couloir "$fiche" br/a liste_temoin branche_temoin_existe
+  printf '%s\n' '```couloir br/a' '+ R/a.R' '```' '```couloir br/z' '+ R/z.R' '```' > "$fiche"
+  BRANCHES_TEMOIN=$'br/a'
+  ABSENT_TEMOIN="aucune branche br/z"
+  attendre "branche contrôlée avec bloc : les blocs d'autres branches ne sont pas signalés" 0 "[OK] br/a" lancer_couloir "$fiche" br/a liste_temoin branche_temoin_existe
+  # Fiche de l'autre branche lue dans sa référence (Q-31), pas dans la fiche de la courante.
+  local fiche_a="$d/fiche_autre.md"
+  FICHE_TEMOIN_AUTRE="$fiche_a"
+  LISTE_TEMOIN=$'R/a.R\ntests/references.R'
+  LISTE_TEMOIN_AUTRE=$'R/b.R\ntests/references.R'
+  printf '%s\n' '```couloir br/a' '+ R/a.R' '= tests/references.R : M404' '```' '```couloir br/b' '+ R/b.R' '```' > "$fiche"
+  printf '%s\n' '```couloir br/b' '+ R/b.R' '= tests/references.R : M404' '```' > "$fiche_a"
+  attendre "intersection : contact ajouté depuis par l'autre branche, vu dans sa référence" 0 "1 point(s) de contact" \
+    lancer_intersection "$fiche" br/a br/b liste_temoin liste_temoin_autre fiche_temoin_autre
+  printf '%s\n' '```couloir br/a' '+ R/a.R' '= tests/references.R : M404' '```' '```couloir br/b' '+ R/b.R' '= tests/references.R : M404' '```' > "$fiche"
+  printf '%s\n' '```couloir br/b' '+ R/b.R' '```' > "$fiche_a"
+  attendre "intersection : contact retiré de la fiche de l'autre branche, la copie périmée de la courante ne vaut pas" 1 "dans une seule des deux fiches" \
+    lancer_intersection "$fiche" br/a br/b liste_temoin liste_temoin_autre fiche_temoin_autre
+  printf '%s\n' '```couloirs br/b' '+ R/b.R' '```' > "$fiche_a"
+  attendre "intersection : coquille dans la fiche de l'autre branche signalée, avec son libellé" 1 "[ECHEC] fiche de br/b (origin/br/b:$FICHE)" \
+    lancer_intersection "$fiche" br/a br/b liste_temoin liste_temoin_autre fiche_temoin_autre
+  REF_AUTRE="br/b"
+  attendre "intersection : référence lue = branche locale (autre branche non poussée) : le libellé cite cette référence, non origin/" 1 "[ECHEC] fiche de br/b (br/b:$FICHE)" \
+    lancer_intersection "$fiche" br/a br/b liste_temoin liste_temoin_autre fiche_temoin_autre
+  REF_AUTRE=""
+  attendre "intersection : fiche de l'autre branche illisible : statut 2" 2 "" \
+    lancer_intersection "$fiche" br/a br/b liste_temoin liste_temoin_autre fiche_temoin_absente
+  FICHE_TEMOIN_AUTRE="$fiche"
   if [ "$echecs" -eq 0 ]; then
-    echo "[OK] témoins : $n cas (couloir, exclusion, recouvrements maîtrisés, points de contact, grammaire, formes refusées, blocs en double ou non fermés, exemple « text », intersection) conformes"
+    echo "[OK] témoins : $n cas (couloir, exclusion, recouvrements maîtrisés, points de contact, grammaire, formes refusées, blocs en double ou non fermés, exemple « text », coquilles de la chaîne d'information, blocs de branches absentes, fiche de l'autre branche, intersection) conformes"
     return 0
   fi
   echo "[ECHEC] témoins : $echecs cas sur $n non conformes"
@@ -473,6 +615,7 @@ temoins() {
 FICHE="docs/feuille-de-route.md"
 BRANCHE=""
 AUTRE=""
+REF_AUTRE=""
 MODE="couloir"
 for arg in "$@"; do
   case "$arg" in
@@ -503,8 +646,9 @@ if [ -z "$BRANCHE" ]; then
 fi
 statut=0
 if [ -n "$AUTRE" ]; then
-  lancer_intersection "$FICHE" "$BRANCHE" "$AUTRE" fichiers_courante fichiers_autre || statut=$?
+  REF_AUTRE=$(ref_autre)
+  lancer_intersection "$FICHE" "$BRANCHE" "$AUTRE" fichiers_courante fichiers_autre fiche_autre || statut=$?
 else
-  lancer_couloir "$FICHE" "$BRANCHE" fichiers_courante || statut=$?
+  lancer_couloir "$FICHE" "$BRANCHE" fichiers_courante branche_existe || statut=$?
 fi
 exit "$statut"

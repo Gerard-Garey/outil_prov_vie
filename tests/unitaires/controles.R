@@ -469,6 +469,50 @@ r <- .essai("graphe_modules", list("R/outils.R" = "avec_graine <- function(grain
 verifier("l'exception de globalenv ne couvre pas do.call(get, ...), même dans avec_graine(), outils.R:1",
          .echoue_en(r, "R/outils.R", 1L, "do.call()"))
 
+# #137 : dynGet, .GlobalEnv, forme appel d'environment<-, homonyme local d'une exception
+# (m3 de #109 ; m-1 de l'audit de ac01c58).
+section("contrôles : graphe_modules.R, dynGet, .GlobalEnv, environment<- et homonyme d'une exception (#137)")
+r <- cas_graphe(c("calcul_e <- function(x) {", "  a <- dynGet(\"a\")", "  x", "}"))
+verifier("#137 : dynGet(\"a\"), engagement.R:2", .echoue_en(r, "R/engagement.R", 2L, "dynGet()"))
+r <- cas_graphe(c("calcul_e <- function(x) {", "  a <- .GlobalEnv", "  x", "}"))
+verifier("#137 : .GlobalEnv, engagement.R:2", .echoue_en(r, "R/engagement.R", 2L, ".GlobalEnv sans appel"))
+r <- cas_graphe(c("calcul_e <- function(x) {", "  a <- base::.GlobalEnv", "  x", "}"))
+verifier("#137 : base::.GlobalEnv, engagement.R:2", .echoue_en(r, "R/engagement.R", 2L, ".GlobalEnv sans appel"))
+r <- cas_graphe(c("calcul_e <- function(x) {", "  f <- function() 1", "  `environment<-`(f, x)", "  f", "}"))
+verifier("#137 : `environment<-`(f, e) (forme appel), engagement.R:3", .echoue_en(r, "R/engagement.R", 3L, "environment<-()"))
+r <- cas_graphe(c("calcul_e <- function(x) {", "  f <- function() 1", "  base::`environment<-`(f, x)", "  f", "}"))
+verifier("#137 : base::`environment<-`(f, e) (forme appel), engagement.R:3", .echoue_en(r, "R/engagement.R", 3L, "environment<-()"))
+r <- cas_graphe(c("calcul_e <- function(x) {", "  f <- function() 1", "  \"environment<-\"(f, x)", "  f", "}"))
+verifier("#137 : \"environment<-\"(f, e) (appel par une chaîne), engagement.R:3", .echoue_en(r, "R/engagement.R", 3L, "environment<-()"))
+r <- cas_graphe(c("calcul_e <- function(x) {", "  g <- `environment<-`", "  x", "}"))
+verifier("#137 : `environment<-` référencé sans appel, engagement.R:2", .echoue_en(r, "R/engagement.R", 2L, "environment<- sans appel"))
+r <- cas_graphe(c("calcul_e <- function(x) {", "  y <- x$dynGet", "  z <- list(dynGet = 1, .GlobalEnv = 2)", "  dyn_get <- 1", "  y", "}"))
+verifier("#137, cas licite : dynGet et .GlobalEnv en champ ou en nom d'argument, nom voisin", .passe(r))
+r <- .essai("graphe_modules", list("R/outils.R" = c("avec_graine <- function(graine, expr, f) {", "  globalenv <- f",
+                                                    "  do.call(globalenv, list())", "}")))
+verifier("#137 : homonyme local de l'exception, globalenv <- f ; do.call(globalenv, list()) dans avec_graine(), outils.R:3",
+         .echoue_en(r, "R/outils.R", 3L, "exception declaree inapplicable"))
+r <- .essai("graphe_modules", list("R/outils.R" = c("avec_graine <- function(graine, expr, f) {", "  globalenv <- f",
+                                                    "  globalenv()", "}")))
+verifier("#137 : homonyme local de l'exception, globalenv <- f ; globalenv() dans avec_graine(), outils.R:3",
+         .echoue_en(r, "R/outils.R", 3L, "exception declaree inapplicable"))
+r <- .essai("graphe_modules", list("R/outils.R" = c("avec_graine <- function(graine, expr, f) {", "  globalenv()", "  f -> globalenv", "}")))
+verifier("#137 : homonyme local de l'exception par ->, affecté après l'appel, outils.R:2",
+         .echoue_en(r, "R/outils.R", 2L, "exception declaree inapplicable"))
+r <- .essai("graphe_modules", list("R/rapport.R" = c("empreinte_code <- function() {", "  topenv <- function() 1", "  topenv()", "}")))
+verifier("#137 : homonyme local de l'exception de topenv() dans empreinte_code(), rapport.R:3",
+         .echoue_en(r, "R/rapport.R", 3L, "exception declaree inapplicable"))
+r <- .essai("graphe_modules", list("R/outils.R" = c("avec_graine <- function(graine, expr) {", "  global <- globalenv()", "  topenv <- 1", "  global", "}")))
+verifier("#137 : une variable locale de nom différent de l'exception (topenv) ne rend pas inapplicable celle de globalenv : le contrôle passe",
+         .passe(r))
+r <- .essai("graphe_modules", list("R/outils.R" = c("avec_graine <- function(graine, expr, f) {", "  global <- globalenv()", "  global", "}",
+                                                    "autre_f <- function(f) { globalenv <- f ; f }")))
+verifier("#137 : l'homonyme local d'une autre fonction de outils.R ne rend pas inapplicable l'exception d'avec_graine() : le contrôle passe",
+         .passe(r))
+r <- .essai("graphe_modules", list("R/outils.R" = "avec_graine <- function(graine, expr, globalenv) globalenv()"))
+verifier("#137, limite documentée : argument formel homonyme de l'exception, non détecté, le contrôle passe",
+         .passe(r))
+
 # m1 : un nom d'auxiliaire à point passé en chaîne (match.fun) est un emploi (issue #74, audit).
 section("contrôles : graphe_modules.R, noms passés en chaîne (#74, m1)")
 cas_chaine <- function(lecture) .essai("graphe_modules", list("R/dictionnaire.R" = c(".aux <- function(x) x", "dico_f <- function(x) x"),
@@ -916,13 +960,111 @@ verifier("recensement : une marque orpheline est listée même sans appel à tol
            any(grepl(" : 1 marques$", r$sortie)) &&
            any(grepl("temoin.R:1 aucun appel de verifier_egal() a la ligne suivante", r$sortie, fixed = TRUE)))
 
+# #136 (M725) : marque seule sur sa ligne (r1), rep(0, k) non évaluable (r2), attendu apparié comme R (r3),
+# motif de la marque exigé. Chaque témoin échoue sur le script d'avant #136.
+# r1 : un commentaire en fin de ligne n'est pas une marque ; une marque indentée, seule sur sa ligne, en est une.
+r <- cas_recensement(c("x <- 1  # zero_compense : motif en fin de ligne",
+                       "verifier_egal(\"a\", x - y, 0, tolerance = 1e-8)",
+                       "  # zero_compense : marque indentee",
+                       "verifier_egal(\"b\", x - y, 0, tolerance = 1e-8)",
+                       "verifier_egal(\"c\", x - y, c(1, 2),  # zero_compense : motif dans un appel sur plusieurs lignes",
+                       "               tolerance = 1e-8)"))
+verifier("#136 r1 : un commentaire `# zero_compense` en fin de ligne n'est pas une marque : l'appel suivant (temoin.R:2) reste sous ZEROS ATTENDUS, un seul appel déclaré (temoin.R:4, marque indentée), aucune marque orpheline, statut 0",
+         .passe(r) && any(grepl("^\\[INFO\\] ZEROS ATTENDUS A TOLERANCE > 0 .* : 1 appels$", r$sortie)) &&
+           any(grepl("^\\[INFO\\] ZERO DE COMPENSATION DECLARE \\(.* : 1 appels$", r$sortie)) &&
+           any(grepl("temoin.R:2 tolerance 1e-08", r$sortie, fixed = TRUE)) &&
+           any(grepl("temoin.R:4 tolerance 1e-08", r$sortie, fixed = TRUE)) &&
+           any(grepl("^\\[INFO\\] MARQUES zero_compense ORPHELINES .* : 0 marques$", r$sortie)))
+# r2 : rep(0, k) / rep_len(0, k) non évaluables comptent plusieurs zéros ; k littéral multiplie ; k = 0 : aucun zéro.
+r <- cas_recensement(c("# zero_compense : motif",
+                       "verifier_egal(\"a\", x - y, list(f(y), rep(0, k)), tolerance = 1e-8)",
+                       "# zero_compense : motif",
+                       "verifier_egal(\"b\", x - y, list(f(y), rep_len(0, k)), tolerance = 1e-8)",
+                       "# zero_compense : motif",
+                       "verifier_egal(\"c\", x - y, list(f(y), rep(0, 3L)), tolerance = 1e-8)",
+                       "# zero_compense : motif",
+                       "verifier_egal(\"d\", x - y, list(f(y), 0), tolerance = 1e-8)",
+                       "# zero_compense : motif",
+                       "verifier_egal(\"e\", x - y, list(f(y), rep(0, 0L), 0), tolerance = 1e-8)"))
+multi <- grep("^\\[INFO\\] ZERO DE COMPENSATION DECLARE A PLUSIEURS ZEROS ", r$sortie)
+verifier("#136 r2 : un rep(0, k) ou rep_len(0, k) non évaluable sous marque est listé sous A PLUSIEURS ZEROS (temoin.R:2 et :4, 2 zéros), rep(0, 3L) compte 3 (:6) ; un zéro seul (:8) et rep(0, 0L) + 0 (:10) ne sont pas listés",
+         .passe(r) && length(multi) == 1L && grepl(" : 3 appels$", r$sortie[multi]) &&
+           identical(r$sortie[(multi + 1L):(multi + 3L)],
+                     c("[INFO]   tests/unitaires/temoin.R:2 tolerance 1e-08, 2 zeros", "[INFO]   tests/unitaires/temoin.R:4 tolerance 1e-08, 2 zeros",
+                       "[INFO]   tests/unitaires/temoin.R:6 tolerance 1e-08, 3 zeros")))
+# r2 (reprise) : le facteur de répétition lit les constantes du fichier : rep(0, N) avec N <- 1 compte 1 zéro, N <- 3 en compte 3.
+r <- cas_recensement(c("N <- 1",
+                       "M <- 3",
+                       "# zero_compense : motif",
+                       "verifier_egal(\"a\", x - y, list(f(y), rep(0, N)), tolerance = 1e-8)",
+                       "# zero_compense : motif",
+                       "verifier_egal(\"b\", x - y, list(f(y), rep(0, M)), tolerance = 1e-8)"))
+multi <- grep("^\\[INFO\\] ZERO DE COMPENSATION DECLARE A PLUSIEURS ZEROS ", r$sortie)
+verifier("#136 r2 (reprise) : rep(0, N) avec la constante N <- 1 compte un zéro (temoin.R:4, non listé sous A PLUSIEURS ZEROS) ; avec M <- 3 il en compte 3 (:6, seul appel listé)",
+         .passe(r) && length(multi) == 1L && grepl(" : 1 appels$", r$sortie[multi]) &&
+           identical(r$sortie[multi + 1L], "[INFO]   tests/unitaires/temoin.R:6 tolerance 1e-08, 3 zeros"))
+# Débordement de l'entier R (#136, constat de la revue finale) : sous options(warn = 2), as.integer() d'un double
+# hors de portée, ou la somme d'entiers qui déborde, arrêtait le script. Un facteur hors de l'entier R donne
+# « plusieurs » (2 zéros) ; un produit ou une somme qui déborde est plafonné à .Machine$integer.max (2147483647).
+r <- cas_recensement(c("# zero_compense : motif",
+                       "verifier_egal(\"a\", x - y, list(f(y), rep(0, 3e9)), tolerance = 1e-8)",
+                       "# zero_compense : motif",
+                       "verifier_egal(\"b\", x - y, list(f(y), rep(0, times = 50000, each = 50000)), tolerance = 1e-8)",
+                       "# zero_compense : motif",
+                       "verifier_egal(\"c\", x - y, list(f(y), rep_len(0, 3e9)), tolerance = 1e-8)",
+                       "# zero_compense : motif",
+                       "verifier_egal(\"d\", x - y, list(f(y), numeric(3e9)), tolerance = 1e-8)",
+                       "# zero_compense : motif",
+                       "verifier_egal(\"e\", x - y, list(f(y), numeric(2e9), numeric(2e9)), tolerance = 1e-8)"))
+multi <- grep("^\\[INFO\\] ZERO DE COMPENSATION DECLARE A PLUSIEURS ZEROS ", r$sortie)
+verifier("#136 débordement : rep(0, 3e9) (temoin.R:2) et rep_len(0, 3e9) (:6) comptent 2 zéros, rep(0, times = 50000, each = 50000) (:4), numeric(3e9) (:8) et deux numeric(2e9) (:10) sont plafonnés à 2147483647 zéros ; aucun arrêt, statut 0",
+         .passe(r) && length(multi) == 1L && grepl(" : 5 appels$", r$sortie[multi]) &&
+           identical(r$sortie[(multi + 1L):(multi + 5L)],
+                     c("[INFO]   tests/unitaires/temoin.R:2 tolerance 1e-08, 2 zeros", "[INFO]   tests/unitaires/temoin.R:4 tolerance 1e-08, 2147483647 zeros",
+                       "[INFO]   tests/unitaires/temoin.R:6 tolerance 1e-08, 2 zeros", "[INFO]   tests/unitaires/temoin.R:8 tolerance 1e-08, 2147483647 zeros",
+                       "[INFO]   tests/unitaires/temoin.R:10 tolerance 1e-08, 2147483647 zeros")))
+# r3 : attendu apparié par R (arguments nommés écartés avant les autres) pour un appel avec argument en trop.
+r <- cas_recensement(c("verifier_egal(nom = \"a\", obtenu = x, c(0, 1), extra, tolerance = 1e-8)",
+                       "verifier_egal(nom = \"b\", obtenu = x, c(1, 2), extra, tolerance = 1e-8)",
+                       "verifier_egal(obtenu = x, \"c\", c(0, 1), extra, tolerance = 1e-8)",
+                       "verifier_egal(\"d\", x, c(0, 1), ..., tolerance = 1e-8)",
+                       "verifier_egal(\"e\", ..., c(0, 1), tolerance = 1e-8)",
+                       "verifier_egal(\"f\", x, c(0, 1), extra, tolerance = 1e-8)"))
+zeros <- grep("^\\[INFO\\] ZEROS ATTENDUS A TOLERANCE > 0 ", r$sortie)
+comp <- grep("^\\[INFO\\] ZERO DE COMPENSATION DECLARE \\(", r$sortie)
+verifier("#136 r3 : l'attendu d'un appel non appariable est lu comme R l'apparie : zéros comptés pour temoin.R:1 (nom et obtenu nommés en tête), :3 (obtenu nommé seul), :4 (`...` après l'attendu), :6 (positionnel, argument en trop) ; pas de zéro en :2 ; `...` avant l'attendu (:5) : attendu inconnu, non compté",
+         .passe(r) && length(zeros) == 1L && length(comp) == 1L && grepl(" : 4 appels$", r$sortie[zeros]) &&
+           identical(r$sortie[(zeros + 1L):(comp - 1L)],
+                     c("[INFO]   tests/unitaires/temoin.R:1 tolerance 1e-08", "[INFO]   tests/unitaires/temoin.R:3 tolerance 1e-08",
+                       "[INFO]   tests/unitaires/temoin.R:4 tolerance 1e-08", "[INFO]   tests/unitaires/temoin.R:6 tolerance 1e-08")))
+# Motif exigé : une marque sans motif est un [ECHEC] à sa ligne et ne compte pas comme une marque.
+r <- cas_recensement(c("# zero_compense",
+                       "verifier_egal(\"a\", x - y, 0, tolerance = 1e-8)",
+                       "# zero_compense :",
+                       "verifier_egal(\"b\", x - y, 0, tolerance = 1e-8)",
+                       "# zero_compense :    ",
+                       "verifier_egal(\"c\", x - y, 0, tolerance = 1e-8)",
+                       "# zero_compense motif sans deux-points",
+                       "verifier_egal(\"d\", x - y, 0, tolerance = 1e-8)"))
+verifier("TEMOIN #136 : une marque `# zero_compense` sans motif (nue, deux-points seuls, motif d'espaces, sans deux-points) est un échec, statut 1, à sa ligne (temoin.R:1, :3, :5, :7)",
+         .echoue_en(r, "tests/unitaires/temoin.R", 1L, "sans motif") && .echoue_en(r, "tests/unitaires/temoin.R", 3L, "sans motif") &&
+           .echoue_en(r, "tests/unitaires/temoin.R", 5L, "sans motif") && .echoue_en(r, "tests/unitaires/temoin.R", 7L, "sans motif") &&
+           sum(startsWith(r$sortie, "[ECHEC] ")) == 4L)
+verifier("#136 : une marque sans motif ne déclare rien : les quatre appels restent sous ZEROS ATTENDUS, aucun déclaré",
+         any(grepl("^\\[INFO\\] ZEROS ATTENDUS A TOLERANCE > 0 .* : 4 appels$", r$sortie)) &&
+           any(grepl("^\\[INFO\\] ZERO DE COMPENSATION DECLARE \\(.* : 0 appels$", r$sortie)))
+r <- cas_recensement(c("x <- 1  # zero_compense", "# zero_compense : motif",
+                       "verifier_egal(\"a\", x - y, 0, tolerance = 1e-8)"))
+verifier("#136 : un commentaire `# zero_compense` sans motif en fin de ligne n'est pas une marque : pas d'échec ; la marque avec motif de la ligne 2 compte, statut 0",
+         .passe(r) && any(grepl("^\\[INFO\\] ZERO DE COMPENSATION DECLARE \\(.* : 1 appels$", r$sortie)))
+
 # --- paquets_java.sh (#120 ; #95, point 5) --------------------------------------------------
 # Script bash : appelé par bash (system2), les listes avant / après sont des fichiers texte. Les
 # noms de paquets Java interdits par absence_java.R sont fabriqués comme ailleurs dans ce fichier
 # (absence_java.R le balaie). Seul le fichier de motifs, tests/controles/paquets_java_motifs.sh,
 # est une exclusion déclarée d'absence_java.R ; paquets_java.sh reste balayé.
 section("contrôles : paquets_java.sh, paquets système installés (#120)")
-r <- cas_java(list("tests/controles/paquets_java_motifs.sh" = c(paste0("MOTIFS=('^", JDK, "')"))))
+r <- cas_java(list("tests/controles/paquets_java_motifs.sh" = c(paste0("^", JDK))))
 verifier("#120 : tests/controles/paquets_java_motifs.sh, exclusion déclarée : un nom de JDK en clair passe", .passe(r))
 r <- cas_java(list("tests/controles/paquets_java.sh" = c(paste0("MOTIFS=('^", JDK, "')"))))
 verifier("#120 : le script paquets_java.sh reste balayé : un nom de JDK en clair y est refusé, :1",
@@ -988,6 +1130,46 @@ if (nzchar(Sys.which("bash"))) {
   verifier("paquets_java.sh : liste APRES vide, statut 2 et aucun [OK]", identical(r$statut, 2L) && !any(startsWith(r$sortie, "[OK]")))
   r <- .lancer_paquets(character(0))
   verifier("paquets_java.sh : sans argument, usage et statut 2", identical(r$statut, 2L))
+  # Fichier de motifs lu sans être exécuté (#139, Q-33) : copie du script et d'un fichier de motifs
+  # de contenu `motifs` dans un dossier temporaire ; rend list(statut, sortie, marque) où `marque`
+  # dit si la commande `touch` placée dans le fichier de motifs a été exécutée.
+  .essai_motifs <- function(motifs, apres = c(AVANT, "tex-gyre", "libpdfbox-java")) {
+    d <- tempfile("motifs-")
+    dir.create(d)
+    on.exit(unlink(d, recursive = TRUE), add = TRUE)
+    file.copy(.script_paquets, file.path(d, "paquets_java.sh"))
+    writeLines(sub("@MARQUE@", file.path(d, "marque"), motifs, fixed = TRUE), file.path(d, "paquets_java_motifs.sh"), sep = "\n")
+    writeLines(AVANT, file.path(d, "avant.txt"))
+    writeLines(apres, file.path(d, "apres.txt"))
+    r <- tryCatch({
+      sortie <- suppressWarnings(system2("bash", c(shQuote(file.path(d, "paquets_java.sh")), shQuote(file.path(d, "avant.txt")),
+                                                  shQuote(file.path(d, "apres.txt"))), stdout = TRUE, stderr = TRUE))
+      statut <- attr(sortie, "status")
+      list(statut = if (is.null(statut)) 0L else statut, sortie = sortie)
+    }, error = function(e) list(statut = NA_integer_, sortie = paste0("[ECHEC] lancement impossible : ", conditionMessage(e))))
+    r$marque <- file.exists(file.path(d, "marque"))
+    r
+  }
+  r <- .essai_motifs(c("touch @MARQUE@", "-java$"))
+  verifier("#139 : une commande dans le fichier de motifs n'est pas exécutée (touch sans effet) et fait échouer, statut 2, ligne 1",
+           !r$marque && identical(r$statut, 2L) && any(grepl("ligne 1 :", r$sortie, fixed = TRUE)))
+  r <- .essai_motifs(c("-java$", "x=1; touch @MARQUE@"))
+  verifier("#139 : commande après un motif valide, ligne 2 refusée, rien d'exécuté, statut 2",
+           !r$marque && identical(r$statut, 2L) && any(grepl("ligne 2 :", r$sortie, fixed = TRUE)))
+  r <- .essai_motifs(c("MOTIFS=(", "  '-java$'", ")"))
+  verifier("#139 : ancien format MOTIFS=(...) refusé, statut 2", identical(r$statut, 2L))
+  r <- .essai_motifs(c("$(touch@{IFS}@MARQUE@)"))
+  verifier("#139 : substitution de commande dans une ligne : refusée sans exécution, statut 2", !r$marque && identical(r$statut, 2L))
+  r <- .essai_motifs(c("-java$", "^(abc"))
+  verifier("#139 : ERE invalide, ligne 2, statut 2", identical(r$statut, 2L) && any(grepl("ligne 2 :", r$sortie, fixed = TRUE)))
+  r <- .essai_motifs(c("# seulement un commentaire", ""))
+  verifier("#139 : fichier sans aucun motif refusé, statut 2 (le contrôle n'est pas neutralisé)",
+           identical(r$statut, 2L) && any(grepl("aucun motif", r$sortie, fixed = TRUE)))
+  r <- .essai_motifs(c("# commentaire", "", "   # commentaire indenté", "-java$\r", "^zulu"))
+  verifier("#139 : commentaires, lignes vides et \\r final admis, motif appliqué (libpdfbox-java refusé, statut 1)",
+           .refuse(r, "libpdfbox-java") && !r$marque)
+  r <- .essai_motifs(c("# commentaire", "^zulu"), apres = c(AVANT, "libpdfbox-java"))
+  verifier("#139 : seuls les motifs du fichier s'appliquent (un seul motif, libpdfbox-java accepté), statut 0", .passe(r))
   # --lister avec un dpkg-query factice : en échec (statut non nul, aucune liste) ou muet (statut 2).
   d_faux <- tempfile("faux-dpkg-")
   dir.create(d_faux)
@@ -1043,6 +1225,12 @@ if (nzchar(Sys.which("bash"))) {
   r <- .essai_couloir(c("```text", "+ R/a.R", "```"))
   verifier("couloir.sh : un bloc sous une autre chaîne d'information n'est pas un couloir, [INFO], statut 0",
            .passe(r) && any(startsWith(r$sortie, "[INFO]")))
+  r <- .essai_couloir(c("```Couloir br/a", "+ R/a.R", "```"))
+  verifier("couloir.sh : une coquille de casse dans la chaîne d'information est un [ECHEC] mal formée, statut 1 (#135)",
+           identical(r$statut, 1L) && any(grepl("^\\[ECHEC\\] .*\\.md:1 : cha.+ne d'information .+ mal form", r$sortie)))
+  r <- .essai_couloir(c("~~~couloir br/a", "+ R/a.R", "~~~"))
+  verifier("couloir.sh : un bloc ouvert par « ~~~couloir » est un [ECHEC] mal formée, statut 1 (#135)",
+           identical(r$statut, 1L) && any(grepl("^\\[ECHEC\\] .*\\.md:1 : cha.+ne d'information .+ mal form", r$sortie)))
   r <- .lancer_couloir(c("--branche=sans/bloc", paste0("--fiche=", shQuote(file.path(racine, "docs", "feuille-de-route.md")))))
   verifier("couloir.sh : la feuille de route du dépôt se lit sans erreur de forme ; branche sans bloc : [INFO], statut 0",
            .passe(r) && any(startsWith(r$sortie, "[INFO]")))

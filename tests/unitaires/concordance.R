@@ -514,3 +514,29 @@ verifier("nombre précédé d'un nombre mais séparé par une virgule : lu, éca
 r <- decompte("outils", "fonctions=1", "Deux de ses six fonctions.")
 verifier("« Deux de ses six fonctions » : six précédé de « ses », lu, écart", r$statut == 1L &&
            grepl("texte « six fonctions » = 6, marqueur fonctions=1", r$sortie, fixed = TRUE))
+
+# Lecture après « et » et « \\% » (issue #138, Q-32 (c) : N1 et N2 de l'audit de #104).
+# N1 : « et » ne bloque plus la lecture ; seul « <dizaine> et <nombre> » reste un composé non lu.
+r <- decompte("outils", "fonctions=1", "Les modules et deux fonctions.")
+verifier("« et deux fonctions » : lu, écart (N1, faux négatif corrigé)", r$statut == 1L &&
+           grepl("texte « deux fonctions » = 2, marqueur fonctions=1", r$sortie, fixed = TRUE))
+r <- decompte("outils", "fonctions=1", "Ses fonctions\net trois exportées. Et deux fonctions.")
+verifier("« et » en fin de ligne du source, « Et » en début de phrase : « deux fonctions » lu, écart", r$statut == 1L &&
+           grepl("texte « deux fonctions » = 2, marqueur fonctions=1", r$sortie, fixed = TRUE))
+r <- decompte("outils", "fonctions=1", "Ses soixante et onze fonctions, vingt et un fonctions, quarante et onze fonctions.")
+verifier("« <dizaine> et <nombre> » : composé, non lu, statut 0 (« cent cinq » et « soixante et onze » toujours non lus)",
+         r$statut == 0L && grepl("fonctions=1 concordant(s) avec le code, 0 nombre(s) en lettres lu(s)", r$sortie, fixed = TRUE))
+r <- decompte("outils", "fonctions=1", "Ses cent et deux fonctions ; cent cinq fonctions.")
+verifier("« cent et deux » (« et » après un mot de nombre qui n'est pas une dizaine) : lu, écart ; « cent cinq » non lu",
+         r$statut == 1L && grepl("texte « deux fonctions » = 2, marqueur fonctions=1", r$sortie, fixed = TRUE) &&
+           !grepl("cinq", r$sortie, fixed = TRUE))
+# N2 : un « % » n'est échappé que si le nombre de « \ » qui le précèdent est impair.
+r <- decompte("outils", "fonctions=1", "Une fonction \\\\% deux fonctions.")
+verifier("« \\\\% » (saut de ligne puis commentaire) : le texte qui suit est un commentaire, non lu, statut 0 (N2, faux positif corrigé)",
+         r$statut == 0L && grepl("fonctions=1 concordant(s) avec le code, 0 nombre(s) en lettres lu(s)", r$sortie, fixed = TRUE))
+r <- decompte("outils", "fonctions=1", "Une fonction \\\\\\% deux fonctions.")
+verifier("« \\\\\\% » (trois « \\ » : nombre impair) : « % » échappé, le texte qui suit est lu, écart", r$statut == 1L &&
+           grepl("texte « deux fonctions » = 2, marqueur fonctions=1", r$sortie, fixed = TRUE))
+r <- decompte("outils", "fonctions=1", "Ses dix-huit\\\\%\nfonctions sont exportées.")
+verifier("« \\\\% » en fin de ligne : « dix-huit » non lu, statut 0 (garde de non-régression)", r$statut == 0L &&
+           grepl("fonctions=1 concordant(s) avec le code, 0 nombre(s) en lettres lu(s)", r$sortie, fixed = TRUE))

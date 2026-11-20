@@ -21,10 +21,12 @@
 #        sous dpkg n'a jamais zero paquet.
 #  Sortie : [OK] / [ECHEC] <paquet> : motif ; avec GITHUB_ACTIONS=true, une annotation
 #  ::error:: en plus. Statut 0 (aucun paquet Java installe), 1 (au moins un [ECHEC]),
-#  2 (usage, fichier illisible, liste vide, fichier de motifs absent).
+#  2 (usage, fichier illisible, liste vide, fichier de motifs absent ou de forme invalide).
 #
-#  Motifs : tests/controles/paquets_java_motifs.sh (noms de paquets Debian et Ubuntu),
-#  charge par ce script avec `source`, donc EXECUTE (voir « Limites connues »). Le present
+#  Motifs : tests/controles/paquets_java_motifs.sh (noms de paquets Debian et Ubuntu), LU
+#  ligne a ligne et jamais execute (#139) : un motif (ERE bash) par ligne, lignes vides et
+#  commentaires # admis. Toute autre ligne (commande, caracteres hors forme d'un motif, ERE
+#  invalide) et un fichier sans motif sont une erreur de forme (statut 2). Le present
 #  fichier ne cite aucun nom Java : il est balaye par absence_java.R ; seul le fichier de motifs
 #  en est une exclusion declaree.
 #
@@ -32,13 +34,6 @@
 #  nom (JDK d'un tiers, bibliotheque dont le nom ne dit rien de Java) passe au travers,
 #  de meme que ce qui s'installe hors de dpkg (tlmgr, pip, R, archive decompressee) et ce
 #  qui est deja present dans AVANT.
-#
-#  Limites connues (reserve d'audit non corrigee, suivie par la question Q-33 de la feuille de
-#  route ; N3, mesuree) : le fichier de motifs est charge par `source`, il est execute et non
-#  seulement lu. Une commande placee dans paquets_java_motifs.sh s'execute au lancement de ce
-#  script ; elle echappe a absence_java.R, dont ce fichier est la seule exclusion declaree, et
-#  a ce script, qui ne compare que des noms de paquets. Seule la revue du fichier de motifs
-#  (n'y mettre que des motifs) en tient lieu.
 #
 #  Bash et utilitaires POSIX (dpkg-query et awk pour --lister seulement).
 ###############################################################################
@@ -74,8 +69,34 @@ if [ ! -r "$fichier_motifs" ]; then
   echo "[ECHEC] fichier de motifs illisible : $fichier_motifs" >&2
   exit 2
 fi
-# shellcheck source=paquets_java_motifs.sh
-source "$fichier_motifs"
+# Lecture sans execution : un motif par ligne (ERE bash), ni source ni eval. Forme d'un motif :
+# caracteres de [A-Za-z0-9._^$|()*+?{},[]-] seulement, ERE compilable ; \r final retire.
+LC_ALL=C
+forme_motif='^[][A-Za-z0-9._^$|()*+?{},-]+$'
+MOTIFS=()
+numero=0
+while IFS= read -r ligne || [ -n "$ligne" ]; do
+  numero=$((numero + 1))
+  ligne="${ligne%$'\r'}"
+  if [[ "$ligne" =~ ^[[:space:]]*(#.*)?$ ]]; then
+    continue
+  fi
+  rc=0
+  [[ "$ligne" =~ $forme_motif ]] || rc=1
+  if [ "$rc" -eq 0 ]; then
+    [[ "" =~ $ligne ]] || rc=$?
+    [ "$rc" -le 1 ] && rc=0
+  fi
+  if [ "$rc" -ne 0 ]; then
+    echo "[ECHEC] $fichier_motifs, ligne $numero : ni commentaire ni motif valide (un motif ERE par ligne, sans espace)" >&2
+    exit 2
+  fi
+  MOTIFS+=("$ligne")
+done < "$fichier_motifs"
+if [ "${#MOTIFS[@]}" -eq 0 ]; then
+  echo "[ECHEC] $fichier_motifs : aucun motif" >&2
+  exit 2
+fi
 
 # Noms nets : \r final et suffixe :arch retires, lignes vides ignorees, triees sans doublon.
 noms() {
