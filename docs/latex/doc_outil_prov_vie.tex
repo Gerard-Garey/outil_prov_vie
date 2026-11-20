@@ -6862,10 +6862,17 @@ sans aucun marqueur. Les règles de lecture du paragraphe (espace
 insécable, majuscule initiale, commentaires de fin de ligne) et leurs
 limites connues sont écrites dans \code{docs/latex/CONVENTIONS.md}, qui
 reprend l'en-tête de \code{tests/concordance\_doc\_moteur.R}~: un nombre
-placé dans une commande de mise en forme n'est pas lu, ni un nombre précédé
-de «~et~»\fsp; une fin de ligne LaTeX suivie d'un commentaire
-(\code{\textbackslash\textbackslash\%}) est prise pour un \code{\%}
-échappé, et le texte du commentaire est lu (faux positif, du côté sûr).
+placé dans une commande de mise en forme n'est pas lu, ni le second terme
+d'un composé «~<dizaine> et <nombre>~» («~soixante et onze~»), alors
+qu'un nombre précédé de «~et~» seul l'est\fsp; seul le nombre placé
+juste avant la grandeur est lu, de sorte que, dans «~Deux de ses six
+fonctions sont exportées~», «~Deux~» n'est couvert que par la valeur
+déclarée au marqueur (limite acceptée par le mainteneur le 14~novembre~2026,
+M366)\fsp; un \code{\%} n'est tenu pour échappé que si le nombre de
+barres obliques inverses qui le précèdent est impair, de sorte qu'une fin
+de ligne LaTeX suivie d'un commentaire
+(\code{\textbackslash\textbackslash\%}) ouvre bien un commentaire, qui
+n'est pas lu (issue~138).
 
 Avec l'option \code{-{}-strict}, tout écart, comme l'absence du document,
 fait échouer la batterie\fsp; sans elle, les écarts sont des avertissements.
