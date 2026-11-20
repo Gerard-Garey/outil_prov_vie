@@ -6495,9 +6495,11 @@ dépôt, exécuté dans le conteneur \code{rocker/r-ver:4.3.3} épinglé par
 digest~: c'est la \textbf{plateforme de référence}, la seule sur
 laquelle les références de non-régression sont produites, par le workflow
 de régénération (section~\ref{sec:references}). Le job «~Contrôles du
-dépôt~», qui n'emploie pas R, vérifie les réglages de Claude Code, les
-fiches des agents et l'absence de fichier sensible versionné, puis exécute
-les scripts \code{commit\_reference.sh}, sur les commits de la pull
+dépôt~» vérifie les réglages de Claude Code, les fiches des agents et
+l'absence de fichier sensible versionné, exécute
+\code{caracteres\_controle.R} (avec le \code{Rscript} de l'image, sinon
+après l'installation de \code{r-base-core} sans paquets recommandés),
+puis les scripts \code{commit\_reference.sh}, sur les commits de la pull
 request, et \code{couloir.sh}, sur les fichiers qu'elle touche
 (section~\ref{sec:controles}). Avant les
 batteries, le job imprime au journal \code{sessionInfo()},
