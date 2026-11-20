@@ -488,6 +488,17 @@ r <- cas_graphe(c("calcul_e <- function(x) {", "  f <- function() 1", "  \"envir
 verifier("#137 : \"environment<-\"(f, e) (appel par une chaîne), engagement.R:3", .echoue_en(r, "R/engagement.R", 3L, "environment<-()"))
 r <- cas_graphe(c("calcul_e <- function(x) {", "  g <- `environment<-`", "  x", "}"))
 verifier("#137 : `environment<-` référencé sans appel, engagement.R:2", .echoue_en(r, "R/engagement.R", 2L, "environment<- sans appel"))
+r <- cas_graphe(c("calcul_e <- function(x) {", "  e <- new.env()", "  `parent.env<-`(e, x)", "  e", "}"))
+verifier("#178 : `parent.env<-`(e, x) (forme appel), engagement.R:3", .echoue_en(r, "R/engagement.R", 3L, "parent.env<-()"))
+r <- cas_graphe(c("calcul_e <- function(x) {", "  e <- new.env()", "  base::`parent.env<-`(e, x)", "  e", "}"))
+verifier("#178 : base::`parent.env<-`(e, x) (forme appel), engagement.R:3", .echoue_en(r, "R/engagement.R", 3L, "parent.env<-()"))
+r <- cas_graphe(c("calcul_e <- function(x) {", "  e <- new.env()", "  \"parent.env<-\"(e, x)", "  e", "}"))
+verifier("#178 : \"parent.env<-\"(e, x) (appel par une chaîne), engagement.R:3", .echoue_en(r, "R/engagement.R", 3L, "parent.env<-()"))
+r <- cas_graphe(c("calcul_e <- function(x) {", "  g <- `parent.env<-`", "  x", "}"))
+verifier("#178 : `parent.env<-` référencé sans appel, engagement.R:2", .echoue_en(r, "R/engagement.R", 2L, "parent.env<- sans appel"))
+r <- cas_graphe(c("calcul_e <- function(x) {", "  e <- new.env()", "  parent.env(e) <- x", "  e", "}"))
+verifier("#178 : parent.env(e) <- x (forme remplacement, déjà refusée par parent.env), engagement.R:3",
+         .echoue_en(r, "R/engagement.R", 3L, "parent.env()"))
 r <- cas_graphe(c("calcul_e <- function(x) {", "  y <- x$dynGet", "  z <- list(dynGet = 1, .GlobalEnv = 2)", "  dyn_get <- 1", "  y", "}"))
 verifier("#137, cas licite : dynGet et .GlobalEnv en champ ou en nom d'argument, nom voisin", .passe(r))
 r <- .essai("graphe_modules", list("R/outils.R" = c("avec_graine <- function(graine, expr, f) {", "  globalenv <- f",
@@ -512,8 +523,60 @@ r <- .essai("graphe_modules", list("R/outils.R" = c("avec_graine <- function(gra
 verifier("#137 : l'homonyme local d'une autre fonction de outils.R ne rend pas inapplicable l'exception d'avec_graine() : le contrôle passe",
          .passe(r))
 r <- .essai("graphe_modules", list("R/outils.R" = "avec_graine <- function(graine, expr, globalenv) globalenv()"))
-verifier("#137, limite documentée : argument formel homonyme de l'exception, non détecté, le contrôle passe",
+verifier("#178 : argument formel homonyme de l'exception, function(graine, expr, globalenv) globalenv(), outils.R:1",
+         .echoue_en(r, "R/outils.R", 1L, "exception declaree inapplicable"))
+r <- .essai("graphe_modules", list("R/outils.R" = "avec_graine <- \\(graine, expr, globalenv) globalenv()"))
+verifier("#178 : argument formel homonyme de l'exception, fonction anonyme \\(graine, expr, globalenv), outils.R:1",
+         .echoue_en(r, "R/outils.R", 1L, "exception declaree inapplicable"))
+r <- .essai("graphe_modules", list("R/outils.R" = c("avec_graine <- function(graine, expr, f) {", "  for (globalenv in list(f)) globalenv()", "}")))
+verifier("#178 : variable de for homonyme de l'exception, for (globalenv in list(f)) globalenv(), outils.R:2",
+         .echoue_en(r, "R/outils.R", 2L, "exception declaree inapplicable"))
+verifier("#178 : variable de for homonyme avec appel : une seule ligne [ECHEC] (la variable de for n'est pas une référence)",
+         sum(startsWith(r$sortie, "[ECHEC]")) == 1L)
+r <- .essai("graphe_modules", list("R/outils.R" = c("avec_graine <- function(graine, expr, l) {", "  for (globalenv in l) 1", "}")))
+verifier("#178 : variable de for homonyme sans appel : exception périmée (la liaison n'est pas un emploi), une seule ligne, outils.R",
+         .echoue_en(r, "R/outils.R", NA_integer_, "ne se produit plus") && sum(startsWith(r$sortie, "[ECHEC]")) == 1L)
+r <- .essai("graphe_modules", list("R/outils.R" = c("avec_graine <- function(graine, expr) globalenv()",
+                                                    "h <- function(l) { for (get in l) 1; 2 }")))
+verifier("#178 : une variable de for qui porte un nom interdit hors exception reste une référence refusée, for (get in l) 1, outils.R:2",
+         .echoue_en(r, "R/outils.R", 2L, "get sans appel"))
+r <- .essai("graphe_modules", list("R/rapport.R" = c("empreinte_code <- function(topenv) {", "  topenv()", "}")))
+verifier("#178 : argument formel homonyme de l'exception de topenv() dans empreinte_code(), rapport.R:2",
+         .echoue_en(r, "R/rapport.R", 2L, "exception declaree inapplicable"))
+r <- .essai("graphe_modules", list("R/outils.R" = c("avec_graine <- function(graine, expr) {", "  assign(\"globalenv\", function() 1)",
+                                                    "  globalenv()", "}")))
+verifier("#178 : assign(\"globalenv\", ...) dans avec_graine() puis globalenv(), outils.R:3",
+         .echoue_en(r, "R/outils.R", 3L, "exception declaree inapplicable"))
+r <- .essai("graphe_modules", list("R/outils.R" = "avec_graine <- function(graine, expr) { assign(\"globalenv\", function() 1); globalenv() }"))
+verifier("#178 : le cas de l'issue, sur une seule ligne, outils.R:1",
+         .echoue_en(r, "R/outils.R", 1L, "exception declaree inapplicable"))
+r <- .essai("graphe_modules", list("R/outils.R" = c("avec_graine <- function(graine, expr) {", "  assign(`x` = 'globalenv', value = function() 1)",
+                                                    "  globalenv()", "}")))
+verifier("#178 : assign(`x` = 'globalenv', ...) (nom d'argument entre accents graves) dans avec_graine(), outils.R:3",
+         .echoue_en(r, "R/outils.R", 3L, "exception declaree inapplicable"))
+r <- .essai("graphe_modules", list("R/outils.R" = c("avec_graine <- function(graine, expr) {", "  assign(\"x\" = 'globalenv', value = function() 1)",
+                                                    "  globalenv()", "}")))
+verifier("#178 : assign(\"x\" = 'globalenv', ...) (nom d'argument en chaîne) dans avec_graine(), outils.R:3",
+         .echoue_en(r, "R/outils.R", 3L, "exception declaree inapplicable"))
+r <- .essai("graphe_modules", list("R/outils.R" = c("avec_graine <- function(graine, expr) {", "  base::assign(x = \"globalenv\", value = 1)",
+                                                    "  globalenv()", "}")))
+verifier("#178 : base::assign(x = \"globalenv\", ...) (argument nommé) dans avec_graine(), outils.R:3",
+         .echoue_en(r, "R/outils.R", 3L, "exception declaree inapplicable"))
+r <- .essai("graphe_modules", list("R/outils.R" = c("avec_graine <- function(graine, expr) {", "  assign(\"autre\", 1)",
+                                                    "  assign(\".Random.seed\", 1, envir = globalenv())", "}")))
+verifier("#178 : assign() d'un autre nom dans avec_graine() ne rend pas l'exception inapplicable : le contrôle passe", .passe(r))
+r <- .essai("graphe_modules", list("R/outils.R" = c("avec_graine <- function(graine, expr) {", "  globalenv()", "}",
+                                                    "autre_f <- function(globalenv) {", "  assign(\"globalenv\", 1)", "  1", "}")))
+verifier("#178 : formel et assign() homonymes dans une autre fonction de outils.R ne rendent pas inapplicable l'exception d'avec_graine() : le contrôle passe",
          .passe(r))
+r <- .essai("graphe_modules", list("R/outils.R" = c("avec_graine <- function(graine, expr) {", "  x <- list()", "  x$globalenv <- 1",
+                                                    "  globalenv()", "}")))
+verifier("#178 : faux positif levé, l'affectation d'un champ (x$globalenv <- 1) n'est pas un homonyme local : le contrôle passe",
+         .passe(r))
+r <- .essai("graphe_modules", list("R/outils.R" = "avec_graine <- function(graine, expr) { x <- list(); x$globalenv <- 1; globalenv() }"))
+verifier("#178 : le cas de l'issue (faux positif), sur une seule ligne : le contrôle passe", .passe(r))
+r <- .essai("graphe_modules", list("R/outils.R" = c("avec_graine <- function(graine, expr, nom) {", "  assign(nom, function() 1)", "  globalenv()", "}")))
+verifier("#178, limite documentée : assign() sur un nom calculé (assign(nom, f)) n'est pas vu, le contrôle passe", .passe(r))
 
 # m1 : un nom d'auxiliaire à point passé en chaîne (match.fun) est un emploi (issue #74, audit).
 section("contrôles : graphe_modules.R, noms passés en chaîne (#74, m1)")
