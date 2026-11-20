@@ -12,8 +12,10 @@
 .script_controle <- function(nom) file.path(racine, "tests", "controles", paste0(nom, ".R"))
 
 # Écrit `lignes` dans `chemin` (dossiers créés), en octets, fin de ligne \n.
+# Un vecteur `raw` est écrit tel quel (octets de contrôle, que charToRaw() ne sait pas rendre pour 0x00).
 .deposer <- function(chemin, lignes) {
   dir.create(dirname(chemin), recursive = TRUE, showWarnings = FALSE)
+  if (is.raw(lignes)) return(writeBin(lignes, chemin))
   writeBin(charToRaw(paste0(paste(lignes, collapse = "\n"), "\n")), chemin)
 }
 
@@ -1276,3 +1278,98 @@ verifier("#149 : image_reference.R : deuxième conteneur de ci.yml non épinglé
          .echoue_en(r, ".github/workflows/ci.yml", 5L, "image non epinglee par digest"))
 verifier("#149 : image_reference.R : un ci.yml fautif ne produit aucun [ECHEC] parasite de témoin",
          !any(grepl("[ECHEC] temoin", r$sortie, fixed = TRUE)))
+
+# --- caracteres_controle.R (#182) -------------------------------------------------------------
+# Aucun octet de contrôle en clair dans ce fichier (le script le balaie) : "\f" est écrit avec sa
+# barre inverse, les autres octets sont fabriqués par as.raw(). Admis : tabulation, fin de ligne
+# (LF, CRLF). Binaires exclus par extension (liste motivée de l'en-tête du script).
+CC <- "caracteres_controle"
+octets <- function(...) as.raw(c(...))
+txt <- function(...) charToRaw(paste0(..., collapse = ""))
+cas_cc <- function(fichiers) .essai(CC, fichiers)
+
+section("contrôles : caracteres_controle.R (#182)")
+r <- cas_cc(list("docs/latex/a.tex" = c("\\section{A}", "texte", "avant\fsp apres", "fin")))
+verifier("#182 : un saut de page (U+000C) dans un .tex est refusé, a.tex:3 avec U+000C et sa colonne (6)",
+         .echoue_en(r, "docs/latex/a.tex", 3L, "U+000C (colonne 6)"))
+for (code in c(0L, 1L, 7L, 8L, 11L, 12L, 14L, 27L, 31L)) {
+  r <- cas_cc(list("R/x.R" = c(octets(utf8ToInt("a"), code), txt("\n"))))
+  verifier(paste0("#182 : l'octet de contrôle ", sprintf("U+%04X", code), " est refusé, x.R:1"),
+           .echoue_en(r, "R/x.R", 1L, sprintf("U+%04X", code)))
+}
+r <- cas_cc(list("README.md" = c(txt("a\tb\n"), txt("ligne crlf\r\n"), txt("\tfin\n"))))
+verifier("#182 : tabulation, saut de ligne et CRLF sont admis (statut 0)", .passe(r))
+r <- cas_cc(list("README.md" = c(txt("a\r\n"), txt("b\r\n"), octets(utf8ToInt("c"), 12L), txt("\r\n"))))
+verifier("#182 : un fichier en CRLF : la ligne de l'octet de contrôle est comptée aux sauts de ligne (3)",
+         .echoue_en(r, "README.md", 3L, "U+000C (colonne 2)"))
+r <- cas_cc(list("docs/note.md" = c(octets(12L, 12L, 27L), txt("\nsuite\n"))))
+verifier("#182 : plusieurs octets sur une même ligne : une seule ligne [ECHEC], tous cités",
+         .echoue_en(r, "docs/note.md", 1L, "U+000C (colonne 1), U+000C (colonne 2), U+001B (colonne 3)") &&
+           sum(startsWith(r$sortie, "[ECHEC]")) == 1L)
+r <- cas_cc(list("LICENSE" = c(txt("texte\n"), octets(12L), txt("\n"))))
+verifier("#182 : un fichier sans extension est examiné, LICENSE:2", .echoue_en(r, "LICENSE", 2L, "U+000C"))
+r <- cas_cc(list(".claude/agents/z.md" = c(txt("a\n"), octets(12L))))
+verifier("#182 : un fichier caché sous .claude/ est examiné, dernier octet sans saut de ligne, z.md:2",
+         .echoue_en(r, ".claude/agents/z.md", 2L, "U+000C"))
+r <- cas_cc(list("docs/ok.md" = "texte propre", "docs/a.PDF" = octets(37L, 80L, 0L, 12L, 1L, 255L),
+                 "inst/b.png" = octets(137L, 80L, 78L, 71L, 0L, 12L), "inst/c.rds" = octets(0L, 1L, 2L)))
+verifier("#182 : PDF, PNG et RDS (octets de contrôle propres au format) sont exclus : statut 0, une ligne [INFO] chacun",
+         .passe(r) && sum(startsWith(r$sortie, "[INFO]") & grepl("binaire", r$sortie, fixed = TRUE)) == 3L &&
+           any(startsWith(r$sortie, "[INFO] docs/a.PDF ")))
+r <- cas_cc(list("docs/ok.md" = "texte propre", "docs/a.txt" = octets(37L, 80L, 0L, 12L, 1L, 255L)))
+verifier("#182 : les mêmes octets dans un .txt sont refusés (l'exclusion est par extension, pas par contenu)",
+         .echoue_en(r, "docs/a.txt", 1L, "U+0000"))
+r <- cas_cc(list("docs/a.pdf" = octets(37L, 80L, 12L)))
+verifier("#182 : une racine dont tous les fichiers sont binaires n'examine rien : [ECHEC] (liste vide)",
+         r$statut == 1L && any(startsWith(r$sortie, "[ECHEC] aucun fichier a examiner")))
+r <- cas_cc(list("a.md" = "propre", "docs/b.md" = "propre aussi"))
+verifier("#182 : fichiers propres : statut 0, une ligne [OK] qui compte 2 fichiers",
+         .passe(r) && any(grepl("^\\[OK\\] 2 fichier", r$sortie)))
+r <- cas_cc(list("docs/long.md" = c(rep(c(octets(12L), txt("\n")), 25L))))
+verifier("#182 : au plus 20 lignes citées par fichier, puis une ligne de reste (5 autres)",
+         .echoue_en(r, "docs/long.md", 20L, "U+000C") && !any(startsWith(r$sortie, "[ECHEC] docs/long.md:21 ")) &&
+           any(grepl("5 autre(s) ligne(s)", r$sortie, fixed = TRUE)))
+# Temoin de passage a l'echelle : un binaire d'extension non listee d'environ 1 Mo (octets
+# tires sous une graine locale, generateur fixe, etat global restaure). Avant la correction
+# (recherche du debut de ligne par octet fautif : quadratique), 300 ko demandaient 58 s et 1 Mo
+# plus de dix minutes ; apres, moins d'une seconde. Seuil large (60 s) : il ne vise qu'a
+# separer le lineaire du quadratique, sans dependre de la machine.
+.octets_aleatoires <- function(n, graine) {
+  existait <- exists(".Random.seed", envir = globalenv(), inherits = FALSE)
+  ancien <- if (existait) get(".Random.seed", envir = globalenv())
+  on.exit(if (existait) assign(".Random.seed", ancien, envir = globalenv())
+          else rm(".Random.seed", envir = globalenv()), add = TRUE)
+  set.seed(graine, kind = "Mersenne-Twister", normal.kind = "Inversion",
+           sample.kind = "Rejection")
+  as.raw(sample.int(256L, n, replace = TRUE) - 1L)
+}
+duree <- system.time(r <- cas_cc(list("docs/x.dat" = .octets_aleatoires(1e6L, 182L))))[["elapsed"]]
+verifier("#182 : un binaire non liste de 1 Mo est refuse, x.dat:1 et reste de lignes, en moins de 60 s",
+         .echoue_en(r, "docs/x.dat", 1L, "U+") && any(grepl("autre(s) ligne(s) atteinte(s)", r$sortie, fixed = TRUE)) &&
+           sum(startsWith(r$sortie, "[ECHEC] docs/x.dat:")) == 20L && duree < 60)
+
+# Voie `git ls-files` : seuls les fichiers suivis sont examinés (copie initialisée par git init et git add).
+if (nzchar(Sys.which("git"))) {
+  .essai_git_cc <- function(suivis, non_suivis) {
+    copie <- tempfile("temoin-git-")
+    dir.create(copie)
+    on.exit(unlink(copie, recursive = TRUE), add = TRUE)
+    for (chemin in names(suivis)) .deposer(file.path(copie, chemin), suivis[[chemin]])
+    for (chemin in names(non_suivis)) .deposer(file.path(copie, chemin), non_suivis[[chemin]])
+    git <- function(...) suppressWarnings(system2("git", c("-C", shQuote(copie), ...), stdout = TRUE, stderr = TRUE))
+    git("init", "-q")
+    git("add", names(suivis))
+    sortie <- suppressWarnings(system2(file.path(R.home("bin"), "Rscript"),
+                                       c(shQuote(.script_controle(CC)), shQuote(copie)),
+                                       stdout = TRUE, stderr = TRUE))
+    statut <- attr(sortie, "status")
+    list(statut = if (is.null(statut)) 0L else statut, sortie = sortie)
+  }
+  r <- .essai_git_cc(list("docs/s.md" = c(txt("a\n"), octets(12L), txt("\n"))),
+                     list("docs/n.md" = c(octets(12L), txt("\n"))))
+  verifier("#182 : voie git : un fichier suivi qui porte U+000C est refusé, s.md:2 ; le fichier non suivi n'est pas cité",
+           .echoue_en(r, "docs/s.md", 2L, "U+000C") && !any(grepl("n.md", r$sortie, fixed = TRUE)))
+  r <- .essai_git_cc(list("docs/s.md" = "propre"), list("docs/n.md" = c(octets(12L), txt("\n"))))
+  verifier("#182 : voie git : seul un fichier non suivi porte U+000C, le contrôle passe (preuve de la voie git)",
+           .passe(r) && any(grepl("^\\[OK\\] 1 fichier", r$sortie)))
+}
