@@ -1044,7 +1044,7 @@ verifier("#136 : un commentaire `# zero_compense` sans motif en fin de ligne n'e
 # (absence_java.R le balaie). Seul le fichier de motifs, tests/controles/paquets_java_motifs.sh,
 # est une exclusion déclarée d'absence_java.R ; paquets_java.sh reste balayé.
 section("contrôles : paquets_java.sh, paquets système installés (#120)")
-r <- cas_java(list("tests/controles/paquets_java_motifs.sh" = c(paste0("MOTIFS=('^", JDK, "')"))))
+r <- cas_java(list("tests/controles/paquets_java_motifs.sh" = c(paste0("^", JDK))))
 verifier("#120 : tests/controles/paquets_java_motifs.sh, exclusion déclarée : un nom de JDK en clair passe", .passe(r))
 r <- cas_java(list("tests/controles/paquets_java.sh" = c(paste0("MOTIFS=('^", JDK, "')"))))
 verifier("#120 : le script paquets_java.sh reste balayé : un nom de JDK en clair y est refusé, :1",

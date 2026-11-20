@@ -538,5 +538,5 @@ r <- decompte("outils", "fonctions=1", "Une fonction \\\\\\% deux fonctions.")
 verifier("« \\\\\\% » (trois « \\ » : nombre impair) : « % » échappé, le texte qui suit est lu, écart", r$statut == 1L &&
            grepl("texte « deux fonctions » = 2, marqueur fonctions=1", r$sortie, fixed = TRUE))
 r <- decompte("outils", "fonctions=1", "Ses dix-huit\\\\%\nfonctions sont exportées.")
-verifier("« \\\\% » en fin de ligne : jonction sans espace avec la ligne suivante, non lu, statut 0", r$statut == 0L &&
+verifier("« \\\\% » en fin de ligne : « dix-huit » non lu, statut 0 (garde de non-régression)", r$statut == 0L &&
            grepl("fonctions=1 concordant(s) avec le code, 0 nombre(s) en lettres lu(s)", r$sortie, fixed = TRUE))

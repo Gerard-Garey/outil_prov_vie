@@ -68,14 +68,18 @@
 # affectation locale, portee soeur) est comptee. Limite documentee (cote sur) : un nom local
 # homonyme d'une definition d'un autre module (variable locale lue, fonction locale appelee,
 # argument formel repris) produit une fausse arete, a lever en renommant le nom local.
-# Limites connues (reserves d'audit non corrigees, suivies par la question Q-32 / Q-33 de la
-# feuille de route ; chacune mesuree sur une racine fictive) :
+# Limites connues (reserves d'audit non corrigees, suivies par #178 ; chacune mesuree sur
+# une racine fictive) :
 #   - m3 (#137) : les noms interdits ecrits en chaine ne sont pas vus (`"dynGet"` hors position
 #     d'appel, comme `lapply(1, "sys.call")` plus haut) ; aucune chaine de R/ ne porte ces noms ;
-#   - homonyme d'une exception (#137) : seule la cible d'une affectation locale (<-, =, ->,
-#     ->>) rend l'exception inapplicable ; un argument formel ou une variable de for de meme
-#     nom (`function(graine, expr, globalenv) globalenv()` dans avec_graine) reste couvert par
-#     elle (statut 0).
+#   - homonyme d'une exception (#137) : seule la cible d'une affectation locale (<-, <<-, =,
+#     ->, ->>) rend l'exception inapplicable ; un argument formel ou une variable de for de
+#     meme nom (`function(graine, expr, globalenv) globalenv()` dans avec_graine) reste couvert
+#     par elle (statut 0) ;
+#   - assign() dans la fonction de l'exception : `assign("globalenv", function() 1);
+#     globalenv()` dans avec_graine n'est pas vu (statut 0) ;
+#   - faux positif : l'affectation d'un champ (`x$globalenv <- 1`) dans la fonction de
+#     l'exception est prise pour un homonyme local ([ECHEC] exception declaree inapplicable).
 # Usage, depuis la racine du depot : Rscript tests/controles/graphe_modules.R
 # Un argument facultatif designe une autre racine (copie du depot, pour les temoins).
 # Sortie : lignes [OK] / [ECHEC] fichier:ligne ; statut 1 au moindre [ECHEC].
