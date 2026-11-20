@@ -530,6 +530,10 @@ r <- decompte("outils", "fonctions=1", "Ses cent et deux fonctions ; cent cinq f
 verifier("« cent et deux » (« et » après un mot de nombre qui n'est pas une dizaine) : lu, écart ; « cent cinq » non lu",
          r$statut == 1L && grepl("texte « deux fonctions » = 2, marqueur fonctions=1", r$sortie, fixed = TRUE) &&
            !grepl("cinq", r$sortie, fixed = TRUE))
+r <- decompte("outils", "fonctions=1", "Ses six et deux fonctions.")
+verifier("« Ses six et deux fonctions » (lecture retenue pour #138, #179) : « six » n'est pas suivi de « fonctions », « et » ne bloque pas la lecture de « deux fonctions » : lu (2 pour fonctions=1), écart ; « six » non lu",
+         r$statut == 1L && grepl("texte « deux fonctions » = 2, marqueur fonctions=1", r$sortie, fixed = TRUE) &&
+           !grepl("six", r$sortie, fixed = TRUE))
 # N2 : un « % » n'est échappé que si le nombre de « \ » qui le précèdent est impair.
 r <- decompte("outils", "fonctions=1", "Une fonction \\\\% deux fonctions.")
 verifier("« \\\\% » (saut de ligne puis commentaire) : le texte qui suit est un commentaire, non lu, statut 0 (N2, faux positif corrigé)",

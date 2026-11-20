@@ -990,10 +990,10 @@ verifier("recensement : zéros littéraux d'un appel non évaluable : rep(0, 2L)
 verifier("recensement : ne comptent pas : indice de `[` et `[[` (c, i), digits de round (d), times de rep (e), numeric(0) (g), character(0) (h)",
          length(zeros) == 1L && length(comp) == 1L &&
            !any(grepl("temoin.R:[345789] ", r$sortie[(zeros + 1L):(comp - 1L)])))
-verifier("recensement : tolérance non résolue (j), arguments non appariables lus par position (k : argument en trop ; l : cinq arguments) ou sous le nom attendu (n) : listés ; `...` sans attendu (m) : non",
+verifier("recensement : tolérance non résolue (j), arguments non appariables lus par position (k : argument en trop ; l : cinq arguments, tolérance positionnelle 1e-8 lue, #179) ou sous le nom attendu (n) : listés ; `...` sans attendu (m) : non",
          length(zeros) == 1L && length(comp) == 1L &&
            all(c("[INFO]   tests/unitaires/temoin.R:10 tolerance non resolue", "[INFO]   tests/unitaires/temoin.R:11 tolerance 1e-08",
-                 "[INFO]   tests/unitaires/temoin.R:12 tolerance non resolue", "[INFO]   tests/unitaires/temoin.R:14 tolerance 1e-08") %in%
+                 "[INFO]   tests/unitaires/temoin.R:12 tolerance 1e-08", "[INFO]   tests/unitaires/temoin.R:14 tolerance 1e-08") %in%
                  r$sortie[(zeros + 1L):(comp - 1L)]) &&
            !any(grepl("temoin.R:13 ", r$sortie[(zeros + 1L):(comp - 1L)])) && grepl(" : 7 appels$", r$sortie[zeros]))
 r <- cas_recensement(c("# zero_compense : deux zeros dans l'appel",
@@ -1122,6 +1122,141 @@ r <- cas_recensement(c("x <- 1  # zero_compense", "# zero_compense : motif",
                        "verifier_egal(\"a\", x - y, 0, tolerance = 1e-8)"))
 verifier("#136 : un commentaire `# zero_compense` sans motif en fin de ligne n'est pas une marque : pas d'échec ; la marque avec motif de la ligne 2 compte, statut 0",
          .passe(r) && any(grepl("^\\[INFO\\] ZERO DE COMPENSATION DECLARE \\(.* : 1 appels$", r$sortie)))
+
+# #179 : constante lue à sa dernière affectation de premier niveau qui PRÉCÈDE l'appel, numeric(k) et double(k)
+# à k non littéral, rep_len(0, k), tolérance positionnelle d'un appel non appariable. Chaque témoin échoue sur
+# le script d'avant #179, sauf deux témoins de non-régression qui y passent aussi : la lecture de rep_len (fixée
+# par un témoin de comportement, l'en-tête faux étant gardé par un témoin de l'en-tête) et les formes
+# d'affectation `=`, `->` et `;` (aucun [ECHEC] après la refonte de la lecture des affectations).
+# (1) Constante redéfinie : la valeur est celle de la dernière affectation avant l'appel (ligne, puis colonne).
+r <- cas_recensement(c("N <- 3",
+                       "# zero_compense : motif",
+                       "verifier_egal(\"a\", x - y, list(f(y), rep(0, N)), tolerance = 1e-8)",
+                       "N <- 1"))
+multi <- grep("^\\[INFO\\] ZERO DE COMPENSATION DECLARE A PLUSIEURS ZEROS ", r$sortie)
+verifier("#179 (1) : N <- 3 avant l'appel, N <- 1 après : rep(0, N) compte 3 zéros (temoin.R:3, listé sous A PLUSIEURS ZEROS)",
+         .passe(r) && length(multi) == 1L && grepl(" : 1 appels$", r$sortie[multi]) &&
+           identical(r$sortie[multi + 1L], "[INFO]   tests/unitaires/temoin.R:3 tolerance 1e-08, 3 zeros"))
+r <- cas_recensement(c("N <- 1",
+                       "# zero_compense : motif",
+                       "verifier_egal(\"a\", x - y, list(f(y), rep(0, N)), tolerance = 1e-8)",
+                       "N <- 3"))
+multi <- grep("^\\[INFO\\] ZERO DE COMPENSATION DECLARE A PLUSIEURS ZEROS ", r$sortie)
+verifier("#179 (1) : N <- 1 avant l'appel, N <- 3 après : rep(0, N) compte 1 zéro (temoin.R:3, non listé sous A PLUSIEURS ZEROS)",
+         .passe(r) && length(multi) == 1L && grepl(" : 0 appels$", r$sortie[multi]))
+r <- cas_recensement(c("N <- 3",
+                       "N <- g(N)",
+                       "# zero_compense : motif",
+                       "verifier_egal(\"a\", x - y, list(f(y), rep(0, N)), tolerance = 1e-8)"))
+multi <- grep("^\\[INFO\\] ZERO DE COMPENSATION DECLARE A PLUSIEURS ZEROS ", r$sortie)
+verifier("#179 (1) : N <- 3 puis N <- g(N) (affectation non littérale) avant l'appel : N est inconnue, rep(0, N) compte plusieurs zéros, soit 2 (temoin.R:4), non 3",
+         .passe(r) && length(multi) == 1L && identical(r$sortie[multi + 1L], "[INFO]   tests/unitaires/temoin.R:4 tolerance 1e-08, 2 zeros"))
+r <- cas_recensement(c("N <- 1",
+                       "# zero_compense : motif",
+                       "verifier_egal(\"a\", x - y, list(f(y), rep(0, N)), tolerance = 1e-8); N <- 3",
+                       "N <- 2",
+                       "# zero_compense : motif",
+                       "verifier_egal(\"b\", x - y, list(f(y), rep(0, N)), tolerance = 1e-8)"))
+multi <- grep("^\\[INFO\\] ZERO DE COMPENSATION DECLARE A PLUSIEURS ZEROS ", r$sortie)
+verifier("#179 (1) : sur une même ligne, l'affectation qui suit l'appel (temoin.R:3, N <- 3 après le `;`) ne compte pas : 1 zéro, non listé ; N <- 2 de la ligne 4, qui précède l'appel de la ligne 6, compte : 2 zéros, listé",
+         .passe(r) && length(multi) == 1L && grepl(" : 1 appels$", r$sortie[multi]) &&
+           identical(r$sortie[multi + 1L], "[INFO]   tests/unitaires/temoin.R:6 tolerance 1e-08, 2 zeros"))
+r <- cas_recensement(c("TOL <- 1e-8",
+                       "verifier_egal(\"a\", x, list(f(y), 0), tolerance = TOL)",
+                       "TOL <- 0",
+                       "verifier_egal(\"b\", x, list(f(y), 0), tolerance = TOL)",
+                       "TOL <- 1e-6",
+                       "verifier_egal(\"c\", x, list(f(y), 0), tolerance = TOL)"))
+verifier("#179 (1) : la tolérance symbolique est lue à sa dernière affectation qui précède l'appel : 1e-8 (temoin.R:2), 0 (:4, non recensé), 1e-6 (:6)",
+         .passe(r) && any(grepl("a tolerance > 0 : 2 appels", r$sortie, fixed = TRUE)) &&
+           any(grepl("tests/unitaires/temoin.R:2 tolerance 1e-08", r$sortie, fixed = TRUE)) &&
+           any(grepl("tests/unitaires/temoin.R:6 tolerance 1e-06", r$sortie, fixed = TRUE)) &&
+           !any(grepl("temoin.R:4 ", r$sortie, fixed = TRUE)))
+r <- cas_recensement(c("O = 4; P <- 1",
+                       "3 -> M",
+                       "# zero_compense : motif",
+                       "verifier_egal(\"a\", x - y, list(f(y), rep(0, M)), tolerance = 1e-8)",
+                       "# zero_compense : motif",
+                       "verifier_egal(\"b\", x - y, list(f(y), rep(0, O)), tolerance = 1e-8)"))
+multi <- grep("^\\[INFO\\] ZERO DE COMPENSATION DECLARE A PLUSIEURS ZEROS ", r$sortie)
+verifier("#179 (1) : affectations de premier niveau en `=` (non lue : O est inconnue, 2 zéros, temoin.R:6), en `->` (`3 -> M` lue : 3 zéros, :4) et après un `;` : statut 0, aucun [ECHEC]",
+         .passe(r) && length(multi) == 1L && grepl(" : 2 appels$", r$sortie[multi]) &&
+           identical(r$sortie[(multi + 1L):(multi + 2L)],
+                     c("[INFO]   tests/unitaires/temoin.R:4 tolerance 1e-08, 3 zeros", "[INFO]   tests/unitaires/temoin.R:6 tolerance 1e-08, 2 zeros")))
+# (2) numeric(k), double(k), vector("numeric", k) à k non littéral : plusieurs zéros (au moins 2), comme rep(0, k) ;
+# k constante du fichier : lue.
+r <- cas_recensement(c("N <- 1",
+                       "M <- 3",
+                       "# zero_compense : motif",
+                       "verifier_egal(\"a\", x - y, list(f(y), numeric(k)), tolerance = 1e-8)",
+                       "# zero_compense : motif",
+                       "verifier_egal(\"b\", x - y, list(f(y), double(k)), tolerance = 1e-8)",
+                       "# zero_compense : motif",
+                       "verifier_egal(\"c\", x - y, list(f(y), vector(\"numeric\", k)), tolerance = 1e-8)",
+                       "# zero_compense : motif",
+                       "verifier_egal(\"d\", x - y, list(f(y), rep(0, k)), tolerance = 1e-8)",
+                       "# zero_compense : motif",
+                       "verifier_egal(\"e\", x - y, list(f(y), numeric(N)), tolerance = 1e-8)",
+                       "# zero_compense : motif",
+                       "verifier_egal(\"f\", x - y, list(f(y), numeric(M)), tolerance = 1e-8)",
+                       "# zero_compense : motif",
+                       "verifier_egal(\"g\", x - y, list(f(y), numeric(2)), tolerance = 1e-8)",
+                       "# zero_compense : motif",
+                       "verifier_egal(\"h\", x - y, list(f(y), numeric(0)), tolerance = 1e-8)",
+                       "# zero_compense : motif",
+                       "verifier_egal(\"i\", x - y, list(f(y), vector(\"character\", k)), tolerance = 1e-8)"))
+multi <- grep("^\\[INFO\\] ZERO DE COMPENSATION DECLARE A PLUSIEURS ZEROS ", r$sortie)
+verifier("#179 (2) : numeric(k) (temoin.R:4), double(k) (:6), vector(\"numeric\", k) (:8) comptent 2 zéros comme rep(0, k) (:10) ; numeric(N) avec N <- 1 en compte 1 (:12, non listé), avec M <- 3 en compte 3 (:14) ; numeric(2) en compte 2 (:16) ; numeric(0) (:18) et vector(\"character\", k) (:20) aucun",
+         .passe(r) && length(multi) == 1L && grepl(" : 6 appels$", r$sortie[multi]) &&
+           identical(r$sortie[(multi + 1L):(multi + 6L)],
+                     c("[INFO]   tests/unitaires/temoin.R:4 tolerance 1e-08, 2 zeros", "[INFO]   tests/unitaires/temoin.R:6 tolerance 1e-08, 2 zeros",
+                       "[INFO]   tests/unitaires/temoin.R:8 tolerance 1e-08, 2 zeros", "[INFO]   tests/unitaires/temoin.R:10 tolerance 1e-08, 2 zeros",
+                       "[INFO]   tests/unitaires/temoin.R:14 tolerance 1e-08, 3 zeros", "[INFO]   tests/unitaires/temoin.R:16 tolerance 1e-08, 2 zeros")))
+r <- cas_recensement(c("verifier_egal(\"a\", x, list(f(y), numeric(k)), tolerance = 1e-8)",
+                       "verifier_egal(\"b\", x, list(f(y), double(k)), tolerance = 1e-8)",
+                       "verifier_egal(\"c\", x, list(f(y), numeric(k)), tolerance = 0)"))
+zeros <- grep("^\\[INFO\\] ZEROS ATTENDUS A TOLERANCE > 0 ", r$sortie)
+verifier("#179 (2) : sans marque, numeric(k) et double(k) à tolérance > 0 sont listés sous ZEROS ATTENDUS (temoin.R:1 et :2), non à tolérance 0 (:3)",
+         .passe(r) && length(zeros) == 1L && grepl(" : 2 appels$", r$sortie[zeros]) &&
+           identical(r$sortie[(zeros + 1L):(zeros + 2L)],
+                     c("[INFO]   tests/unitaires/temoin.R:1 tolerance 1e-08", "[INFO]   tests/unitaires/temoin.R:2 tolerance 1e-08")))
+# rep_len(0, k) : length.out est la longueur du résultat, non un multiplicateur : rep_len(0, 3) compte 2 zéros
+# (« plusieurs »), alors que rep(0, 3) en compte 3 ; l'en-tête du script le dit (#179, commentaire du 20/11/2026).
+r <- cas_recensement(c("# zero_compense : motif",
+                       "verifier_egal(\"a\", x - y, list(f(y), rep_len(0, 3)), tolerance = 1e-8)",
+                       "# zero_compense : motif",
+                       "verifier_egal(\"b\", x - y, list(f(y), rep(0, 3)), tolerance = 1e-8)",
+                       "# zero_compense : motif",
+                       "verifier_egal(\"c\", x - y, list(f(y), rep_len(0, 1)), tolerance = 1e-8)",
+                       "# zero_compense : motif",
+                       "verifier_egal(\"d\", x - y, list(f(y), rep_len(0, 0)), tolerance = 1e-8)"))
+multi <- grep("^\\[INFO\\] ZERO DE COMPENSATION DECLARE A PLUSIEURS ZEROS ", r$sortie)
+verifier("#179 rep_len : rep_len(0, 3) compte 2 zéros (temoin.R:2), rep(0, 3) en compte 3 (:4) ; rep_len(0, 1) et rep_len(0, 0) ne sont pas listés (:6, :8)",
+         .passe(r) && length(multi) == 1L && grepl(" : 2 appels$", r$sortie[multi]) &&
+           identical(r$sortie[(multi + 1L):(multi + 2L)],
+                     c("[INFO]   tests/unitaires/temoin.R:2 tolerance 1e-08, 2 zeros", "[INFO]   tests/unitaires/temoin.R:4 tolerance 1e-08, 3 zeros")))
+entete <- readLines(.script_controle("recensement_tolerances"), n = 80L)
+entete <- entete[startsWith(entete, "#")]
+verifier("#179 rep_len : l'en-tête du script dit que rep_len(0, 3) compte 2 zéros et ne dit plus que rep_len(0, k) compte k zéros",
+         any(grepl("rep_len(0, 3) compte 2 zeros", entete, fixed = TRUE)) && !any(grepl("rep_len(0, k) compte k", entete, fixed = TRUE)) &&
+           !any(grepl("rep(0, k) ou rep_len(0, k) compte", entete, fixed = TRUE)))
+# Tolérance positionnelle d'un appel non appariable : lue par le même appariement que l'attendu.
+r <- cas_recensement(c("TOL <- 1e-8",
+                       "verifier_egal(\"a\", x, list(f(y), 0), 0, 2)",
+                       "verifier_egal(\"b\", x, list(f(y), 0), 1e-8, 2)",
+                       "verifier_egal(\"c\", x, list(f(y), 0), TOL, 2)",
+                       "verifier_egal(nom = \"d\", obtenu = x, list(f(y), 0), 0, extra)",
+                       "verifier_egal(\"e\", x, list(f(y), 0), tolerance = 0, 2)",
+                       "verifier_egal(\"f\", x, list(f(y), 0), ..., 1e-8)",
+                       "verifier_egal(\"g\", x, list(f(y), 0), 0, ...)",
+                       "verifier_egal(\"h\", x, list(f(y), 0), 2e-8, tolerance = 1e-8)"))
+zeros <- grep("^\\[INFO\\] ZEROS ATTENDUS A TOLERANCE > 0 ", r$sortie)
+comp <- grep("^\\[INFO\\] ZERO DE COMPENSATION DECLARE \\(", r$sortie)
+verifier("#179 tolérance positionnelle : lue par l'appariement : 0 (temoin.R:2, :5, :8, argument en trop ou `...` transmise) et tolerance = 0 nommée (:6) ne sont pas listés ; 1e-8 (:3), TOL (:4) le sont avec leur tolérance lue ; une `...` avant la tolérance (:7) la rend non résolue ; tolérance nommée et positionnelle (:9) : la nommée, 1e-8",
+         .passe(r) && length(zeros) == 1L && length(comp) == 1L && grepl(" : 4 appels$", r$sortie[zeros]) &&
+           identical(r$sortie[(zeros + 1L):(comp - 1L)],
+                     c("[INFO]   tests/unitaires/temoin.R:3 tolerance 1e-08", "[INFO]   tests/unitaires/temoin.R:4 tolerance 1e-08",
+                       "[INFO]   tests/unitaires/temoin.R:7 tolerance non resolue", "[INFO]   tests/unitaires/temoin.R:9 tolerance 1e-08")))
 
 # --- paquets_java.sh (#120 ; #95, point 5) --------------------------------------------------
 # Script bash : appelé par bash (system2), les listes avant / après sont des fichiers texte. Les
