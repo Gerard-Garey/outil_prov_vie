@@ -79,22 +79,20 @@
 # `package` avec une autre grandeur qu'exportees, valeur déclarée différente du code, nombre
 # en lettres différent de la valeur déclarée, marqueur sans paragraphe, portée (les quinze
 # modules et `package`) sans aucun marqueur. Une ligne [OK] par marqueur concordant.
-# Lecture du paragraphe : les commentaires de fin de ligne (« % ... » non précédé de « \ »)
-# en sont retirés, et la ligne qui porte un « % » se joint à la suivante sans espace, comme
-# en LaTeX (« dix-huit% » puis « fonctions » ne fait pas un décompte) ; le séparateur entre
-# le nombre et la grandeur est une espace, une fin de ligne ou « ~ » (espace insécable) ;
+# Lecture du paragraphe : les commentaires de fin de ligne (« % » non échappé) en sont retirés,
+# et la ligne qui porte un « % » se joint à la suivante sans espace, comme en LaTeX
+# (« dix-huit% » puis « fonctions » ne fait pas un décompte) ; un « % » est échappé seulement
+# si le nombre de « \ » qui le précèdent est impair (« 100\% » : échappé ; « \\% » : saut de
+# ligne puis commentaire ; « \\\% » : échappé) ; le séparateur entre le nombre et la grandeur est
+# une espace, une fin de ligne ou « ~ » (espace insécable) ;
 # seule la première lettre du nombre peut être une majuscule (« ZÉRO » n'est pas lu, ce qui
 # rend le bilan identique en locale C et en UTF-8) ; un nombre précédé d'un mot de nombre
-# (« cent deux fonctions », « soixante et onze fonctions ») n'est pas lu. Limite connue : un
-# nombre dans une commande (« \emph{dix-huit} fonctions ») n'est pas lu. Un marqueur dont la
+# (« cent deux fonctions ») ou d'un composé « <dizaine> et » (« soixante et onze fonctions »)
+# n'est pas lu, alors qu'un nombre précédé de « et » seul l'est (« les modules et deux
+# fonctions »). Limites connues : un nombre dans une commande (« \emph{dix-huit} fonctions »)
+# n'est pas lu ; seul le nombre placé juste avant la grandeur est lu (dans « Deux de ses six
+# fonctions », « Deux » n'est pas contrôlé ; décision Q-28 / Q-39). Un marqueur dont la
 # valeur dépasse six chiffres, ou écrit « %% concordance-decomptes », est mal formé.
-# Limites connues (réserves d'audit non corrigées, suivies par la question Q-32 / Q-33 de la
-# feuille de route ; chacune mesurée sur une racine fictive) :
-#   - N1 : un nombre précédé de « et » n'est pas lu (« les modules et deux fonctions » : aucun
-#     nombre lu, statut 0 pour fonctions=1, alors que « les deux fonctions » échoue) ;
-#   - N2 : « \\% » (saut de ligne LaTeX suivi d'un commentaire) est pris pour un « % » échappé,
-#     si bien que le texte qui suit le « % » est lu : faux positif, du côté sûr (« Une fonction
-#     \\% deux fonctions. » échoue pour fonctions=1).
 
 options(warn = 2)
 args <- commandArgs(TRUE)
@@ -182,6 +180,7 @@ NOMBRES <- c(zero = 0L, un = 1L, une = 1L, deux = 2L, trois = 3L, quatre = 4L, c
              "dix-huit" = 18L, "dix-neuf" = 19L, vingt = 20L)
 MOTS_NOMBRES <- c(names(NOMBRES), "trente", "quarante", "cinquante", "soixante", "cent",
                   "vingts", "cents", "et")
+DIZAINES <- c("vingt", "trente", "quarante", "cinquante", "soixante")
 MOTIF_DECOMPTE <- paste0("(?<![[:alpha:]-])([[:alpha:]]+(?:-[[:alpha:]]+)*|[0-9]+) ",
                          "(motifs|cha[^ ]{1,2}nes|lignes|CSV)(?![[:alpha:]])")
 MOTIF_SUITE_CODE <- "^\\\\code\\{[^{}\"]*\\}(?:, \\\\code\\{[^{}\"]*\\})*"
@@ -446,7 +445,10 @@ lire_decomptes <- function(chemin) {
         # n'est pas une espace et les blancs qui débutent la ligne suivante sont ignorés.
         # Seul un vrai `%` de fin de ligne (non échappé) déclenche la jonction sans espace : une ligne
         # sans commentaire dont les blancs de tête ont été retirés n'est pas une ligne commentée.
-        texte <- sub("(?<!\\\\)%.*$", "", lignes[j], perl = TRUE)
+        # Un `%` est échappé si le nombre de `\` qui le précèdent est impair : en LaTeX, `\` suivi
+        # d'un caractère forme une paire (`\\` est un saut de ligne, `\%` un pour-cent), d'où la
+        # lecture par paires jusqu'au premier `%` hors paire (issue #138, N2).
+        texte <- sub("^((?:[^\\\\%]|\\\\.)*)%.*$", "\\1", lignes[j], perl = TRUE)
         commentee <- texte != lignes[j]
         if (apres_commentaire) texte <- sub("^\\s+", "", texte)
         paragraphe <- c(paragraphe, if (length(paragraphe) && !apres_commentaire) paste0(" ", texte) else texte)
@@ -615,7 +617,11 @@ if (!file.exists(document)) {
       # cela, « exportées » s'imprime « export<U+00E9>es » hors d'une locale UTF-8.
       Encoding(trouve) <- "unknown"
       if (!(mot %in% names(NOMBRES_DECOMPTES))) next
-      if (all(strsplit(precedent, "-", fixed = TRUE)[[1L]] %in% MOTS_NOMBRES) && nzchar(precedent)) next
+      if (nzchar(precedent) && all(strsplit(precedent, "-", fixed = TRUE)[[1L]] %in% setdiff(MOTS_NOMBRES, "et"))) next
+      # « et » ne bloque la lecture que dans un composé (« soixante et onze ») : le mot qui précède
+      # « et » est une dizaine. Sinon (« les modules et deux fonctions »), le nombre est lu (issue #138, N1).
+      if (identical(precedent, "et") && length(avant) >= 2L &&
+          minuscule_initiale(avant[length(avant) - 1L]) %in% DIZAINES) next
       g <- if (startsWith(mots[2L], "fonction")) {
         if (identical(mq$portee, "package")) "exportees" else "fonctions"
       } else if (startsWith(mots[2L], "export")) "exportees" else "constantes"
