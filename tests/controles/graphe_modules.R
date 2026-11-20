@@ -68,8 +68,9 @@
 # affectation locale, portee soeur) est comptee. Limite documentee (cote sur) : un nom local
 # homonyme d'une definition d'un autre module (variable locale lue, fonction locale appelee,
 # argument formel repris) produit une fausse arete, a lever en renommant le nom local.
-# Limites connues (reserves d'audit non corrigees, suivies par #178 ; chacune mesuree sur
-# une racine fictive) :
+# Limites connues (reserves d'audit non corrigees ; chacune mesuree sur une racine fictive).
+# La premiere, m3, est une reserve de #137 qu'aucune issue ne suit ; les trois autres sont
+# suivies par #178 :
 #   - m3 (#137) : les noms interdits ecrits en chaine ne sont pas vus (`"dynGet"` hors position
 #     d'appel, comme `lapply(1, "sys.call")` plus haut) ; aucune chaine de R/ ne porte ces noms ;
 #   - homonyme d'une exception (#137) : seule la cible d'une affectation locale (<-, <<-, =,

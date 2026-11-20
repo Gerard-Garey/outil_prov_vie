@@ -35,7 +35,8 @@
 # evaluable peut en cacher d'autres : le critere est syntaxique, il n'est pas exhaustif). Dans un appel
 # non evaluable, les arguments qui ne sont pas des valeurs ne comptent pas : indices de `[` et `[[`,
 # times, length.out et each de rep() (ils multiplient les zeros de l'objet : voir plus bas), digits de round()
-# et signif(), longueur de character(0) ; numeric(n) et double(n) avec n litteral > 0 comptent n zeros.
+# et signif(), longueur de character(0) ; numeric(n) et double(n) avec n litteral > 0 comptent n zeros
+# (n hors de l'entier R : plafonne a .Machine$integer.max, 2147483647, comme tout decompte qui deborde).
 # Un zero obtenu par compensation (ecart de passage, total moins la somme de ses parties), que le
 # harnais compare a tolerance absolue declaree, reste a tolerance, dans son propre appel : la ligne qui
 # precede l'appel porte, seule sur sa ligne, la marque `# zero_compense : <motif>` (un commentaire en fin de
@@ -45,9 +46,10 @@
 # suivante, sous MARQUES ORPHELINES. Ces rubriques sont informatives. Le motif est exige : une marque
 # sans motif (`# zero_compense`, `# zero_compense :` ou motif d'espaces), ou sans les deux-points, est un
 # [ECHEC] a son fichier:ligne (statut 1) et ne compte pas comme une marque.
-# Un rep(0, k) ou rep_len(0, k) compte k zeros si k est litteral (times, each) ; non evaluable
-# (rep(0, k)) ou length.out > 1, il est compte comme plusieurs zeros (au moins 2) : l'appel marque qui le
-# porte est liste sous A PLUSIEURS ZEROS.
+# Un rep(0, k) ou rep_len(0, k) compte k zeros si k est litteral (times, each) et evaluable comme entier R
+# (k fois les zeros de l'objet, produit plafonne a .Machine$integer.max s'il deborde) ; non evaluable
+# (rep(0, k)), hors de l'entier R (3e9) ou length.out > 1, il compte "plusieurs" zeros (au moins 2 : le
+# decompte ne distingue que 0, 1 ou plusieurs) : l'appel marque qui le porte est liste sous A PLUSIEURS ZEROS.
 # Pour un appel dont les arguments ne s'apparient pas (argument en trop), l'attendu est lu par
 # l'appariement de R (match.call sur la signature de verifier_egal()), sous son nom ou en position, les
 # arguments nommes etant ecartes avant les autres ; une `...` transmise n'est pas developpee : les arguments
@@ -128,10 +130,15 @@ zeros_feuilles <- function(x) {
 
 # Nombre de constantes litterales 0 (reelles) d'une expression (a defaut de pouvoir l'evaluer) ; un 0 qui
 # n'est pas une valeur n'est pas compte : arguments de longueur ou d'indice (voir l'en-tete). rep(0, k) et
-# rep_len(0, k) : voir zeros_repetes() (k zeros si k est litteral ou une constante du fichier, au moins 2 sinon).
+# rep_len(0, k) : voir zeros_repetes() (k zeros si k est litteral ou une constante du fichier et dans l'entier R ;
+# "plusieurs", soit 2, sinon : non evaluable ou hors de l'entier R ; un decompte qui deborde est plafonne par plafonner()).
 # Les appels de FONCTIONS_SANS_ZERO (entiers, caracteres, logiques) ne portent aucun zero reel.
 FONCTIONS_SANS_ZERO <- c("character", "integer", "logical", "seq_len")
 FONCTIONS_PREMIER_ARGUMENT <- c("[", "[[", "rep", "rep_len", "round", "signif")
+# Decompte en double, plafonne a l'entier maximal : as.integer() d'un double hors de portee, ou la somme de
+# plusieurs entiers qui deborde, leve un avertissement (options(warn = 2) : arret). Le decompte ne distingue
+# que 0, 1 ou plusieurs zeros, le plafond n'y change rien.
+plafonner <- function(x) as.integer(min(x, .Machine$integer.max))
 # Zeros d'un appel de rep() ou rep_len() dont l'objet porte z zeros litteraux : times et each litteraux
 # multiplient (rep(0, 3) : 3 zeros) ; une repetition non evaluable (rep(0, k)), length.out > 1 ou un appel
 # qui ne s'apparie pas comptent au moins 2 zeros ("plusieurs zeros" : le zero n'est pas unique) ; une
@@ -145,8 +152,9 @@ zeros_repetes <- function(e, z, constantes) {
   if (is.null(m)) return(plusieurs)
   entier <- function(arg) {
     r <- evaluer(arg, constantes)
-    if (r$ok && is.numeric(r$valeur) && length(r$valeur) == 1L && is.finite(r$valeur) && r$valeur >= 0) as.integer(r$valeur)
-    else NA_integer_
+    if (r$ok && is.numeric(r$valeur) && length(r$valeur) == 1L && is.finite(r$valeur) && r$valeur >= 0 &&
+        r$valeur <= .Machine$integer.max) as.integer(r$valeur)
+    else NA_integer_  # hors de l'entier R : NA, donc plusieurs zeros (le decompte ne distingue que 0, 1 ou plusieurs)
   }
   if (!is.null(m$length.out)) {
     n <- entier(m$length.out)
@@ -155,7 +163,7 @@ zeros_repetes <- function(e, z, constantes) {
   fois <- if (is.null(m$times)) 1L else entier(m$times)
   chacun <- if (is.null(m$each)) 1L else entier(m$each)
   if (is.na(fois) || is.na(chacun)) return(plusieurs)
-  as.integer(z * fois * chacun)
+  plafonner(as.numeric(z) * as.numeric(fois) * as.numeric(chacun))
 }
 
 zeros_litteraux <- function(e, constantes) {
@@ -181,12 +189,12 @@ zeros_litteraux <- function(e, constantes) {
       if (is.null(m)) return(0L)
       if (f == "vector" && !(is.character(m$mode) && m$mode %in% c("numeric", "double"))) return(0L)
       n <- m$length
-      return(if (is.numeric(n) && length(n) == 1L && is.finite(n) && n > 0) as.integer(n) else 0L)
+      return(if (is.numeric(n) && length(n) == 1L && is.finite(n) && n > 0) plafonner(n) else 0L)
     }
   }
   if (is.call(e) || is.expression(e)) {
-    return(sum(vapply(seq_along(e), function(i) if (identical(e[[i]], quote(expr = ))) 0L else zeros_litteraux(e[[i]], constantes),
-                      integer(1L))))
+    return(plafonner(sum(vapply(seq_along(e), function(i) if (identical(e[[i]], quote(expr = ))) 0 else as.numeric(zeros_litteraux(e[[i]], constantes)),
+                                numeric(1L)))))
   }
   0L
 }

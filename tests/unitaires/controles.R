@@ -1003,6 +1003,26 @@ multi <- grep("^\\[INFO\\] ZERO DE COMPENSATION DECLARE A PLUSIEURS ZEROS ", r$s
 verifier("#136 r2 (reprise) : rep(0, N) avec la constante N <- 1 compte un zéro (temoin.R:4, non listé sous A PLUSIEURS ZEROS) ; avec M <- 3 il en compte 3 (:6, seul appel listé)",
          .passe(r) && length(multi) == 1L && grepl(" : 1 appels$", r$sortie[multi]) &&
            identical(r$sortie[multi + 1L], "[INFO]   tests/unitaires/temoin.R:6 tolerance 1e-08, 3 zeros"))
+# Débordement de l'entier R (#136, constat de la revue finale) : sous options(warn = 2), as.integer() d'un double
+# hors de portée, ou la somme d'entiers qui déborde, arrêtait le script. Un facteur hors de l'entier R donne
+# « plusieurs » (2 zéros) ; un produit ou une somme qui déborde est plafonné à .Machine$integer.max (2147483647).
+r <- cas_recensement(c("# zero_compense : motif",
+                       "verifier_egal(\"a\", x - y, list(f(y), rep(0, 3e9)), tolerance = 1e-8)",
+                       "# zero_compense : motif",
+                       "verifier_egal(\"b\", x - y, list(f(y), rep(0, times = 50000, each = 50000)), tolerance = 1e-8)",
+                       "# zero_compense : motif",
+                       "verifier_egal(\"c\", x - y, list(f(y), rep_len(0, 3e9)), tolerance = 1e-8)",
+                       "# zero_compense : motif",
+                       "verifier_egal(\"d\", x - y, list(f(y), numeric(3e9)), tolerance = 1e-8)",
+                       "# zero_compense : motif",
+                       "verifier_egal(\"e\", x - y, list(f(y), numeric(2e9), numeric(2e9)), tolerance = 1e-8)"))
+multi <- grep("^\\[INFO\\] ZERO DE COMPENSATION DECLARE A PLUSIEURS ZEROS ", r$sortie)
+verifier("#136 débordement : rep(0, 3e9) (temoin.R:2) et rep_len(0, 3e9) (:6) comptent 2 zéros, rep(0, times = 50000, each = 50000) (:4), numeric(3e9) (:8) et deux numeric(2e9) (:10) sont plafonnés à 2147483647 zéros ; aucun arrêt, statut 0",
+         .passe(r) && length(multi) == 1L && grepl(" : 5 appels$", r$sortie[multi]) &&
+           identical(r$sortie[(multi + 1L):(multi + 5L)],
+                     c("[INFO]   tests/unitaires/temoin.R:2 tolerance 1e-08, 2 zeros", "[INFO]   tests/unitaires/temoin.R:4 tolerance 1e-08, 2147483647 zeros",
+                       "[INFO]   tests/unitaires/temoin.R:6 tolerance 1e-08, 2 zeros", "[INFO]   tests/unitaires/temoin.R:8 tolerance 1e-08, 2147483647 zeros",
+                       "[INFO]   tests/unitaires/temoin.R:10 tolerance 1e-08, 2147483647 zeros")))
 # r3 : attendu apparié par R (arguments nommés écartés avant les autres) pour un appel avec argument en trop.
 r <- cas_recensement(c("verifier_egal(nom = \"a\", obtenu = x, c(0, 1), extra, tolerance = 1e-8)",
                        "verifier_egal(nom = \"b\", obtenu = x, c(1, 2), extra, tolerance = 1e-8)",

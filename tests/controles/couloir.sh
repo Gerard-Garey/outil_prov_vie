@@ -323,6 +323,10 @@ lancer_intersection() {
 }
 
 # Corps du mode intersection ; $6 : fichier qui contient la fiche de l'autre branche.
+# Le libellé de la fiche de l'autre branche cite la référence effectivement lue (REF_AUTRE, posée au
+# point d'entrée par ref_autre : origin/<autre>, ou la branche locale à défaut), non le chemin de
+# l'arbre de travail : ses numéros de ligne viennent de git show. Sans REF_AUTRE (témoins, qui
+# tournent sans git), origin/<autre>.
 intersection_avec_fiche() {
   local fiche="$1" branche="$2" autre="$3" liste_c liste_a inter f n=0 echecs=0 maitrises=0 contacts=0 fiche_a="$6" libelle_a
   charger_couloir "$fiche" "$branche" || return $?
@@ -330,7 +334,7 @@ intersection_avec_fiche() {
     echo "[INFO] aucun bloc « couloir $branche » dans $fiche : aucun point de contact déclaré par $branche"
   fi
   A_CONTACTS="$C_CONTACTS"
-  libelle_a="fiche de $autre ($fiche)"
+  libelle_a="fiche de $autre (${REF_AUTRE:-origin/$autre}:$FICHE)"
   charger_couloir "$fiche_a" "$autre" "$libelle_a" || return $?
   if [ "$NB_BLOCS" -eq 0 ]; then
     echo "[INFO] aucun bloc « couloir $autre » dans la $libelle_a : aucun point de contact déclaré par $autre"
@@ -590,8 +594,12 @@ temoins() {
   attendre "intersection : contact retiré de la fiche de l'autre branche, la copie périmée de la courante ne vaut pas" 1 "dans une seule des deux fiches" \
     lancer_intersection "$fiche" br/a br/b liste_temoin liste_temoin_autre fiche_temoin_autre
   printf '%s\n' '```couloirs br/b' '+ R/b.R' '```' > "$fiche_a"
-  attendre "intersection : coquille dans la fiche de l'autre branche signalée, avec son libellé" 1 "[ECHEC] fiche de br/b (" \
+  attendre "intersection : coquille dans la fiche de l'autre branche signalée, avec son libellé" 1 "[ECHEC] fiche de br/b (origin/br/b:$FICHE)" \
     lancer_intersection "$fiche" br/a br/b liste_temoin liste_temoin_autre fiche_temoin_autre
+  REF_AUTRE="br/b"
+  attendre "intersection : référence lue = branche locale (autre branche non poussée) : le libellé cite cette référence, non origin/" 1 "[ECHEC] fiche de br/b (br/b:$FICHE)" \
+    lancer_intersection "$fiche" br/a br/b liste_temoin liste_temoin_autre fiche_temoin_autre
+  REF_AUTRE=""
   attendre "intersection : fiche de l'autre branche illisible : statut 2" 2 "" \
     lancer_intersection "$fiche" br/a br/b liste_temoin liste_temoin_autre fiche_temoin_absente
   FICHE_TEMOIN_AUTRE="$fiche"
@@ -607,6 +615,7 @@ temoins() {
 FICHE="docs/feuille-de-route.md"
 BRANCHE=""
 AUTRE=""
+REF_AUTRE=""
 MODE="couloir"
 for arg in "$@"; do
   case "$arg" in
@@ -637,6 +646,7 @@ if [ -z "$BRANCHE" ]; then
 fi
 statut=0
 if [ -n "$AUTRE" ]; then
+  REF_AUTRE=$(ref_autre)
   lancer_intersection "$FICHE" "$BRANCHE" "$AUTRE" fichiers_courante fichiers_autre fiche_autre || statut=$?
 else
   lancer_couloir "$FICHE" "$BRANCHE" fichiers_courante branche_existe || statut=$?
