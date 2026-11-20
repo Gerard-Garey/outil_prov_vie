@@ -2,7 +2,8 @@ name: CI
 
 # Quatre contrôles requis par le ruleset de main (README, « Sécurité du dépôt » ;
 # .github/ruleset-main.json ; M90, M91 et M603) :
-#   - « Contrôles du dépôt » : réglages Claude Code, fiches d'agents, fichiers sensibles ;
+#   - « Contrôles du dépôt » : réglages Claude Code, fiches d'agents, fichiers sensibles,
+#     caractères de contrôle des fichiers versionnés (#182) ;
 #   - « Tests (R 4.3.3) » : les trois batteries de CLAUDE.md dans le conteneur
 #     rocker/r-ver:4.3.3 épinglé par digest (plateforme de référence, ADR 0010, point 27 ;
 #     CONTEXT.md, « Plateforme de référence »), sans package CRAN ;
@@ -65,6 +66,20 @@ jobs:
             echo "::error::fichier sensible versionné (voir la liste ci-dessus)"; exit 1
           fi
           echo "Aucun fichier sensible versionné."
+      # Issue #182 : aucun caractère de contrôle (hors tabulation et fin de ligne) dans les
+      # fichiers texte suivis ; binaires exclus par extension (liste motivée dans l'en-tête du
+      # script, qui écrit aussi ses limites ; témoins : tests/unitaires/controles.R). R de base
+      # seulement, non épinglé (ni version 4.3.3 ni package) : Rscript de l'image s'il existe,
+      # sinon r-base-core d'Ubuntu, installé sans paquets recommandés (qui entraînent
+      # default-jre, CLAUDE.md, « Architecture »).
+      - name: Aucun caractère de contrôle dans les fichiers versionnés
+        run: |
+          set -euo pipefail
+          if ! command -v Rscript >/dev/null; then
+            sudo apt-get update
+            sudo apt-get install -y --no-install-recommends r-base-core
+          fi
+          Rscript tests/controles/caracteres_controle.R
       # ADR 0011, point 21 : tout commit qui touche tests/reference/ ne touche rien d'autre, a
       # pour unique parent le commit calculé (message et provenance.txt) et cite l'empreinte de
       # l'arbre ; témoins négatifs d'abord. Plage : commits de la PR, ou de la poussée sur main.
