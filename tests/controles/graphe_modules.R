@@ -32,7 +32,8 @@
 #      premier niveau, la cible d'une affectation locale (`globalenv <- f ; globalenv()`, #137 ;
 #      un champ `x$globalenv <- 1` n'en est pas une, #178), un argument formel
 #      (`function(graine, expr, globalenv)`), une variable de for (`for (globalenv in l)`) ou le
-#      nom en chaine simple d'un assign() (`assign("globalenv", f)`) (#178) : l'exception couvre l'appel
+#      nom en chaine simple d'un assign() (`assign("globalenv", f)`) (#178 ; un appel de champ
+#      `x$assign("globalenv", f)` n'est pas un assign()) : l'exception couvre l'appel
 #      de la fonction de base, non celui d'une variable locale ;
 #      Ces noms sont interdits aussi sans appel (#109) : toute reference (symbole hors
 #      position d'appel, ex. `g <- parent.frame`, `lapply(1, sys.call)`, `do.call(get, l)`,
