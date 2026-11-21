@@ -540,6 +540,10 @@ r <- .essai("graphe_modules", list("R/outils.R" = c("avec_graine <- function(gra
                                                     "h <- function(l) { for (get in l) 1; 2 }")))
 verifier("#178 : une variable de for qui porte un nom interdit hors exception reste une référence refusée, for (get in l) 1, outils.R:2",
          .echoue_en(r, "R/outils.R", 2L, "get sans appel"))
+r <- .essai("graphe_modules", list("R/outils.R" = c("avec_graine <- function(graine, expr, x) {", "  x$assign(\"globalenv\", 1)",
+                                                    "  globalenv()", "}")))
+verifier("#178 : un appel de champ x$assign(\"globalenv\", 1) n'est pas un assign() de base : l'exception d'avec_graine() reste applicable",
+         .passe(r))
 r <- .essai("graphe_modules", list("R/rapport.R" = c("empreinte_code <- function(topenv) {", "  topenv()", "}")))
 verifier("#178 : argument formel homonyme de l'exception de topenv() dans empreinte_code(), rapport.R:2",
          .echoue_en(r, "R/rapport.R", 2L, "exception declaree inapplicable"))

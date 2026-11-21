@@ -298,8 +298,10 @@ analyser <- function(chemin) {
     res
   }
   # assign() : nom en chaine simple de la cible (argument x, ou premier argument positionnel) ; "" si le
-  # nom est calcule (limite documentee, #178).
-  for (r in which(jetons$token == "SYMBOL_FUNCTION_CALL" & jetons$texte == "assign")) {
+  # nom est calcule (limite documentee, #178). Un appel de champ (`x$assign(...)`, `x@assign(...)`)
+  # n'est pas un appel de assign() de base.
+  for (r in which(jetons$token == "SYMBOL_FUNCTION_CALL" & jetons$texte == "assign" &
+                    !(jetons$prec %in% c("'$'", "'@'")))) {
     i <- idx[r]
     nom_fonction <- match(pd$parent[i], pd$id)
     args <- arguments_appel(lignes_de(pd$parent[nom_fonction]))
