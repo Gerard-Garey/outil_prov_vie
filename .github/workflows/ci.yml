@@ -70,8 +70,8 @@ jobs:
       # fichiers texte suivis ; binaires exclus par extension (liste motivée dans l'en-tête du
       # script, qui écrit aussi ses limites ; témoins : tests/unitaires/controles.R). R de base
       # seulement, non épinglé (ni version 4.3.3 ni package) : Rscript de l'image s'il existe,
-      # sinon r-base-core d'Ubuntu, installé sans paquets recommandés (qui entraînent
-      # default-jre, CLAUDE.md, « Architecture »).
+      # sinon r-base-core d'Ubuntu, installé sans paquets recommandés (précaution, comme dans le
+      # job « Documents LaTeX » ; contrôle par paquets_java.sh suivi par #185).
       - name: Aucun caractère de contrôle dans les fichiers versionnés
         run: |
           set -euo pipefail
