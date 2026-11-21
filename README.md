@@ -2,7 +2,7 @@
 
 Outil de **validation actuarielle** qui recalcule, à une date d'arrêté déclarée, les provisions des garanties d'assurance vie et de prévoyance assurables en France (v1 : décès et arrêt de travail ; v2 : épargne en euros et en unités de compte ; v3 : retraite, préretraite et indemnités de fin de carrière) à partir d'une base de gestion, sous deux référentiels — comptes sociaux et meilleure estimation Solvabilité II — avec le tableau de passage, la fiche de calcul et le rapport figé. Package R `provie` (moteur, R de base) et application Shiny locale. Le dépôt ne contient **aucune donnée réelle** : la base brute fictive est tirée par le simulateur du package. IFRS 17 et le SCR sont hors périmètre.
 
-Issu du dépôt modèle `Gerard-Garey/Modele_vibe_code` (organisation Claude Code : sous-agents, circuits, règles Git, traçabilité). Règles : `CLAUDE.md` ; cahier des charges : `docs/exigences.md` ; vocabulaire : `CONTEXT.md` ; décisions : `docs/cadrage/`, `docs/adr/` et `docs/feuille-de-route.md` (§ 4).
+Issu du dépôt modèle `Gerard-Garey/Modele_vibe_code` (organisation Claude Code : sous-agents, circuits, règles Git, traçabilité). Règles : `CLAUDE.md` ; cahier des charges : `docs/exigences.md` ; vocabulaire : `CONTEXT.md` ; décisions : `docs/cadrage/`, `docs/adr/` et `docs/feuille-de-route.md` (§ 4 ; M1 à M599 et branches fusionnées : `docs/feuille-de-route-archive.md`).
 
 **État** (12 novembre 2026) : package `provie` en version `0.5.0` — dictionnaire, lecture et contrôles de la base, simulateur et jeux simulés versionnés, plan et fiche de calcul, tables, familles « engagement » et « risque en cours » du capital décès, `calculer_provisions()` et premières références de non-régression (branche B2, fusionnée le 12 novembre 2026) ; pas encore d'application Shiny. Suivent les reliquats du capital décès et l'outillage des contrôles, puis les tardifs (famille « triangle ») : `docs/feuille-de-route.md`.
 
@@ -16,7 +16,8 @@ Issu du dépôt modèle `Gerard-Garey/Modele_vibe_code` (organisation Claude Cod
 | `docs/recherche/2026-11-07-cadre-provisionnement-vie.md` | Rapport de recherche : textes qui font foi, tables et licences, outillage R, validation actuarielle (statuts vérifié / incertain / non trouvé) |
 | `CONTEXT.md` | Glossaire du domaine (personnes, garanties et sinistres, provisions par référentiel, familles de calcul, triangles, tables, hypothèses, plan et méthodes, données, validation, épargne) et de l'organisation |
 | `docs/adr/` | Décisions consignées (gabarit `0000-gabarit.md`) |
-| `docs/feuille-de-route.md` | Branche de travail en cours, branches suivantes, décisions M du mainteneur |
+| `docs/feuille-de-route.md` | Branche de travail en cours, branches suivantes, décisions M du mainteneur (M600 et suivantes) |
+| `docs/feuille-de-route-archive.md` | Branches fusionnées, séries passées, décisions M1 à M599, sous les mêmes numéros de section |
 | `docs/latex/charte_graphique.tex` | Charte graphique des documents LaTeX (pdfLaTeX), reprise de `docu_actu` (ADR 0003 annoté) ; la documentation de fond sera `docs/latex/doc_outil_prov_vie.tex` |
 | `.claude/agents/` | Sept sous-agents : `architect` (pilotage), `actuary` et `regulatory` (fond), `coder`, `docwriter` (réalisation), `audit`, `app-review` (vérification) ; variantes `-approfondi` générées par `.claude/outils/fiches_jumelles.sh` |
 | `docs/agents/routage.md` | Politique de routage du modèle et de l'effort (ADR 0001, ADR 0002) |
