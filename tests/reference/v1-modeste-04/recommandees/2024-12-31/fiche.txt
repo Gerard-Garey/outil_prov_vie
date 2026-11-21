@@ -129,10 +129,10 @@ empreintes/fichiers	null
 empreintes/tables/mortalite_fictive_v1_03	character	4eb68f9af5835cad25255f14232f5df0
 empreintes/tables/tme_fictive_v1_03	character	a5b4c1cf5cf86afc6ac166504fe808d7
 empreintes/resultat	character	9d89d1cb49593d0b55a44e01c2841dff
-empreintes/code	character	4616965064c47fcd85f79b24684967a1
+empreintes/code	character	9a4bbda00aceedeb97bb562684ad3754
 empreintes/representation	character	provie-resultat-1
 versions/r	character	4.3.3
-versions/provie	character	0.12.0
+versions/provie	character	0.15.0
 versions/fiche	integer	1
 versions/dictionnaire	character	1.6
 plateforme/r	character	R version 4.3.3 (2024-02-29)

@@ -63,7 +63,7 @@ donnees/exclusions/nombre_dossiers	integer	0	0	0	0	2	2	2	2	0	0	0	0
 donnees/hypotheses_defaut/motif	character	D03a	D03a	D03b	D03b	D03c	D03c
 donnees/hypotheses_defaut/referentiel	character	comptes_sociaux	solvabilite_2	comptes_sociaux	solvabilite_2	comptes_sociaux	solvabilite_2
 donnees/hypotheses_defaut/poste	character	tous	tous	tous	tous	tous	tous
-donnees/hypotheses_defaut/valeur	character	age_par_defaut_du_segment	age_par_defaut_du_segment	sexe_par_defaut_du_poste	sexe_par_defaut_du_poste	salaire_par_defaut_du_college	salaire_par_defaut_du_college
+donnees/hypotheses_defaut/valeur	character	regle	regle	assure=M;autre=F;conjoint=oppose_assure;enfant=F	assure=M;autre=F;conjoint=oppose_assure;enfant=F	ensemble=53180	ensemble=34560.53
 donnees/hypotheses_defaut/nombre	integer	11	11	6	6	11	11
 donnees/signalements/code	character	D03a	D13	D02b	D05	D06	D03g	D01b
 donnees/signalements/table	character	assures	sinistres	evenements	evenements	evenements	prestations	cotisations

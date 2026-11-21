@@ -1,6 +1,6 @@
 provie-liste 1
 plan/version_plan	integer	1
-plan/arrete	date	2025-12-31
+plan/arrete	date	2024-12-31
 plan/perimetre/garanties	character	deces
 plan/perimetre/referentiels	character	comptes_sociaux
 plan/perimetre/segmentations	liste
@@ -97,43 +97,43 @@ plan/donnees/exclusions/12/action	character	exclure
 plan/donnees/hypotheses/1/motif	character	D02b
 plan/donnees/hypotheses/1/referentiel	character	comptes_sociaux
 plan/donnees/hypotheses/1/poste	character	tous
-plan/donnees/hypotheses/1/valeur	character	visibilite_max_saisie_effet_parente
+plan/donnees/hypotheses/1/valeur	character	regle
 plan/donnees/hypotheses/2/motif	character	D02b
 plan/donnees/hypotheses/2/referentiel	character	solvabilite_2
 plan/donnees/hypotheses/2/poste	character	tous
-plan/donnees/hypotheses/2/valeur	character	visibilite_max_saisie_effet_parente
+plan/donnees/hypotheses/2/valeur	character	regle
 plan/donnees/hypotheses/3/motif	character	D03a
 plan/donnees/hypotheses/3/referentiel	character	comptes_sociaux
 plan/donnees/hypotheses/3/poste	character	tous
-plan/donnees/hypotheses/3/valeur	character	age_par_defaut_du_segment
+plan/donnees/hypotheses/3/valeur	character	regle
 plan/donnees/hypotheses/4/motif	character	D03a
 plan/donnees/hypotheses/4/referentiel	character	solvabilite_2
 plan/donnees/hypotheses/4/poste	character	tous
-plan/donnees/hypotheses/4/valeur	character	age_par_defaut_du_segment
+plan/donnees/hypotheses/4/valeur	character	regle
 plan/donnees/hypotheses/5/motif	character	D03b
 plan/donnees/hypotheses/5/referentiel	character	comptes_sociaux
 plan/donnees/hypotheses/5/poste	character	tous
-plan/donnees/hypotheses/5/valeur	character	sexe_par_defaut_du_poste
+plan/donnees/hypotheses/5/valeur	character	assure=M;autre=F;conjoint=oppose_assure;enfant=F
 plan/donnees/hypotheses/6/motif	character	D03b
 plan/donnees/hypotheses/6/referentiel	character	solvabilite_2
 plan/donnees/hypotheses/6/poste	character	tous
-plan/donnees/hypotheses/6/valeur	character	sexe_par_defaut_du_poste
+plan/donnees/hypotheses/6/valeur	character	assure=M;autre=F;conjoint=oppose_assure;enfant=F
 plan/donnees/hypotheses/7/motif	character	D03c
 plan/donnees/hypotheses/7/referentiel	character	comptes_sociaux
 plan/donnees/hypotheses/7/poste	character	tous
-plan/donnees/hypotheses/7/valeur	character	salaire_par_defaut_du_college
+plan/donnees/hypotheses/7/valeur	character	ensemble=53180
 plan/donnees/hypotheses/8/motif	character	D03c
 plan/donnees/hypotheses/8/referentiel	character	solvabilite_2
 plan/donnees/hypotheses/8/poste	character	tous
-plan/donnees/hypotheses/8/valeur	character	salaire_par_defaut_du_college
+plan/donnees/hypotheses/8/valeur	character	ensemble=34560.53
 plan/donnees/hypotheses/9/motif	character	D03g
 plan/donnees/hypotheses/9/referentiel	character	comptes_sociaux
 plan/donnees/hypotheses/9/poste	character	tous
-plan/donnees/hypotheses/9/valeur	character	date_effet_plus_delai
+plan/donnees/hypotheses/9/valeur	character	regle
 plan/donnees/hypotheses/10/motif	character	D03g
 plan/donnees/hypotheses/10/referentiel	character	solvabilite_2
 plan/donnees/hypotheses/10/poste	character	tous
-plan/donnees/hypotheses/10/valeur	character	date_effet_plus_delai
+plan/donnees/hypotheses/10/valeur	character	regle
 plan/donnees/hypotheses/11/motif	character	D05
 plan/donnees/hypotheses/11/referentiel	character	comptes_sociaux
 plan/donnees/hypotheses/11/poste	character	tous
@@ -172,6 +172,7 @@ plan/donnees/seuils/d03g_delai_jours/famille	integer	3
 plan/donnees/seuils/d03g_delai_jours/prestations	integer	0
 plan/donnees/seuils/d03g_delai_jours/rentes	integer	2
 plan/donnees/seuils/d03g_delai_jours/sinistres	integer	5
+plan/donnees/seuils/d07b_mois	integer	6
 plan/restitution/echeanciers	character	aucun
 plan/restitution/triangles	character	aucun
 plan/liens	liste
@@ -192,11 +193,11 @@ parametres_retenus/tables/format_natif	character	lx_age	serie_tme_mensuelle
 parametres_retenus/tables/provenance	character	table fictive, sans source (jeux de la v1, plans de référence)	série fictive, sans source (jeux de la v1, plans de référence)
 parametres_retenus/tables/conversion	character	convertir_lx_qx	convertir_pourcent
 parametres_retenus/tables/empreinte	character	4eb68f9af5835cad25255f14232f5df0	a5b4c1cf5cf86afc6ac166504fe808d7
-parametres_retenus/hypotheses_defaut/motif	character	D03a	D03a	D03b	D03b	D03c	D03c
-parametres_retenus/hypotheses_defaut/referentiel	character	comptes_sociaux	solvabilite_2	comptes_sociaux	solvabilite_2	comptes_sociaux	solvabilite_2
-parametres_retenus/hypotheses_defaut/poste	character	tous	tous	tous	tous	tous	tous
-parametres_retenus/hypotheses_defaut/valeur	character	age_par_defaut_du_segment	age_par_defaut_du_segment	sexe_par_defaut_du_poste	sexe_par_defaut_du_poste	salaire_par_defaut_du_college	salaire_par_defaut_du_college
-parametres_retenus/hypotheses_defaut/nombre	integer	11	11	6	6	11	11
+parametres_retenus/hypotheses_defaut/motif	character	D02b	D02b	D03a	D03a	D03b	D03b	D03c	D03c	D03g	D03g
+parametres_retenus/hypotheses_defaut/referentiel	character	comptes_sociaux	solvabilite_2	comptes_sociaux	solvabilite_2	comptes_sociaux	solvabilite_2	comptes_sociaux	solvabilite_2	comptes_sociaux	solvabilite_2
+parametres_retenus/hypotheses_defaut/poste	character	tous	tous	tous	tous	tous	tous	tous	tous	tous	tous
+parametres_retenus/hypotheses_defaut/valeur	character	regle	regle	regle	regle	assure=M;autre=F;conjoint=oppose_assure;enfant=F	assure=M;autre=F;conjoint=oppose_assure;enfant=F	ensemble=53180	ensemble=34560.53	regle	regle
+parametres_retenus/hypotheses_defaut/nombre	integer	3	3	10	10	5	5	10	10	1	1
 parametres_retenus/exclusions/motif	character	D01b	D01b	D01b	D01b	D02a	D02a	D02a	D02a	D04b	D04b	D04b	D04b
 parametres_retenus/exclusions/famille	character	engagement	triangle	risque_en_cours	regle_comptable	engagement	triangle	risque_en_cours	regle_comptable	engagement	triangle	risque_en_cours	regle_comptable
 parametres_retenus/exclusions/action	character	exclure	exclure	exclure	exclure	conserver	exclure	conserver	conserver	exclure	exclure	exclure	exclure
@@ -227,11 +228,11 @@ empreintes/donnees/cotisations	character	821da881fc2d860d3b783d8ec201bed7
 empreintes/fichiers	null
 empreintes/tables/mortalite_fictive_v1_03	character	4eb68f9af5835cad25255f14232f5df0
 empreintes/tables/tme_fictive_v1_03	character	a5b4c1cf5cf86afc6ac166504fe808d7
-empreintes/resultat	character	055878a5384c434c970c98519f7e1316
-empreintes/code	character	4616965064c47fcd85f79b24684967a1
+empreintes/resultat	character	cdd7ba9bc22fc6a8315d655967c49635
+empreintes/code	character	9a4bbda00aceedeb97bb562684ad3754
 empreintes/representation	character	provie-resultat-1
 versions/r	character	4.3.3
-versions/provie	character	0.12.0
+versions/provie	character	0.15.0
 versions/fiche	integer	1
 versions/dictionnaire	character	1.6
 plateforme/r	character	R version 4.3.3 (2024-02-29)
