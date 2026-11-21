@@ -14,8 +14,11 @@
 # HORS BALAYAGE de tests/controles/absence_java.R (#180, Q-78) : ce fichier INTERDIT des noms de
 # paquets d'environnements Java et n'en installe aucun ; l'extension .txt n'est pas dans
 # EXTENSIONS d'absence_java.R, qui ne le balaie donc pas (il n'est plus une exclusion nominative,
-# comme l'etait le nom en .sh jusqu'a #180). Ajouter .txt a EXTENSIONS demanderait de retablir
-# une exclusion. paquets_java.sh, lui, reste balaye.
+# comme l'etait le nom en .sh jusqu'a #180). Il passerait le balayage tel quel (mesure a edd7b09 : copie du
+# depot avec txt ajoute a EXTENSIONS, [OK] 102 fichier(s) balaye(s) ; fichier renomme en .sh,
+# [OK] 71) : les motifs n'ecrivent aucun nom complet (^openjd, ^default-j(re|dk)) et les noms en
+# clair des commentaires sont retires par absence_java.R. Une exclusion ne serait a retablir que
+# si un motif ou un commentaire non retire portait un nom complet. paquets_java.sh reste balaye.
 # Un ajout de motif se fait ici, avec sa raison, et son temoin (tests/unitaires/controles.R).
 
 -java$

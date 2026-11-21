@@ -49,8 +49,8 @@ fin <- function() quit(save = "no", status = if (.n_echec > 0L) 1L else 0L)
 # --- Listes --------------------------------------------------------------------------
 
 # Extensions de fichiers binaires, exclues de l'examen : images, documents compiles, classeurs,
-# archives, donnees serialisees de R, polices. Les quatre premieres sont celles que
-# .gitattributes declare binary (pdf, xlsx, png, jpg) avec rds ; les autres sont des formats
+# archives, donnees serialisees de R, polices. La liste comprend les cinq extensions que
+# .gitattributes declare binary (pdf, xlsx, png, jpg, rds) ; les autres sont des formats
 # binaires usuels qu'un depot de documentation ou de donnees peut recevoir.
 EXTENSIONS_BINAIRES <- c("pdf", "png", "jpg", "jpeg", "gif", "ico", "xlsx", "xls", "rds",
                          "rda", "rdata", "zip", "gz", "tgz", "bz2", "xz", "7z",

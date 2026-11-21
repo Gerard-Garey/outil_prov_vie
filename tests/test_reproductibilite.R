@@ -65,10 +65,11 @@ source(file.path(racine, "tests", "jeux_v1.R"))
 # manifeste$version_provie (version qui a produit le jeu), contrôlée à part : au plus la
 # version installée.
 sans_version <- function(jeu, version) { jeu$manifeste$version_provie <- version; jeu }
-# Octets de manifeste.txt, la valeur de la ligne `version_provie` (3e champ) étant masquée : clé,
-# type, place de la ligne et tout le reste du fichier (fin de ligne, fin de fichier) comptent.
+# Octets de manifeste.txt, la valeur de la ligne `version_provie` (3e champ, jusqu'à la tabulation,
+# au retour chariot ou au saut de ligne) étant masquée : clé, type, place de la ligne et tout le
+# reste du fichier (fin de ligne, champ supplémentaire, fin de fichier) comptent.
 masquer_version <- function(octets) {
-  charToRaw(sub("(^|\n)(version_provie\tcharacter\t)[^\n]*", "\\1\\2", rawToChar(octets), useBytes = TRUE))
+  charToRaw(sub("(^|\n)(version_provie\tcharacter\t)[^\t\r\n]*", "\\1\\2", rawToChar(octets), useBytes = TRUE))
 }
 manifeste_hors_version <- function(fichier) masquer_version(readBin(fichier, "raw", n = 1e6))
 for (nom in names(JEUX_V1)) {
@@ -133,7 +134,12 @@ verifier("témoin manifeste.txt : la seule valeur de version_provie n'est pas co
          !identical(autre_version(mf_texte), mf_texte) && identical(masque(autre_version(mf_texte)), masque(mf_texte)))
 verifier("témoin manifeste.txt : une valeur altérée hors de version_provie fait différer les octets, version différente comprise",
          !identical(masque(mf_altere), masque(mf_texte)) && !identical(masque(autre_version(mf_altere)), masque(mf_texte)))
-verifier("témoin manifeste.txt : la fin de fichier compte", !identical(masque(mf_sans_fin), masque(mf_texte)))
+# fin de ligne (retour chariot) et champ supplémentaire après la version : hors de la valeur masquée
+mf_cr <- sub("(version_provie\tcharacter\t[^\n]*)\n", "\\1\r\n", mf_texte, useBytes = TRUE)
+mf_champ <- sub("(version_provie\tcharacter\t[^\n]*)\n", "\\1\tjunk\n", mf_texte, useBytes = TRUE)
+verifier("témoin manifeste.txt : la fin de fichier, la fin de ligne (retour chariot) et un champ supplémentaire après la version comptent",
+         !identical(masque(mf_sans_fin), masque(mf_texte)) && !identical(masque(mf_cr), masque(mf_texte)) &&
+           !identical(masque(mf_champ), masque(mf_texte)))
 
 section("références de non-régression : couples de référence (ADR 0011, points 6 à 10, 23 et 25 ; #67)")
 source(file.path(racine, "tests", "references.R"))
