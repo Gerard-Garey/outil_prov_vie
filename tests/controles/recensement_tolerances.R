@@ -4,15 +4,23 @@
 # colonne de grandeurs d'ordres differents.
 # Critere mesurable (analyse statique, sans executer les tests) : l'argument attendu est evalue
 # dans un environnement sans effet de bord (parent emptyenv() ; constantes numeriques litterales
-# des affectations de premier niveau du fichier, liste blanche de fonctions pures FONCTIONS_PURES,
+# des affectations `<-` de premier niveau du fichier, liste blanche de fonctions pures FONCTIONS_PURES,
 # D() = as.Date) ; ses feuilles numeriques finies non nulles (dates exclues,
 # listes et colonnes parcourues) sont rassemblees ; l'argument est SIGNALE si elles sont au moins
 # deux et que max |x| / min |x| >= 10 ; il est INDETERMINE (et liste) s'il n'est pas evaluable
 # sans les donnees des tests ou sans appeler une fonction hors liste blanche : rien n'est execute.
-# La tolerance d'un appel est lue : litterale, ou symbole affecte a un litteral en tete de
-# fichier (TOL) ; sinon l'appel est range en "tolerance non resolue" (comptee a tolerance > 0).
+# La tolerance d'un appel est lue : litterale, ou symbole affecte a un litteral (TOL) ; sinon l'appel
+# est range en "tolerance non resolue" (comptee a tolerance > 0).
+# Une constante a la valeur de sa derniere affectation `<-` de premier niveau qui PRECEDE l'appel dans
+# le source (ligne, puis colonne : `N <- 3; appel(...); N <- 1` lit 3) ; une affectation non litterale
+# (`N <- g(N)`) la rend inconnue jusqu'a la suivante. Limite : la lecture est textuelle, comme celle d'un
+# appel au premier niveau ; le corps d'une fonction, appele plus tard, lit les constantes qui precedent
+# son texte, non celles qui valent a l'appel ; une affectation en `=`, `assign()`, `<<-` ou dans une
+# fonction, un `if` ou une boucle n'est pas lue (`3 -> N` s'analyse en `N <- 3` : elle l'est).
 # Un appel dont les arguments ne s'apparient pas sans execution (`...` transmis, argument en trop)
-# est "indetermine" et liste, sa tolerance lue sur l'argument nomme `tolerance` s'il y en a un.
+# est "indetermine" et liste ; pour verifier_egal(), sa tolerance est lue par l'appariement de R, comme
+# l'attendu (voir plus bas : sous son nom ou en position), pour all.equal() sur l'argument nomme `tolerance`
+# s'il y en a un.
 # Un appel est reconnu sous ses formes nue, entre accents graves ou prefixee (`base::all.equal`,
 # `pkg::verifier_egal`), par l'arbre et par l'analyse du source ; un champ (`x$verifier_egal(...)`)
 # n'est pas un appel. Un nom ecrit en chaine en position d'appel (`"all.equal"(...)`) que l'arbre
@@ -35,8 +43,10 @@
 # evaluable peut en cacher d'autres : le critere est syntaxique, il n'est pas exhaustif). Dans un appel
 # non evaluable, les arguments qui ne sont pas des valeurs ne comptent pas : indices de `[` et `[[`,
 # times, length.out et each de rep() (ils multiplient les zeros de l'objet : voir plus bas), digits de round()
-# et signif(), longueur de character(0) ; numeric(n) et double(n) avec n litteral > 0 comptent n zeros
-# (n hors de l'entier R : plafonne a .Machine$integer.max, 2147483647, comme tout decompte qui deborde).
+# et signif(), longueur de character(0) ; numeric(n), double(n) et vector("numeric", n) avec n litteral ou
+# constante du fichier > 0 comptent n zeros (n hors de l'entier R : plafonne a .Machine$integer.max,
+# 2147483647, comme tout decompte qui deborde) ; avec n non evaluable (numeric(k)), ils comptent "plusieurs"
+# zeros (au moins 2), comme rep(0, k).
 # Un zero obtenu par compensation (ecart de passage, total moins la somme de ses parties), que le
 # harnais compare a tolerance absolue declaree, reste a tolerance, dans son propre appel : la ligne qui
 # precede l'appel porte, seule sur sa ligne, la marque `# zero_compense : <motif>` (un commentaire en fin de
@@ -46,10 +56,12 @@
 # suivante, sous MARQUES ORPHELINES. Ces rubriques sont informatives. Le motif est exige : une marque
 # sans motif (`# zero_compense`, `# zero_compense :` ou motif d'espaces), ou sans les deux-points, est un
 # [ECHEC] a son fichier:ligne (statut 1) et ne compte pas comme une marque.
-# Un rep(0, k) ou rep_len(0, k) compte k zeros si k est litteral (times, each) et evaluable comme entier R
-# (k fois les zeros de l'objet, produit plafonne a .Machine$integer.max s'il deborde) ; non evaluable
-# (rep(0, k)), hors de l'entier R (3e9) ou length.out > 1, il compte "plusieurs" zeros (au moins 2 : le
-# decompte ne distingue que 0, 1 ou plusieurs) : l'appel marque qui le porte est liste sous A PLUSIEURS ZEROS.
+# Un rep(0, k) compte k zeros si k (times, each) est litteral ou constante du fichier et evaluable comme
+# entier R (k fois les zeros de l'objet, produit plafonne a .Machine$integer.max s'il deborde) ; non
+# evaluable (rep(0, k)) ou hors de l'entier R (3e9), il compte "plusieurs" zeros (au moins 2 : le decompte
+# ne distingue que 0, 1 ou plusieurs) : l'appel marque qui le porte est liste sous A PLUSIEURS ZEROS.
+# rep_len(0, k) ne multiplie pas : length.out est la longueur du resultat, non un facteur.
+# rep_len(0, 3) compte 2 zeros ("plusieurs"), non 3 ; rep_len(0, 1) en compte 1, rep_len(0, 0) aucun.
 # Pour un appel dont les arguments ne s'apparient pas (argument en trop), l'attendu est lu par
 # l'appariement de R (match.call sur la signature de verifier_egal()), sous son nom ou en position, les
 # arguments nommes etant ecartes avant les autres ; une `...` transmise n'est pas developpee : les arguments
@@ -60,7 +72,8 @@
 # le recensement des appels n'est pas coherent ou si une marque `# zero_compense` n'a pas de motif
 # (statut 1). Aucune ligne [ECHEC] pour un signalement.
 # Les reserves r1 a r3 d'audit de #111 (marque en fin de ligne, rep(0, k) non evaluable, attendu lu par
-# position) et le motif non controle sont corrigees par #136 (Q-32 (a)).
+# position) et le motif non controle sont corrigees par #136 (Q-32 (a)) ; la constante redefinie,
+# numeric(k), double(k), rep_len et la tolerance positionnelle d'un appel non appariable, par #179.
 # Usage, depuis la racine du depot : Rscript tests/controles/recensement_tolerances.R
 # Un argument facultatif designe une autre racine. Code ASCII, R de base seulement.
 
@@ -130,8 +143,9 @@ zeros_feuilles <- function(x) {
 
 # Nombre de constantes litterales 0 (reelles) d'une expression (a defaut de pouvoir l'evaluer) ; un 0 qui
 # n'est pas une valeur n'est pas compte : arguments de longueur ou d'indice (voir l'en-tete). rep(0, k) et
-# rep_len(0, k) : voir zeros_repetes() (k zeros si k est litteral ou une constante du fichier et dans l'entier R ;
-# "plusieurs", soit 2, sinon : non evaluable ou hors de l'entier R ; un decompte qui deborde est plafonne par plafonner()).
+# rep_len(0, k) : voir zeros_repetes() (rep : k zeros si k est litteral ou une constante du fichier et dans l'entier R ;
+# "plusieurs", soit 2, sinon : non evaluable ou hors de l'entier R ; rep_len : length.out > 1 compte "plusieurs" ;
+# un decompte qui deborde est plafonne par plafonner()). numeric(k), double(k) : n zeros si k est evaluable, "plusieurs" sinon.
 # Les appels de FONCTIONS_SANS_ZERO (entiers, caracteres, logiques) ne portent aucun zero reel.
 FONCTIONS_SANS_ZERO <- c("character", "integer", "logical", "seq_len")
 FONCTIONS_PREMIER_ARGUMENT <- c("[", "[[", "rep", "rep_len", "round", "signif")
@@ -183,13 +197,16 @@ zeros_litteraux <- function(e, constantes) {
       return(if (f %in% c("rep", "rep_len")) zeros_repetes(e, z, constantes) else z)
     }
     if (f %in% c("numeric", "double", "vector")) {
-      # n zeros reels pour une longueur litterale n > 0 (vector : mode numeric ou double seulement)
+      # n zeros reels pour une longueur n > 0 litterale ou constante du fichier (vector : mode numeric ou double
+      # seulement) ; une longueur non evaluable compte "plusieurs" zeros (2), comme rep(0, k) ; numeric() : aucun
       m <- tryCatch(match.call(if (f == "vector") function(mode, length) NULL else function(length) NULL, e, envir = emptyenv()),
                     error = function(err) NULL)
       if (is.null(m)) return(0L)
       if (f == "vector" && !(is.character(m$mode) && m$mode %in% c("numeric", "double"))) return(0L)
-      n <- m$length
-      return(if (is.numeric(n) && length(n) == 1L && is.finite(n) && n > 0) plafonner(n) else 0L)
+      if (is.null(m$length)) return(0L)
+      r <- evaluer(m$length, constantes)
+      if (!(r$ok && is.numeric(r$valeur) && length(r$valeur) == 1L && is.finite(r$valeur))) return(2L)
+      return(if (r$valeur > 0) plafonner(r$valeur) else 0L)
     }
   }
   if (is.call(e) || is.expression(e)) {
@@ -245,20 +262,19 @@ classer <- function(expr, constantes, tol = NA_real_) {
        n_zeros = n)
 }
 
-# Argument attendu d'un appel de verifier_egal() dont les arguments ne s'apparient pas (argument en trop, `...`),
-# lu par l'appariement de R (match.call sur la signature de verifier_egal(), complete de `...` pour recevoir
-# l'argument en trop) : sous son nom, ou en position, les arguments nommes etant ecartes avant les autres. Une
-# `...` transmise ne se developpe pas sans execution : les arguments sans nom qui la suivent sont ignores
-# (NULL si l'attendu n'est pas connu).
-attendu_apparie <- function(a) {
+# Appariement d'un appel de verifier_egal() dont les arguments ne s'apparient pas (argument en trop, `...`), par
+# l'appariement de R (match.call sur la signature de verifier_egal(), complete de `...` pour recevoir l'argument
+# en trop) : l'attendu et la tolerance se lisent sous leur nom, ou en position, les arguments nommes etant ecartes
+# avant les autres. Une `...` transmise ne se developpe pas sans execution : les arguments sans nom qui la suivent
+# sont ignores (m$attendu, m$tolerance : NULL s'ils ne sont pas connus ; NULL si l'appel ne s'apparie pas).
+apparier_egal <- function(a) {
   args <- as.list(a)[-1L]
   nm <- if (is.null(names(args))) rep("", length(args)) else names(args)
   points <- which(vapply(args, function(x) identical(x, quote(...)), logical(1L)))
   garde <- if (length(points) == 0L) rep(TRUE, length(args)) else (seq_along(args) < points[1L] | nm != "") & !seq_along(args) %in% points
   appel <- as.call(c(list(a[[1L]]), args[garde]))
-  m <- tryCatch(match.call(function(nom, obtenu, attendu, tolerance = 0, ...) NULL, appel, envir = emptyenv()),
-                error = function(e) NULL)
-  if (is.null(m)) NULL else m$attendu
+  tryCatch(match.call(function(nom, obtenu, attendu, tolerance = 0, ...) NULL, appel, envir = emptyenv()),
+           error = function(e) NULL)
 }
 
 resoudre_tolerance <- function(expr, constantes) {
@@ -276,7 +292,40 @@ lignes_de <- function(chemin, jeton) {
   precedent <- c(NA_character_, t$token[-nrow(t)])
   garde <- t$token == "SYMBOL_FUNCTION_CALL" & gsub("`", "", t$text, fixed = TRUE) == jeton &
     !(precedent %in% c("'$'", "'@'"))
-  t$line1[garde]
+  lignes <- t$line1[garde]
+  attr(lignes, "col") <- t$col1[garde]
+  lignes
+}
+
+# Affectations `<-` de premier niveau d'un fichier analysable, dans l'ordre du source : nom, valeur (NA si
+# l'affectation n'est pas un litteral numerique : la constante devient inconnue), position de fin (ligne, colonne,
+# lues dans les donnees d'analyse comme celles des appels). NULL si les expressions de premier niveau ne
+# s'apparient pas aux donnees d'analyse.
+affectations_de <- function(exprs, d) {
+  if (length(exprs) == 0L) return(list())
+  if (is.null(d)) return(NULL)
+  fins <- d[d$parent == 0L & !d$terminal, ]  # `expr`, ou `expr_or_assign_or_help` pour `x = 1`
+  fins <- fins[order(fins$line1, fins$col1), ]
+  if (nrow(fins) != length(exprs)) return(NULL)
+  res <- list()
+  for (k in seq_along(exprs)) {
+    e <- exprs[[k]]
+    if (is.call(e) && identical(e[[1L]], as.name("<-")) && is.symbol(e[[2L]])) {
+      res[[length(res) + 1L]] <- list(nom = as.character(e[[2L]]), valeur = if (is.numeric(e[[3L]])) e[[3L]] else NA_real_,
+                                      ligne = fins$line2[k], col = fins$col2[k])
+    }
+  }
+  res
+}
+
+# Constantes (liste nommee) qui valent au point (ligne, col) : la derniere affectation qui precede ce point.
+constantes_avant <- function(affectations, ligne, col) {
+  constantes <- list()
+  for (a in affectations) {
+    if (a$ligne > ligne || (a$ligne == ligne && a$col >= col)) break
+    constantes[[a$nom]] <- if (is.na(a$valeur)) NULL else a$valeur
+  }
+  constantes
 }
 
 recensement <- list()
@@ -308,16 +357,17 @@ for (chemin in fichiers) {
   }
   marques[[length(marques) + 1L]] <- data.frame(fichier = rep(rel(chemin), length(marques_fichier)), ligne = marques_fichier,
                                                 stringsAsFactors = FALSE)
-  # constantes numeriques litterales des affectations de premier niveau
-  constantes <- list()
-  for (e in exprs) {
-    if (is.call(e) && identical(e[[1L]], as.name("<-")) && is.symbol(e[[2L]]) && is.numeric(e[[3L]])) {
-      constantes[[as.character(e[[2L]])]] <- e[[3L]]
-    }
+  # affectations de premier niveau : les constantes d'un appel sont celles qui le precedent (constantes_avant())
+  affectations <- affectations_de(exprs, d)
+  if (is.null(affectations)) {
+    echec("affectations de premier niveau non appariees aux donnees d'analyse", rel(chemin))
+    next
   }
   for (jeton in c("verifier_egal", "all.equal")) {
     appels <- appels_de(exprs, jeton)
     lignes <- lignes_de(chemin, jeton)
+    colonnes <- attr(lignes, "col")
+    lignes <- as.vector(lignes)
     if (length(appels) != length(lignes)) {
       echec(sprintf("recensement incoherent pour %s : %d appels dans l'arbre, %d dans l'analyse du source", jeton,
                     length(appels), length(lignes)), rel(chemin))
@@ -330,16 +380,19 @@ for (chemin in fichiers) {
     }
     for (i in seq_along(appels)) {
       a <- appels[[i]]
+      constantes <- constantes_avant(affectations, lignes[i], colonnes[i])
       signature <- if (jeton == "verifier_egal") function(nom, obtenu, attendu, tolerance = 0) NULL
                    else function(target, current, ..., tolerance = 1.5e-8) NULL
       # Les arguments ne s'apparient pas toujours sans execution (`...` transmis, argument en
-      # trop : match.call() echoue) : l'appel est alors indetermine, la tolerance etant lue sur
-      # l'argument nomme `tolerance` s'il y en a un.
+      # trop : match.call() echoue) : l'appel est alors indetermine, la tolerance etant lue, pour verifier_egal(),
+      # par le meme appariement que l'attendu (apparier_egal()), sinon sur l'argument nomme `tolerance` s'il y en a un.
       m <- tryCatch(match.call(signature, a, envir = emptyenv()), error = function(e) NULL)
       if (is.null(m)) {
-        tol <- if (is.null(a[["tolerance"]])) NA_real_ else resoudre_tolerance(a[["tolerance"]], constantes)
+        m2 <- if (jeton == "verifier_egal") apparier_egal(a) else NULL
+        tol_expr <- if (is.null(m2)) a[["tolerance"]] else m2$tolerance
+        tol <- if (is.null(tol_expr)) NA_real_ else resoudre_tolerance(tol_expr, constantes)
         if (!is.na(tol) && tol == 0) next
-        att <- if (jeton == "verifier_egal") attendu_apparie(a) else NULL
+        att <- if (is.null(m2)) NULL else m2$attendu
         n <- if (!is.null(att) && (is.na(tol) || tol > 0)) compter_zeros(att, constantes) else 0L
         cl <- list(classe = "indetermine", detail = "arguments non appariables", petites = FALSE, min_abs = NA_real_,
                    zeros = n > 0L, n_zeros = n)

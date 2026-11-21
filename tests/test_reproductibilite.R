@@ -65,6 +65,13 @@ source(file.path(racine, "tests", "jeux_v1.R"))
 # manifeste$version_provie (version qui a produit le jeu), contrôlée à part : au plus la
 # version installée.
 sans_version <- function(jeu, version) { jeu$manifeste$version_provie <- version; jeu }
+# Octets de manifeste.txt, la valeur de la ligne `version_provie` (3e champ, jusqu'à la tabulation,
+# au retour chariot ou au saut de ligne) étant masquée : clé, type, place de la ligne et tout le
+# reste du fichier (fin de ligne, champ supplémentaire, fin de fichier) comptent.
+masquer_version <- function(octets) {
+  charToRaw(sub("(^|\n)(version_provie\tcharacter\t)[^\t\r\n]*", "\\1\\2", rawToChar(octets), useBytes = TRUE))
+}
+manifeste_hors_version <- function(fichier) masquer_version(readBin(fichier, "raw", n = 1e6))
 for (nom in names(JEUX_V1)) {
   versionne <- file.path(racine, "inst", "extdata", "jeux", nom)
   if (!verifier(paste0(nom, " : jeu versionné présent sous inst/extdata/jeux/"), dir.exists(versionne))) next
@@ -86,18 +93,17 @@ for (nom in names(JEUX_V1)) {
                      JEUX_V1[[nom]]$declarations, date_visa_v1(nom)))
   verifier_egal(paste0(nom, " : simuler_jeu_v1() identique au jeu versionné (hors version_provie)"),
                 sans_version(simuler_jeu_v1(nom), m$version_provie), relu)
-  # octets (réserve m5) : à version égale, empreintes.md5 entier ; sinon, toutes ses lignes hors
-  # celle de manifeste.txt (seul fichier qui porte version_provie)
+  # octets (réserve m5) : empreintes.md5 hors la ligne de manifeste.txt (seul fichier qui porte
+  # version_provie), puis manifeste.txt lui-même hors la valeur de cette ligne, quelle que soit
+  # la version (#181 ; M733) : aucune comparaison d'octets n'est sautée à un relèvement de version
   md5_regenere <- readLines(file.path(dossier, "empreintes.md5"))
   md5_versionne <- readLines(file.path(versionne, "empreintes.md5"))
-  if (identical(m$version_provie, as.character(utils::packageVersion("provie")))) {
-    verifier_egal(paste0(nom, " : mêmes octets que les fichiers versionnés (empreintes.md5 entier)"),
-                  readBin(file.path(dossier, "empreintes.md5"), "raw", n = 1e6),
-                  readBin(file.path(versionne, "empreintes.md5"), "raw", n = 1e6))
-  }
   hors_manifeste <- function(l) l[substring(l, 35L) != "manifeste.txt"]
   verifier_egal(paste0(nom, " : mêmes octets que les fichiers versionnés, hors manifeste.txt (empreintes.md5)"),
                 hors_manifeste(md5_regenere), hors_manifeste(md5_versionne))
+  verifier_egal(paste0(nom, " : mêmes octets de manifeste.txt que le fichier versionné, hors la valeur de la ligne version_provie"),
+                manifeste_hors_version(file.path(dossier, "manifeste.txt")),
+                manifeste_hors_version(file.path(versionne, "manifeste.txt")))
   if (nzchar(Sys.which("md5sum"))) {
     verifier(paste0(nom, " : md5sum -c empreintes.md5 (depuis le dossier du jeu)"), local({
       ancien <- setwd(versionne)
@@ -115,6 +121,25 @@ for (nom in names(JEUX_V1)) {
     verifier(paste0(nom, " : date_visa renseignée"), !is.na(m$date_visa))
   }
 }
+
+# Témoin de la comparaison des octets de manifeste.txt (#181) : une valeur altérée hors de la
+# ligne de version fait échouer l'égalité à version différente ; la seule version n'est pas
+# comparée (elle est contrôlée à part, plus haut).
+mf_texte <- rawToChar(readBin(file.path(racine, "inst", "extdata", "jeux", names(JEUX_V1)[1L], "manifeste.txt"), "raw", n = 1e6))
+autre_version <- function(t) sub("(version_provie\tcharacter\t)[^\n]*", "\\1[9.9.9]", t, useBytes = TRUE)
+mf_altere <- sub("(volumetrie/contrats\tinteger\t)[0-9]+", "\\1999", mf_texte, useBytes = TRUE)
+mf_sans_fin <- sub("\n$", "", mf_texte, useBytes = TRUE)
+masque <- function(t) masquer_version(charToRaw(t))
+verifier("témoin manifeste.txt : la seule valeur de version_provie n'est pas comparée",
+         !identical(autre_version(mf_texte), mf_texte) && identical(masque(autre_version(mf_texte)), masque(mf_texte)))
+verifier("témoin manifeste.txt : une valeur altérée hors de version_provie fait différer les octets, version différente comprise",
+         !identical(masque(mf_altere), masque(mf_texte)) && !identical(masque(autre_version(mf_altere)), masque(mf_texte)))
+# fin de ligne (retour chariot) et champ supplémentaire après la version : hors de la valeur masquée
+mf_cr <- sub("(version_provie\tcharacter\t[^\n]*)\n", "\\1\r\n", mf_texte, useBytes = TRUE)
+mf_champ <- sub("(version_provie\tcharacter\t[^\n]*)\n", "\\1\tjunk\n", mf_texte, useBytes = TRUE)
+verifier("témoin manifeste.txt : la fin de fichier, la fin de ligne (retour chariot) et un champ supplémentaire après la version comptent",
+         !identical(masque(mf_sans_fin), masque(mf_texte)) && !identical(masque(mf_cr), masque(mf_texte)) &&
+           !identical(masque(mf_champ), masque(mf_texte)))
 
 section("références de non-régression : couples de référence (ADR 0011, points 6 à 10, 23 et 25 ; #67)")
 source(file.path(racine, "tests", "references.R"))
