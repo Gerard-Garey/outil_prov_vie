@@ -28,7 +28,7 @@ set.seed(4242)
 etat <- .Random.seed
 j1 <- simuler_jeu_v1("v1-modeste-04")
 verifier("simuler_base() restaure l'état du générateur de l'appelant", identical(.Random.seed, etat))
-j2 <- simuler_jeu_v1("v1-modeste-05")
+j2 <- simuler_jeu_v1("v1-modeste-07")
 obligatoires <- d$tables$table[d$tables$obligatoire == "O"]
 verifier("classe jeu_simule ; champs base, loi_vraie, verite, manifeste, declarations",
          inherits(j1, "jeu_simule") && identical(names(j1), c("base", "loi_vraie", "verite", "manifeste", "declarations")))
@@ -42,13 +42,13 @@ verifier("base : types conformes au dictionnaire (controler_types)", {
 verifier("base : noms de lignes automatiques",
          all(vapply(c(j1$base, j2$base), function(df) identical(attr(df, "row.names"), seq_len(nrow(df))) ||
                       (nrow(df) == 0L), NA)))
-verifier_egal("loi vraie portée telle quelle", j2$loi_vraie, loi_vraie_v1("v1-modeste-05"))
+verifier_egal("loi vraie portée telle quelle", j2$loi_vraie, loi_vraie_v1("v1-modeste-07"))
 verifier_egal("verite : tables de ce que l'organisme ignore et registre",
               names(j1$verite), c("flux_futurs", "etats_vrais", "familles_vraies", "sinistres_non_declares", "defauts"))
 verifier_egal("registre : colonnes du point 19", names(j2$verite$defauts),
               c("code", "parametre", "rang", "table", "cle", "colonne", "valeur_propre", "valeur_injectee"))
 verifier("registre du jeu sans défaut : vide", nrow(j1$verite$defauts) == 0L)
-verifier("registre de v1-modeste-05 : chaque défaut simulé au moins une fois",
+verifier("registre de v1-modeste-07 : chaque défaut simulé au moins une fois",
          setequal(unique(j2$verite$defauts$code), ns$DEFAUTS_SIMULES$code))
 verifier_egal("manifeste : champs dans l'ordre de l'ADR 0010, onzième série, (c)", names(j1$manifeste),
               c("nom", "version_dictionnaire", "version_provie", "version_simulateur", "graines", "date_extraction",
@@ -63,7 +63,7 @@ maintien_attendu <- function(b) {
   nature <- b$contrats$nature_contrat[match(gs$id_contrat, b$contrats$id_contrat)]
   ifelse(gs$code_garantie == "deces" & nature != "individuel", FALSE, NA)
 }
-verifier("maintien_deces (P6, M678) : FALSE sur la garantie deces de chaque contrat collectif, manquante ailleurs (v1-modeste-04, -05)",
+verifier("maintien_deces (P6, M678) : FALSE sur la garantie deces de chaque contrat collectif, manquante ailleurs (v1-modeste-04, -07)",
          identical(j1$base$garanties_souscrites$maintien_deces, maintien_attendu(j1$base)) &&
            identical(j2$base$garanties_souscrites$maintien_deces, maintien_attendu(j2$base)) &&
            sum(j1$base$garanties_souscrites$maintien_deces %in% FALSE) == 5L)
@@ -94,7 +94,7 @@ verifier("flux_futurs : décès survenus après l'extraction distingués (date_s
 u8 <- function(x) { Encoding(x) <- "UTF-8"; x }
 verifier_egal("format() : décomptes du jeu (nom, versions, visa, tables, registre par code, déclarations)",
               format(j2)[c(1L, 2L, 4L, 5L)],
-              u8(c("jeu simulé v1-modeste-05 (extraction du 2025-12-31)",
+              u8(c("jeu simulé v1-modeste-07 (extraction du 2025-12-31)",
                 paste0("  dictionnaire 1.6, simulateur 2, provie ", j2$manifeste$version_provie, ", visa ",
                        if (is.na(j2$manifeste$date_visa)) "non renseigné" else format(j2$manifeste$date_visa)),
                 paste0("  registre des défauts : ", nrow(j2$verite$defauts), " ligne(s) ; par code : D01b 4, D02a 4, ",
@@ -143,7 +143,7 @@ reconstituer <- function(base, registre) {
   }
   base
 }
-verifier_egal("jeu propre de v1-modeste-05 (base et registre) = base de v1-modeste-04",
+verifier_egal("jeu propre de v1-modeste-07 (base et registre) = base de v1-modeste-04",
               reconstituer(j2$base, j2$verite$defauts), j1$base)
 verifier("tables de vérité du jeu propre inchangées par les défauts",
          identical(j1$verite[1:4], j2$verite[1:4]))
@@ -353,31 +353,31 @@ for (arrete in list(A, A0)) {
   verifier(paste0("v1-modeste-04 à ", etiquette, " : seuls non exécutés, les reports et les états transitoires déclarés (non_implemente ; D03h non lisible retiré par P6)"),
            all(r1$controles_non_executes$cause %in% "non_implemente"))
   r2 <- bilan_de(j2, arrete)
-  verifier(paste0("v1-modeste-05 à ", etiquette, " : jeu de contrôle, D09 refuse prestations.montant (seul refus)"),
+  verifier(paste0("v1-modeste-07 à ", etiquette, " : jeu de contrôle, D09 refuse prestations.montant (seul refus)"),
            identical(r2$refus_tables[, c("table", "colonne", "motif")],
                      data.frame(table = "prestations", colonne = "montant", motif = "D09", stringsAsFactors = FALSE)))
-  verifier(paste0("v1-modeste-05 à ", etiquette, " : aucune déclaration requise"), nrow(r2$declarations_requises) == 0L)
+  verifier(paste0("v1-modeste-07 à ", etiquette, " : aucune déclaration requise"), nrow(r2$declarations_requises) == 0L)
   reg <- j2$verite$defauts
-  verifier(paste0("v1-modeste-05 à ", etiquette, " : chaque défaut injecté figure au bilan, aucun autre code"),
+  verifier(paste0("v1-modeste-07 à ", etiquette, " : chaque défaut injecté figure au bilan, aucun autre code"),
            setequal(paste(r2$controles$code, r2$controles$table), unique(paste(reg$code, reg$table))))
   # identifiants détectés : parmi les lignes injectées du même défaut
   inclus <- vapply(seq_len(nrow(r2$controles)), function(k) {
     ids <- strsplit(r2$controles$identifiants[k], ";", fixed = TRUE)[[1L]]
     all(ids %in% reg$cle[reg$code == r2$controles$code[k] & reg$table == r2$controles$table[k]])
   }, NA)
-  verifier(paste0("v1-modeste-05 à ", etiquette, " : identifiants détectés parmi les lignes injectées"), all(inclus))
+  verifier(paste0("v1-modeste-07 à ", etiquette, " : identifiants détectés parmi les lignes injectées"), all(inclus))
   n_inj <- injectees(reg)
   n_det <- tapply(r2$controles$nombre, paste(r2$controles$code, r2$controles$table), max)
   if (identical(arrete, A)) {
-    verifier_egal("v1-modeste-05 à l'extraction : détection exacte = injection (spécification, § 2.5, critère 4)",
+    verifier_egal("v1-modeste-07 à l'extraction : détection exacte = injection (spécification, § 2.5, critère 4)",
                   n_det[names(n_inj)], n_inj)
   } else {
     # règles B et P (base entière, indépendantes de l'arrêté) : exactes à tout arrêté ; règle V
     # (vue) : au plus les lignes injectées
     bp <- c("D02b prestations", "D02b evenements", "D03g prestations", "D04b cotisations", "D09 prestations")
     bp <- intersect(bp, names(n_inj))
-    verifier_egal(paste0("v1-modeste-05 à ", etiquette, " : règles B et P exactes"), n_det[bp], n_inj[bp])
-    verifier(paste0("v1-modeste-05 à ", etiquette, " : règle V, au plus les lignes injectées"),
+    verifier_egal(paste0("v1-modeste-07 à ", etiquette, " : règles B et P exactes"), n_det[bp], n_inj[bp])
+    verifier(paste0("v1-modeste-07 à ", etiquette, " : règle V, au plus les lignes injectées"),
              all(n_det[names(n_inj)] <= n_inj))
   }
 }
@@ -395,7 +395,7 @@ for (arrete in list(A, A0)) {
 r_sans <- controler_base(j2$base, A0, conventions = j2$declarations$conventions)
 r_avec <- bilan_de(j2, A0)
 cles_ne <- function(r) with(r$controles_non_executes, paste(code, table, colonne, cause))
-verifier_egal("W8 (#40) : v1-modeste-05 sans déclaration au 2024-12-31 : PR00027 non déterminée (D03g), aucune ligne (D02a, prestations) dans controles_non_executes ; lignes non exécutées = celles avec déclarations, plus D02c (declaration_absente), D07b et D12 (plus paiements_cumules depuis #72 : refus D09 de PR00010 de portée ligne) ; D02a sur PR00039 seule",
+verifier_egal("W8 (#40) : v1-modeste-07 sans déclaration au 2024-12-31 : PR00027 non déterminée (D03g), aucune ligne (D02a, prestations) dans controles_non_executes ; lignes non exécutées = celles avec déclarations, plus D02c (declaration_absente), D07b et D12 (plus paiements_cumules depuis #72 : refus D09 de PR00010 de portée ligne) ; D02a sur PR00039 seule",
               list(with(r_sans$vue$visibilite_non_determinee, identifiants[table == "prestations"]),
                    nrow(r_sans$controles_non_executes[r_sans$controles_non_executes$code == "D02a", ]),
                    setdiff(cles_ne(r_sans), cles_ne(r_avec)),

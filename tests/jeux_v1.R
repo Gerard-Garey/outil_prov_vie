@@ -5,7 +5,7 @@
 # La session principale écrit les jeux versionnés après le visa du mainteneur (M188), sa date
 # portée dans DATE_VISA_V1_6 ci-dessous, depuis la racine du dépôt, package provie installé (un
 # seul jeu : remplacer names(JEUX_V1) par son nom) :
-#   rm -rf inst/extdata/jeux/v1-modeste-04 inst/extdata/jeux/v1-modeste-05 inst/extdata/jeux/v1-modeste-06
+#   rm -rf inst/extdata/jeux/v1-modeste-04 inst/extdata/jeux/v1-modeste-06 inst/extdata/jeux/v1-modeste-07
 #   Rscript -e 'library(provie); source("tests/jeux_v1.R"); for (j in names(JEUX_V1))
 #     ecrire_jeu(simuler_jeu_v1(j), file.path("inst/extdata/jeux", j))'
 # Un jeu versionné ne change jamais en place (ADR 0008) : modifier une définition ci-dessous fait
@@ -19,6 +19,11 @@
 # mainteneur, Q1 option (b) restreinte). Égalité contrôlée par tests/controles/egalite_jeux.R
 # (anciens jeux de git archive a5e8970 contre les nouveaux, description comparée après cette
 # substitution).
+# Valeurs des hypothèses H (#99 ; spécification de B2, erratum v1.0.21, § 7.10 ; M751, M755) :
+# v1-modeste-07 remplace v1-modeste-05, retiré, dont les valeurs textuelles n'ont pas la forme
+# du dictionnaire 1.6, § 9 ; même loi vraie, mêmes graines, même date d'extraction, mêmes
+# exclusions et seuils ; seules changent les valeurs des hypothèses, la description et la date
+# de visa. La description de v1-modeste-04, jeu inchangé, nomme encore v1-modeste-05.
 #
 # Loi vraie : chaque valeur est un jugement d'expert déclaré (statut rappelé en commentaire,
 # avec sa justification courte), sans calibration sur une référence, choisie pour un
@@ -134,6 +139,8 @@ DATE_EXTRACTION_V1 <- as.Date("2025-12-31")
 # pas donné (date_visa du manifeste non renseignée, échec attendu de tests/test_reproductibilite.R,
 # renvoi #60) ; la session la renseigne et réécrit les trois jeux (commande en tête de fichier).
 DATE_VISA_V1_6 <- as.Date("2026-11-18")
+# Date du visa du mainteneur des valeurs de v1-modeste-07 (M755, 21/11/2026 ; Q-92, M751).
+DATE_VISA_V1_07 <- as.Date("2026-11-21")
 
 # Déclarations communes, jugements de l'analyste pour le jeu (non de la loi vraie) : jeu de
 # déclarations de controler_base() en Bd (réserve R3 d'actuary) ; un calcul sur ces jeux, en B2,
@@ -149,34 +156,40 @@ DATE_VISA_V1_6 <- as.Date("2026-11-18")
   d03g_delai_jours = list(contrats = 30, affiliations = 15, famille = 3, sinistres = 5, beneficiaires = 3,
                           rentes = 2, evenements = 7, prestations = 0))
 
-# Déclarations de v1-modeste-02 : une par motif injecté qui attend une exclusion ou une
-# hypothèse (declarations_requises vide aux deux arrêtés du test) ; listes nommées de listes
-# nommées (forme sérialisable par ecrire_liste(), admise par controler_base()). Jugements de
-# l'analyste : doublons (D01b) et orphelines (D04b) exclus pour les quatre familles ; D02a exclu
-# pour la famille triangle et conservé ailleurs (proposition du dictionnaire, § 9) ; D02b et D03g
-# en hypothèse de visibilité ; D03a, D03b, D03c en hypothèse nommée par une règle (valeur en
-# clair, sans liste fermée en Bd, R3) ; D05, D06 et D13 signalés.
+# Déclarations de v1-modeste-07 (celles de v1-modeste-02 et v1-modeste-05, valeurs des
+# hypothèses H alignées sur la forme du dictionnaire 1.6, § 9 ; spécification de B2, § 7.10) :
+# une par motif injecté qui attend une exclusion ou une hypothèse (declarations_requises vide
+# aux deux arrêtés du test) ; listes nommées de listes nommées (forme sérialisable par
+# ecrire_liste(), admise par controler_base()). Jugements de l'analyste : doublons (D01b) et
+# orphelines (D04b) exclus pour les quatre familles ; D02a exclu pour la famille triangle et
+# conservé ailleurs (proposition du dictionnaire, § 9) ; D02b et D03g en hypothèse de
+# visibilité (`regle`) ; D03a `regle` ; D03b par lien (assure M, prudent au décès et mode du
+# portefeuille ; conjoint de sexe opposé, configuration majoritaire ; enfant et autre F, prudent
+# en survie, sans observation) ; D03c, collège `ensemble` (seul collège du jeu) : 90e centile des
+# salaires observés (53 180) en comptes sociaux, valeur prudente, moyenne (34 560,53) en
+# Solvabilité II, valeur centrale (jugements d'expert, § 7.10) ; D05, D06 et D13 signalés.
 .exclusion <- function(motif, familles, action) {
   stats::setNames(lapply(familles, function(f) list(motif = motif, famille = f, action = action[[f]])),
                   paste(motif, familles, sep = "_"))
 }
-.hypothese <- function(motif, valeur) {
-  stats::setNames(lapply(c("comptes_sociaux", "solvabilite_2"), function(r) {
-    list(motif = motif, referentiel = r, poste = "tous", valeur = valeur)
-  }), paste(motif, c("comptes_sociaux", "solvabilite_2"), sep = "_"))
+.hypothese <- function(motif, valeur, valeur_s2 = valeur) {
+  valeurs <- c(comptes_sociaux = valeur, solvabilite_2 = valeur_s2)
+  stats::setNames(lapply(names(valeurs), function(r) {
+    list(motif = motif, referentiel = r, poste = "tous", valeur = valeurs[[r]])
+  }), paste(motif, names(valeurs), sep = "_"))
 }
 .familles <- c("engagement", "triangle", "risque_en_cours", "regle_comptable")
 .tout <- function(action) stats::setNames(as.list(rep(action, 4L)), .familles)
-.declarations_v1_02 <- list(
+.declarations_v1_07 <- list(
   exclusions = c(.exclusion("D01b", .familles, .tout("exclure")),
                  .exclusion("D02a", .familles, list(engagement = "conserver", triangle = "exclure",
                                                     risque_en_cours = "conserver", regle_comptable = "conserver")),
                  .exclusion("D04b", .familles, .tout("exclure"))),
-  hypotheses = c(.hypothese("D02b", "visibilite_max_saisie_effet_parente"),
-                 .hypothese("D03a", "age_par_defaut_du_segment"),
-                 .hypothese("D03b", "sexe_par_defaut_du_poste"),
-                 .hypothese("D03c", "salaire_par_defaut_du_college"),
-                 .hypothese("D03g", "date_effet_plus_delai"),
+  hypotheses = c(.hypothese("D02b", "regle"),
+                 .hypothese("D03a", "regle"),
+                 .hypothese("D03b", "assure=M;autre=F;conjoint=oppose_assure;enfant=F"),
+                 .hypothese("D03c", "ensemble=53180", "ensemble=34560.53"),
+                 .hypothese("D03g", "regle"),
                  .hypothese("D05", "signalement"),
                  .hypothese("D06", "signalement"),
                  .hypothese("D13", "signalement")),
@@ -190,7 +203,7 @@ JEUX_V1 <- list(
       "controler_base() en Bd (aucune d\u00e9claration requise \u00e0 l'extraction et au 31 d\u00e9cembre 2024).", .USAGE_V1)),
     defauts = list(),
     declarations = list(declarations = list(seuils = .seuils_v1), conventions = .conventions_v1)),
-  `v1-modeste-05` = list(
+  `v1-modeste-07` = list(
     description = .u8(paste(
       "Jeu de contr\u00f4le, non de calcul : m\u00eame jeu propre que v1-modeste-04, avec douze d\u00e9fauts du",
       "dictionnaire, \u00a7 9 ; D09 refuse la colonne prestations.montant. Sous-cas simul\u00e9s (loi vraie,",
@@ -200,14 +213,15 @@ JEUX_V1 <- list(
       "prestations, orpheline sur les \u00e9missions de cotisations, clos_sans_motif sur les sorties sans",
       "suite, cloture_sans_justificatif sur les sorties, montant_aberrant par signe invers\u00e9 seul,",
       "instruction_absente par la date seule. declarations.txt : jeu de d\u00e9clarations de",
-      "controler_base() en Bd.", .USAGE_V1)),
+      "controler_base() en Bd ; hypoth\u00e8ses H de forme admise (dictionnaire 1.6, \u00a7 9), valeurs de la",
+      "sp\u00e9cification de B2, \u00a7 7.10 (#99).", .USAGE_V1)),
     # Intensités (jugement d'expert) : relevées pour qu'au moins une ligne de chaque défaut soit
     # injectée sous ces graines ; clos_sans_motif à 1 (deux sorties sans suite éligibles).
     defauts = list(doublon_contenu = 0.05, date_ordre = 0.1, saisie_anterieure = 0.02,
                    manquant_date_naissance = 0.02, manquant_sexe = 0.02, manquant_salaire = 0.02,
                    manquant_date_saisie = 0.02, orpheline = 0.03, clos_sans_motif = 1,
                    cloture_sans_justificatif = 0.1, montant_aberrant = 0.05, instruction_absente = 0.5),
-    declarations = list(declarations = .declarations_v1_02, conventions = .conventions_v1)))
+    declarations = list(declarations = .declarations_v1_07, conventions = .conventions_v1)))
 
 # --- Jeu v1-modeste-03 (#69 ; spécification de B2, § 7.9 ; ADR 0011, point 14) ------------
 # Jeu propre du capital décès : loi vraie au format version 2 (§ 7.9.2), base LOI_VRAIE_V1 avec
@@ -297,14 +311,15 @@ JEUX_V1$`v1-modeste-06` <- list(
   declarations = list(declarations = list(seuils = .seuils_v1), conventions = .conventions_v1))
 
 # Loi vraie, graines et date de visa d'un jeu : celles de la v1 (intensités de défauts du jeu
-# substituées) ; celles de v1-modeste-03 pour v1-modeste-06 ; date de visa du dictionnaire 1.6.
+# substituées) ; celles de v1-modeste-03 pour v1-modeste-06 ; date de visa du dictionnaire 1.6
+# (DATE_VISA_V1_07 pour v1-modeste-07).
 loi_vraie_v1 <- function(nom) {
   lv <- if (identical(nom, "v1-modeste-06")) LOI_VRAIE_V1_03 else LOI_VRAIE_V1
   for (p in names(JEUX_V1[[nom]]$defauts)) lv$defauts[[p]] <- JEUX_V1[[nom]]$defauts[[p]]
   lv
 }
 graines_v1 <- function(nom) if (identical(nom, "v1-modeste-06")) GRAINES_V1_03 else GRAINES_V1
-date_visa_v1 <- function(nom) DATE_VISA_V1_6
+date_visa_v1 <- function(nom) if (identical(nom, "v1-modeste-07")) DATE_VISA_V1_07 else DATE_VISA_V1_6
 
 simuler_jeu_v1 <- function(nom, date_visa = date_visa_v1(nom)) {
   j <- JEUX_V1[[nom]]

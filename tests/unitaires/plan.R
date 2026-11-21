@@ -471,7 +471,7 @@ verifier("fiche relue : mêmes contrôles", nrow(ns$controler_rejeu(lire_fiche(o
 
 section("plan : sous-schéma donnees inchangé (critère 1.8)")
 
-for (nom in c("v1-modeste-04", "v1-modeste-05")) {
+for (nom in c("v1-modeste-04", "v1-modeste-07")) {
   jj <- lire_jeu(file.path(racine, "inst", "extdata", "jeux", nom))
   p <- plan_min()
   p$donnees <- jj$declarations$declarations
@@ -487,6 +487,92 @@ for (nom in c("v1-modeste-04", "v1-modeste-05")) {
                        controler_base(jj$base, a, jj$declarations$declarations, jj$declarations$conventions)))
   }
 }
+
+section("plan : forme de la valeur des hypothèses H (critère (4.11), #99 ; spécification de B2, erratum v1.0.21, § 2.3)")
+
+# Toute ligne de `hypotheses`, placée ou non, pour tout référentiel et tout poste, a la forme de
+# son motif (dictionnaire 1.6, § 9) ; contrôle unique, lire_declarations() (`donnees`), donc
+# valider_plan(), controler_base() et vue_a_date() refusent plan_invalide. Base v1-modeste-04
+# (aucun constat : aucune ligne n'est placée sous l'hypothèse) et v1-modeste-07 (D03b et D03c
+# placées) ; une ligne déclarée pour un seul référentiel (comptes_sociaux, puis solvabilite_2) ;
+# poste `tous` (D02a et D02b : seul poste admis), sinon P1. Avant #99 : acceptées (m34), sauf le
+# signalement d'un motif non alternatif (règle existante). Ici, une hypothèse est placée sur une
+# ligne, non lue par un poste ; le cas d'une valeur lue par un poste est testé ailleurs : (4.9)
+# dans tests/unitaires/engagement.R (D03c), (4.6) (k) et (l) dans
+# tests/unitaires/calculer_provisions.R (D03f), D03h dans tests/unitaires/risque_en_cours.R.
+j7 <- lire_jeu(file.path(racine, "inst", "extdata", "jeux", "v1-modeste-07"))
+hyp1 <- function(motif, valeur, referentiel) {
+  list(list(motif = motif, referentiel = referentiel, poste = if (motif %in% c("D02a", "D02b")) "tous" else
+    "sinistres_declares_non_regles", valeur = valeur))
+}
+refus_hypothese <- function(motif, valeur, referentiel) {
+  h <- hyp1(motif, valeur, referentiel)
+  p <- plan_min()
+  p$donnees <- list(hypotheses = h)
+  m <- function(expr) tryCatch({ expr; "aucun" }, refus_provie = function(e) e$motif)
+  c(valider_plan = m(valider_plan(p)),
+    controler_base = m(controler_base(base, as.Date("2025-12-31"), list(hypotheses = h))),
+    controler_base_07 = m(controler_base(j7$base, as.Date("2025-12-31"), list(hypotheses = h))),
+    vue_a_date = m(ns$vue_a_date(j7$base, as.Date("2025-12-31"), list(hypotheses = h), NULL)))
+}
+d03c_309 <- paste0("ensemble=", strrep("9", 309L))
+formes_refusees <- list(
+  c("regle mal écrite (D02a)", "D02a", "Regle"), c("regle mal écrite, blanc final (D06)", "D06", "regle "),
+  c("D03f autre que regle", "D03f", "n_importe"), c("signalement sur un motif non alternatif (D03c)", "D03c", "signalement"),
+  c("liste par clé, clé inconnue (D03b)", "D03b", "pere=M"), c("liste par clé, clé en double (D03b)", "D03b", "assure=M;assure=F"),
+  c("liste par clé, élément vide (D03b)", "D03b", "assure=M;;enfant=F"), c("liste par clé, « ; » final (D03b)", "D03b", "assure=M;"),
+  c("liste par clé, blanc (D03b)", "D03b", "assure=M; enfant=F"), c("D03b, valeur hors domaine", "D03b", "enfant=oppose_assure"),
+  c("D05 sans decompte", "D05", "motif=refus"), c("D05, clé en trop", "D05", "motif=refus;decompte=compte;autre=x"),
+  c("décimal mal écrit (D03h, virgule)", "D03h", "0,01"), c("décimal mal écrit (D03h, zero)", "D03h", "zero"),
+  c("D03h à -0,0501", "D03h", "-0.0501"), c("D03h à 0,1001", "D03h", "0.1001"), c("D13 à 1,01", "D13", "1.01"),
+  c("D03e hors catégorie", "D03e", "cat4"), c("D03c, montant négatif", "D03c", "ensemble=-1"),
+  c("D03c, montant à exposant", "D03c", "ensemble=3e4"), c("D03c, 309 « 9 » (non fini en double)", "D03c", d03c_309),
+  c("D03c, collège avec U+0020", "D03c", "cad res=40000"), c("D03c, collège avec « = »", "D03c", "a=b=40000"),
+  c("D03c, collège vide", "D03c", "=40000"), c("D03c, collège répété", "D03c", "ensemble=1;ensemble=2"),
+  # valeurs de m34 (acceptées avant #99) ; D03c n_importe déclarée pour solvabilite_2 seulement :
+  # tour du référentiel solvabilite_2 de la boucle ci-dessous
+  c("D02b autre que regle (m34)", "D02b", "visibilite_max_saisie_effet_parente"),
+  c("D03b, texte libre (m34)", "D03b", "sexe_par_defaut_du_poste"), c("D03h à 0,5 (m34)", "D03h", "0.5"),
+  c("D03h à -0,2 (m34)", "D03h", "-0.2"), c("D03c, texte libre (m34)", "D03c", "n_importe"))
+for (f in formes_refusees) {
+  for (r in ns$REFERENTIELS) {
+    verifier_egal(paste0("(4.11) ", f[[1L]], ", valeur « ", substr(f[[3L]], 1L, 40L), " », déclarée pour ", r,
+                         " : plan_invalide par valider_plan(), controler_base() (ligne non placée, puis jeu v1-modeste-07) et vue_a_date()"),
+                  refus_hypothese(f[[2L]], f[[3L]], r),
+                  c(valider_plan = "plan_invalide", controler_base = "plan_invalide", controler_base_07 = "plan_invalide",
+                    vue_a_date = "plan_invalide"))
+  }
+}
+r <- refus_de(valider_plan(avec(plan_min(), "donnees", list(hypotheses = hyp1("D03c", "ensemble=3e4", "solvabilite_2")))))
+verifier("(4.11) le message nomme le motif, le référentiel, le poste, la valeur et la forme attendue",
+         !is.null(r) && all(vapply(c("D03c", "solvabilite_2", "sinistres_declares_non_regles", "ensemble=3e4",
+                                     "<college>=<montant>"), grepl, NA, conditionMessage(r), fixed = TRUE)))
+formes_admises <- list(
+  c("D03h à -0,05 (borne)", "D03h", "-0.05"), c("D03h à 0,10 (borne)", "D03h", "0.10"), c("D03h 1e-2", "D03h", "1e-2"),
+  c("D13 à 1", "D13", "1"), c("D03c ensemble=0", "D03c", "ensemble=0"), c("D03c, deux collèges", "D03c", "cadres=50000;ensemble=40000.5"),
+  c("D03c, 308 « 9 » (fini)", "D03c", paste0("ensemble=", strrep("9", 308L))), c("D03b à une clé", "D03b", "assure=M"),
+  c("D03b de v1-modeste-07", "D03b", "assure=M;autre=F;conjoint=oppose_assure;enfant=F"),
+  c("D05, clés dans un autre ordre", "D05", "decompte=compte;motif=refus"), c("D03e", "D03e", "cat2"), c("D03f", "D03f", "regle"),
+  c("signalement d'un motif alternatif (D13)", "D13", "signalement"))
+for (f in formes_admises) {
+  for (r in ns$REFERENTIELS) {
+    verifier_egal(paste0("(4.11) contre-témoin, ", f[[1L]], ", déclaré pour ", r, " : admis par les trois fonctions"),
+                  refus_hypothese(f[[2L]], f[[3L]], r),
+                  c(valider_plan = "aucun", controler_base = "aucun", controler_base_07 = "aucun", vue_a_date = "aucun"))
+  }
+}
+verifier("(4.11) .FORMES_HYPOTHESE : exactement les motifs de defauts.csv qui admettent H, sous-cas lettrés sans leurs parents",
+         { dd <- dictionnaire()$defauts
+           h <- dd$code[vapply(dd$traitements, function(x) "H" %in% strsplit(x, ";", fixed = TRUE)[[1L]], NA)]
+           setequal(names(ns$.FORMES_HYPOTHESE), setdiff(h, dd$parent[nzchar(dd$parent)])) &&
+             all(ns$.FORMES_HYPOTHESE %in% names(ns$.TEXTES_FORME_HYPOTHESE)) })
+# la valeur est canonisée telle que déclarée (erratum v1.0.21, § 2.8) : ni réordonnée ni réécrite
+verifier_egal("(4.11) canonisation : valeur d'une liste par clé et écriture d'un décimal gardées telles que déclarées",
+              { p <- plan_min()
+                p$donnees <- list(hypotheses = c(hyp1("D03b", "enfant=F;assure=M", "comptes_sociaux"),
+                                                 hyp1("D03h", "1e-2", "comptes_sociaux")))
+                unname(vapply(canoniser_plan(p)$donnees$hypotheses, `[[`, "", "valeur")) },
+              c("enfant=F;assure=M", "1e-2"))
 
 section("plan : exports (critère 1.9)")
 

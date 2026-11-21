@@ -907,8 +907,9 @@ eclater_champ <- function(x) if (identical(x, "") || is.na(x)) character(0) else
 # `hypotheses` : motif d'un défaut admettant H (ou, pour la valeur .VALEUR_SIGNALEMENT, motif
 # de .motifs_signalement(), seule ligne de son (motif, referentiel)), référentiel de
 # REFERENTIELS, poste (ou `tous`) et valeur en chaînes, une ligne par (motif, referentiel,
-# poste) ; D02a, D02b et D03g : poste `tous`, même valeur pour les deux référentiels, sans
-# signalement (M717). D07, D10 et D11 se déclarent par sous-cas (traitements du sous-cas,
+# poste), valeur de la forme de son motif (.forme_hypothese_admise(), ligne lue ou non ; seul
+# contrôle de cette forme, erratum v1.0.21 de la spécification de B2, #99) ; D02a, D02b et
+# D03g : poste `tous`, même valeur pour les deux référentiels, sans signalement (M717). D07, D10 et D11 se déclarent par sous-cas (traitements du sous-cas,
 # .codes_a_sous_cas()). Un motif à traitement
 # unique (.MOTIFS_TRAITEMENT_UNIQUE) ne se déclare pas dans les deux rubriques (D8).
 # `seuils` : liste nommée ; d03g_delai_jours (liste nommée par table de D03g, jours entiers
@@ -1011,6 +1012,17 @@ lire_declarations <- function(declarations, dico) {
     .refus_plan(paste0("declarations$hypotheses : D02a, D02b et D03g portent le poste tous, la m\u00eame valeur pour les deux ",
                        "r\u00e9f\u00e9rentiels, et ne se signalent pas (S \u00e0 l'extraction seulement)"))
   }
+  # forme de la valeur de toute ligne déclarée, lue ou non, pour tout référentiel et tout poste
+  # (spécification de B2, erratum v1.0.21, § 2.3, #99) : seul lieu de ce contrôle, appliqué
+  # par valider_plan(), controler_base() et vue_a_date() ; un signalement admis ci-dessus a sa
+  # forme
+  for (i in which(!signalement)) {
+    if (!.forme_hypothese_admise(hy$motif[i], hy$valeur[i])) {
+      .refus_plan(paste0("declarations$hypotheses : ", hy$motif[i], " (", hy$referentiel[i], ", ", hy$poste[i],
+                         ") : valeur \u00ab ", hy$valeur[i], " \u00bb, forme attendue : ",
+                         .TEXTES_FORME_HYPOTHESE[[.FORMES_HYPOTHESE[[hy$motif[i]]]]]))
+    }
+  }
   # motif à traitement unique déclaré à la fois en exclusion et en hypothèse (D8)
   double <- intersect(intersect(ex$motif, hy$motif), .MOTIFS_TRAITEMENT_UNIQUE)
   if (length(double) > 0L) {
@@ -1020,6 +1032,81 @@ lire_declarations <- function(declarations, dico) {
   declarations$exclusions <- ex
   declarations$hypotheses <- hy
   declarations
+}
+
+# Forme de la `valeur` d'une ligne de `hypotheses`, par motif qui admet H (dictionnaire 1.6, § 9,
+# tableau « Forme de la valeur des hypothèses H » ; spécification de B2, erratum v1.0.21, § 2.3,
+# #99) : `regle`, la chaîne exacte ; `d03b`, `d03c`, `d05`, listes par clé ; `d03e`, catégorie ;
+# `d03h`, `d13`, décimaux bornés. Égalité des motifs avec ceux de defauts.csv qui admettent H
+# (sous-cas lettrés, sans les parents) contrôlée par tests/unitaires/plan.R. La valeur
+# `signalement` est contrôlée à part (.motifs_signalement()).
+.FORMES_HYPOTHESE <- c(D02a = "regle", D02b = "regle", D03a = "regle", D03b = "d03b", D03c = "d03c", D03d = "regle",
+                       D03e = "d03e", D03f = "regle", D03g = "regle", D03h = "d03h", D05 = "d05", D06 = "regle",
+                       D07a = "regle", D07c = "regle", D08 = "regle", D09 = "regle", D10f = "regle", D13 = "d13",
+                       D14 = "regle")
+# Forme attendue, nommée par le message de refus.
+.TEXTES_FORME_HYPOTHESE <- c(
+  regle = "la cha\u00eene regle",
+  d03b = paste0("liste par cl\u00e9 <cle>=<valeur> jointe par \u00ab ; \u00bb (sans blanc ni \u00e9l\u00e9ment vide, cl\u00e9s ",
+                "distinctes parmi assure, conjoint, enfant, autre ; valeur F ou M, et pour conjoint aussi oppose_assure ",
+                "ou identique_assure)"),
+  d03c = paste0("liste par cl\u00e9 <college>=<montant> jointe par \u00ab ; \u00bb (sans blanc ni \u00e9l\u00e9ment vide, ",
+                "coll\u00e8ges distincts du domaine de college, montant de forme [0-9]+(.[0-9]+)? fini en double)"),
+  d05 = paste0("liste par cl\u00e9 <cle>=<valeur> jointe par \u00ab ; \u00bb (sans blanc ni \u00e9l\u00e9ment vide), exactement ",
+               "les cl\u00e9s motif (sans_suite ou refus) et decompte (compte ou non_compte)"),
+  d03e = "cat1, cat2 ou cat3",
+  d03h = "d\u00e9cimal -?[0-9]+(.[0-9]+)?([eE][-+]?[0-9]+)? dans [-0,05 ; 0,10]",
+  d13 = "d\u00e9cimal -?[0-9]+(.[0-9]+)?([eE][-+]?[0-9]+)? dans [0 ; 1]")
+# Écriture d'un décimal (D03h, D13) et d'un montant de D03c (forme stricte de M315, M757).
+.FORME_DECIMAL <- "^-?[0-9]+(\\.[0-9]+)?([eE][-+]?[0-9]+)?$"
+.FORME_MONTANT_D03C <- "^[0-9]+(\\.[0-9]+)?$"
+
+# Vrai si `valeur` (chaîne renseignée, non vide) a la forme admise pour le motif `motif` (code de
+# .FORMES_HYPOTHESE ; un autre code est une erreur interne). Liste par clé : éléments
+# <cle>=<valeur> joints par « ; », au moins un, aucun vide (ni « ; » en tête, en fin ou doublé),
+# aucun blanc de `.BLANCS`, clés distinctes, ordre libre ; la clé va jusqu'au premier « = ».
+# Décimal : bornes incluses, comparées sur le double lu, sans tolérance. Collège de D03c : domaine
+# de college (M656 : non vide, sans blanc, ni « ; », ni « = ») ; montant fini une fois lu en double.
+.forme_hypothese_admise <- function(motif, valeur) {
+  forme <- .FORMES_HYPOTHESE[motif]
+  if (is.na(forme)) {
+    stop("erreur interne de provie : motif ", motif, " sans forme de valeur (.FORMES_HYPOTHESE)", call. = FALSE)
+  }
+  liste <- function() {
+    if (.contient_blanc(valeur) || startsWith(valeur, ";") || endsWith(valeur, ";")) return(NULL)
+    el <- strsplit(valeur, ";", fixed = TRUE)[[1L]]
+    if (length(el) == 0L || !all(nzchar(el)) || !all(grepl("=", el, fixed = TRUE))) return(NULL)
+    p <- regexpr("=", el, fixed = TRUE)
+    cles <- substr(el, 1L, p - 1L)
+    if (anyDuplicated(cles)) return(NULL)
+    list(cles = cles, valeurs = substring(el, p + 1L))
+  }
+  decimal <- function(min, max) {
+    if (!grepl(.FORME_DECIMAL, valeur)) return(FALSE)
+    x <- as.numeric(valeur)
+    x >= min && x <= max
+  }
+  switch(forme,
+    regle = identical(valeur, "regle"),
+    d03e = valeur %in% c("cat1", "cat2", "cat3"),
+    d03h = decimal(-0.05, 0.10),
+    d13 = decimal(0, 1),
+    d03b = {
+      l <- liste()
+      !is.null(l) && all(l$cles %in% c("assure", "conjoint", "enfant", "autre")) &&
+        all(l$valeurs %in% c("F", "M") | (l$cles == "conjoint" & l$valeurs %in% c("oppose_assure", "identique_assure")))
+    },
+    d05 = {
+      l <- liste()
+      !is.null(l) && length(l$cles) == 2L && setequal(l$cles, c("motif", "decompte")) &&
+        l$valeurs[l$cles == "motif"] %in% c("sans_suite", "refus") &&
+        l$valeurs[l$cles == "decompte"] %in% c("compte", "non_compte")
+    },
+    d03c = {
+      l <- liste()
+      !is.null(l) && all(nzchar(l$cles)) && all(grepl(.FORME_MONTANT_D03C, l$valeurs)) &&
+        all(is.finite(as.numeric(l$valeurs)))
+    })
 }
 
 # Familles de calcul d'une exclusion du motif `motif` : toutes, hors les couples traités S

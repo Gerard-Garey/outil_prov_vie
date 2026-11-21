@@ -107,7 +107,7 @@ p3 <- j3$r$provisions
 # § 11.5) : le refus D09 de PR00010 (indemnité journalière du dossier DO0014, garantie
 # incapacite) a la portée ligne ; aucune unité de P1 ni de P2 ne lit la ligne : P1, P2 et le
 # total sont calculés, à 0 exact (avant #72 : arrêtés D09, total poste_arrete:...)
-verifier_egal("J3 (v1-modeste-05) : P1, P2 et P3 calculés (0), total calculé (0) ; la ligne refusée PR00010 n'est lue par aucune unité (#72)",
+verifier_egal("J3 (v1-modeste-07) : P1, P2 et P3 calculés (0), total calculé (0) ; la ligne refusée PR00010 n'est lue par aucune unité (#72)",
               lapply(c("sinistres_declares_non_regles", "capitaux_non_reclames", "provision_mathematique_temporaire_deces", "total"),
                      function(po) as.list(p3[p3$poste == po, c("montant", "nombre_dossiers", "statut_calcul", "motif_arret")])),
               rep(list(list(montant = 0, nombre_dossiers = 0L, statut_calcul = "calcule", motif_arret = NA_character_)), 4L))
@@ -997,27 +997,44 @@ for (nom_s in names(segs_45)) {
   r_46g <- calculer_provisions(b_46g, plan_45(sg, ex = d02a_c), tid)
   verifier(paste0("(4.6) (g) mi2 : fin_periode de COC1 = A (2025-12-31), sans défaut : P3 3 710,670981993908 exact (cotisation échue)", et),
            egal_mixte(cel_x(r_46g, P3)$montant, 3710.670981993908) && identical(cel_x(r_46g, P3)$statut_resultat, "exact"))
-  verifier_egal(paste0("(4.6) (h) Q1 : cas (e) avec la valeur n_importe : refus plan_invalide", et),
-                motif_de(calculer_provisions(b_46e, plan_45(sg, ex = d02a_c, h = hyp_v("D03f", "n_importe")), tid)),
-                "plan_invalide")
+  verifier_egal(paste0("(4.6) (h) Q1 : cas (e) avec la valeur n_importe : refus plan_invalide, par valider_plan() (erratum v1.0.21, #99)", et),
+                c(motif_de(valider_plan(plan_45(sg, ex = d02a_c, h = hyp_v("D03f", "n_importe")))),
+                  motif_de(calculer_provisions(b_46e, plan_45(sg, ex = d02a_c, h = hyp_v("D03f", "n_importe")), tid))),
+                c("plan_invalide", "plan_invalide"))
   r_46i <- calculer_provisions(b_46i, plan_45(sg, ex = d02a_c, h = hyp_x("D03f")), tid)
   verifier(paste0("(4.6) (i) Q2 (E16-2 (ii)) : debut_periode de COC2 manquante, fin 2025-06-30, mouvement 2025-03-01, D03f H : P3 4 275,986050487058 approximation_numerique (hypothèse non lue)", et),
            egal_mixte(cel_x(r_46i, P3)$montant, 4275.986050487058) &&
              identical(cel_x(r_46i, P3)$statut_resultat, "approximation_numerique"))
-  # (k) Q-a : périodicité unique (règle non applicable), valeur invalide sous D03f H : arrêt, non refus
-  verifier_egal(paste0("(4.6) (k) Q-a : COC1 de périodicité unique, fin_periode manquante, D03f H avec la valeur n_importe : arrêt parametre_non_determine, CTC1 (non refus)", et),
-                arret_46(calculer_provisions(b_un, plan_45(sg, ex = d02a_c, h = hyp_v("D03f", "n_importe")), tid)), arret_attendu)
-  # (l) Q-b : deux déclarations D03f (tous, puis P3), le poste P3 l'emportant sur tous
-  r_46l <- calculer_provisions(b_46e, plan_45(sg, ex = d02a_c, h = c(hyp_v("D03f", "n_importe"),
-                                                                     list(list(motif = "D03f", referentiel = "comptes_sociaux", poste = P3, valeur = "regle")))), tid)
-  verifier(paste0("(4.6) (l) Q-b : D03f tous invalide (n_importe), D03f P3 regle (comptes sociaux) : pas de refus, P3 3 710,670981993908 jugement_expert, total 444 872,630083363678", et),
-           egal_mixte(c(cel_x(r_46l, P3)$montant, cel_x(r_46l, "total")$montant), c(3710.670981993908, 444872.630083363678)) &&
-             identical(cel_x(r_46l, P3)$statut_resultat, "jugement_expert"))
+  # (k) Q-a : périodicité unique (règle non applicable), valeur invalide sous D03f H : refus au plan,
+  # avant tout calcul (erratum v1.0.21, § 2.3, #99 ; avant : arrêt parametre_non_determine, non refus) ;
+  # sous la valeur regle, arrêt
+  verifier_egal(paste0("(4.6) (k) Q-a : COC1 de périodicité unique, fin_periode manquante, D03f H avec la valeur n_importe : refus plan_invalide au plan (avant #99 : arrêt) ; valeur regle : arrêt parametre_non_determine, CTC1", et),
+                list(motif_de(calculer_provisions(b_un, plan_45(sg, ex = d02a_c, h = hyp_v("D03f", "n_importe")), tid)),
+                     arret_46(calculer_provisions(b_un, plan_45(sg, ex = d02a_c, h = hyp_v("D03f", "regle")), tid))),
+                list("plan_invalide", arret_attendu))
+  # (l) Q-b : deux déclarations D03f (tous, puis P3), le poste P3 l'emportant sur tous ; une
+  # valeur invalide est refusée au plan même quand une autre hypothèse est lue pour la ligne
+  # (erratum v1.0.21, § 2.3, #99 ; avant : pas de refus)
+  verifier_egal(paste0("(4.6) (l) Q-b : D03f tous invalide (n_importe), D03f P3 regle (comptes sociaux) : refus plan_invalide au plan (avant #99 : P3 3 710,670981993908 jugement_expert, sans refus)", et),
+                motif_de(calculer_provisions(b_46e, plan_45(sg, ex = d02a_c, h = c(hyp_v("D03f", "n_importe"),
+                                                                                 list(list(motif = "D03f", referentiel = "comptes_sociaux", poste = P3, valeur = "regle")))), tid)),
+                "plan_invalide")
   verifier_egal(paste0("(4.6) (l) Q-b : D03f tous regle, D03f P3 invalide (n_importe, comptes sociaux) : refus plan_invalide", et),
                 motif_de(calculer_provisions(b_46e, plan_45(sg, ex = d02a_c, h = c(hyp_v("D03f", "regle"),
                                                                                  list(list(motif = "D03f", referentiel = "comptes_sociaux", poste = P3, valeur = "n_importe")))), tid)),
                 "plan_invalide")
 }
+# forme de D03f contrôlée au plan seulement (erratum v1.0.21, § 2.3, #99) : une valeur autre que
+# regle qui atteindrait provisions_collectives() (vue modifiée à la main) est une erreur interne,
+# non un refus ; témoin : la vue du plan valide
+p_46x <- plan_45(list(), ex = d02a_c, h = hyp_x("D03f"))
+v_46x <- b2_vue(b_46e, p_46x$arrete, p_46x$donnees, p_46x$conventions)
+v_46n <- v_46x
+v_46n$hypotheses <- lapply(v_46n$hypotheses, function(h) { if (h$motif == "D03f") h$valeur <- "n_importe"; h })
+verifier_egal("(4.6) D03f : valeur autre que regle atteignant provisions_collectives() (vue modifiée à la main) : erreur interne ; témoin (regle) : calculé",
+              list(startsWith(motif_de(ns$provisions_collectives(v_46n, p_46x)), "autre : erreur interne de provie : hypoth"),
+                   motif_de(ns$provisions_collectives(v_46x, p_46x))),
+              list(TRUE, "aucun"))
 verifier("(4.6) (j) une seule constante des mois par périodicité dans R/ : MOIS_PERIODE_COTISATION, sans point, module donnees (E16-3 (a)) ; .MOIS_PERIODICITE supprimée",
          local({
            # toute définition de premier niveau dont la valeur (celle de l'espace de noms) a pour noms

@@ -311,7 +311,8 @@ verifier_egal("Q-a : ouvert -> clos -> fixation 100 000 -> réouverture : capita
               list("capital_du", 100000, D("2024-12-01"), 103936), tolerance = TOL)
 # affiliation exclue pour la famille engagement (D03c, salaire manquant, exclusion déclarée) :
 # elle ne couvre rien, affiliation_non_determinee ; sans exclusion ni hypothèse :
-# assiette_non_determinee (garde ; lecture de D03c sous H : critère (4.9), #75)
+# assiette_non_determinee (arrêt réel, non une garde, erratum v1.0.21 ; lecture de D03c sous H :
+# critère (4.9), #75)
 b_d03c <- b2_base_capital(capital = NA)
 b_d03c$affiliations$salaire_reference <- NA_real_
 excl_d03c <- list(exclusions = data.frame(motif = "D03c", famille = ns$FAMILLES_CALCUL,
@@ -666,13 +667,27 @@ verifier_egal("(4.9) D03c H, valeur ensemble=30000 : DO1 85 747,20, jugement_exp
 verifier_egal("(4.9) D03c H, valeur ensemble=40000 : DO1 114 329,60 (= 40 000 x 2,75 x 1,03936), jugement_expert, D03c",
               do1_49(calculer_provisions(b_49, plan_49(hyp_d("D03c", "ensemble=40000")), tid)),
               list("DO1", 114329.6, "jugement_expert", "D03c"), tolerance = TOL)
-verifier_egal("(4.9) D03c H, valeur salaire_par_defaut_du_college : refus plan_invalide ; cadres=40000 : refus plan_incomplet",
-              list(motif_de(calculer_provisions(b_49, plan_49(hyp_d("D03c", "salaire_par_defaut_du_college")), tid)),
+verifier_egal("(4.9) D03c H, valeur salaire_par_defaut_du_college : refus plan_invalide par valider_plan() (erratum v1.0.21, #99), de même par calculer_provisions() ; cadres=40000 : refus plan_incomplet (collège absent, à la lecture)",
+              list(motif_de(valider_plan(plan_49(hyp_d("D03c", "salaire_par_defaut_du_college")))),
+                   motif_de(calculer_provisions(b_49, plan_49(hyp_d("D03c", "salaire_par_defaut_du_college")), tid)),
                    motif_de(calculer_provisions(b_49, plan_49(hyp_d("D03c", "cadres=40000")), tid))),
-              list("plan_invalide", "plan_incomplet"))
-verifier_egal("(4.9) D03c H déclarée pour le seul poste capitaux_non_reclames : P1 arrêté assiette_non_determinee (garde)",
-              p1_49(calculer_provisions(b_49, plan_49(hyp_d("D03c", "ensemble=30000", P2)), tid)),
-              list(NA_real_, NA_character_, "arrete", "assiette_non_determinee"))
+              list("plan_invalide", "plan_invalide", "plan_incomplet"))
+# D03c H déclarée pour le seul poste P2 : comportement visé, refus declaration_manquante (R2,
+# § 6.2, M756), non encore codé (#108 ; aujourd'hui P1 arrêté assiette_non_determinee) ; témoin
+# vrai avant et après #108 : P1 sans montant (arrêté, ou plan refusé declaration_manquante), aucun
+# montant jugement_expert pour P1
+attendu_echec("(4.9) D03c H déclarée pour le seul poste capitaux_non_reclames : refus declaration_manquante (R2, § 6.2, M756)", "#108",
+              identical(motif_de(calculer_provisions(b_49, plan_49(hyp_d("D03c", "ensemble=30000", P2)), tid)),
+                        "declaration_manquante"))
+verifier("(4.9) D03c H déclarée pour le seul poste capitaux_non_reclames : P1 sans montant (arrêté, ou refus declaration_manquante), aucun montant jugement_expert pour P1",
+         tryCatch({
+           r <- calculer_provisions(b_49, plan_49(hyp_d("D03c", "ensemble=30000", P2)), tid)
+           q <- r$provisions[r$provisions$poste == P1, , drop = FALSE]
+           d <- r$dossiers[r$dossiers$poste == P1, , drop = FALSE]
+           nrow(q) > 0L && all(is.na(q$montant)) && all(q$statut_calcul == "arrete") &&
+             !any(!is.na(d$montant) & d$statut_resultat %in% "jugement_expert") &&
+             !any(!is.na(q$montant) & q$statut_resultat %in% "jugement_expert")
+         }, refus_provie = function(e) identical(e$motif, "declaration_manquante")))
 verifier_egal("(4.9) D03c X pour engagement (conserver ailleurs) : P1 arrêté affiliation_non_determinee (inchangé)",
               p1_49(calculer_provisions(b_49, plan_49(exclusions = excl_fam("D03c", "engagement")$exclusions), tid)),
               list(NA_real_, NA_character_, "arrete", "affiliation_non_determinee"))
@@ -681,11 +696,12 @@ verifier_egal("(4.9) D03c X pour engagement (conserver ailleurs) : P1 arrêté a
 b_49a <- b2_base_capital(capital = NA)
 b_49a$famille$date_naissance[b_49a$famille$id_membre == "ME2"] <- as.Date(NA)
 verifier_egal("(4.9) témoin D03a : R5 (a), date de naissance de ME2 (né le 2014-01-01) manquante, D03a H : P1 arrêté famille_non_determinee (D03a non lue sous H, IP6)",
-              p1_49(calculer_provisions(b_49a, plan_49(hyp_d("D03a", "age_par_defaut_du_segment")), tid)),
+              p1_49(calculer_provisions(b_49a, plan_49(hyp_d("D03a", "regle")), tid)),
               list(NA_real_, NA_character_, "arrete", "famille_non_determinee"))
 # cas de la règle hors des valeurs du critère : P2 lit D03c comme P1 ; hypothèse du poste de
-# préférence à celle de `tous` (comme D03h) ; refus levé seulement si aucun dossier n'arrête
-# le poste (§ 5.9 : après les règles d'arrêt) ; valeur de forme invalide.
+# préférence à celle de `tous` (comme D03h) ; refus de collège absent levé seulement si aucun
+# dossier n'arrête le poste (§ 5.9 : après les règles d'arrêt) ; valeur de forme invalide :
+# refus au plan, quelles que soient les données (erratum v1.0.21, § 2.3, #99).
 b_49n <- b2_base_capital(capital = NA, qualite = "non_identifie")
 b_49n$affiliations$salaire_reference <- NA_real_
 verifier_egal("(4.9) P2 (bénéficiaire non identifié) : D03c H ensemble=30000, DO1 jugement_expert, D03c, 85 747,20 (frais nuls)",
@@ -701,24 +717,36 @@ verifier_egal("(4.9) préférence : D03c du poste P1 (ensemble=40000) et de tous
               c(114329.6, 85747.2), tolerance = TOL)
 b_49f <- b_49
 b_49f$famille$date_naissance[b_49f$famille$id_membre == "ME2"] <- as.Date(NA)
-verifier_egal("(4.9) valeur invalide et dossier arrêté (ME2 d'âge inconnu, D03a conserver) : arrêt famille_non_determinee, sans refus ; formes refusées (plan_invalide) : ensemble=30000; ; ensemble = 30000 ; ensemble=3e4 ; ensemble=30000;ensemble=40000 ; ensemble=-1",
-              list(p1_49(calculer_provisions(b_49f, plan_49(hyp_d("D03c", "n_importe"), excl_fam("D03a", character(0), F3)$exclusions),
-                                             tid))[[4L]],
+verifier_egal("(4.9) valeur invalide et dossier arrêté (ME2 d'âge inconnu, D03a conserver) : refus plan_invalide par valider_plan() et par calculer_provisions(), avant tout calcul (avant #99 : arrêt famille_non_determinee, sans refus) ; formes refusées (plan_invalide) : ensemble=30000; ; ensemble = 30000 ; ensemble=3e4 ; ensemble=30000;ensemble=40000 ; ensemble=-1",
+              list(motif_de(valider_plan(plan_49(hyp_d("D03c", "n_importe"), excl_fam("D03a", character(0), F3)$exclusions))),
+                   motif_de(calculer_provisions(b_49f, plan_49(hyp_d("D03c", "n_importe"), excl_fam("D03a", character(0), F3)$exclusions),
+                                                tid)),
                    vapply(c("ensemble=30000;", "ensemble = 30000", "ensemble=3e4", "ensemble=30000;ensemble=40000", "ensemble=-1"),
                           function(v) motif_de(calculer_provisions(b_49, plan_49(hyp_d("D03c", v)), tid)), "",
                           USE.NAMES = FALSE)),
-              list("famille_non_determinee", rep("plan_invalide", 5L)))
-# montant de forme valide mais hors de la plage des doubles (400 « 9 », non fini) : valeur mal
-# formée, refus plan_invalide après les arrêts du poste (comme les formes ci-dessus), jamais
+              list("plan_invalide", "plan_invalide", rep("plan_invalide", 5L)))
+# forme contrôlée au plan seulement : une valeur hors forme qui atteindrait le lecteur est une
+# erreur interne, non un refus ; collège absent : NA sans refus, plan_incomplet avec refus
+verifier_egal("(4.9) .salaire_d03c() : valeur hors forme (n_importe, ensemble=3e400, ensemble=1;ensemble=2) : erreur interne ; collège absent : NA, puis plan_incomplet ; ensemble=30000.5 : 30 000,5",
+              list(vapply(c("n_importe", "ensemble=3e400", "ensemble=1;ensemble=2"),
+                          function(v) startsWith(motif_de(ns$.salaire_d03c(v, "ensemble", P1, FALSE)),
+                                                 "autre : erreur interne de provie : hypoth"), NA, USE.NAMES = FALSE),
+                   ns$.salaire_d03c("cadres=1", "ensemble", P1, FALSE), motif_de(ns$.salaire_d03c("cadres=1", "ensemble", P1, TRUE)),
+                   ns$.salaire_d03c("cadres=1;ensemble=30000.5", "ensemble", P1, FALSE)),
+              list(rep(TRUE, 3L), NA_real_, "plan_incomplet", 30000.5))
+# montant de forme valide mais hors de la plage des doubles (400 « 9 », non fini) : refus
+# plan_invalide par valider_plan(), quelles que soient les données (erratum v1.0.21, § 2.3), jamais
 # l'erreur brute de valeur_actuelle_probable()
 d03c_inf <- paste0("ensemble=", strrep("9", 400L))
-verifier_egal("(4.9) montant hors de la plage des doubles (ensemble= suivi de 400 « 9 ») : refus plan_invalide ; liste cadres=50000;ensemble=<400 « 9 »> : refus plan_invalide ; dossier arrêté (ME2 d'âge inconnu) : arrêt famille_non_determinee, sans refus ; entrée valide ensemble=30000 inchangée : DO1 85 747,20",
-              list(motif_de(calculer_provisions(b_49, plan_49(hyp_d("D03c", d03c_inf)), tid)),
+verifier_egal("(4.9) montant hors de la plage des doubles (ensemble= suivi de 400 « 9 », seul ou après cadres=50000;) : refus plan_invalide par valider_plan() et par calculer_provisions() ; dossier arrêté (ME2 d'âge inconnu) : même refus, avant tout calcul (avant #99 : arrêt famille_non_determinee) ; entrée valide ensemble=30000 inchangée : DO1 85 747,20",
+              list(motif_de(valider_plan(plan_49(hyp_d("D03c", d03c_inf)))),
+                   motif_de(valider_plan(plan_49(hyp_d("D03c", paste0("cadres=50000;", d03c_inf))))),
+                   motif_de(calculer_provisions(b_49, plan_49(hyp_d("D03c", d03c_inf)), tid)),
                    motif_de(calculer_provisions(b_49, plan_49(hyp_d("D03c", paste0("cadres=50000;", d03c_inf))), tid)),
-                   p1_49(calculer_provisions(b_49f, plan_49(hyp_d("D03c", d03c_inf), excl_fam("D03a", character(0), F3)$exclusions),
-                                             tid))[[4L]],
+                   motif_de(calculer_provisions(b_49f, plan_49(hyp_d("D03c", d03c_inf), excl_fam("D03a", character(0), F3)$exclusions),
+                                                tid)),
                    do1_49(calculer_provisions(b_49, plan_49(hyp_d("D03c", "ensemble=30000")), tid))[[2L]]),
-              list("plan_invalide", "plan_invalide", "famille_non_determinee", 85747.2), tolerance = TOL)
+              list("plan_invalide", "plan_invalide", "plan_invalide", "plan_invalide", "plan_invalide", 85747.2), tolerance = TOL)
 verifier_egal("(4.9) liste à deux collèges cadres=50000;ensemble=40000 : collège ensemble lu, 114 329,60 ; montant décimal ensemble=30000.50",
               c(do1_49(calculer_provisions(b_49, plan_49(hyp_d("D03c", "cadres=50000;ensemble=40000")), tid))[[2L]],
                 do1_49(calculer_provisions(b_49, plan_49(hyp_d("D03c", "ensemble=30000.50")), tid))[[2L]]),
@@ -759,11 +787,11 @@ verifier("hypothese_vue() : seule sélection d'une hypothèse par ligne, défini
 section("engagement : statut sous une hypothèse de la vue, D02b et D03g (critère (4.7), § 5.8, source S2), #87")
 
 # Plan de (4.7) : b2_plan() dont `donnees` est celui du plan `recommandees` de la base construite
-# (seuils de D02c, p49), plus D03g en H (deux référentiels, poste tous, date_effet_plus_delai) et
+# (seuils de D02c, p49), plus D03g en H (deux référentiels, poste tous, valeur regle) et
 # les délais de seuils$d03g_delai_jours. Valeurs en dur : § 7.7, critère (4.7) ; (e) à (l)
 # recalculées par un chemin indépendant du code (b87/temoins.R, visa d'actuary). R1 : facteur
 # 1,015 x 1,024 = 1,03936 ; R3 : paiement de 40 000 le 2025-03-01 ; R3b : 140 928 / 73.
-plan_87 <- function(delais = list(), hypotheses = hyp_d("D03g", "date_effet_plus_delai"), exclusions = NULL) {
+plan_87 <- function(delais = list(), hypotheses = hyp_d("D03g", "regle"), exclusions = NULL) {
   q <- p49
   if (length(delais)) q$donnees$seuils$d03g_delai_jours <- delais
   q$donnees$hypotheses <- hypotheses
@@ -872,7 +900,7 @@ b_87k$evenements <- b2_tab("evenements", id_evenement = "EV1", id_sinistre = "SI
                            type_evenement = "demande_mise_a_jour", date_effet = D("2025-01-10"), date_saisie = as.Date(NA))
 verifier_egal("(4.7) (k) D03c (S1) et D03g (S2) sur le même dossier : DO1 85 747,20, jugement_expert, hypotheses_defaut D03c;D03g",
               dos_87(calculer_provisions(b_87k, plan_87(list(evenements = 0),
-                                                        c(hyp_d("D03g", "date_effet_plus_delai"), hyp_d("D03c", "ensemble=30000"))), tid)),
+                                                        c(hyp_d("D03g", "regle"), hyp_d("D03c", "ensemble=30000"))), tid)),
               list("DO1", "deces", 85747.2, "jugement_expert", "D03c;D03g"), tolerance = TOL)
 # (l) accesseur de donnees : clé de la base d'une ligne placée, même invisible ; refus (erreur
 # interne) d'une ligne non placée et d'une colonne qui n'est pas une clé du dictionnaire

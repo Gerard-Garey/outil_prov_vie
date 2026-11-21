@@ -155,11 +155,19 @@ verifier_egal("D03h : taux du tarif manquant, hypothèse 0 % (comptes_sociaux) :
               list(c_h$taux_tarif, c_h$hypothese_d03h, r_h$cellules$statut_resultat, r_h$indicateurs$depassement[1L],
                    r_h$indicateurs$detail[1L]),
               list(0, TRUE, "jugement_expert", TRUE, "id_contrat=CT2;hypothese_D03h"))
-verifier_egal("D03h : sans hypothèse déclarée, declaration_manquante ; valeur non décimale, plan_invalide",
+verifier_egal("D03h : sans hypothèse déclarée, declaration_manquante ; valeur non décimale, plan_invalide (au plan, par lire_declarations() de vue_a_date(), erratum v1.0.21, #99)",
               list(motif_de(risque(b2_base_p3(tarif = NA), plan_p3())),
                    motif_de(risque(b2_base_p3(tarif = NA), plan_p3(),
                                    declarations = list(hypotheses = lapply(d03h$hypotheses, function(h) { h$valeur <- "zero"; h }))))),
               list("declaration_manquante", "plan_invalide"))
+# forme contrôlée au plan seulement (erratum v1.0.21, § 2.3, #99) : une valeur hors forme qui
+# atteindrait le lecteur (vue modifiée à la main) est une erreur interne, non un refus
+v_h <- b2_vue(b2_base_p3(tarif = NA), plan_p3()$arrete, d03h)
+v_h$hypotheses <- lapply(v_h$hypotheses, function(h) { h$valeur <- "zero"; h })
+verifier_egal("D03h : valeur hors forme atteignant .hypothese_d03h() (vue modifiée à la main) : erreur interne ; valeur de la vue : 0",
+              list(startsWith(motif_de(ns$.hypothese_d03h(v_h, 1L)), "autre : erreur interne de provie : hypoth"),
+                   ns$.hypothese_d03h(b2_vue(b2_base_p3(tarif = NA), plan_p3()$arrete, d03h), 1L)),
+              list(TRUE, 0))
 verifier_egal("arrêt hors_axes (hors_axes = refus) : assuré de 45 ans à l'effet (table 40 à 42) : poste arrêté, contrat en cause ; derniere_valeur : calculé",
               { b <- b2_base_p3(); b$assures$date_naissance <- D("1979-01-01")
                 r <- risque(b, plan_p3())
@@ -373,7 +381,7 @@ plan_87p3 <- function(delai) {
                            d02c_age_max = list(assures_sinistre = 75, assures_affiliation = 70, famille = 110),
                            d03g_delai_jours = list(sinistres = delai))
   q$donnees$hypotheses <- lapply(ns$REFERENTIELS, function(r) list(motif = "D03g", referentiel = r, poste = "tous",
-                                                                     valeur = "date_effet_plus_delai"))
+                                                                     valeur = "regle"))
   q$perimetre$segmentations <- list(ct = list(regle = "contrat"))
   q
 }

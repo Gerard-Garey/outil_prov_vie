@@ -377,17 +377,18 @@ provisions_individuelles <- function(vue, plan, tables, temoin) {
 # Valeur de l'hypothèse D03h appliquée à la ligne `ligne` de garanties_souscrites
 # (hypothese_vue() de `engagement`, seule sélection : motif D03h, référentiel comptes_sociaux,
 # poste P3 de préférence à `tous`), lue comme un taux décimal ; NULL sans hypothèse appliquée.
-# Une valeur qui n'est pas un nombre décimal à point est un refus plan_invalide (aucune
-# conversion silencieuse).
+# La forme de la valeur (décimal dans [-0,05 ; 0,10]) est contrôlée au plan par
+# lire_declarations() (`donnees`, erratum v1.0.21, § 2.3, #99) : une valeur qui n'est pas un
+# nombre fini ici est une erreur interne.
 .hypothese_d03h <- function(vue, ligne) {
   valeur <- hypothese_vue(vue, "D03h", .REFERENTIEL_P3, "garanties_souscrites", ligne, .POSTE_P3)
   if (is.na(valeur)) return(NULL)
-  if (!grepl("^-?[0-9]+(\\.[0-9]+)?([eE][-+]?[0-9]+)?$", valeur)) {
-    refuser(paste0("plan : hypoth\u00e8se D03h (comptes_sociaux) : valeur \u00ab ", valeur,
-                   " \u00bb, taux d\u00e9cimal attendu (taux du tarif retenu)"), "plan_invalide", module = "risque_en_cours",
-            recu = valeur)
+  taux <- suppressWarnings(as.numeric(valeur))
+  if (!is.finite(taux)) {
+    stop("erreur interne de provie : hypoth\u00e8se D03h de valeur \u00ab ", valeur,
+         " \u00bb, hors de la forme contr\u00f4l\u00e9e au plan (lire_declarations())", call. = FALSE)
   }
-  as.numeric(valeur)
+  taux
 }
 
 # Témoin rétrospectif (spécification de B2, § 5.5 ; Norberg 1991, recensement § 12), aux mêmes
@@ -441,10 +442,10 @@ provisions_individuelles <- function(vue, plan, tables, temoin) {
 # hors du calcul (vue$exclu) ; hypothèse H (comptes_sociaux, poste P3 ou `tous`) appliquée à la
 # ligne : les deux bornes sont celles de periode_cotisation_regle() (`donnees`), contrat sous
 # hypothèse, restitué même quand la règle rend la cotisation échue (unité de montant nul, § 5.8,
-# #92 mi1) ; valeur déclarée `regle` seule admise, toute autre valeur est un refus plan_invalide,
-# levé après les arrêts du poste quand une cotisation lit l'hypothèse (#92 Q1, comme pour
-# D03h) ; règle non applicable (périodicité `unique` ou non lisible, mouvement manquant) :
-# arrêt parametre_non_determine ; sans hypothèse (conserver) : lecture de Kleene stricte, arrêt
+# #92 mi1) ; valeur déclarée `regle` seule admise, contrôlée au plan par lire_declarations()
+# (`donnees`, erratum v1.0.21, § 2.3, #99 ; une autre valeur ici est une erreur interne) ;
+# règle non applicable (périodicité `unique` ou non lisible, mouvement manquant) : arrêt
+# parametre_non_determine ; sans hypothèse (conserver) : lecture de Kleene stricte, arrêt
 # parametre_non_determine. Identifiant en cause : premier contrat (ordre des lignes de
 # cotisations de la vue). Aucun NA n'entre dans une somme : une part NA résiduelle est une
 # erreur interne. Rend un data.frame (id_contrat, montant), contrats triés, d'attributs
@@ -498,7 +499,12 @@ provisions_collectives <- function(vue, plan) {
   if (any(non_determine)) {
     return(resultat(character(0), numeric(0), "parametre_non_determine", contrat[which(non_determine)[1L]]))
   }
-  if (any(sous_h)) .valeur_d03f(h_d03f[sous_h])
+  # forme de D03f (`regle` seule) contrôlée au plan par lire_declarations() (`donnees`, erratum
+  # v1.0.21, § 2.3, #99) : une autre valeur ici est une erreur interne
+  if (!all(h_d03f[sous_h] == "regle")) {
+    stop("erreur interne de provie : hypoth\u00e8se D03f de valeur autre que regle, hors de la forme contr\u00f4l\u00e9e ",
+         "au plan (lire_declarations())", call. = FALSE)
+  }
   # contrats sous une valeur S1 (D03f) ou S2 (hypothèse de la vue appliquée à la ligne de
   # contrats du contrat ou à une cotisation lue) du § 5.8 : ensemble du statut (#87, #92 mi1) ;
   # l'unité de montant nul n'en retient que les contrats à cotisation lue sous D03f (plus bas)
@@ -537,21 +543,6 @@ provisions_collectives <- function(vue, plan) {
     montant[match(rownames(s), ids)] <- unname(s[, 1L])
   }
   resultat(ids, montant, hypothese = hypothese)
-}
-
-# Contrôle des valeurs de l'hypothèse D03f lues pour les cotisations sous hypothèse
-# (`valeurs` : choisies par hypothese_vue(), dans l'ordre des cotisations de la vue) :
-# `regle` seule admise (#92 Q1, erratum v1.0.16) ; toute autre valeur est un refus
-# plan_invalide, sur la première en cause (aucune valeur ignorée en silence). Ne rend rien.
-.valeur_d03f <- function(valeurs) {
-  for (valeur in valeurs) {
-    if (!identical(valeur, "regle")) {
-      refuser(paste0("plan : hypoth\u00e8se D03f (comptes_sociaux) : valeur \u00ab ", valeur,
-                     " \u00bb, seule la valeur \u00ab regle \u00bb est admise (r\u00e8gle du dictionnaire)"),
-              "plan_invalide", module = "risque_en_cours", recu = valeur)
-    }
-  }
-  invisible(NULL)
 }
 
 # --- Point d'appel de la famille -----------------------------------------------------

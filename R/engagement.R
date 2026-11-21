@@ -258,9 +258,9 @@ parametre_vue <- function(vue, nom, gs, famille = NULL) {
 # sans hypothèse appliquée. `colonnes` : NULL (toute hypothèse de la ligne), ou colonnes de la
 # table lues par le poste : seules comptent les hypothèses dont une colonne (`colonnes` de
 # l'entrée de vue$hypotheses) en fait partie (garde du point 1 de #112, M661 ; spécification
-# `donnees` v1.9, § 9.4). Ne contrôle pas la forme de la valeur, propre à chaque motif (refus
-# plan_invalide du lecteur). Sans point : seule sélection d'une hypothèse par ligne, lue aussi
-# par `risque_en_cours` (D03h) ; non exportée.
+# `donnees` v1.9, § 9.4). Ne contrôle pas la forme de la valeur, contrôlée au plan par
+# lire_declarations() (`donnees`, erratum v1.0.21, § 2.3, #99). Sans point : seule sélection
+# d'une hypothèse par ligne, lue aussi par `risque_en_cours` (D03h) ; non exportée.
 hypothese_vue <- function(vue, motif, referentiel, table, lignes, poste, colonnes = NULL) {
   h <- Filter(function(x) x$motif == motif && x$referentiel == referentiel && x$table == table &&
                 x$poste %in% c(poste, "tous") && (is.null(colonnes) || any(x$colonnes %in% colonnes)), vue$hypotheses)
@@ -444,23 +444,21 @@ lecture_unites <- function(table, colonnes, cles, unite = seq_along(cles), garde
 
 # Salaire de référence par défaut sous l'hypothèse D03c (spécification de B2, § 5.9 ; décision
 # E16-1 du mainteneur, option B) : `valeur` déclarée, de forme `<college>=<montant>` joints
-# par « ; » (montant décimal à point, positif ou nul, fini), et `college` de l'affiliation. Rend
-# le montant ; valeur d'une autre forme (dont un collège répété ou un montant hors de la plage
-# des doubles, non fini) ou collège absent de la liste :
-# NA si `refus` est faux, sinon refus plan_invalide ou plan_incomplet (aucune conversion
-# silencieuse ; le lecteur ne refuse qu'une fois les arrêts du poste connus).
+# par « ; », et `college` de l'affiliation. La forme de la valeur (collège du domaine de
+# college, montant décimal à point, positif ou nul, fini ; collèges distincts) est contrôlée au
+# plan par lire_declarations() (`donnees`, erratum v1.0.21, § 2.3, #99), seul lieu de ce
+# contrôle ; ici, une valeur vide, un élément sans « = », un montant qui n'est pas un nombre fini
+# ou deux collèges égaux sont une erreur interne (le reste de la forme n'est pas revérifié). Rend
+# le montant ; collège absent de la liste (contenu qui dépend des données) : NA si `refus` est
+# faux, sinon refus plan_incomplet (le lecteur ne refuse qu'une fois les arrêts du poste connus).
 .salaire_d03c <- function(valeur, college, poste, refus) {
   morceaux <- strsplit(valeur, ";", fixed = TRUE)[[1L]]
-  montants <- sub("^[^=]*=", "", morceaux)
-  forme <- length(morceaux) > 0L && all(grepl("^[^=;[:space:]]+=[0-9]+(\\.[0-9]+)?$", morceaux)) &&
-    !endsWith(valeur, ";") && all(is.finite(as.numeric(montants)))
   cles <- sub("=.*$", "", morceaux)
-  if (!forme || anyDuplicated(cles)) {
-    if (!refus) return(NA_real_)
-    refuser(paste0("plan : hypoth\u00e8se D03c (comptes_sociaux, ", poste, ") : valeur \u00ab ", valeur,
-                   " \u00bb, liste <college>=<montant> joints par \u00ab ; \u00bb attendue (salaire de ",
-                   "r\u00e9f\u00e9rence par d\u00e9faut, montant d\u00e9cimal \u00e0 point)"),
-            "plan_invalide", module = "engagement", recu = valeur)
+  montants <- suppressWarnings(as.numeric(sub("^[^=]*=", "", morceaux)))
+  if (length(morceaux) == 0L || !all(grepl("=", morceaux, fixed = TRUE)) || !all(is.finite(montants)) ||
+      anyDuplicated(cles)) {
+    stop("erreur interne de provie : hypoth\u00e8se D03c de valeur \u00ab ", valeur,
+         " \u00bb, hors de la forme contr\u00f4l\u00e9e au plan (lire_declarations())", call. = FALSE)
   }
   i <- match(college, cles)
   if (is.na(i)) {
@@ -469,7 +467,7 @@ lecture_unites <- function(table, colonnes, cles, unite = seq_along(cles), garde
                    " \u00bb sans salaire pour le coll\u00e8ge ", college), "plan_incomplet", module = "engagement",
             attendu = paste0(college, "=<montant>"), recu = valeur)
   }
-  as.numeric(montants[i])
+  montants[i]
 }
 
 # Capital reconstitué des dossiers `ouvert` (spécification de B2, § 5.3) : `etats` (lignes de
@@ -485,8 +483,9 @@ lecture_unites <- function(table, colonnes, cles, unite = seq_along(cles), garde
 # majoration_enfant) ; non instruit, structure_familiale du plan (espérance, jugement
 # d'expert) ; une majoration absente vaut 0. Salaire manquant d'une affiliation dont la ligne
 # porte une hypothèse D03c placée (comptes_sociaux, poste `poste` ou `tous`) : salaire déclaré
-# pour son collège (§ 5.9, option B ; refus plan_invalide ou plan_incomplet levé seulement si
-# aucun dossier n'arrête le poste, comme D03h au § 5.5). Rend data.frame (capital, structure,
+# pour son collège (§ 5.9, option B ; collège absent de la liste : refus plan_incomplet levé
+# seulement si aucun dossier n'arrête le poste, comme D03h au § 5.5 ; forme de la valeur
+# contrôlée au plan, erratum v1.0.21). Rend data.frame (capital, structure,
 # arret, d03c, reconstitue) : `structure` vrai si la structure familiale du plan entre dans le
 # montant ; `d03c` vrai si le salaire déclaré sous D03c entre dans le montant (source S1, § 5.8) ;
 # `reconstitue` vrai si le capital est reconstitué (sans capital_forfaitaire : affiliations, et
@@ -495,8 +494,9 @@ lecture_unites <- function(table, colonnes, cles, unite = seq_along(cles), garde
 # plusieurs affiliations de ce collège couvrent la survenance, ou collège inconnu de la
 # garantie ou d'une affiliation de l'assuré au contrat couvrant la survenance ; parametre_non_determine : taux_capital et
 # capital_forfaitaire absents, ou paramètre lu à plusieurs valeurs ou dont une ligne retenue
-# est exclue pour engagement, erratum v1.0.7 ; assiette_non_determinee (garde) :
-# salaire de l'affiliation manquant hors d'une hypothèse D03c lue ; famille_non_determinee :
+# est exclue pour engagement, erratum v1.0.7 ; assiette_non_determinee, arrêt réel et non une
+# garde (erratum v1.0.21) : salaire de l'affiliation manquant sans hypothèse D03c du poste ou
+# de `tous` appliquée à la ligne ; famille_non_determinee :
 # dossier instruit dont une ligne de famille rattachée au sinistre est exclue pour engagement,
 # ou dont un enfant vivant a un âge inconnu sans situation a_naitre ou handicape, erratum
 # v1.0.6), NA sinon.
@@ -571,8 +571,9 @@ lecture_unites <- function(table, colonnes, cles, unite = seq_along(cles), garde
   un <- nb == 1L & !college_inconnu
   sal <- salaire[k1[un]]
   # salaire manquant : hypothèse D03c de la ligne de l'affiliation (§ 5.9), valeur lue ici sans
-  # refus (illisible : NA), refus différé à la fin, une fois les arrêts connus ; sans
-  # hypothèse lue, arrêt assiette_non_determinee (garde)
+  # refus (collège absent : NA), refus différé à la fin, une fois les arrêts connus ; sans
+  # hypothèse lue, arrêt assiette_non_determinee (arrêt réel, non une garde : aucune hypothèse
+  # D03c, ou hypothèse d'un autre poste seulement)
   manque <- which(is.na(sal))
   h_d03c <- hypothese_vue(vue, "D03c", .REFERENTIEL_B2, "affiliations", k1[un][manque], poste)
   lue <- !is.na(h_d03c)
@@ -637,8 +638,9 @@ lecture_unites <- function(table, colonnes, cles, unite = seq_along(cles), garde
                                                                            me0[ins[connu]] * enfants[connu])
     res$arret[ins[inconnu]] <- "famille_non_determinee"
   }
-  # valeur de D03c illisible pour un dossier qui la lit : refus, levé seulement si aucun dossier
-  # n'arrête le poste (§ 5.9 ; ordre de D03h, § 5.5)
+  # collège de l'affiliation absent de la valeur de D03c pour un dossier qui la lit : refus
+  # plan_incomplet, levé seulement si aucun dossier n'arrête le poste (§ 5.9 ; ordre de D03h,
+  # § 5.5)
   if (all(is.na(res$arret))) for (j in seq_along(d03c$i)) .salaire_d03c(d03c$valeur[j], d03c$college[j], poste, TRUE)
   res
 }
