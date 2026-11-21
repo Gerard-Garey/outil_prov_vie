@@ -470,6 +470,26 @@ lecture_unites <- function(table, colonnes, cles, unite = seq_along(cles), garde
   montants[i]
 }
 
+# Refus de lecture R3 (spécification de B2, § 5.9 et § 6.2, erratum v1.0.21, #113, option (a)) :
+# un dossier dont l'assiette est lue sous D03c (`d03c` vrai) et dont une des grandeurs `...`
+# (vecteurs parallèles à `id_dossier` : capital, solde, montant) est infinie ou NaN donne un
+# refus plan_invalide qui nomme le plus petit dossier en cause (ordre des octets). Un
+# débordement d'un dossier hors D03c (valeur de la base) n'est pas refusé ici (limite, #189) :
+# erreur brute de valeur_actuelle_probable() à frais nuls (salaire de 1e308), montant infini
+# calculé avec des frais (salaire de 6e307, frais de 0,1) ; total de poste qui déborde sur des
+# dossiers finis : #190.
+# L'appelant ne l'appelle qu'une fois tous les arrêts du poste écartés (rang du § 6.2).
+.refuser_debordement_d03c <- function(id_dossier, d03c, ..., poste) {
+  deborde <- Reduce(`|`, lapply(list(...), function(x) is.infinite(x) | is.nan(x)), rep(FALSE, length(id_dossier)))
+  en_cause <- id_dossier[d03c & deborde]
+  if (length(en_cause) == 0L) return(invisible(NULL))
+  premier <- sort(as.character(en_cause), method = "radix")[1L]
+  refuser(paste0("plan : hypoth\u00e8se D03c (comptes_sociaux, ", poste, ") : capital, solde ou montant non fini du ",
+                 "dossier ", premier, " sous le salaire d\u00e9clar\u00e9 (d\u00e9bordement des doubles)"),
+          "plan_invalide", module = "engagement", identifiants = premier,
+          attendu = "capital, solde et montant finis sous le salaire d\u00e9clar\u00e9")
+}
+
 # Capital reconstitué des dossiers `ouvert` (spécification de B2, § 5.3) : `etats` (lignes de
 # etats_a_date()) ; `parametres` : paramètres du poste (plan). capital_forfaitaire s'il est
 # présent ; sinon assiette (salaire_reference de l'affiliation retenue de l'assuré du sinistre
@@ -961,6 +981,11 @@ calculer_engagement <- function(vue, plan, tables, catalogue, garantie, poste) {
   if (length(ar$lignes)) return(arreter(ar$motif, ar$identifiant, ar$lignes))
   arret <- which(!is.na(calc$arret))
   if (length(arret)) return(arreter(calc$arret[arret[1L]], calc$id_dossier[arret[1L]]))
+  # débordement d'un dossier lu sous D03c (refus de lecture R3, #113, option (a), § 5.9 et
+  # § 6.2) : capital reconstitué, solde revalorisé ou montant non fini, levé ici, une fois tous
+  # les arrêts du poste écartés ; avant valeur_actuelle_probable(), où un flux NaN (frais nuls
+  # x montant infini) est une erreur brute (m32)
+  .refuser_debordement_d03c(calc$id_dossier, calc$d03c, calc$capital, calc$solde, calc$montant, poste = poste)
   # invariant (spécification de B2, § 4.3) : aucun dossier valorisé à instruction inconnue par sa
   # partie de ligne ; une instruction tenue pour inconnue par D02a sous H (R10) n'est lue que pour
   # un capital reconstitué, arrêté plus haut (.reconstituer_capital())
@@ -1014,6 +1039,8 @@ calculer_engagement <- function(vue, plan, tables, catalogue, garantie, poste) {
                     probabilite = c(rep(cc$issue, each = 2L), rep(1, 2L * nc)), stringsAsFactors = FALSE)
   vap <- valeur_actuelle_probable(ech, list(type = "aucune"), plan$conventions)
   montant <- vap$valeurs$valeur_actuelle[apparier_cles(cc$id_dossier, vap$valeurs$cle)]
+  # montant restitué du dossier (frais compris) non fini sous D03c : même refus R3
+  .refuser_debordement_d03c(cc$id_dossier, cc$d03c, montant, poste = poste)
   reglement <- .HORIZONS[[methode]] != "arrete"
   # jugement_expert : méthode « règlement », structure familiale du plan, facteur d'issue, ou
   # valeur des sources S1 (salaire déclaré sous D03c, § 5.9) et S2 (hypothèse de la vue, #87)

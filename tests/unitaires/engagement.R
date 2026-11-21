@@ -747,6 +747,76 @@ verifier_egal("(4.9) montant hors de la plage des doubles (ensemble= suivi de 40
                                                 tid)),
                    do1_49(calculer_provisions(b_49, plan_49(hyp_d("D03c", "ensemble=30000")), tid))[[2L]]),
               list("plan_invalide", "plan_invalide", "plan_invalide", "plan_invalide", "plan_invalide", 85747.2), tolerance = TOL)
+# critère (4.12), #113, option (a) (§ 5.9, refus de lecture R3 ; erratum v1.0.21) : montant
+# D03c de forme admise, fini en double, dont le capital reconstitué (x 2,75), le solde revalorisé
+# (x 1,03936) ou le montant restitué (frais compris) déborde : refus plan_invalide qui nomme le
+# plus petit dossier, levé après les arrêts du poste. Avant : erreur brute de
+# valeur_actuelle_probable() (m32), ou montant infini calculé quand les frais sont non nuls.
+d03c_n <- function(n) hyp_d("D03c", paste0("ensemble=", strrep("9", n)))
+refus_de <- function(expr) tryCatch({ expr; NULL }, refus_provie = function(e) list(e$motif, e$identifiants),
+                                    error = function(e) list(paste("autre :", conditionMessage(e)), character(0)))
+verifier_egal("(4.12) ensemble= suivi de n « 9 » : n = 300, 306, 307 calculés, DO1 2,85824e300, 2,85824e306, 2,85824e307, jugement_expert, D03c (inchangés)",
+              lapply(c(300L, 306L, 307L), function(n) do1_49(calculer_provisions(b_49, plan_49(d03c_n(n)), tid))),
+              list(list("DO1", 2.85824e300, "jugement_expert", "D03c"), list("DO1", 2.85824e306, "jugement_expert", "D03c"),
+                   list("DO1", 2.85824e307, "jugement_expert", "D03c")), tolerance = TOL)
+verifier_egal("(4.12) n = 308 (capital non fini) : refus plan_invalide, DO1 (avant : erreur brute de valeur_actuelle_probable(), m32) ; n = 309 : refus plan_invalide par valider_plan() (#99)",
+              list(refus_de(calculer_provisions(b_49, plan_49(d03c_n(308L)), tid)), motif_de(valider_plan(plan_49(d03c_n(309L))))),
+              list(list("plan_invalide", "DO1"), "plan_invalide"))
+verifier_egal("(4.12) capital fini, solde non fini (ensemble=64 suivi de 306 « 0 » : capital 1,76e308, solde x 1,03936 infini) : refus plan_invalide, DO1 (avant : erreur brute)",
+              refus_de(calculer_provisions(b_49, plan_49(hyp_d("D03c", paste0("ensemble=64", strrep("0", 306L)))), tid)),
+              list("plan_invalide", "DO1"))
+# montant restitué non fini : ensemble=6e307 donne un montant de 1,714944e308, fini ; des frais de
+# 0,1 le portent au-delà de la plage des doubles (avant : P1 infini, calculé)
+p_frais <- function(plan, taux) {
+  plan$frais$deces$sinistres_declares_non_regles$comptes_sociaux$taux_chargement_psap <- taux
+  plan
+}
+d03c_6 <- hyp_d("D03c", paste0("ensemble=6", strrep("0", 307L)))
+verifier_egal("(4.12) ensemble=6 suivi de 307 « 0 » : frais nuls, DO1 1,714944e308 calculé ; frais de 0,1, montant restitué non fini : refus plan_invalide, DO1 (avant : P1 infini, calculé)",
+              list(do1_49(calculer_provisions(b_49, plan_49(d03c_6), tid))[[2L]],
+                   refus_de(calculer_provisions(b_49, p_frais(plan_49(d03c_6), 0.1), tid))),
+              list(1.714944e308, list("plan_invalide", "DO1")), tolerance = TOL)
+# rang du refus R3 (§ 6.2) : un arrêt du poste l'emporte. Base à deux dossiers (modèle de
+# deux_gs) : DO1 lu sous D03c (n = 308, débordement) ; DO2, autre sinistre SI2 de l'assuré AS2
+# (affiliation AF2, salaire 30 000 connu), enfant ME2b d'âge inconnu (D03a conserver) : arrêt
+# famille_non_determinee de DO2, sans refus (un refus levé avant l'arrêt rendrait
+# plan_invalide DO1)
+b_rang <- local({ b <- b_49
+  b$assures <- rbind(b$assures, transform(b$assures, id_assure = "AS2"))
+  b$affiliations <- rbind(b$affiliations, transform(b$affiliations, id_affiliation = "AF2", id_assure = "AS2",
+                                                    salaire_reference = 30000))
+  b$sinistres <- rbind(b$sinistres, transform(b$sinistres, id_sinistre = "SI2", id_assure = "AS2"))
+  b$dossiers <- rbind(b$dossiers, transform(b$dossiers, id_dossier = "DO2", id_sinistre = "SI2"))
+  b$beneficiaires <- rbind(b$beneficiaires, transform(b$beneficiaires, id_beneficiaire = "BE2", id_dossier = "DO2",
+                                                      id_membre = NA_character_, qualite = "heritiers"))
+  me <- b$famille[b$famille$id_membre == "ME2", , drop = FALSE]
+  b$famille <- rbind(b$famille, transform(me, id_membre = "ME2b", id_assure = "AS2", id_sinistre = "SI2",
+                                          date_naissance = as.Date(NA)))
+  b })
+verifier_egal("(4.12) rang : DO1 sous D03c (n = 308) et DO2 arrêté (ME2b d'âge inconnu, D03a conserver) : P1 arrêté famille_non_determinee, sans refus ; témoin, sans ME2b : refus plan_invalide, DO1",
+              list(p1_49(calculer_provisions(b_rang, plan_49(d03c_n(308L), excl_fam("D03a", character(0), F3)$exclusions), tid)),
+                   refus_de(calculer_provisions(within(b_rang, famille <- famille[famille$id_membre != "ME2b", , drop = FALSE]),
+                                                plan_49(d03c_n(308L), excl_fam("D03a", character(0), F3)$exclusions), tid))),
+              list(list(NA_real_, NA_character_, "arrete", "famille_non_determinee"), list("plan_invalide", "DO1")))
+# témoin de la limite (§ 5.9) : le même débordement depuis la base, sans D03c, n'est pas refusé
+# (#189) : salaire de 1e308, erreur brute ; salaire de 6e307 et frais de 0,1, P1 infini calculé.
+# Comportement visé : un refus classé ou une cellule arrêtée, jamais une erreur brute ni un
+# calcul mené à son terme avec un montant non fini (débordement du total de poste : #190)
+classe_ou_arrete <- function(base, plan) {
+  tryCatch({
+    r <- calculer_provisions(base, plan, tid)
+    q <- r$provisions[r$provisions$poste == P1 & r$provisions$segmentation == "ensemble", , drop = FALSE]
+    nrow(q) > 0L && all(q$statut_calcul == "arrete")
+  }, refus_provie = function(e) TRUE, error = function(e) FALSE)
+}
+b_s308 <- b2_base_capital(capital = NA)
+b_s308$affiliations$salaire_reference <- 1e308
+b_s6 <- b2_base_capital(capital = NA)
+b_s6$affiliations$salaire_reference <- 6e307
+attendu_echec("(4.12) limite : salaire de 1e308 dans la base, sans D03c : refus classé ou P1 arrêté (aujourd'hui : erreur brute)", "#189",
+              classe_ou_arrete(b_s308, plan_49()))
+attendu_echec("(4.12) limite : salaire de 6e307 dans la base et frais de 0,1, sans D03c : refus classé ou P1 arrêté (aujourd'hui : P1 infini, calculé)", "#189",
+              classe_ou_arrete(b_s6, p_frais(plan_49(), 0.1)))
 verifier_egal("(4.9) liste à deux collèges cadres=50000;ensemble=40000 : collège ensemble lu, 114 329,60 ; montant décimal ensemble=30000.50",
               c(do1_49(calculer_provisions(b_49, plan_49(hyp_d("D03c", "cadres=50000;ensemble=40000")), tid))[[2L]],
                 do1_49(calculer_provisions(b_49, plan_49(hyp_d("D03c", "ensemble=30000.50")), tid))[[2L]]),
