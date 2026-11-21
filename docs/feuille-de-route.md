@@ -56,7 +56,7 @@ Tenue par `architect`, après chaque série de PR fusionnées. Chaque mise à jo
   - Format des jeux : inchangé (le jeu nouveau suit le format existant).
   - Graphe des modules : `plan` dépend déjà de `dictionnaire` et de `donnees` (`tests/controles/graphe_modules.R:126`, *vérifié*). Aucun arc nouveau n'est attendu (*hypothèse*, à confirmer par `coder`).
 - **Étape 0, avant tout code** :
-  - [ ] **0a — erratum de la spécification de B2** (suite de v1.0.20), par **`actuary-approfondi`** (jugement : spécification ; une seule consultation pour les cinq points) :
+  - [x] **0a — erratum de la spécification de B2** (suite de v1.0.20), par **`actuary-approfondi`** (jugement : spécification ; une seule consultation pour les cinq points) : *Fait : erratum v1.0.21, rédigé par `actuary-approfondi` (une relance ciblée après la limite de 80 tours), écrit par la session (`1192aca`).*
     1. **Q-4** : concilier le contrôle de forme « au plan » (#99) avec le refus paresseux du § 5.9. Fixer quels refus restent levés à la lecture (contenu qui dépend des données : collège absent de la liste de D03c ; hypothèse D03h ou D03c non déclarée pour le poste) et leur rang par rapport aux arrêts du § 6.2 (`hors_axes`, `parametre_non_determine`). Examiner D03f. Le cas mesuré par #108 (D03h `zero`) devient un refus de plan.
     2. **#113** : choisir l'option (a), refus `plan_invalide` d'un capital ou d'une assiette non finis, ou l'option (b), borne du montant déclaré (valeur et motif).
     3. **Jeu nouveau** : une valeur de forme admise pour chaque motif que déclare `v1-modeste-05` (D02b, D03a, D03b, D03c, D03g), avec des collèges de D03c pris dans le jeu.
@@ -64,9 +64,9 @@ Tenue par `architect`, après chaque série de PR fusionnées. Chaque mise à jo
     5. **Points rattachés à #99** : valeur D03f invalide pour `solvabilite_2` ; limite de forme de D03c (M315, M656) ; formulation « garde » d'`assiette_non_determinee` (commentaire 6836953391).
 
     `regulatory` : sans objet, aucun texte qui fait foi n'est en jeu. Les bornes de D03h sont des bornes de contrôle de la colonne (dict. § 3, T4), non un plafond réglementaire (*hypothèse*, à confirmer par `actuary` en 0a).
-  - [ ] **0b — visa du mainteneur** sur l'erratum (comme pour les errata `1.9.x`, M695 et M706) et sur le jeu nouveau (Q-92) ; décisions consignées à partir de M749.
-  - [ ] **0c — libellés** (Q-95).
-  - [ ] **0d — archivage de la feuille de route** (M747) : mission séparée d'`architect-approfondi`, commit `docs:` de la session, **avant le premier commit de code** (recommandé : chaque agent de la branche lit alors la feuille de route allégée).
+  - [x] **0b — visa du mainteneur** sur l'erratum (comme pour les errata `1.9.x`, M695 et M706) et sur le jeu nouveau (Q-92) ; décisions consignées à partir de M749. *Fait le 21/11/2026 : M755 à M757.*
+  - [x] **0c — libellés** (Q-95). *Fait : M754.*
+  - [x] **0d — archivage de la feuille de route** (M747) : mission séparée d'`architect-approfondi`, commit `docs:` de la session, **avant le premier commit de code** (recommandé : chaque agent de la branche lit alors la feuille de route allégée). *Fait : `5fd5815` ; renvois à l'archive décidés, M758.*
 - **Périmètre** (Q-90 (a)), dans l'ordre des commits ; un commit par issue qui change un résultat, avec son tableau avant / après :
   1. [ ] **#99 — contrôle de la valeur des hypothèses `H` par `valider_plan()`**.
      - *Circuit* : circuit 1. La spécification est visée (dictionnaire `1.6`, § 9, M664) et complétée par l'erratum de 0a ; puis `coder-approfondi`, `audit` léger, validation d'`actuary`, et `docwriter` en fin de branche.
@@ -657,8 +657,12 @@ Sous-section ouverte à la cinquante-deuxième série, à l'épuisement du bloc 
 | M752 | 21/11/2026 | **Q-93 (a)** — ordre : Bdr-b3, **Bo5**, Bdr-b4, Bdr-b5, Bdr-r (précise M743 et M744) (décision du mainteneur, en session) | § 2 ; § 4.4, Q-93 ; M744 |
 | M753 | 21/11/2026 | **Q-94 (a)** — pas de consultation Fable pour le plan de Bdr-b3 (seuil « macro » atteint à la lettre, critère (i), sur des fonctions des seuls postes du décès, comme M608 et M637) ; Fable proposé au plan de Bdr-b4 ; compteur de Bdr-b3 : 0/3 (décision du mainteneur, en session) | § 2 ; § 4.4, Q-94 |
 | M754 | 21/11/2026 | **Q-95 : oui** — `ready-for-agent` sur #99, #113, #108, #176 ; `enhancement` sur #99 ; `bug` sur #113 et #108 ; `needs-triage` retiré ; posés par la session (décision du mainteneur, en session) | § 1.19 ; § 4.4, Q-95 |
+| M755 | 21/11/2026 | **Visa 0b de l'erratum v1.0.21** de la spécification de B2 (`1192aca`), tel que proposé par `actuary-approfondi` : forme des valeurs `H` contrôlée au plan par `lire_declarations()`, seul lieu (ADR 0010, point 17, à annoter) ; rang des refus nés à la lecture après tous les arrêts du poste ; #113 option (a), voie D03c, voie de la base renvoyée à une issue ; deux clés de D05 exigées ; `valeur` canonisée telle que déclarée ; valeurs du jeu `v1-modeste-07` (§ 7.10) ; #176, plus petit identifiant et motif de l'unité retenue ; rang de `taux_par_annee` inchangé (décision du mainteneur, en session) | § 1.19, 0b ; M750, M751 |
+| M756 | 21/11/2026 | **R2 : refus `declaration_manquante`** quand une ligne lit D03c, D03f ou D03h sans hypothèse de ce motif pour son poste ni pour `tous`, mais avec une hypothèse pour un autre poste ; renverse la « garde » d'E16-1 et le comportement de #92 pour D03f ; alternative écartée : arrêt uniforme (décision du mainteneur, en session) | erratum v1.0.21, § 6.2 |
+| M757 | 21/11/2026 | **Montant de D03c : forme stricte de M315** (`[0-9]+(\.[0-9]+)?`), de préférence au « décimal » du dictionnaire `1.6`, § 9 ; erratum du dictionnaire à prévoir (décision du mainteneur, en session) | erratum v1.0.21, § 5.9 ; M315 |
+| M758 | 21/11/2026 | **Archive de la feuille de route** : M1 à M599 restent dans `docs/feuille-de-route-archive.md` (règle de renvoi en tête du fichier vivant) ; renvois à l'archive ajoutés dans `CLAUDE.md`, `README.md`, `CONTEXT.md`, la fiche `architect` (jumelle régénérée) et le commentaire de `tests/controles/couloir.sh:3`, un commit par domaine ; ADR 0012 annoté par `architect`, voie (a) : archivage seulement quand une seule branche est ouverte, `couloir.sh` inchangé (décision du mainteneur, en session) | § 1.19, 0d ; M747 |
 
-Prochain numéro : ~~**M742**~~ ~~**M743**~~ ~~**M749**~~ **M755** (*soixante et unième série* : M742 attribué à Q-84 (a) ; *annotation de la session du 21/11/2026* : M743 à M748 attribués aux réponses à Q-85 à Q-89 et à l'ouverture de Bdr-b3) ; M749 à M754 aux réponses à Q-90 à Q-95).
+Prochain numéro : ~~**M742**~~ ~~**M743**~~ ~~**M749**~~ ~~**M755**~~ **M759** (*soixante et unième série* : M742 attribué à Q-84 (a) ; *annotation de la session du 21/11/2026* : M743 à M748 attribués aux réponses à Q-85 à Q-89 et à l'ouverture de Bdr-b3) ; M749 à M754 aux réponses à Q-90 à Q-95).
 
 ## 5. Escalades, relances et arrêts hors branche
 
