@@ -1218,9 +1218,9 @@ Tenue par `architect`, après chaque série de PR fusionnées. Chaque mise à jo
 - **Consultations Fable** : 0/3 (non prévue ; seuil « macro » non atteint, § 2). *Bilan* : 0/3.
 - **Escalades et reprises** : notées d'une ligne dans le corps de la PR par la session. *Bilan* (corps de la PR #183) : une reprise de `coder` sur #182, #180 et #178 chacune ; workflow `circuit-technique` arrêté sur un point de décision technique (#182, installation de R, tranché par la session, suivi par #185) et sur deux points tranchés par le mainteneur (#178, M737, M738) ; trois issues terminées avec questions de fond portées à `actuary` (#181, #180, #179) ; une relance du workflow sur #179 (mot « -approfondi » refusé dans la consigne) ; mineurs d'audit corrigés par la session après la reprise unique (R1, R2, `shQuote()`, exclusion des liaisons, commentaire des témoins, `f790caf`), notés dans les messages de commit ; aucun emploi de `coder-approfondi`.
 
-### 1.19 Branche des valeurs `H` et de l'ordre des refus : `claude/plan-valeurs-h` (Bdr-b3, décidée le 21 novembre 2026, M743 ; créée sur `0bd7b44` avant son plan, M748 ; PR brouillon #188 ; périmètre **proposé, non décidé**)
+### 1.19 Branche des valeurs `H` et de l'ordre des refus : `claude/plan-valeurs-h` (Bdr-b3, décidée le 21 novembre 2026, M743 ; créée sur `0bd7b44` avant son plan, M748 ; PR brouillon #188 ; périmètre ~~proposé, non décidé~~ **décidé le 21 novembre 2026, M749**)
 
-*Fiche rédigée par `architect-approfondi` (jugement : plan de branche, `docs/agents/routage.md`, § 3) le 21 novembre 2026 (soixante-deuxième série), sur `33f79c9`, tête de `claude/plan-valeurs-h`. **Statut : proposée, non décidée.** Le périmètre se ferme sur la réponse du mainteneur à Q-90 (M748) ; aucun code avant ses réponses à Q-90 et Q-91. Découpe de la ligne et motifs : § 2, proposition de la soixante-deuxième série.*
+*Fiche rédigée par `architect-approfondi` (jugement : plan de branche, `docs/agents/routage.md`, § 3) le 21 novembre 2026 (soixante-deuxième série), sur `33f79c9`, tête de `claude/plan-valeurs-h`. **Statut : ~~proposée, non décidée~~ décidée le 21 novembre 2026 (M749 à M754).** Le périmètre se ferme sur la réponse du mainteneur à Q-90 (M748) ; aucun code avant ses réponses à Q-90 et Q-91. Découpe de la ligne et motifs : § 2, proposition de la soixante-deuxième série.*
 
 - **Branche** : `claude/plan-valeurs-h` (nom fixé par la session, M748), créée sur `0bd7b44` (fusion de la PR #183) ; PR brouillon **#188** ; premier commit `33f79c9` (`docs:`, point d'étape de la soixante et unième série, M743 à M748). Corps de la PR si Q-90 (a), un `Closes #N` par ligne, dans l'ordre des commits :
 
@@ -2719,7 +2719,7 @@ Posées par `architect-approfondi` ; chaque réponse prend son numéro M à sa d
 
 *Ajout du 21 novembre 2026 (soixante-deuxième série, plan de Bdr-b3, `architect-approfondi`)* : questions nouvelles, même règle (chaque réponse prend son numéro à sa date, à partir de **M749**, § 4.6). Rien n'est décidé tant qu'elles sont ouvertes. **Q-4** (ouverte depuis la vingt-neuvième série) est reprise par Q-91 ; **Q-6** par l'étape 0 de Bdr-b4 (Q-90 (a)).
 
-90. **Q-90 — Périmètre de Bdr-b3 et découpe de la ligne** (§ 1.19 ; § 2, proposition de la soixante-deuxième série).
+90. **Q-90 — Périmètre de Bdr-b3 et découpe de la ligne** (§ 1.19 ; § 2, proposition de la soixante-deuxième série). *Soldée le 21/11/2026 : M749 ((a)).*
     - (a) **trois lignes de quatre issues**, un seul lien décidé desserré (« #176 dans le lot de #175 », M721, qui devient « #176 après #108 ») :
       - **Bdr-b3** `claude/plan-valeurs-h` : #99, #113, #108, #176, dans cet ordre ;
       - **Bdr-b4** `claude/lignes-lues-unite` : #174, #175, #171, #112 ;
@@ -2733,13 +2733,13 @@ Posées par `architect-approfondi` ; chaque réponse prend son numéro M à sa d
     - #99, contrat partagé, passe avant les branches qui écrivent des plans ;
     - étape 0 légère ;
     - plafond tenu.
-91. **Q-91 — Q-4 et étape 0a de Bdr-b3.** Accord pour trois points :
+91. **Q-91 — Q-4 et étape 0a de Bdr-b3.** Accord pour trois points : *Soldée le 21/11/2026 : M750 (oui aux trois).*
     - (i) la dépendance #108 → #99 ;
     - (ii) un erratum de la spécification de B2, rédigé par `actuary-approfondi` en 0a, qui concilie le contrôle « au plan » et le refus paresseux du § 5.9, et qui fixe aussi l'option de #113, les valeurs du jeu nouveau, la convention de #176 et les points rattachés à #99 ;
     - (iii) le visa du mainteneur sur cet erratum avant tout code.
 
     *Recommandé* : **oui** pour les trois. Motif : Q-4 attend depuis la vingt-neuvième série, et #108 ne se code pas sans elle.
-92. **Q-92 — Jeu de #99.** `v1-modeste-05` déclare cinq valeurs `H` hors forme (*vérifié*, § 1.19), et #99 refusera son plan.
+92. **Q-92 — Jeu de #99.** `v1-modeste-05` déclare cinq valeurs `H` hors forme (*vérifié*, § 1.19), et #99 refusera son plan. *Soldée le 21/11/2026 : M751 ((a)).*
     - (a) **jeu nouveau `v1-modeste-07`** :
       - même base (octets de `base/` identiques si le protocole d'écriture le permet, à mesurer par `coder`) ;
       - déclarations alignées sur les valeurs de 0a ;
@@ -2749,7 +2749,7 @@ Posées par `architect-approfondi` ; chaque réponse prend son numéro M à sa d
     - (b) déclarations de `v1-modeste-05` modifiées en place : contraire à la règle d'un jeu jamais modifié en place (Q-80).
 
     *Recommandé* : **(a)**.
-93. **Q-93 — Rang de Bo5.** M743 et M744 la placent « après Bdr-b3 », écrit quand la ligne était entière.
+93. **Q-93 — Rang de Bo5.** M743 et M744 la placent « après Bdr-b3 », écrit quand la ligne était entière. *Soldée le 21/11/2026 : M752 ((a)).*
     - (a) **aussitôt après Bdr-b3** (la branche ouverte), avant Bdr-b4 et Bdr-b5 ;
     - (b) après Bdr-b5.
 
@@ -2757,12 +2757,12 @@ Posées par `architect-approfondi` ; chaque réponse prend son numéro M à sa d
     - #186, un `bug`, rétablit cinq témoins de la voie git que la CI saute ; ces témoins portent sur les jeux et leurs empreintes ;
     - Bdr-b3 ajoute un jeu (palliatif : critère de fin du § 1.19), et Bdr-b5 changera des bilans ;
     - Bdr-b3 est courte ; (b) retarderait le correctif de trois branches et franchirait le critère (iii) du seuil « macro ».
-94. **Q-94 — Fable pour le plan de Bdr-b3.** Le seuil « macro » est atteint à la lettre, par le critère (i) seul (§ 2, constat de la soixante-deuxième série).
+94. **Q-94 — Fable pour le plan de Bdr-b3.** Le seuil « macro » est atteint à la lettre, par le critère (i) seul (§ 2, constat de la soixante-deuxième série). *Soldée le 21/11/2026 : M753 ((a)).*
     - (a) aucune consultation, comme M608 et M637 ; Fable à proposer au plan de Bdr-b4 ;
     - (b) une consultation Fable d'`architect-approfondi` sur la présente découpe (compteur de Bdr-b3 : 1/3).
 
     *Recommandé* : **(a)**.
-95. **Q-95 — Libellés**, à la décision de Q-90 (a) :
+95. **Q-95 — Libellés**, à la décision de Q-90 (a) : *Soldée le 21/11/2026 : M754 (oui).*
     - `ready-for-agent` à la place de `needs-triage` sur #99, #113, #108 et #176 ;
     - libellé de type : `enhancement` sur #99 ; `bug` sur #113 (erreur brute au lieu d'un refus classé) et sur #108 (écart du code au § 5.9 de la spécification de B2) ; #176 garde `bug` ;
     - les huit autres issues gardent `needs-triage` jusqu'au plan de leur ligne ;
@@ -2941,8 +2941,14 @@ Sous-section ouverte à la cinquante-deuxième série, à l'épuisement du bloc 
 | M746 | 21/11/2026 | **Q-88 (a)** — #184 : règle stricte pour `assign()` à nom calculé et formes voisines si `coder` mesure qu'elle ne fait apparaître aucun signalement nouveau sur `R/` ; sinon limite écrite (décision du mainteneur, en session) | § 4.4, Q-88 ; #184 |
 | M747 | 21/11/2026 | **Q-89 (a)** — archivage de la feuille de route décidé, exécuté par `architect-approfondi` dans la première branche ouverte (Bdr-b3) (décision du mainteneur, en session) | § 4.4, Q-89 ; M736 |
 | M748 | 21/11/2026 | **Ouverture de Bdr-b3 avant son plan** : branche `claude/plan-valeurs-h` (nom fixé par la session) créée sur `0bd7b44`, PR brouillon ouverte aussitôt ; premier commit `docs:` = point d'étape de la soixante et unième série et M743 à M748 ; le plan d'`architect-approfondi` et l'archivage (M747) y sont commités ensuite ; **périmètre fermé fixé après la décision du mainteneur sur le plan** (amende la recommandation de Q-85 (a), ouverture après le plan) (décision du mainteneur, en session) | § 1 ; § 2 ; M743 |
+| M749 | 21/11/2026 | **Q-90 (a)** — découpe de la ligne « plan et valeurs `H` » en trois lignes de quatre issues : **Bdr-b3** (#99, #113, #108, #176, dans cet ordre, avec l'étape 0a), puis **Bdr-b4** (#174, #175, #171, #112), puis **Bdr-b5** (#105, #147, #125, #129) ; lien de M721 « #176 dans le lot de #175 » remplacé par « #176 après #108 » ; autres liens de M602 et M721 inchangés (décision du mainteneur, en session) | § 1.19 ; § 2 ; § 3 ; § 4.4, Q-90 ; M721 |
+| M750 | 21/11/2026 | **Q-91 : oui aux trois** — erratum de la spécification de B2 (Q-4, option de #113, valeurs du jeu nouveau, convention de #176, points de #99) rédigé par `actuary-approfondi` en une consultation à l'étape 0a ; dépendance #108 → #99 ; visa du mainteneur sur l'erratum avant tout commit de code (décision du mainteneur, en session) | § 1.19 ; § 4.4, Q-91 ; Q-4 |
+| M751 | 21/11/2026 | **Q-92 (a)** — #99 : jeu nouveau `v1-modeste-07` (même base, déclarations `H` alignées), `v1-modeste-05` retiré, une seule régénération R1 sur la CI après visa ; effet sur les provisions mesuré avant R1 (décision du mainteneur, en session) | § 1.19 ; § 4.4, Q-92 ; ADR 0011 |
+| M752 | 21/11/2026 | **Q-93 (a)** — ordre : Bdr-b3, **Bo5**, Bdr-b4, Bdr-b5, Bdr-r (précise M743 et M744) (décision du mainteneur, en session) | § 2 ; § 4.4, Q-93 ; M744 |
+| M753 | 21/11/2026 | **Q-94 (a)** — pas de consultation Fable pour le plan de Bdr-b3 (seuil « macro » atteint à la lettre, critère (i), sur des fonctions des seuls postes du décès, comme M608 et M637) ; Fable proposé au plan de Bdr-b4 ; compteur de Bdr-b3 : 0/3 (décision du mainteneur, en session) | § 2 ; § 4.4, Q-94 |
+| M754 | 21/11/2026 | **Q-95 : oui** — `ready-for-agent` sur #99, #113, #108, #176 ; `enhancement` sur #99 ; `bug` sur #113 et #108 ; `needs-triage` retiré ; posés par la session (décision du mainteneur, en session) | § 1.19 ; § 4.4, Q-95 |
 
-Prochain numéro : ~~**M742**~~ ~~**M743**~~ **M749** (*soixante et unième série* : M742 attribué à Q-84 (a) ; *annotation de la session du 21/11/2026* : M743 à M748 attribués aux réponses à Q-85 à Q-89 et à l'ouverture de Bdr-b3).
+Prochain numéro : ~~**M742**~~ ~~**M743**~~ ~~**M749**~~ **M755** (*soixante et unième série* : M742 attribué à Q-84 (a) ; *annotation de la session du 21/11/2026* : M743 à M748 attribués aux réponses à Q-85 à Q-89 et à l'ouverture de Bdr-b3) ; M749 à M754 aux réponses à Q-90 à Q-95).
 
 ## 5. Escalades, relances et arrêts hors branche
 
