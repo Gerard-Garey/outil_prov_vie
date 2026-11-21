@@ -68,7 +68,7 @@ Tenue par `architect`, après chaque série de PR fusionnées. Chaque mise à jo
   - [x] **0c — libellés** (Q-95). *Fait : M754.*
   - [x] **0d — archivage de la feuille de route** (M747) : mission séparée d'`architect-approfondi`, commit `docs:` de la session, **avant le premier commit de code** (recommandé : chaque agent de la branche lit alors la feuille de route allégée). *Fait : `5fd5815` ; renvois à l'archive décidés, M758.*
 - **Périmètre** (Q-90 (a)), dans l'ordre des commits ; un commit par issue qui change un résultat, avec son tableau avant / après :
-  1. [ ] **#99 — contrôle de la valeur des hypothèses `H` par `valider_plan()`**.
+  1. [x] **#99 — contrôle de la valeur des hypothèses `H` par `valider_plan()`**. *Fait : `e2649ad` (`moteur:`, tests compris) et `f44bea6` (`donnees:`, jeu `v1-modeste-07`, description confirmée par le mainteneur) ; circuit 1, `coder-approfondi`, audit léger conforme avec trois mineurs, une reprise, audit de la reprise conforme ; avis d'`actuary` sur cinq questions ; R1 : run 44927726108, candidat validé par `actuary` (commentaire 7066517947 de la PR #188), commit de référence `14cb8fc` ; provisions totales et verdicts inchangés ; échec attendu #108 ajouté (R2) ; voie de la base de (4.12) renvoyée à #189.*
      - *Circuit* : circuit 1. La spécification est visée (dictionnaire `1.6`, § 9, M664) et complétée par l'erratum de 0a ; puis `coder-approfondi`, `audit` léger, validation d'`actuary`, et `docwriter` en fin de branche.
      - *Rang* : en tête. #99 resserre le format du plan sur lequel s'écrivent les tests des trois commits suivants, et il porte la seule régénération.
      - *Domaines* : `moteur:` (avec `tests:`), puis `donnees:` (jeu nouveau).
