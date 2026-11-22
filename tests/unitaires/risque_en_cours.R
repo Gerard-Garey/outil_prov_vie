@@ -155,11 +155,19 @@ verifier_egal("D03h : taux du tarif manquant, hypothèse 0 % (comptes_sociaux) :
               list(c_h$taux_tarif, c_h$hypothese_d03h, r_h$cellules$statut_resultat, r_h$indicateurs$depassement[1L],
                    r_h$indicateurs$detail[1L]),
               list(0, TRUE, "jugement_expert", TRUE, "id_contrat=CT2;hypothese_D03h"))
-verifier_egal("D03h : sans hypothèse déclarée, declaration_manquante ; valeur non décimale, plan_invalide",
+verifier_egal("D03h : sans hypothèse déclarée, declaration_manquante ; valeur non décimale, plan_invalide (au plan, par lire_declarations() de vue_a_date(), erratum v1.0.21, #99)",
               list(motif_de(risque(b2_base_p3(tarif = NA), plan_p3())),
                    motif_de(risque(b2_base_p3(tarif = NA), plan_p3(),
                                    declarations = list(hypotheses = lapply(d03h$hypotheses, function(h) { h$valeur <- "zero"; h }))))),
               list("declaration_manquante", "plan_invalide"))
+# forme contrôlée au plan seulement (erratum v1.0.21, § 2.3, #99) : une valeur hors forme qui
+# atteindrait le lecteur (vue modifiée à la main) est une erreur interne, non un refus
+v_h <- b2_vue(b2_base_p3(tarif = NA), plan_p3()$arrete, d03h)
+v_h$hypotheses <- lapply(v_h$hypotheses, function(h) { h$valeur <- "zero"; h })
+verifier_egal("D03h : valeur hors forme atteignant .hypothese_d03h() (vue modifiée à la main) : erreur interne ; valeur de la vue : 0",
+              list(startsWith(motif_de(ns$.hypothese_d03h(v_h, 1L)), "autre : erreur interne de provie : hypoth"),
+                   ns$.hypothese_d03h(b2_vue(b2_base_p3(tarif = NA), plan_p3()$arrete, d03h), 1L)),
+              list(TRUE, 0))
 verifier_egal("arrêt hors_axes (hors_axes = refus) : assuré de 45 ans à l'effet (table 40 à 42) : poste arrêté, contrat en cause ; derniere_valeur : calculé",
               { b <- b2_base_p3(); b$assures$date_naissance <- D("1979-01-01")
                 r <- risque(b, plan_p3())
@@ -167,6 +175,141 @@ verifier_egal("arrêt hors_axes (hors_axes = refus) : assuré de 45 ans à l'eff
                 list(r$cellules$statut_calcul, r$cellules$motif_arret, attr(r$cellules, "identifiant_arret"),
                      risque(b, p_dv)$cellules$statut_calcul) },
               list("arrete", "hors_axes", "CT2", "calcule"))
+# critère (4.13), #108 (spécification de B2, § 5.5, § 5.6 et § 6.2, « Refus nés à la lecture »,
+# erratum v1.0.21) : le refus declaration_manquante de D03h (taux du tarif manquant sans
+# hypothèse D03h de P3 ou de `tous`) et celui de D03f appliquée pour un autre poste seulement
+# (R2) sont levés après tous les arrêts du poste, les deux champs compris (hors_axes du champ
+# (a), parametre_non_determine du champ (b)) ; champ (a) avant champ (b). Valeurs en dur :
+# assuré AS2 né le 1979-01-01 (45 ans à l'effet, table de 40 à 42 ans) ; « avant » mesuré à
+# 172986f.
+hyp_p <- function(motif, valeur, poste) {
+  lapply(ns$REFERENTIELS, function(r) list(motif = motif, referentiel = r, poste = poste, valeur = valeur))
+}
+d03h_autre <- hyp_p("D03h", "0", "sinistres_declares_non_regles")
+d03f_autre <- hyp_p("D03f", "regle", "sinistres_declares_non_regles")
+d03f_conserver <- data.frame(motif = "D03f", famille = ns$FAMILLES_CALCUL, action = "conserver", stringsAsFactors = FALSE)
+issue_p3 <- function(expr) {
+  tryCatch({ r <- expr; list(r$cellules$statut_calcul, r$cellules$motif_arret, attr(r$cellules, "identifiant_arret")) },
+           refus_provie = function(e) list("refus", e$motif, e$identifiants))
+}
+hors_a <- b2_base_p3(tarif = NA)
+hors_a$assures$date_naissance <- D("1979-01-01")
+# cotisation de CT3 sans debut_periode, de fin postérieure à l'arrêté (période non déterminée)
+cot_nd <- data.frame(debut = D(NA), fin = D("2025-06-30"), montant = 1200, mouvement = D("2024-07-01"))
+verifier_egal("(4.13) (a) P3 individuel, taux du tarif manquant, assuré hors des axes (hors_axes = refus), D03h déclarée pour un autre poste seulement : arrêt hors_axes, CT2 (avant : refus declaration_manquante) ; même cas sans aucune D03h : même arrêt",
+              list(issue_p3(risque(hors_a, plan_p3(), declarations = list(hypotheses = d03h_autre))),
+                   issue_p3(risque(hors_a, plan_p3()))),
+              list(list("arrete", "hors_axes", "CT2"), list("arrete", "hors_axes", "CT2")))
+verifier_egal("(4.13) (b) même cas, assuré dans les axes : refus declaration_manquante, GS2 (inchangé)",
+              issue_p3(risque(b2_base_p3(tarif = NA), plan_p3(), declarations = list(hypotheses = d03h_autre))),
+              list("refus", "declaration_manquante", "GS2"))
+verifier_egal("(4.13) (c) taux du tarif manquant de CT2, D03h pour un autre poste ; cotisation de CT3 de période non déterminée (D03f conserver) : arrêt parametre_non_determine, CT3 (avant : refus declaration_manquante) ; témoin, D03h tous : même arrêt",
+              list(issue_p3(risque(b2_base_p3(tarif = NA, cotisation = cot_nd), plan_p3(),
+                                   declarations = list(exclusions = d03f_conserver, hypotheses = d03h_autre))),
+                   issue_p3(risque(b2_base_p3(tarif = NA, cotisation = cot_nd), plan_p3(),
+                                   declarations = list(exclusions = d03f_conserver, hypotheses = hyp_p("D03h", "0", "tous"))))),
+              list(list("arrete", "parametre_non_determine", "CT3"), list("arrete", "parametre_non_determine", "CT3")))
+refus_p3 <- function(expr) tryCatch({ expr; NULL }, refus_provie = function(e) list(e$motif, e$table, e$colonne, e$identifiants))
+verifier_egal("(4.13) (d) cotisation de CT3 de période non déterminée (debut_periode manquante), D03f regle déclarée pour un autre poste seulement : refus declaration_manquante sur cotisations, debut_periode, CO1 (avant : arrêt parametre_non_determine, CT3) ; témoin, D03f tous : calculé",
+              list(refus_p3(risque(b2_base_p3(cotisation = cot_nd), plan_p3(), declarations = list(hypotheses = d03f_autre))),
+                   issue_p3(risque(b2_base_p3(cotisation = cot_nd), plan_p3(),
+                                   declarations = list(hypotheses = hyp_p("D03f", "regle", "tous"))))[[1L]]),
+              list(list("declaration_manquante", "cotisations", "debut_periode", "CO1"), "calcule"))
+verifier_egal("(4.13) (f) D03h de valeur zero : refus plan_invalide par valider_plan(), avant tout calcul",
+              motif_de(valider_plan(local({ q <- plan_p3(); q$donnees$hypotheses <- hyp_p("D03h", "zero", "tous"); q }))),
+              "plan_invalide")
+# rang, plusieurs contrats : CT2 au taux du tarif manquant (D03h d'un autre poste), en première
+# ligne ; CT4 (GS4, assuré AS4 né le 1979-01-01, taux du tarif 0,02) hors des axes : l'arrêt
+# hors_axes de CT4 l'emporte sur le refus né de CT2 (avant : refus declaration_manquante, GS2)
+deux_ind <- local({
+  b <- b2_base_p3(tarif = NA)
+  b$contrats <- rbind(b$contrats, transform(b$contrats[1L, ], id_contrat = "CT4", id_assure = "AS4"))
+  b$garanties_souscrites <- rbind(b$garanties_souscrites,
+                                  transform(b$garanties_souscrites[1L, ], id_garantie_souscrite = "GS4", id_contrat = "CT4",
+                                            taux_technique_tarif = 0.02))
+  b$parametres <- rbind(b$parametres, transform(b$parametres[b$parametres$id_garantie_souscrite == "GS2", , drop = FALSE],
+                                                id_garantie_souscrite = "GS4"))
+  b$assures <- rbind(b$assures, transform(b$assures, id_assure = "AS4", date_naissance = D("1979-01-01")))
+  b
+})
+verifier_egal("(4.13) rang : CT2 sans taux du tarif (D03h d'un autre poste), en première ligne, et CT4 hors des axes : arrêt hors_axes, CT4 (avant : refus declaration_manquante, GS2) ; témoin, CT4 dans les axes : refus declaration_manquante, GS2",
+              list(issue_p3(risque(deux_ind, plan_p3(), declarations = list(hypotheses = d03h_autre))),
+                   issue_p3(risque(within(deux_ind, assures$date_naissance <- D("1984-01-01")), plan_p3(),
+                                   declarations = list(hypotheses = d03h_autre)))),
+              list(list("arrete", "hors_axes", "CT4"), list("refus", "declaration_manquante", "GS2")))
+# deux refus R2 concurrents : D03h du champ (a) (CT2) et D03f du champ (b) (CT3), chacun déclaré
+# pour un autre poste seulement : le champ (a) passe avant le champ (b)
+verifier_egal("(4.13) rang : refus R2 de D03h (champ (a), GS2) et de D03f (champ (b), CO1) : declaration_manquante sur garanties_souscrites, GS2 (champ (a) avant champ (b), inchangé)",
+              tryCatch({ risque(b2_base_p3(tarif = NA, cotisation = cot_nd), plan_p3(),
+                                declarations = list(hypotheses = c(d03h_autre, d03f_autre))); NULL },
+                       refus_provie = function(e) list(e$motif, e$table, e$colonne, e$identifiants)),
+              list("declaration_manquante", "garanties_souscrites", "taux_technique_tarif", "GS2"))
+# plus petit identifiant de la cotisation en cause (§ 6.2, « Identifiant publié ») : deux
+# cotisations de période non déterminée, CO2 (debut_periode manquante) avant CO1 (debut_periode
+# 2024-07-01, fin_periode manquante) dans l'ordre des lignes ; colonne publiée : la borne
+# manquante de la cotisation retenue
+verifier_egal("(4.13) D03f d'un autre poste, deux cotisations de période non déterminée (CO2 sans début avant CO1 sans fin dans la table) : refus declaration_manquante sur cotisations, fin_periode, CO1 (avant : arrêt parametre_non_determine, CT3)",
+              refus_p3(risque(within(b2_base_p3(cotisation = rbind(cot_nd, cot_nd)), {
+                                cotisations$id_cotisation <- c("CO2", "CO1")
+                                cotisations$debut_periode[2L] <- D("2024-07-01")
+                                cotisations$fin_periode[2L] <- D(NA) }),
+                              plan_p3(), declarations = list(hypotheses = d03f_autre))),
+              list("declaration_manquante", "cotisations", "fin_periode", "CO1"))
+# deux bornes manquantes de la cotisation retenue : colonne publiée fin_periode, borne qui fait
+# naître le refus (§ 5.5, ordre d'évaluation, puce (1) ; avis d'actuary sur #108)
+verifier_egal("(4.13) D03f d'un autre poste, cotisation CO1 sans début ni fin : refus declaration_manquante sur cotisations, fin_periode, CO1 (avant : arrêt parametre_non_determine, CT3)",
+              refus_p3(risque(within(b2_base_p3(cotisation = cot_nd), cotisations$fin_periode <- D(NA)),
+                              plan_p3(), declarations = list(hypotheses = d03f_autre))),
+              list("declaration_manquante", "cotisations", "fin_periode", "CO1"))
+# critère (4.14), #176 (spécification de B2, § 6.2, « Identifiant publié ») : tout identifiant
+# publié par un arrêt ou un refus de P3 est le plus petit en cause (tri radix), quel que soit
+# l'ordre des lignes de la base. Un test par site, en ordre direct et en ordre inverse des
+# lignes ; « avant » mesuré à ca84b9e (le premier rencontré dans l'ordre des lignes) : les
+# identifiants de l'ordre inverse sont CT4, GS4 et CT5.
+inverser <- function(b, tables) {
+  for (nom in tables) b[[nom]] <- b[[nom]][rev(seq_len(nrow(b[[nom]]))), , drop = FALSE]
+  b
+}
+# deux contrats individuels CT2 (GS2, AS2) et CT4 (GS4, AS4), mêmes paramètres ; taux du tarif
+# et date de naissance des deux assurés donnés (1979 : 45 ans à l'effet, hors des axes de 40 à 42)
+deux_176 <- function(tarif, naissance) {
+  b <- b2_base_p3(tarif = tarif[1L])
+  b$contrats <- rbind(b$contrats, transform(b$contrats[1L, ], id_contrat = "CT4", id_assure = "AS4"))
+  b$garanties_souscrites <- rbind(b$garanties_souscrites,
+                                  transform(b$garanties_souscrites[1L, ], id_garantie_souscrite = "GS4", id_contrat = "CT4",
+                                            taux_technique_tarif = tarif[2L]))
+  b$parametres <- rbind(b$parametres, transform(b$parametres[b$parametres$id_garantie_souscrite == "GS2", , drop = FALSE],
+                                                id_garantie_souscrite = "GS4"))
+  b$assures <- rbind(b$assures, transform(b$assures, id_assure = "AS4"))
+  b$assures$date_naissance <- D(naissance)
+  b
+}
+inv_ind <- c("contrats", "garanties_souscrites")
+h_176 <- deux_176(c(0.02, 0.02), c("1979-01-01", "1979-01-01"))
+verifier_egal("(4.14) #176, hors_axes = refus, CT2 et CT4 lus hors des axes : arrêt hors_axes, CT2 (plus petit contrat), lignes de contrats et de garanties_souscrites en ordre direct comme en ordre inverse (avant : CT4 en ordre inverse)",
+              list(issue_p3(risque(h_176, plan_p3())), issue_p3(risque(inverser(h_176, inv_ind), plan_p3()))),
+              rep(list(list("arrete", "hors_axes", "CT2")), 2L))
+d_176 <- deux_176(c(NA, NA), c("1984-01-01", "1984-01-01"))
+verifier_egal("(4.14) #176, CT2 et CT4 sans taux du tarif (D03h pour un autre poste seulement), dans les axes : refus declaration_manquante, GS2 (plus petite garantie souscrite), ordre direct comme ordre inverse (avant : GS4 en ordre inverse)",
+              list(issue_p3(risque(d_176, plan_p3(), declarations = list(hypotheses = d03h_autre))),
+                   issue_p3(risque(inverser(d_176, inv_ind), plan_p3(), declarations = list(hypotheses = d03h_autre)))),
+              rep(list(list("refus", "declaration_manquante", "GS2")), 2L))
+# deux contrats collectifs CT3 (cotisation CO1) et CT5 (GS5, cotisation CO2), période non
+# déterminée (debut_periode manquante, fin postérieure à l'arrêté ; D03f conserver)
+c_176 <- local({
+  b <- b2_base_p3(cotisation = rbind(cot_nd, cot_nd))
+  b$contrats <- rbind(b$contrats, transform(b$contrats[b$contrats$id_contrat == "CT3", , drop = FALSE], id_contrat = "CT5"))
+  b$garanties_souscrites <- rbind(b$garanties_souscrites,
+                                  transform(b$garanties_souscrites[b$garanties_souscrites$id_contrat == "CT3", , drop = FALSE],
+                                            id_garantie_souscrite = "GS5", id_contrat = "CT5"))
+  b$parametres <- rbind(b$parametres, transform(b$parametres[b$parametres$id_garantie_souscrite == "GS3", , drop = FALSE],
+                                                id_garantie_souscrite = "GS5"))
+  b$cotisations$id_garantie_souscrite[2L] <- "GS5"
+  b })
+verifier_egal("(4.14) #176, champ (b), CT3 (CO1) et CT5 (CO2) de période non déterminée : arrêt parametre_non_determine, CT3 (plus petit contrat), lignes de cotisations en ordre direct comme en ordre inverse (avant : CT5 en ordre inverse)",
+              list(issue_p3(risque(c_176, plan_p3(), declarations = list(exclusions = d03f_conserver))),
+                   issue_p3(risque(inverser(c_176, "cotisations"), plan_p3(), declarations = list(exclusions = d03f_conserver)))),
+              rep(list(list("arrete", "parametre_non_determine", "CT3")), 2L))
 # T8 (spécification de B2, § 7.4, erratum v1.0.16 ; #91, source S3 du § 5.8) : T1 avec
 # date_terme 2028-01-01, âges lus 40 à 43, 43 hors des axes de la table (40 à 42). Valeur en
 # dur : formule fermée T1 + 100 000 x 0,98 x 0,97 x 0,03 x 1,02^(-t3), t3 = 364/365 + 2 +
@@ -373,7 +516,7 @@ plan_87p3 <- function(delai) {
                            d02c_age_max = list(assures_sinistre = 75, assures_affiliation = 70, famille = 110),
                            d03g_delai_jours = list(sinistres = delai))
   q$donnees$hypotheses <- lapply(ns$REFERENTIELS, function(r) list(motif = "D03g", referentiel = r, poste = "tous",
-                                                                     valeur = "date_effet_plus_delai"))
+                                                                     valeur = "regle"))
   q$perimetre$segmentations <- list(ct = list(regle = "contrat"))
   q
 }

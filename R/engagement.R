@@ -258,12 +258,16 @@ parametre_vue <- function(vue, nom, gs, famille = NULL) {
 # sans hypothèse appliquée. `colonnes` : NULL (toute hypothèse de la ligne), ou colonnes de la
 # table lues par le poste : seules comptent les hypothèses dont une colonne (`colonnes` de
 # l'entrée de vue$hypotheses) en fait partie (garde du point 1 de #112, M661 ; spécification
-# `donnees` v1.9, § 9.4). Ne contrôle pas la forme de la valeur, propre à chaque motif (refus
-# plan_invalide du lecteur). Sans point : seule sélection d'une hypothèse par ligne, lue aussi
-# par `risque_en_cours` (D03h) ; non exportée.
-hypothese_vue <- function(vue, motif, referentiel, table, lignes, poste, colonnes = NULL) {
+# `donnees` v1.9, § 9.4). Ne contrôle pas la forme de la valeur, contrôlée au plan par
+# lire_declarations() (`donnees`, erratum v1.0.21, § 2.3, #99). `autre_poste` : FALSE (défaut),
+# ou TRUE pour ne sélectionner que les hypothèses placées pour un poste autre que `poste` et
+# `tous` (refus de lecture R2 : hypothèse appliquée à la ligne pour un autre poste seulement,
+# spécification de B2, § 6.2, erratum v1.0.21, #108). Sans point : seule sélection d'une
+# hypothèse par ligne, lue aussi par `risque_en_cours` (D03h, D03f) ; non exportée.
+hypothese_vue <- function(vue, motif, referentiel, table, lignes, poste, colonnes = NULL, autre_poste = FALSE) {
   h <- Filter(function(x) x$motif == motif && x$referentiel == referentiel && x$table == table &&
-                x$poste %in% c(poste, "tous") && (is.null(colonnes) || any(x$colonnes %in% colonnes)), vue$hypotheses)
+                xor(x$poste %in% c(poste, "tous"), autre_poste) && (is.null(colonnes) || any(x$colonnes %in% colonnes)),
+              vue$hypotheses)
   res <- rep(NA_character_, length(lignes))
   postes <- vapply(h, `[[`, "", "poste")
   # priorité décroissante ; affectées de la plus faible à la plus forte, qui l'emporte
@@ -444,32 +448,83 @@ lecture_unites <- function(table, colonnes, cles, unite = seq_along(cles), garde
 
 # Salaire de référence par défaut sous l'hypothèse D03c (spécification de B2, § 5.9 ; décision
 # E16-1 du mainteneur, option B) : `valeur` déclarée, de forme `<college>=<montant>` joints
-# par « ; » (montant décimal à point, positif ou nul, fini), et `college` de l'affiliation. Rend
-# le montant ; valeur d'une autre forme (dont un collège répété ou un montant hors de la plage
-# des doubles, non fini) ou collège absent de la liste :
-# NA si `refus` est faux, sinon refus plan_invalide ou plan_incomplet (aucune conversion
-# silencieuse ; le lecteur ne refuse qu'une fois les arrêts du poste connus).
-.salaire_d03c <- function(valeur, college, poste, refus) {
+# par « ; », et `college` de l'affiliation. La forme de la valeur (collège du domaine de
+# college, montant décimal à point, positif ou nul, fini ; collèges distincts) est contrôlée au
+# plan par lire_declarations() (`donnees`, erratum v1.0.21, § 2.3, #99), seul lieu de ce
+# contrôle ; ici, une valeur vide, un élément sans « = », un montant qui n'est pas un nombre fini
+# ou deux collèges égaux sont une erreur interne (le reste de la forme n'est pas revérifié). Rend
+# le montant ; collège absent de la liste (contenu qui dépend des données) : NA si `refus` est
+# faux, sinon refus plan_incomplet (le lecteur ne refuse qu'une fois les arrêts du poste connus) ;
+# `ligne` : affiliation en cause (identifiant publié du refus, #176), NA sans affiliation connue.
+.salaire_d03c <- function(valeur, college, poste, refus, ligne = NA_character_) {
   morceaux <- strsplit(valeur, ";", fixed = TRUE)[[1L]]
-  montants <- sub("^[^=]*=", "", morceaux)
-  forme <- length(morceaux) > 0L && all(grepl("^[^=;[:space:]]+=[0-9]+(\\.[0-9]+)?$", morceaux)) &&
-    !endsWith(valeur, ";") && all(is.finite(as.numeric(montants)))
   cles <- sub("=.*$", "", morceaux)
-  if (!forme || anyDuplicated(cles)) {
-    if (!refus) return(NA_real_)
-    refuser(paste0("plan : hypoth\u00e8se D03c (comptes_sociaux, ", poste, ") : valeur \u00ab ", valeur,
-                   " \u00bb, liste <college>=<montant> joints par \u00ab ; \u00bb attendue (salaire de ",
-                   "r\u00e9f\u00e9rence par d\u00e9faut, montant d\u00e9cimal \u00e0 point)"),
-            "plan_invalide", module = "engagement", recu = valeur)
+  montants <- suppressWarnings(as.numeric(sub("^[^=]*=", "", morceaux)))
+  if (length(morceaux) == 0L || !all(grepl("=", morceaux, fixed = TRUE)) || !all(is.finite(montants)) ||
+      anyDuplicated(cles)) {
+    stop("erreur interne de provie : hypoth\u00e8se D03c de valeur \u00ab ", valeur,
+         " \u00bb, hors de la forme contr\u00f4l\u00e9e au plan (lire_declarations())", call. = FALSE)
   }
   i <- match(college, cles)
   if (is.na(i)) {
     if (!refus) return(NA_real_)
     refuser(paste0("plan : hypoth\u00e8se D03c (comptes_sociaux, ", poste, ") : valeur \u00ab ", valeur,
-                   " \u00bb sans salaire pour le coll\u00e8ge ", college), "plan_incomplet", module = "engagement",
+                   " \u00bb sans salaire pour le coll\u00e8ge ", college,
+                   if (!is.na(ligne)) paste0(" (affiliation ", ligne, ")")), "plan_incomplet", module = "engagement",
+            table = if (!is.na(ligne)) "affiliations" else NA_character_,
+            colonne = if (!is.na(ligne)) "salaire_reference" else NA_character_,
+            identifiants = if (!is.na(ligne)) ligne else character(0),
             attendu = paste0(college, "=<montant>"), recu = valeur)
   }
-  as.numeric(montants[i])
+  montants[i]
+}
+
+# Refus de lecture R3 (spécification de B2, § 5.9 et § 6.2, erratum v1.0.21, #113, option (a)) :
+# un dossier dont l'assiette est lue sous D03c (`d03c` vrai) et dont une des grandeurs `...`
+# (vecteurs parallèles à `id_dossier` : capital, solde, montant) est infinie ou NaN donne un
+# refus plan_invalide qui nomme le plus petit dossier en cause (ordre des octets). Un
+# débordement d'un dossier hors D03c (valeur de la base) n'est pas refusé ici (limite, #189) :
+# erreur brute de valeur_actuelle_probable() à frais nuls (salaire de 1e308), montant infini
+# calculé avec des frais (salaire de 6e307, frais de 0,1) ; total de poste qui déborde sur des
+# dossiers finis : #190.
+# L'appelant ne l'appelle qu'une fois tous les arrêts du poste écartés (rang du § 6.2).
+.refuser_debordement_d03c <- function(id_dossier, d03c, ..., poste) {
+  deborde <- Reduce(`|`, lapply(list(...), function(x) is.infinite(x) | is.nan(x)), rep(FALSE, length(id_dossier)))
+  en_cause <- id_dossier[d03c & deborde]
+  if (length(en_cause) == 0L) return(invisible(NULL))
+  premier <- sort(as.character(en_cause), method = "radix")[1L]
+  refuser(paste0("plan : hypoth\u00e8se D03c (comptes_sociaux, ", poste, ") : capital, solde ou montant non fini du ",
+                 "dossier ", premier, " sous le salaire d\u00e9clar\u00e9 (d\u00e9bordement des doubles)"),
+          "plan_invalide", module = "engagement", identifiants = premier,
+          attendu = "capital, solde et montant finis sous le salaire d\u00e9clar\u00e9")
+}
+
+# Refus de lecture R2 puis R1 de D03c (spécification de B2, § 5.9 et § 6.2, erratum v1.0.21,
+# #108), dans cet ordre, à partir des colonnes `refus`, `refus_ligne`, `refus_valeur` et
+# `refus_college` de capital_deces_dossier() (`calc`) : R2, salaire manquant d'une affiliation
+# sans hypothèse D03c du poste ou de `tous`, avec une hypothèse D03c de comptes_sociaux appliquée
+# à la ligne pour un autre poste seulement : refus declaration_manquante qui nomme la plus petite
+# affiliation en cause (ordre des octets) ; R1, collège de l'affiliation absent de la valeur
+# lue : refus plan_incomplet de .salaire_d03c(), qui nomme le plus petit collège absent (ordre des
+# octets) et, parmi les affiliations en cause de ce collège, la plus petite (§ 6.2, « Identifiant
+# publié », #176 ; la valeur lue est celle de cette affiliation). L'appelant ne l'appelle qu'une
+# fois tous les arrêts du poste écartés (rang du § 6.2).
+.refuser_lecture_d03c <- function(calc, poste) {
+  r2 <- which(calc$refus %in% "declaration_manquante")
+  if (length(r2)) {
+    premier <- sort(calc$refus_ligne[r2], method = "radix")[1L]
+    refuser(paste0("engagement : salaire de r\u00e9f\u00e9rence manquant de l'affiliation ", premier,
+                   " sans hypoth\u00e8se D03c d\u00e9clar\u00e9e pour ", poste, " ou tous (comptes_sociaux), ",
+                   "hypoth\u00e8se d\u00e9clar\u00e9e pour un autre poste seulement"),
+            "declaration_manquante", module = "engagement", table = "affiliations", colonne = "salaire_reference",
+            identifiants = premier)
+  }
+  r1 <- which(calc$refus %in% "plan_incomplet")
+  if (length(r1)) {
+    j <- r1[order(calc$refus_college[r1], calc$refus_ligne[r1], method = "radix")[1L]]
+    .salaire_d03c(calc$refus_valeur[j], calc$refus_college[j], poste, TRUE, calc$refus_ligne[j])
+  }
+  invisible(NULL)
 }
 
 # Capital reconstitué des dossiers `ouvert` (spécification de B2, § 5.3) : `etats` (lignes de
@@ -485,9 +540,14 @@ lecture_unites <- function(table, colonnes, cles, unite = seq_along(cles), garde
 # majoration_enfant) ; non instruit, structure_familiale du plan (espérance, jugement
 # d'expert) ; une majoration absente vaut 0. Salaire manquant d'une affiliation dont la ligne
 # porte une hypothèse D03c placée (comptes_sociaux, poste `poste` ou `tous`) : salaire déclaré
-# pour son collège (§ 5.9, option B ; refus plan_invalide ou plan_incomplet levé seulement si
-# aucun dossier n'arrête le poste, comme D03h au § 5.5). Rend data.frame (capital, structure,
-# arret, d03c, reconstitue) : `structure` vrai si la structure familiale du plan entre dans le
+# pour son collège (§ 5.9, option B ; forme de la valeur contrôlée au plan, erratum v1.0.21).
+# Rend data.frame (capital, structure, arret, d03c, reconstitue, refus, refus_ligne,
+# refus_valeur, refus_college) : `refus` : refus de lecture différé du dossier (§ 6.2, erratum
+# v1.0.21, #108), jamais levé ici : declaration_manquante (R2 : salaire manquant, hypothèse D03c
+# de comptes_sociaux appliquée à la ligne pour un autre poste seulement), plan_incomplet (R1 :
+# collège de l'affiliation absent de la valeur lue), NA sinon ; le capital du dossier reste
+# alors NA ; `refus_ligne` : affiliation en cause ; `refus_valeur`, `refus_college` : valeur
+# lue et collège (R1) ; `structure` vrai si la structure familiale du plan entre dans le
 # montant ; `d03c` vrai si le salaire déclaré sous D03c entre dans le montant (source S1, § 5.8) ;
 # `reconstitue` vrai si le capital est reconstitué (sans capital_forfaitaire : affiliations, et
 # famille si instruit, lues ; lignes lues de la source S2, § 5.8) ;
@@ -495,15 +555,18 @@ lecture_unites <- function(table, colonnes, cles, unite = seq_along(cles), garde
 # plusieurs affiliations de ce collège couvrent la survenance, ou collège inconnu de la
 # garantie ou d'une affiliation de l'assuré au contrat couvrant la survenance ; parametre_non_determine : taux_capital et
 # capital_forfaitaire absents, ou paramètre lu à plusieurs valeurs ou dont une ligne retenue
-# est exclue pour engagement, erratum v1.0.7 ; assiette_non_determinee (garde) :
-# salaire de l'affiliation manquant hors d'une hypothèse D03c lue ; famille_non_determinee :
+# est exclue pour engagement, erratum v1.0.7 ; assiette_non_determinee, arrêt réel et non une
+# garde (erratum v1.0.21) : salaire de l'affiliation manquant sans hypothèse D03c du poste ou
+# de `tous` appliquée à la ligne ; famille_non_determinee :
 # dossier instruit dont une ligne de famille rattachée au sinistre est exclue pour engagement,
 # ou dont un enfant vivant a un âge inconnu sans situation a_naitre ou handicape, erratum
 # v1.0.6), NA sinon.
 .reconstituer_capital <- function(vue, etats, parametres, conventions, poste) {
   n <- nrow(etats)
   res <- data.frame(capital = rep(NA_real_, n), structure = rep(FALSE, n), arret = rep(NA_character_, n),
-                    d03c = rep(FALSE, n), reconstitue = rep(FALSE, n), stringsAsFactors = FALSE)
+                    d03c = rep(FALSE, n), reconstitue = rep(FALSE, n), refus = rep(NA_character_, n),
+                    refus_ligne = rep(NA_character_, n), refus_valeur = rep(NA_character_, n),
+                    refus_college = rep(NA_character_, n), stringsAsFactors = FALSE)
   if (n == 0L) return(res)
   vv <- function(t, c1) valeurs_vue(vue, t, c1)
   # clés appariées : une clé manquante ou vide ne s'apparie à rien (apparier_cles(), #158)
@@ -536,6 +599,7 @@ lecture_unites <- function(table, colonnes, cles, unite = seq_along(cles), garde
   af_assure <- as.character(vv("affiliations", "id_assure"))
   af_contrat <- as.character(vv("affiliations", "id_contrat"))
   af_college <- as.character(vv("affiliations", "college"))
+  af_id <- as.character(vv("affiliations", "id_affiliation"))
   af_debut <- as.numeric(vv("affiliations", "date_debut"))
   af_fin <- as.numeric(vv("affiliations", "date_fin"))
   # dates tenues pour inconnues par D02a sous H (R5 ; dates_inconnues_vue(), spécification
@@ -571,17 +635,32 @@ lecture_unites <- function(table, colonnes, cles, unite = seq_along(cles), garde
   un <- nb == 1L & !college_inconnu
   sal <- salaire[k1[un]]
   # salaire manquant : hypothèse D03c de la ligne de l'affiliation (§ 5.9), valeur lue ici sans
-  # refus (illisible : NA), refus différé à la fin, une fois les arrêts connus ; sans
-  # hypothèse lue, arrêt assiette_non_determinee (garde)
+  # refus ; refus de lecture différés, marqués dans `refus` (levés par calculer_engagement() une
+  # fois tous les arrêts du poste écartés, § 6.2, erratum v1.0.21, #108) : hypothèse D03c de
+  # comptes_sociaux appliquée à la ligne pour un autre poste seulement (R2,
+  # declaration_manquante) ; collège absent de la valeur lue (R1, plan_incomplet). Sans
+  # hypothèse D03c appliquée à la ligne (traitement X conserver) : arrêt assiette_non_determinee
+  # (arrêt réel, non une garde)
   manque <- which(is.na(sal))
   h_d03c <- hypothese_vue(vue, "D03c", .REFERENTIEL_B2, "affiliations", k1[un][manque], poste)
   lue <- !is.na(h_d03c)
-  d03c <- list(i = a_calculer[un][manque][lue], valeur = h_d03c[lue], college = af_college[k1[un][manque][lue]])
-  res$arret[a_calculer[un][manque][!lue]] <- "assiette_non_determinee"
+  autre <- !lue & !is.na(hypothese_vue(vue, "D03c", .REFERENTIEL_B2, "affiliations", k1[un][manque], poste,
+                                       autre_poste = TRUE))
+  d03c <- list(i = a_calculer[un][manque][lue], valeur = h_d03c[lue], college = af_college[k1[un][manque][lue]],
+               ligne = af_id[k1[un][manque][lue]])
+  res$arret[a_calculer[un][manque][!lue & !autre]] <- "assiette_non_determinee"
+  r2 <- a_calculer[un][manque][autre]
+  res$refus[r2] <- "declaration_manquante"
+  res$refus_ligne[r2] <- af_id[k1[un][manque][autre]]
   res$d03c[d03c$i] <- TRUE
   assiette[a_calculer[un]] <- sal
   assiette[d03c$i] <- vapply(seq_along(d03c$i), function(j) .salaire_d03c(d03c$valeur[j], d03c$college[j], poste, FALSE),
                              0)
+  r1 <- which(is.na(assiette[d03c$i]))
+  res$refus[d03c$i[r1]] <- "plan_incomplet"
+  res$refus_ligne[d03c$i[r1]] <- d03c$ligne[r1]
+  res$refus_valeur[d03c$i[r1]] <- d03c$valeur[r1]
+  res$refus_college[d03c$i[r1]] <- d03c$college[r1]
   a_calculer <- a_calculer[is.na(res$arret[a_calculer])]
   if (length(a_calculer) == 0L) return(res)
   mc0 <- ifelse(is.na(mc$valeur), 0, mc$valeur)
@@ -637,9 +716,6 @@ lecture_unites <- function(table, colonnes, cles, unite = seq_along(cles), garde
                                                                            me0[ins[connu]] * enfants[connu])
     res$arret[ins[inconnu]] <- "famille_non_determinee"
   }
-  # valeur de D03c illisible pour un dossier qui la lit : refus, levé seulement si aucun dossier
-  # n'arrête le poste (§ 5.9 ; ordre de D03h, § 5.5)
-  if (all(is.na(res$arret))) for (j in seq_along(d03c$i)) .salaire_d03c(d03c$valeur[j], d03c$college[j], poste, TRUE)
   res
 }
 
@@ -657,7 +733,9 @@ lecture_unites <- function(table, colonnes, cles, unite = seq_along(cles), garde
 # A + 1), statut du dossier. `prestations` : lignes de la vue non exclues (indices) ; `poste` :
 # poste du calcul (hypothèse D03c du poste ou de `tous`, § 5.9). Rend un data.frame, une ligne
 # par dossier (`d03c` : salaire déclaré sous D03c lu, source S1 du § 5.8 ; `reconstitue` :
-# capital reconstitué, affiliations et famille lues, lignes lues de la source S2).
+# capital reconstitué, affiliations et famille lues, lignes lues de la source S2 ; `refus`,
+# `refus_ligne`, `refus_valeur`, `refus_college` : refus de lecture différé de
+# .reconstituer_capital(), NA pour un dossier qui n'est pas ouvert ; solde et montant NA).
 capital_deces_dossier <- function(vue, plan, etats, methode, parametres, prestations, poste) {
   horizon <- .HORIZONS[[methode]]
   a <- vue$bilan$vue$date_arrete
@@ -677,6 +755,9 @@ capital_deces_dossier <- function(vue, plan, etats, methode, parametres, prestat
   d03c[ouvert] <- rec$d03c
   reconstitue <- rep(FALSE, n)
   reconstitue[ouvert] <- rec$reconstitue
+  refus <- data.frame(refus = rep(NA_character_, n), refus_ligne = rep(NA_character_, n),
+                      refus_valeur = rep(NA_character_, n), refus_college = rep(NA_character_, n), stringsAsFactors = FALSE)
+  refus[ouvert, ] <- rec[names(refus)]
   issue <- rep(1, n)
   issue[ouvert & etats$etat %in% "deces"] <- 1 - parametres$taux_sans_suite
   issue[ouvert & etats$etat %in% "iad"] <- parametres$probabilite_reconnaissance_iad
@@ -685,8 +766,9 @@ capital_deces_dossier <- function(vue, plan, etats, methode, parametres, prestat
                     montant = rep(NA_real_, n),
                     date_flux = structure(rep(as.numeric(a) + 1, n), class = "Date"),
                     horizon = structure(rep(as.numeric(a), n), class = "Date"), horizon_echu = rep(FALSE, n),
-                    stringsAsFactors = FALSE)
-  ok <- which(is.na(arret))
+                    refus, stringsAsFactors = FALSE)
+  # dossier à refus de lecture différé (R1, R2) : capital inconnu, ni solde ni montant
+  ok <- which(is.na(arret) & is.na(refus$refus))
   if (length(ok) == 0L) return(res)
   taux_futur <- rv$taux_futur
   f <- function(debut, fin) facteur_revalorisation(debut, fin, rv$taux_par_annee, rv$prorata, conventions, a, taux_futur)
@@ -848,8 +930,8 @@ calculer_engagement <- function(vue, plan, tables, catalogue, garantie, poste) {
   # D11a, ou de visibilité non déterminée ; dossier non exclu pour engagement, ni à couverture
   # exclue ; spécification `donnees` v1.9, § 9.3 (1) et bloc « Erratum 1.9.2 », (i) et (vii),
   # M509, #83) : le poste lit les colonnes de la garantie, jamais lues sur une version non
-  # retenue : arrêt parametre_non_determine, premier dossier en cause
-  # (dossiers_garantie_invisible(), seule implémentation)
+  # retenue : arrêt parametre_non_determine, plus petit dossier en cause (tri radix, rendu ainsi
+  # par dossiers_garantie_invisible(), seule implémentation)
   invisibles <- dossiers_garantie_invisible(vue, "engagement")
   if (length(invisibles)) return(arreter("parametre_non_determine", invisibles[1L]))
 
@@ -921,7 +1003,9 @@ calculer_engagement <- function(vue, plan, tables, catalogue, garantie, poste) {
                           setdiff(listees, differees))
   if (length(ar$lignes)) return(arreter(ar$motif, ar$identifiant, ar$lignes))
   # partition non déterminée (Kleene : un critère connu vrai décide) : P1 et P2 arrêtés
-  if (anyNA(non_reclame)) return(arreter("parametre_non_determine", etats$id_dossier[is.na(non_reclame)][1L]))
+  if (anyNA(non_reclame)) {
+    return(arreter("parametre_non_determine", sort(as.character(etats$id_dossier[is.na(non_reclame)]), method = "radix")[1L]))
+  }
   etats <- etats[if (poste == "capitaux_non_reclames") non_reclame else !non_reclame, , drop = FALSE]
   # dossiers clos du poste : hors du calcul ; restitués à 0 sous une hypothèse de la vue (S2)
   clos <- etats[etats$etat_dossier %in% "clos", , drop = FALSE]
@@ -929,12 +1013,14 @@ calculer_engagement <- function(vue, plan, tables, catalogue, garantie, poste) {
   # dates du sinistre tenues pour inconnues par D02a sous H (dates_inconnues_vue(), `donnees` ;
   # spécification `donnees` v1.9, § 9.4, #90) : la survenance (R8, R9) est lue par toute méthode
   # (revalorisation, reconstitution) ; la déclaration (R9, R10), par l'horizon de dépôt d'un
-  # décès de 2015 ou après. Arrêt parametre_non_determine, premier dossier en cause
+  # décès de 2015 ou après. Arrêt parametre_non_determine, plus petit dossier en cause (tri radix)
   i_s <- apparier_cles(etats$id_sinistre, valeurs_vue(vue, "sinistres", "id_sinistre"))
   date_inconnue <- dates_inconnues_vue(vue, "sinistres", "date_survenance")[i_s] %in% TRUE |
     (.HORIZONS[[methode]] == "depot" & dates_inconnues_vue(vue, "sinistres", "date_declaration")[i_s] %in% TRUE &
        (as.numeric(etats$date_entree_etat) >= as.numeric(.DEBUT_DEPOT_LEGAL)) %in% TRUE)
-  if (any(date_inconnue)) return(arreter("parametre_non_determine", etats$id_dossier[date_inconnue][1L]))
+  if (any(date_inconnue)) {
+    return(arreter("parametre_non_determine", sort(as.character(etats$id_dossier[date_inconnue]), method = "radix")[1L]))
+  }
   # couverture de taux_par_annee : chaque année de la survenance la plus ancienne à l'arrêté
   rv <- .revalorisation_plan(plan)
   if (nrow(etats) > 0L) {
@@ -942,9 +1028,9 @@ calculer_engagement <- function(vue, plan, tables, catalogue, garantie, poste) {
     debut <- as.POSIXlt(etats$date_entree_etat)$year + 1900L
     for (y in seq.int(min(debut), annee_a)) {
       if (!(as.character(y) %in% names(rv$taux_par_annee))) {
-        premier <- etats$id_dossier[debut <= y][1L]
+        premier <- sort(as.character(etats$id_dossier[debut <= y]), method = "radix")[1L]
         refuser(paste0("plan : revalorisation$capital_deces$taux_par_annee ne couvre pas l'ann\u00e9e ", y,
-                       " (premier dossier : ", premier, ")"), "plan_incomplet", module = "engagement",
+                       " (plus petit dossier : ", premier, ")"), "plan_incomplet", module = "engagement",
                 attendu = paste0("revalorisation$capital_deces$taux_par_annee$", y), identifiants = premier)
       }
     }
@@ -957,8 +1043,22 @@ calculer_engagement <- function(vue, plan, tables, catalogue, garantie, poste) {
                           Filter(function(l) l$table %in% differees, .lectures_dossiers(vue, etats, calc$reconstitue)),
                           etats$id_dossier, listees, differees, repli = FALSE)
   if (length(ar$lignes)) return(arreter(ar$motif, ar$identifiant, ar$lignes))
+  # plus petit dossier arrêté (tri radix), avec son propre motif : l'identifiant et le motif publiés
+  # ne dépendent pas de l'ordre des lignes (§ 6.2, « Identifiant publié », #176, m37)
   arret <- which(!is.na(calc$arret))
-  if (length(arret)) return(arreter(calc$arret[arret[1L]], calc$id_dossier[arret[1L]]))
+  if (length(arret)) {
+    j <- arret[order(as.character(calc$id_dossier[arret]), method = "radix")[1L]]
+    return(arreter(calc$arret[j], calc$id_dossier[j]))
+  }
+  # refus de lecture R2 puis R1 de D03c (§ 5.9 et § 6.2, erratum v1.0.21, #108), levés ici, une
+  # fois tous les arrêts du poste écartés (arrêts de portée ligne, appel différé compris, et
+  # arrêts nés du calcul), avant R3
+  .refuser_lecture_d03c(calc, poste)
+  # débordement d'un dossier lu sous D03c (refus de lecture R3, #113, option (a), § 5.9 et
+  # § 6.2) : capital reconstitué, solde revalorisé ou montant non fini, levé ici, une fois tous
+  # les arrêts du poste écartés ; avant valeur_actuelle_probable(), où un flux NaN (frais nuls
+  # x montant infini) est une erreur brute (m32)
+  .refuser_debordement_d03c(calc$id_dossier, calc$d03c, calc$capital, calc$solde, calc$montant, poste = poste)
   # invariant (spécification de B2, § 4.3) : aucun dossier valorisé à instruction inconnue par sa
   # partie de ligne ; une instruction tenue pour inconnue par D02a sous H (R10) n'est lue que pour
   # un capital reconstitué, arrêté plus haut (.reconstituer_capital())
@@ -1012,6 +1112,8 @@ calculer_engagement <- function(vue, plan, tables, catalogue, garantie, poste) {
                     probabilite = c(rep(cc$issue, each = 2L), rep(1, 2L * nc)), stringsAsFactors = FALSE)
   vap <- valeur_actuelle_probable(ech, list(type = "aucune"), plan$conventions)
   montant <- vap$valeurs$valeur_actuelle[apparier_cles(cc$id_dossier, vap$valeurs$cle)]
+  # montant restitué du dossier (frais compris) non fini sous D03c : même refus R3
+  .refuser_debordement_d03c(cc$id_dossier, cc$d03c, montant, poste = poste)
   reglement <- .HORIZONS[[methode]] != "arrete"
   # jugement_expert : méthode « règlement », structure familiale du plan, facteur d'issue, ou
   # valeur des sources S1 (salaire déclaré sous D03c, § 5.9) et S2 (hypothèse de la vue, #87)

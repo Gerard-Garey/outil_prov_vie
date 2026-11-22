@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Contrôle : couloirs des branches parallèles (ADR 0012, points 5, 6, 9 et 23 ; #94 ; forme du
-# couloir : docs/feuille-de-route.md, § 1.12, « Forme du couloir pour #94 », M359). Tourne dans
+# couloir : docs/feuille-de-route-archive.md, § 1.12, « Forme du couloir pour #94 », M359). Tourne dans
 # le job « Contrôles du dépôt » de la CI (historique complet, sans R), hors de la batterie
 # unitaire (git peut manquer dans l'image du job « Tests (R 4.3.3) »).
 #

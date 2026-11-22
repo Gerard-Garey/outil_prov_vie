@@ -507,7 +507,7 @@ print.resultat_provie <- function(x, ...) {
 # Paramètres retenus de la fiche (ADR 0010, point 10 ; spécification de B2, § 2.8) :
 #   postes : une ligne par poste du plan (garantie, referentiel, poste, famille, methode,
 #     statut_methode de la cellule `ensemble` ; parametres : texte canonique de
-#     list(declaration = déclaration du poste au plan, identifiant_arret = premier dossier ou
+#     list(declaration = déclaration du poste au plan, identifiant_arret = plus petit dossier ou
 #     contrat en cause d'un arrêt né de la famille, NULL sinon) ; usages_tables : identifiants
 #     des tables lues, triés, joints par « ; »), puis une ligne `total` par garantie et
 #     référentiel (famille, méthode et statut NA ; parametres : texte canonique de

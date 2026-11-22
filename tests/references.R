@@ -16,7 +16,7 @@ source(file.path(racine, "tests", "b2_bases.R"))
 # <donnees>/<plan>/<arrete>.
 COUPLES_REFERENCE <- data.frame(
   couple = c("J1", "J2", "J3", "J4", "C1", "C2", "C3", "C4", "V1", "V2"),
-  donnees = c("v1-modeste-04", "v1-modeste-04", "v1-modeste-05", "v1-modeste-05", rep("construite-deces-02", 4L),
+  donnees = c("v1-modeste-04", "v1-modeste-04", "v1-modeste-07", "v1-modeste-07", rep("construite-deces-02", 4L),
               "v1-modeste-06", "v1-modeste-06"),
   plan = c(rep("recommandees", 6L), "alternatives", "alternatives", "recommandees", "recommandees"),
   arrete = c("2025-12-31", "2024-12-31", "2025-12-31", "2024-12-31", "2025-12-31", "2025-01-01", "2025-12-31",

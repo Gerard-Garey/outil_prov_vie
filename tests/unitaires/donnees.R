@@ -1606,7 +1606,14 @@ section("donnees : déclarations (sous-schéma donnees, ADR 0010, point 17) et p
 excl4 <- function(motif, action = "exclure") {
   data.frame(motif = motif, famille = ns$FAMILLES_CALCUL, action = action, stringsAsFactors = FALSE)
 }
-hyp2 <- function(motif, referentiels = ns$REFERENTIELS, valeur = "regle") {
+# valeur par défaut de la forme du motif (dictionnaire 1.6, § 9 ; erratum v1.0.21 de la
+# spécification de B2, § 2.3, #99) : `regle`, sauf les motifs à liste par clé, à décimal ou à
+# catégorie
+valeur_admise <- function(motif) {
+  switch(motif, D03b = "assure=M", D03c = "ensemble=30000", D03e = "cat1", D03h = "0", D05 = "motif=refus;decompte=compte",
+         D13 = "0.5", "regle")
+}
+hyp2 <- function(motif, referentiels = ns$REFERENTIELS, valeur = valeur_admise(motif)) {
   lapply(referentiels, function(r) list(motif = motif, referentiel = r, poste = "tous", valeur = valeur))
 }
 for (cas in list(
@@ -1854,7 +1861,7 @@ for (cas in list(
   list("signalement d'un motif sans S (D03c)", list(hypotheses = hyp2("D03c", valeur = "signalement"))),
   list("signalement et autre ligne pour un même (motif, referentiel)",
        list(hypotheses = c(hyp2("D13", "comptes_sociaux", "signalement"),
-                           list(list(motif = "D13", referentiel = "comptes_sociaux", poste = "pm", valeur = "v"))))),
+                           list(list(motif = "D13", referentiel = "comptes_sociaux", poste = "pm", valeur = "0.5"))))),
   list("D10 sans sous-cas en exclusion (m1)", list(exclusions = excl4("D10"))),
   list("D10 sans sous-cas en hypothèse (m1)", list(hypotheses = hyp2("D10"))),
   list("D07 sans sous-cas en hypothèse (lettrage du dictionnaire 1.6, M660)", list(hypotheses = hyp2("D07"))),
@@ -1869,7 +1876,7 @@ for (cas in list(
        list(hypotheses = list(list(motif = "D02b", referentiel = "comptes_sociaux", poste = "tous", valeur = "max"),
                               list(motif = "D02b", referentiel = "solvabilite_2", poste = "tous", valeur = "autre")))),
   list("D02b, poste autre que tous (Q4)",
-       list(hypotheses = list(list(motif = "D02b", referentiel = "comptes_sociaux", poste = "pm", valeur = "max")))),
+       list(hypotheses = list(list(motif = "D02b", referentiel = "comptes_sociaux", poste = "pm", valeur = "regle")))),
   list("D02a, valeurs différentes entre référentiels (M717)",
        list(hypotheses = list(list(motif = "D02a", referentiel = "comptes_sociaux", poste = "tous", valeur = "regle"),
                               list(motif = "D02a", referentiel = "solvabilite_2", poste = "tous", valeur = "autre")))),
@@ -5150,7 +5157,7 @@ verifier_egal("D07 (c) : non détecté si l'enfant est jeune, si le dossier est 
                    d07(cb(de("1999-03-01", TRUE, "handicape"), conventions = cv("atteinte"))),
                    d07(cb(de("1999-03-01", FALSE, "handicape"), conventions = cv("atteinte")))),
               list(character(0), "rentes RE1", "rentes RE1", c("dossiers DO4", "rentes RE1")))
-hy_d07 <- list(hypotheses = list(list(motif = "D07c", referentiel = "comptes_sociaux", poste = "tous", valeur = "extinction"),
+hy_d07 <- list(hypotheses = list(list(motif = "D07c", referentiel = "comptes_sociaux", poste = "tous", valeur = "regle"),
                                  list(motif = "D07c", referentiel = "solvabilite_2", poste = "tous", valeur = "signalement")))
 r <- cb(de("1999-03-01"), conventions = cv("atteinte"), declarations = hy_d07)
 verifier_egal("D07 (c) : hypothèse (comptes sociaux) et signalement (Solvabilité II) déclarés : placés, aucune attente",
@@ -5539,7 +5546,7 @@ verifier_egal("D07 (b), C07b-5 : PR4 (paiement de RE1 réglé le 2025-06-01) san
               list(character(0), "rentes NA declaration_absente", character(0)))
 r_x <- controler_base(base_ref, A, c(s34(6), list(exclusions = ex34("D07b"))), cv34)
 r_s <- controler_base(base_ref, A, c(s34(6), list(hypotheses = hy34("D07b", "signalement"))), cv34)
-r_h <- controler_base(base_ref, A, c(s34(6), list(hypotheses = hy34("D07a", "extinction"))), cv34)
+r_h <- controler_base(base_ref, A, c(s34(6), list(hypotheses = hy34("D07a", "regle"))), cv34)
 verifier_egal("D07 (b), traitement X;S : exclusion déclarée pour chaque famille, placée ; signalement déclaré, placé ; hypothèse (H) déclarée pour D07a : ne couvre pas D07b, exclusion par famille et signalement par référentiel toujours attendus ; hypothèse déclarée pour D07b (sans H) : plan_invalide",
               list(paste(r_x$exclusions$famille, r_x$exclusions$action, r_x$exclusions$nombre_lignes), rq34(r_x, "D07b"),
                    paste(ligne(r_s$signalements, "D07b")$detection, ligne(r_s$signalements, "D07b")$identifiants), rq34(r_s, "D07b"),
@@ -5641,7 +5648,7 @@ verifier_egal("D07 (a), C07a-6 : décès de AS2 porté par SI3 sans date de sais
               list(co34(controler_base(membre_nd34, A0, s34(1000), cv34), "D07a"), ne34(controler_base(membre_nd34, A0, s34(1000), cv34), "D07a"),
                    co34(controler_base(within(membre_nd34, sinistres$date_saisie[3L] <- D("2025-03-06")), A0, s34(1000), cv34), "D07a")),
               list(character(0), "rentes NA declaration_absente", "rentes exacte RE1"))
-r <- controler_base(inc34, A, c(s34(1000), list(hypotheses = hy34("D07a", "extinction"))), cv34)
+r <- controler_base(inc34, A, c(s34(1000), list(hypotheses = hy34("D07a", "regle"))), cv34)
 verifier_egal("D07 (a) : hypothèse déclarée par référentiel : placée (hypotheses_defaut), aucune attente",
               list(paste(ligne(r$hypotheses_defaut, "D07a", champ = "motif")$referentiel, ligne(r$hypotheses_defaut, "D07a", champ = "motif")$nombre),
                    rq34(r, "D07a")),
@@ -6633,7 +6640,7 @@ verifier_egal("D14 : enfant ME1 né le lendemain de la survenance (situation aut
                    ne34(controler_base(post14_34("2025-01-10"), A, s34(1000), sans_la34), "D14")),
               list("sinistres exacte SI1", "sinistres exacte SI1", character(0), "sinistres exacte SI1", character(0),
                    "sinistres NA declaration_absente"))
-r <- controler_base(d14_34(), A, c(s34(1000), list(hypotheses = hy34("D14", "dossier_reconstitue"))), cv34)
+r <- controler_base(d14_34(), A, c(s34(1000), list(hypotheses = hy34("D14", "regle"))), cv34)
 verifier_egal("D14 : hypothèse déclarée par référentiel : placée (hypotheses_defaut, constat sur sinistres), aucune attente",
               list(paste(ligne(r$hypotheses_defaut, "D14", champ = "motif")$referentiel, ligne(r$hypotheses_defaut, "D14", champ = "motif")$nombre),
                    rq34(r, "D14")),
@@ -6668,7 +6675,7 @@ vue_bilan <- function(b, arrete, declarations = NULL, conventions = NULL) {
   identical(ns$vue_a_date(b, arrete, declarations, conventions)$bilan,
             provie::controler_base(b, arrete, declarations, conventions))
 }
-jeux_b2 <- lapply(c("v1-modeste-04", "v1-modeste-05"), function(n) lire_jeu(file.path(racine, "inst", "extdata", "jeux", n)))
+jeux_b2 <- lapply(c("v1-modeste-04", "v1-modeste-07"), function(n) lire_jeu(file.path(racine, "inst", "extdata", "jeux", n)))
 verifier("(3.2) vue_a_date()$bilan identique à controler_base() (base de référence à A et A0, bases de #33 et de D12 à A0, deux jeux aux deux arrêtés)",
          vue_bilan(base_ref, A) && vue_bilan(base_ref, A0) && all(vapply(v33, vue_bilan, NA, arrete = A0)) &&
            all(vapply(d12, vue_bilan, NA, arrete = A0)) &&
