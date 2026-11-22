@@ -672,13 +672,11 @@ verifier_egal("(4.9) D03c H, valeur salaire_par_defaut_du_college : refus plan_i
                    motif_de(calculer_provisions(b_49, plan_49(hyp_d("D03c", "salaire_par_defaut_du_college")), tid)),
                    motif_de(calculer_provisions(b_49, plan_49(hyp_d("D03c", "cadres=40000")), tid))),
               list("plan_invalide", "plan_invalide", "plan_incomplet"))
-# D03c H déclarée pour le seul poste P2 : comportement visé, refus declaration_manquante (R2,
-# § 6.2, M756), non encore codé (#108 ; aujourd'hui P1 arrêté assiette_non_determinee) ; témoin
-# vrai avant et après #108 : P1 sans montant (arrêté, ou plan refusé declaration_manquante), aucun
-# montant jugement_expert pour P1
-attendu_echec("(4.9) D03c H déclarée pour le seul poste capitaux_non_reclames : refus declaration_manquante (R2, § 6.2, M756)", "#108",
-              identical(motif_de(calculer_provisions(b_49, plan_49(hyp_d("D03c", "ensemble=30000", P2)), tid)),
-                        "declaration_manquante"))
+# D03c H déclarée pour le seul poste P2 : refus declaration_manquante (R2, § 6.2, M756 ; #108 ;
+# avant : P1 arrêté assiette_non_determinee) ; témoin vrai avant et après #108 : P1 sans montant
+# (arrêté, ou plan refusé declaration_manquante), aucun montant jugement_expert pour P1
+verifier_egal("(4.9) D03c H déclarée pour le seul poste capitaux_non_reclames : refus declaration_manquante (R2, § 6.2, M756, #108)",
+              motif_de(calculer_provisions(b_49, plan_49(hyp_d("D03c", "ensemble=30000", P2)), tid)), "declaration_manquante")
 verifier("(4.9) D03c H déclarée pour le seul poste capitaux_non_reclames : P1 sans montant (arrêté, ou refus declaration_manquante), aucun montant jugement_expert pour P1",
          tryCatch({
            r <- calculer_provisions(b_49, plan_49(hyp_d("D03c", "ensemble=30000", P2)), tid)
@@ -798,6 +796,74 @@ verifier_egal("(4.12) rang : DO1 sous D03c (n = 308) et DO2 arrêté (ME2b d'âg
                    refus_de(calculer_provisions(within(b_rang, famille <- famille[famille$id_membre != "ME2b", , drop = FALSE]),
                                                 plan_49(d03c_n(308L), excl_fam("D03a", character(0), F3)$exclusions), tid))),
               list(list(NA_real_, NA_character_, "arrete", "famille_non_determinee"), list("plan_invalide", "DO1")))
+# critère (4.13), #108 (spécification de B2, § 5.9 et § 6.2, « Refus nés à la lecture »,
+# erratum v1.0.21) : les refus de lecture de D03c, R2 (hypothèse appliquée à la ligne pour un
+# autre poste seulement : declaration_manquante, qui nomme la plus petite affiliation en cause)
+# et R1 (collège absent : plan_incomplet), sont levés après tous les arrêts du poste, arrêts de
+# portée ligne d'appel différé compris ; puis R3. R2 et R1, ou R2 et R3, ne peuvent pas
+# naître ensemble pour un poste : une hypothèse placée couvre toutes les lignes du constat D03c.
+# « Avant » mesuré à 172986f.
+id_p1_49 <- function(r) {
+  pr <- r$fiche$parametres_retenus$postes
+  ns$lire_liste(charToRaw(pr$parametres[pr$poste == P1]))$identifiant_arret
+}
+refus_tc <- function(expr) tryCatch({ expr; NULL }, refus_provie = function(e) list(e$motif, e$table, e$colonne, e$identifiants))
+verifier_egal("(4.13) R2 de D03c : hypothèse déclarée pour le seul poste capitaux_non_reclames, salaire de AF1 manquant : refus declaration_manquante sur affiliations, salaire_reference, AF1 (avant : P1 arrêté assiette_non_determinee)",
+              refus_tc(calculer_provisions(b_49, plan_49(hyp_d("D03c", "ensemble=30000", P2)), tid)),
+              list("declaration_manquante", "affiliations", "salaire_reference", "AF1"))
+# (e) : ME2 née en 1890 (âge au-delà du seuil D02c de famille, 110) : refus D02c de portée ligne
+# sur la ligne de famille lue pour le capital reconstitué de DO1 (appel différé, m36)
+b_49e <- b_49
+b_49e$famille$date_naissance[b_49e$famille$id_membre == "ME2"] <- D("1890-01-01")
+verifier_egal("(4.13) (e) D03c cadres=40000 (collège ensemble absent), ME2 née en 1890 : P1 arrêté D02c (arrêt de portée ligne différé), sans refus (avant : refus plan_incomplet, m36) ; témoin, ME2 née en 2014 : refus plan_incomplet",
+              list(p1_49(calculer_provisions(b_49e, plan_49(hyp_d("D03c", "cadres=40000")), tid)),
+                   motif_de(calculer_provisions(b_49, plan_49(hyp_d("D03c", "cadres=40000")), tid))),
+              list(list(NA_real_, NA_character_, "arrete", "D02c"), "plan_incomplet"))
+# rang, plusieurs dossiers (base b_rang : DO1, AF1 au salaire manquant ; DO2, AF2) : un arrêt né
+# d'un autre dossier l'emporte sur le refus de lecture du premier
+b_r2 <- within(b_rang, affiliations$salaire_reference[affiliations$id_affiliation == "AF2"] <- NA_real_)
+b_r2 <- within(b_r2, famille <- famille[famille$id_membre != "ME2b", , drop = FALSE])
+b_r2e <- within(b_r2, { me <- famille[famille$id_membre == "ME2", , drop = FALSE]
+  famille <- rbind(famille, transform(me, id_membre = "ME2b", id_assure = "AS2", id_sinistre = "SI2",
+                                      date_naissance = D("1890-01-01"))); rm(me) })
+verifier_egal("(4.13) rang : DO1 sous R2 (D03c du seul poste capitaux_non_reclames), DO2 arrêté famille_non_determinee (ME2b d'âge inconnu, D03a conserver) : P1 arrêté famille_non_determinee, DO2, sans refus (avant : arrêt assiette_non_determinee, DO1)",
+              { r <- calculer_provisions(b_rang, plan_49(hyp_d("D03c", "ensemble=30000", P2),
+                                                         excl_fam("D03a", character(0), F3)$exclusions), tid)
+                c(p1_49(r), id_p1_49(r)) },
+              list(NA_real_, NA_character_, "arrete", "famille_non_determinee", "DO2"))
+verifier_egal("(4.13) rang : DO1 et DO2 sous R1 (cadres=40000), ME2b de DO2 née en 1890 : P1 arrêté D02c (arrêt de portée ligne différé de DO2), sans refus (avant : refus plan_incomplet)",
+              p1_49(calculer_provisions(b_r2e, plan_49(hyp_d("D03c", "cadres=40000")), tid)),
+              list(NA_real_, NA_character_, "arrete", "D02c"))
+# plus petite affiliation en cause (§ 6.2, « Identifiant publié ») : AF1 de DO1 renommée AF3 ;
+# DO1 (AF3) est le premier dossier, AF2 (DO2) la plus petite affiliation
+verifier_egal("(4.13) R2, deux affiliations au salaire manquant, AF3 (DO1, premier dossier) et AF2 (DO2) : refus declaration_manquante, AF2 (avant : P1 arrêté assiette_non_determinee)",
+              refus_tc(calculer_provisions(within(b_r2, affiliations$id_affiliation[affiliations$id_affiliation == "AF1"] <- "AF3"),
+                                           plan_49(hyp_d("D03c", "ensemble=30000", P2)), tid))[[4L]],
+              "AF2")
+# R1 avant R3 : DO2 rattaché à une garantie GS2 de collège cadres (affiliation AF2 de collège
+# cadres, salaire manquant) ; valeur ensemble= suivi de 308 « 9 » : DO1 déborde (R3), le collège
+# cadres de DO2 est absent (R1) : plan_incomplet
+b_r13 <- within(b_r2, {
+  garanties_souscrites <- rbind(garanties_souscrites, transform(garanties_souscrites, id_garantie_souscrite = "GS2", college = "cadres"))
+  parametres <- rbind(parametres, transform(parametres, id_garantie_souscrite = "GS2"))
+  dossiers$id_garantie_souscrite[dossiers$id_dossier == "DO2"] <- "GS2"
+  affiliations$college[affiliations$id_affiliation == "AF2"] <- "cadres" })
+verifier_egal("(4.13) rang : DO1 sous R3 (ensemble= suivi de 308 « 9 ») et DO2 sous R1 (collège cadres absent) : refus plan_incomplet (R1 avant R3, inchangé) ; témoin, DO2 seul lu sous cadres=1 : refus plan_invalide, DO1",
+              list(motif_de(calculer_provisions(b_r13, plan_49(d03c_n(308L)), tid)),
+                   refus_tc(calculer_provisions(b_r13, plan_49(hyp_d("D03c", paste0("cadres=1;ensemble=", strrep("9", 308L)))),
+                                                tid))[c(1L, 4L)]),
+              list("plan_incomplet", list("plan_invalide", "DO1")))
+# ordre défensif R2 avant R1 (§ 6.2) : rang inatteignable depuis les données (une hypothèse
+# D03c placée couvre toutes les lignes du constat, R2 et R1 ne naissent donc pas ensemble pour un
+# poste) ; figé par un appel direct de .refuser_lecture_d03c() sur un `calc` construit à la main,
+# dossier R1 (collège ensemble absent de cadres=1) en premier, dossier R2 (AF2) ensuite
+calc_r <- data.frame(id_dossier = c("DO1", "DO2"), refus = c("plan_incomplet", "declaration_manquante"),
+                     refus_ligne = c("AF1", "AF2"), refus_valeur = c("cadres=1", NA), refus_college = c("ensemble", NA),
+                     stringsAsFactors = FALSE)
+verifier_egal("(4.13) .refuser_lecture_d03c(), rang inatteignable depuis les données : dossier R1 (premier) et dossier R2 : refus declaration_manquante, affiliations, salaire_reference, AF2 (R2 avant R1) ; R1 seul : plan_incomplet ; aucun refus marqué : rien",
+              list(refus_tc(ns$.refuser_lecture_d03c(calc_r, P1)), motif_de(ns$.refuser_lecture_d03c(calc_r[1L, ], P1)),
+                   motif_de(ns$.refuser_lecture_d03c(transform(calc_r, refus = NA_character_), P1))),
+              list(list("declaration_manquante", "affiliations", "salaire_reference", "AF2"), "plan_incomplet", "aucun"))
 # témoin de la limite (§ 5.9) : le même débordement depuis la base, sans D03c, n'est pas refusé
 # (#189) : salaire de 1e308, erreur brute ; salaire de 6e307 et frais de 0,1, P1 infini calculé.
 # Comportement visé : un refus classé ou une cellule arrêtée, jamais une erreur brute ni un
