@@ -1007,7 +1007,7 @@ documentera avec eux.
 \rowcolor{tableheader}
 \textcolor{financeblue}{\textbf{Motif}} & \textcolor{financeblue}{\textbf{Levé, dans l'état du code, par}} \\
 \endhead
-\code{plan\_incomplet} & \code{controler\_base()}~: date d'arrêté absente\fsp; \code{facteur\_revalorisation()} et \code{calculer\_engagement()}~: année sans taux de revalorisation (section~\ref{sec:engagement-capital})\fsp; \code{calculer\_engagement()}, par \code{capital\_deces\_dossier()}~: collège d'une affiliation absent de la valeur de l'hypothèse D03c lue\fsp; \code{valider\_plan()}, et par elle \code{canoniser\_plan()}, \code{ecrire\_plan()} et \code{construire\_fiche()}~: entrée du plan exigée et absente, le message nommant son chemin (section~\ref{sec:plan-schema}). \\
+\code{plan\_incomplet} & \code{controler\_base()}~: date d'arrêté absente\fsp; \code{facteur\_revalorisation()} et \code{calculer\_engagement()}~: année sans taux de revalorisation (section~\ref{sec:engagement-capital})\fsp; \code{calculer\_engagement()}~: collège d'une affiliation absent de la valeur de l'hypothèse D03c lue, levé après tous les arrêts du poste (section~\ref{sec:engagement-capital})\fsp; \code{valider\_plan()}, et par elle \code{canoniser\_plan()}, \code{ecrire\_plan()} et \code{construire\_fiche()}~: entrée du plan exigée et absente, le message nommant son chemin (section~\ref{sec:plan-schema}). \\
 \code{plan\_invalide} & \code{controler\_base()}~: date d'arrêté mal formée, déclaration ou convention mal formée ou hors de sa liste fermée\fsp; \code{calculer\_age()} et \code{date\_atteinte\_age()}~: convention hors de \code{CONVENTIONS\_AGE}\fsp; \code{valider\_plan()}, et par elle les mêmes fonctions que pour \code{plan\_incomplet}~: entrée du plan mal formée, hors de son domaine ou inconnue du schéma (section~\ref{sec:plan-schema})\fsp; \code{resoudre\_tables()}~: statut ou nature d'une table autres que ceux que déclarent le plan et l'usage\fsp; \code{lire\_declarations()}, et par elle \code{controler\_base()}, \code{vue\_a\_date()} et \code{valider\_plan()}~: valeur d'une hypothèse par défaut, lue ou non, de tout référentiel et de tout poste, hors de la forme de son motif (section~\ref{sec:donnees-bilan}, paragraphe «~Forme de la valeur des hypothèses par défaut~»)\fsp; \code{calculer\_engagement()}~: capital reconstitué, solde revalorisé ou montant, avant ou après frais, infini ou indéterminé (\code{NaN}) d'un dossier dont l'assiette est lue sous l'hypothèse D03c, levé après tous les arrêts du poste (section~\ref{sec:engagement-capital}). \\
 \code{liste\_invalide} & \code{ecrire\_valeurs()}, \code{ecrire\_liste()} et \code{lire\_liste()}~: valeur, liste ou texte que l'écriture canonique ou le format de liste n'admet pas (sections~\ref{sec:ecriture} et~\ref{sec:format-liste})\fsp; \code{controler\_types()}, \code{constater\_forme()} et \code{controler\_base()}~: base qui n'est pas une liste nommée de \code{data.frame} aux tables connues\fsp; \code{ecrire\_base()}~: valeur que le CSV ne relirait pas à l'identique\fsp; \code{construire\_fiche()}, \code{ecrire\_fiche()}, \code{lire\_fiche()} et les contrôles du rejeu~: objet ou liste qui n'a pas la forme d'une fiche de calcul. \\
 \code{fichier\_invalide} & \code{lire\_base()}, \code{ecrire\_base()}, \code{ecrire\_jeu()} et \code{lire\_jeu()}~: chemin qui n'est pas une chaîne unique, dossier introuvable, non vide ou impossible à créer, fichier inconnu du dictionnaire, fichier dont la lecture ne rendrait pas le texte exact (section~\ref{sec:lecture-base})\fsp; pour \code{lire\_jeu()}, disposition d'un jeu, liste d'empreintes, volumétrie ou tables de vérité non conformes (section~\ref{sec:lecture-jeu}). \\
@@ -1017,7 +1017,7 @@ documentera avec eux.
 \code{type\_incompatible} & Mêmes fonctions que \code{colonne\_absente}~: colonne d'un autre type que son type déclaré\fsp; \code{construire\_table()} et \code{lire\_table()}~: colonne d'une table d'un autre type que celui de son format. \\
 \code{extraction\_invalide} & \code{controler\_version\_extraction()}, et par elle \code{controler\_types()}, \code{ecrire\_base()}, \code{lire\_base()} et \code{controler\_base()}~: version du dictionnaire autre que \code{VERSION\_DICTIONNAIRE\_ATTENDUE}\fsp; \code{controler\_types()} et \code{controler\_base()}~: table \code{extraction} qui n'a pas exactement une ligne, et, pour \code{controler\_base()} seule, valeur manquante ou hors domaine, date antérieure au 1er~janvier~1901 ou début d'historique qui ne précède pas la date d'extraction. \\
 \code{arrete\_posterieur\_extraction} & \code{controler\_base()}~: date d'arrêté postérieure à la date d'extraction. \\
-\code{declaration\_manquante} & \code{calculer\_provisions()}~: déclaration requise par le bilan et absente du plan (section~\ref{sec:etapes})\fsp; \code{calculer\_risque\_en\_cours()}, par \code{provisions\_individuelles()}~: taux du tarif manquant sans hypothèse D03h déclarée (section~\ref{sec:risque-en-cours-p3}). \\
+\code{declaration\_manquante} & \code{calculer\_provisions()}~: déclaration requise par le bilan et absente du plan (section~\ref{sec:etapes})\fsp; \code{calculer\_risque\_en\_cours()}, après tous les arrêts du poste, les deux champs compris, le champ individuel avant le champ collectif~: taux du tarif manquant sans hypothèse D03h du poste ou de tous les postes appliquée à la garantie souscrite, la plus petite garantie souscrite en cause étant nommée (colonne \code{taux\_technique\_tarif}), puis période couverte manquante d'une cotisation sans hypothèse D03f du poste ou de tous les postes, mais avec une hypothèse D03f déclarée pour un autre poste, la plus petite cotisation en cause étant nommée avec la colonne de sa borne manquante, \code{fin\_periode} si les deux manquent (section~\ref{sec:risque-en-cours-p3})\fsp; \code{calculer\_engagement()}, après tous les arrêts du poste et avant le refus \code{plan\_incomplet}~: salaire de référence manquant de l'affiliation qui porte l'assiette, sans hypothèse D03c du poste ou de tous les postes, mais avec une hypothèse D03c déclarée pour un autre poste, la plus petite affiliation en cause étant nommée (table \code{affiliations}, colonne \code{salaire\_reference}\fsp; section~\ref{sec:engagement-capital}). \\
 \code{table\_absente} & \code{resoudre\_tables()}~: usage exigé sans entrée dans le plan, ou sans table reçue sous l'identifiant déclaré (section~\ref{sec:tables-indicateurs})\fsp; \code{rejouer\_fiche()}, par les contrôles du rejeu~: table importée de la fiche non reçue (section~\ref{sec:plan-fiche}). \\
 \code{empreinte\_discordante} & \code{lire\_jeu()}~: fichier d'un jeu dont le MD5 diffère de celui de \code{empreintes.md5}, avec l'empreinte attendue et l'empreinte reçue\fsp; \code{resoudre\_tables()}~: table reçue dont l'empreinte diffère de celle du plan\fsp; \code{rejouer\_fiche()}, par les contrôles du rejeu~: table de la base ou table importée dont l'empreinte diffère de celle de la fiche (section~\ref{sec:plan-fiche}). \\
 \code{version\_discordante} & \code{lire\_liste()}, et par elle \code{lire\_plan()} et \code{lire\_fiche()}~: en-tête d'une autre version du format de liste, avec la version attendue (\code{attendu}) et la version reçue (\code{recu})\fsp; \code{rejouer\_fiche()}, par les contrôles du rejeu (module \code{plan})~: fiche d'une autre version que \code{VERSION\_FICHE} (section~\ref{sec:plan-fiche}). \\
@@ -4578,8 +4578,8 @@ d'une liste triée~:
 \textcolor{financeblue}{\textbf{Motif d'arrêt}} & \textcolor{financeblue}{\textbf{Cause}} \\
 \code{hors\_axes} & Table lue hors de ses axes sous la déclaration \code{refus} (provision mathématique de la temporaire décès). \\
 \code{affiliation\_non\_determinee} & Sinistres déclarés non réglés et capitaux non réclamés~: affiliation qui porte l'assiette d'un capital à reconstituer non déterminée (section~\ref{sec:engagement-capital}). \\
-\code{assiette\_non\_determinee} & Mêmes postes~: salaire de référence de l'affiliation retenue manquant, sans hypothèse D03c lue par le poste. \\
-\code{parametre\_non\_determine} & Mêmes postes~: paramètre du capital absent, à plusieurs valeurs ou exclu pour la famille «~engagement~», ou dossier dont la garantie souscrite n'est pas retenue à l'arrêté (issue~83)\fsp; provision mathématique de la temporaire décès~: paramètre manquant, à plusieurs valeurs ou exclu pour la famille «~risque en cours~», date de naissance manquante ou d'un assuré exclu, sinistre de l'assuré exclu, fin de couverture indéterminée, sauf contrat hors de la population par une condition connue\fsp; champ collectif~: période couverte d'une cotisation non déterminée (défaut D03f, sans hypothèse ou règle du dictionnaire inapplicable) ou, bornes connues et fin postérieure à l'arrêté, période inversée ou de longueur nulle (section~\ref{sec:risque-en-cours-p3}). \\
+\code{assiette\_non\_determinee} & Mêmes postes~: salaire de référence de l'affiliation retenue manquant, sans aucune hypothèse D03c appliquée à sa ligne (conservation)\fsp; une hypothèse D03c déclarée pour un autre poste seulement donne un refus \code{declaration\_manquante}, non un arrêt. \\
+\code{parametre\_non\_determine} & Mêmes postes~: paramètre du capital absent, à plusieurs valeurs ou exclu pour la famille «~engagement~», ou dossier dont la garantie souscrite n'est pas retenue à l'arrêté (issue~83)\fsp; provision mathématique de la temporaire décès~: paramètre manquant, à plusieurs valeurs ou exclu pour la famille «~risque en cours~», date de naissance manquante ou d'un assuré exclu, sinistre de l'assuré exclu, fin de couverture indéterminée, sauf contrat hors de la population par une condition connue\fsp; champ collectif~: période couverte d'une cotisation non déterminée (défaut D03f, sans aucune hypothèse appliquée à la ligne, ou règle du dictionnaire inapplicable) ou, bornes connues et fin postérieure à l'arrêté, période inversée ou de longueur nulle (section~\ref{sec:risque-en-cours-p3}). \\
 \code{famille\_non\_determinee} & Sinistres déclarés non réglés et capitaux non réclamés~: majoration familiale inconnue d'un dossier instruit. \\
 \end{tabular}
 \end{center}
@@ -4612,13 +4612,13 @@ n'est exportée.
 \rowcolor{tableheader}
 \textcolor{financeblue}{\textbf{Fonction}} & \textcolor{financeblue}{\textbf{Arguments}} & \textcolor{financeblue}{\textbf{Rôle}} \\
 \endhead
-\code{calculer\_engagement()} & \code{vue}, \code{plan}, \code{tables}, \code{catalogue}, \code{garantie}, \code{poste} & Point d'appel d'un poste de la famille «~engagement~» (sinistres déclarés non réglés ou capitaux non réclamés)\fsp; rend les cellules, les dossiers (dont les unités restituées à montant nul), les échéanciers et les indicateurs\fsp; un poste arrêté rend une cellule \code{arrete} sans montant, avec l'identifiant en cause et, pour un arrêt par unité, les lignes de \code{refus\_tables} en cause (attribut \code{refus\_ligne}, issue~72)\fsp; refus \code{plan\_invalide} d'un dossier lu sous D03c dont le capital, le solde ou le montant n'est pas fini, levé après les arrêts du poste (issue~113). \\
-\code{capital\_deces\_dossier()} & \code{vue}, \code{plan}, \code{etats}, \code{methode}, \code{parametres}, \code{prestations}, \code{poste} & Calcule, sous l'une des quatre méthodes, le capital, le solde revalorisé à l'arrêté, le montant à l'horizon de la méthode et la date du flux de chaque dossier\fsp; signale le salaire déclaré sous l'hypothèse D03c du poste (colonne \code{d03c}) et le capital reconstitué (colonne \code{reconstitue}, qui décide des lignes lues pour la détection S2). \\
+\code{calculer\_engagement()} & \code{vue}, \code{plan}, \code{tables}, \code{catalogue}, \code{garantie}, \code{poste} & Point d'appel d'un poste de la famille «~engagement~» (sinistres déclarés non réglés ou capitaux non réclamés)\fsp; rend les cellules, les dossiers (dont les unités restituées à montant nul), les échéanciers et les indicateurs\fsp; un poste arrêté rend une cellule \code{arrete} sans montant, avec l'identifiant en cause et, pour un arrêt par unité, les lignes de \code{refus\_tables} en cause (attribut \code{refus\_ligne}, issue~72)\fsp; refus \code{plan\_invalide} d'un dossier lu sous D03c dont le capital, le solde ou le montant n'est pas fini, levé après les arrêts du poste (issue~113)\fsp; refus de lecture de D03c, \code{declaration\_manquante} puis \code{plan\_incomplet}, levés après tous les arrêts du poste et avant ce refus \code{plan\_invalide} (issue~108). \\
+\code{capital\_deces\_dossier()} & \code{vue}, \code{plan}, \code{etats}, \code{methode}, \code{parametres}, \code{prestations}, \code{poste} & Calcule, sous l'une des quatre méthodes, le capital, le solde revalorisé à l'arrêté, le montant à l'horizon de la méthode et la date du flux de chaque dossier\fsp; signale le salaire déclaré sous l'hypothèse D03c du poste (colonne \code{d03c}) et le capital reconstitué (colonne \code{reconstitue}, qui décide des lignes lues pour la détection S2)\fsp; marque, sans le lever, le refus de lecture de D03c né du dossier (colonne \code{refus}~: \code{declaration\_manquante} ou \code{plan\_incomplet}\fsp; colonnes \code{refus\_ligne}, affiliation en cause, \code{refus\_valeur} et \code{refus\_college}), le capital restant alors manquant. \\
 \code{facteur\_revalorisation()} & \code{debut}, \code{fin}, \code{taux\_par\_annee}, \code{prorata}, \code{conventions}, \code{arrete}, \code{taux\_futur} & Facteur de revalorisation légale entre deux dates, produit sur les années civiles, au prorata simple ou composé\fsp; refus \code{plan\_incomplet} pour une année sans taux. Seule implémentation du package. \\
 \code{valeur\_actuelle\_probable()} & \code{echeancier}, \code{actualisation}, \code{conventions} & Seule fonction de valeur actuelle probable du package~: flux $\times$ probabilité $\times$ facteur d'actualisation, sommés par clé\fsp; un type d'actualisation admis sans branche de calcul est une erreur interne, jamais un facteur~1. Lue aussi par \code{risque\_en\_cours}. \\
 \code{duree\_annees()} & \code{debut}, \code{fin}, \code{conventions} & Durée en années entre deux dates selon la convention de décompte des jours (\code{exact\_exact} ou \code{exact\_365}). \\
 \code{parametre\_vue()} & \code{vue}, \code{nom}, \code{gs}, \code{famille = NULL} & Rend un paramètre de chaque garantie souscrite dans la vue\fsp; \code{NA} s'il manque, \code{ambigu} s'il porte plusieurs valeurs\fsp; si une famille de calcul est donnée, \code{exclu} signale une ligne retenue du paramètre exclue pour cette famille\fsp; une clé manquante ou vide, de la garantie ou de la ligne de paramètre, ne s'apparie à rien (issue~158). Seule lecture des paramètres d'une garantie souscrite, appelée par les familles «~engagement~» et «~risque en cours~». \\
-\code{hypothese\_vue()} & \code{vue}, \code{motif}, \code{referentiel}, \code{table}, \code{lignes}, \code{poste}, \code{colonnes = NULL} & Seule sélection d'une hypothèse placée par la vue pour chaque ligne d'une table, lue par un poste~: hypothèse du poste de préférence à celle de \code{tous}, puis la première placée\fsp; avec \code{colonnes}, seules comptent les hypothèses dont une colonne est lue par le poste (garde par colonnes, M661, issue~90)\fsp; \code{NA} sans hypothèse appliquée\fsp; la forme de la valeur n'est pas contrôlée ici, mais au plan, par \code{lire\_declarations()} (module \code{donnees}). Avec \code{cles\_lignes\_hypothese()}, seule lectrice des hypothèses placées par la vue. Appelée aussi par \code{risque\_en\_cours} (D03h, D03f). \\
+\code{hypothese\_vue()} & \code{vue}, \code{motif}, \code{referentiel}, \code{table}, \code{lignes}, \code{poste}, \code{colonnes = NULL}, \code{autre\_poste = FALSE} & Seule sélection d'une hypothèse placée par la vue pour chaque ligne d'une table, lue par un poste~: hypothèse du poste de préférence à celle de \code{tous}, puis la première placée\fsp; avec \code{colonnes}, seules comptent les hypothèses dont une colonne est lue par le poste (garde par colonnes, M661, issue~90)\fsp; \code{NA} sans hypothèse appliquée\fsp; avec \code{autre\_poste} vrai, seules comptent les hypothèses placées pour un autre poste que celui du calcul et que \code{tous} (refus de lecture \code{declaration\_manquante}, issue~108)\fsp; la forme de la valeur n'est pas contrôlée ici, mais au plan, par \code{lire\_declarations()} (module \code{donnees}). Avec \code{cles\_lignes\_hypothese()}, seule lectrice des hypothèses placées par la vue. Appelée aussi par \code{risque\_en\_cours} (D03h, D03f). \\
 \code{hypotheses\_vue\_unites()} & \code{vue}, \code{referentiel}, \code{poste}, \code{famille}, \code{n}, \code{lectures} & Seule détection des hypothèses appliquées par la vue (source S2~: D02a, D02b, D03g) aux lignes lues pour chaque unité d'un poste, visibles ou non, hors lignes exclues pour la famille\fsp; une clé composée n'est jointe que si chacune de ses composantes est renseignée (issue~158)\fsp; rend les codes de chaque unité. Appelée aussi par \code{risque\_en\_cours}. \\
 \code{joindre\_codes()} & \code{...} & Seule réunion des codes d'hypothèse d'une unité (sources S1 et S2)~: codes uniques, triés, joints par «~;~». Appelée aussi par \code{risque\_en\_cours}. \\
 \code{lecture\_unites()} & \code{table}, \code{colonnes}, \code{cles}, \code{unite}, \code{garde}, \code{admises}, \code{lues} & Décrit la lecture d'une table par les unités d'un poste pour la détection S2 (clés, unités, lignes admises\fsp; avec \code{lues}, colonnes lues, seules les hypothèses qui portent sur l'une d'elles comptant, garde par colonnes, issue~90)\fsp; une clé manquante ou vide ne rattache rien (issue~158). Appelée aussi par \code{risque\_en\_cours}. \\
@@ -4827,13 +4827,29 @@ décidée par le mainteneur le 12~novembre~2026)~:
   double précision, lue comme infinie) ou un collège répété font refuser
   le plan (\code{plan\_invalide}) avant tout calcul. Un collège de
   l'affiliation absent de la liste, contenu qui dépend des données, fait
-  refuser l'appel (\code{plan\_incomplet})~; ce refus n'est levé que si un
-  dossier lit l'assiette et qu'aucun dossier n'arrête le poste. Le dossier
+  refuser l'appel (\code{plan\_incomplet})~; ce refus n'est levé qu'après
+  tous les arrêts du poste (paragraphe «~Rang des refus nés à la
+  lecture~» ci-dessous). Le dossier
   est restitué au statut \code{jugement\_expert}, avec le code
   \code{D03c} dans \code{hypotheses\_defaut}~;
-\item \textbf{sans hypothèse lue par le poste} (conservation, ou
-  hypothèse déclarée pour un autre poste seulement)~: le salaire est
-  inconnu, et le poste est arrêté (\code{assiette\_non\_determinee}).
+\item \textbf{conservation} (aucune hypothèse D03c appliquée à la ligne)~:
+  le salaire est inconnu, et le poste est arrêté
+  (\code{assiette\_non\_determinee})\fsp;
+\item \textbf{hypothèse déclarée pour un autre poste seulement} (aucune
+  hypothèse du poste ni de tous les postes, mais une hypothèse D03c de
+  comptes sociaux appliquée à la ligne pour un autre poste, repérée par
+  \code{hypothese\_vue()} et son argument \code{autre\_poste})~: le motif
+  du refus de l'appel est \code{declaration\_manquante} (table \code{affiliations},
+  colonne \code{salaire\_reference}, plus petite affiliation en cause dans
+  l'ordre des octets), après tous les arrêts du poste (spécification,
+  erratum~1.0.21, §~5.9 et §~6.2, M756\fsp; issue~108 du dépôt). Motif,
+  jugement d'expert visé par le mainteneur~: le plan ne peut pas déclarer
+  la conservation pour un poste et l'hypothèse pour un autre (D03c est un
+  motif à traitement unique, qui ne se déclare pas à la fois dans les
+  exclusions et dans les hypothèses, décision~D8 du mainteneur), de sorte qu'un arrêt appliquerait un traitement
+  que le plan ne peut pas déclarer~; l'alternative écartée, un arrêt
+  uniforme, ferait lire une lacune du plan comme une indétermination des
+  données.
 \end{itemize}
 
 \noindent La forme stricte a une limite, retenue par le mainteneur
@@ -4876,6 +4892,26 @@ infini publié \code{calcule} quand des frais s'y ajoutent (issue~189 du
 dépôt)~; un total de poste, de garantie ou de référentiel qui déborde
 alors que chaque dossier est fini est publié sans refus (issue~190 du
 dépôt).
+
+\textbf{Rang des refus nés à la lecture} (spécification, erratum~1.0.21,
+§~6.2, M755 et M756\fsp; issue~108 du dépôt). Trois refus de la famille
+«~engagement~» dépendent des données et naissent à la lecture d'un
+dossier~: le refus \code{declaration\_manquante} d'une hypothèse D03c
+déclarée pour un autre poste seulement (R2), le refus \code{plan\_incomplet}
+d'un collège absent de la valeur lue (R1) et le refus \code{plan\_invalide}
+du débordement (R3). \code{capital\_deces\_dossier()} les marque sans les
+lever, et \code{calculer\_engagement()} ne les lève qu'une fois écartés
+tous les arrêts du poste, évalués pour tous ses dossiers~: règles d'arrêt
+(section~\ref{sec:garanties-arrets}), arrêts par une ligne refusée lue,
+appel différé compris, et arrêts nés du calcul. Un poste arrêté n'est donc
+jamais refusé, quel que soit l'ordre des dossiers. Plusieurs refus sont
+levés dans l'ordre R2, R1, R3. L'ordre de R2 avant R1 est défensif et
+inatteignable depuis les données~: une hypothèse D03c placée couvre toutes
+les lignes du défaut, de sorte que R2, qui suppose l'absence d'hypothèse
+du poste ou de tous les postes, et R1, qui en suppose une, ne naissent pas
+ensemble pour un poste~; il est figé par un appel direct de la fonction
+interne qui lève R2 et R1. La même règle de rang vaut pour la provision
+mathématique de la temporaire décès (section~\ref{sec:risque-en-cours-p3}).
 
 Les majorations dépendent de l'instruction du sinistre. Instruit, chaque
 membre retenu de la famille rattaché au sinistre compte~: un conjoint
@@ -5244,9 +5280,9 @@ fonctions n'est exportée.
 \begin{tabular}{@{}p{5.6cm}>{\raggedright\arraybackslash}p{3.0cm}p{6.5cm}@{}}
 \rowcolor{tableheader}
 \textcolor{financeblue}{\textbf{Fonction}} & \textcolor{financeblue}{\textbf{Arguments}} & \textcolor{financeblue}{\textbf{Rôle}} \\
-\code{calculer\_risque\_en\_cours()} & \code{vue}, \code{plan}, \code{tables}, \code{catalogue}, \code{garantie}, \code{poste} & Point d'appel de la provision mathématique de la temporaire décès\fsp; rend une cellule pour le poste (champs individuel et collectif réunis), les échéanciers des contrats individuels (deux lignes de flux nul par contrat sorti restitué), les indicateurs et les contrats valorisés par champ (unités de la restitution par segment)\fsp; applique l'arrêt par unité (issue~72) avant toute lecture des valeurs des contrats\fsp; un poste arrêté rend une cellule \code{arrete}, avec le contrat en cause et, pour un arrêt par unité, les lignes de \code{refus\_tables} en cause (attribut \code{refus\_ligne}). \\
-\code{provisions\_individuelles()} & \code{vue}, \code{plan}, \code{tables}, \code{temoin} & Calcule, contrat individuel par contrat, la population, l'échéancier et la provision (plancher nul par contrat)\fsp; marque les contrats dont un âge est lu hors des axes sous \code{derniere\_valeur} et rend leurs lignes \code{hors\_axes\_derniere\_valeur}\fsp; rend les codes des hypothèses de la vue de chaque contrat et les contrats sortis à restituer à montant nul\fsp; le témoin rétrospectif n'est calculé que si \code{temoin} vaut \code{TRUE} (\code{NA} en prime unique)\fsp; l'arrêt \code{parametre\_non\_determine} désigne le plus petit contrat en cause (tri radix, issue~72), l'arrêt \code{hors\_axes} le premier rencontré. \\
-\code{provisions\_collectives()} & \code{vue}, \code{plan} & Calcule, par contrat collectif, la provision au prorata des cotisations nettes de chargement sur les jours postérieurs à l'arrêté (\code{prorata\_cotisation}), sous le traitement déclaré de la période couverte manquante (D03f)\fsp; rend aussi le motif d'arrêt et le premier contrat en cause, et les contrats sous une hypothèse (D03f, ou hypothèse de la vue), qui fondent le statut\fsp; un contrat sans cotisation de fin postérieure à l'arrêté n'est restitué, de montant nul, que si une de ses cotisations est lue sous D03f. \\
+\code{calculer\_risque\_en\_cours()} & \code{vue}, \code{plan}, \code{tables}, \code{catalogue}, \code{garantie}, \code{poste} & Point d'appel de la provision mathématique de la temporaire décès\fsp; rend une cellule pour le poste (champs individuel et collectif réunis), les échéanciers des contrats individuels (deux lignes de flux nul par contrat sorti restitué), les indicateurs et les contrats valorisés par champ (unités de la restitution par segment)\fsp; applique l'arrêt par unité (issue~72) avant toute lecture des valeurs des contrats\fsp; un poste arrêté rend une cellule \code{arrete}, avec le contrat en cause et, pour un arrêt par unité, les lignes de \code{refus\_tables} en cause (attribut \code{refus\_ligne})\fsp; lève ensuite les refus \code{declaration\_manquante} des deux champs, D03h avant D03f (issue~108). \\
+\code{provisions\_individuelles()} & \code{vue}, \code{plan}, \code{tables}, \code{temoin} & Calcule, contrat individuel par contrat, la population, l'échéancier et la provision (plancher nul par contrat)\fsp; marque les contrats dont un âge est lu hors des axes sous \code{derniere\_valeur} et rend leurs lignes \code{hors\_axes\_derniere\_valeur}\fsp; rend les codes des hypothèses de la vue de chaque contrat et les contrats sortis à restituer à montant nul\fsp; le témoin rétrospectif n'est calculé que si \code{temoin} vaut \code{TRUE} (\code{NA} en prime unique)\fsp; l'arrêt \code{parametre\_non\_determine} désigne le plus petit contrat en cause (tri radix, issue~72), l'arrêt \code{hors\_axes} le premier rencontré\fsp; sans arrêt du champ, rend sans le lever le refus de D03h (élément \code{refus\_d03h}), sans valoriser de contrat. \\
+\code{provisions\_collectives()} & \code{vue}, \code{plan} & Calcule, par contrat collectif, la provision au prorata des cotisations nettes de chargement sur les jours postérieurs à l'arrêté (\code{prorata\_cotisation}), sous le traitement déclaré de la période couverte manquante (D03f)\fsp; rend aussi le motif d'arrêt et le premier contrat en cause, et les contrats sous une hypothèse (D03f, ou hypothèse de la vue), qui fondent le statut\fsp; un contrat sans cotisation de fin postérieure à l'arrêté n'est restitué, de montant nul, que si une de ses cotisations est lue sous D03f\fsp; sans arrêt du champ, rend sans le lever le refus de D03f (attributs \code{refus\_d03f} et \code{colonne\_d03f}), sans valoriser de contrat. \\
 \end{tabular}
 \end{center}
 
@@ -5454,13 +5490,28 @@ risque passé changé de signe, sans rapport avec la prospective.
 Un taux du tarif manquant suit l'hypothèse D03h déclarée par le plan (celle
 du poste l'emportant sur celle de tous les postes\fsp; valeur décimale
 de $[-0{,}05\,;\,0{,}10]$, contrôlée au plan, section~\ref{sec:donnees-bilan},
-paragraphe «~Forme de la valeur des hypothèses par défaut~»), sans
-quoi l'appel est refusé (\code{declaration\_manquante})~; le contrat est
+paragraphe «~Forme de la valeur des hypothèses par défaut~»)~; le contrat est
 alors au statut \code{jugement\_expert}, comme un contrat dont un âge est
 lu hors des axes de la table du tarif sous \code{derniere\_valeur}
 (ci-dessous) ou dont une ligne lue (contrat, assuré, sinistres de l'assuré)
 est placée sous une hypothèse de la vue, et \code{exact} sinon (règle
-unique de statut, section~\ref{sec:statut-unite}).
+unique de statut, section~\ref{sec:statut-unite}). Sans hypothèse D03h du
+poste ou de tous les postes appliquée à la garantie souscrite, qu'aucune
+hypothèse ne soit déclarée ou qu'elle le soit pour un autre poste
+seulement, l'appel est refusé (\code{declaration\_manquante}, colonne
+\code{taux\_technique\_tarif}, plus petite garantie souscrite en cause dans
+l'ordre des octets)~; D03h n'admettant que l'hypothèse par défaut, les deux
+cas reçoivent le même refus, et, par le point d'entrée, une déclaration
+de D03h que le bilan exige manque déjà plus tôt (section~\ref{sec:etapes}).
+Ce refus naît à la lecture (spécification, erratum~1.0.21, §~6.2\fsp;
+issue~108 du dépôt)~: \code{provisions\_individuelles()} le rend sans le
+lever, après les arrêts du champ individuel (paramètre non déterminé,
+table lue hors de ses axes sous \code{refus}), et
+\code{calculer\_risque\_en\_cours()} ne le lève qu'une fois écartés tous
+les arrêts du poste, arrêt par unité et arrêts du champ collectif compris,
+avant le refus de même motif du champ collectif (D03f, ci-dessous). Un
+poste arrêté n'est donc jamais refusé (même motif que pour la famille
+«~engagement~», section~\ref{sec:engagement-capital}).
 
 \textbf{Champ collectif.} Sous \code{prorata\_cotisation}, hors couverture
 exclue pour la famille «~risque en cours~» (même fonction), la provision
@@ -5515,7 +5566,8 @@ retenue du champ dont la date de début ou de fin de période manque
 \begin{itemize}[itemsep=2pt]
 \item \textbf{exclusion} pour la famille «~risque en cours~»~: la ligne sort
   du calcul, et l'exclusion est déclarée au bilan avec son enjeu\fsp;
-\item \textbf{conservation} (signalement)~: la borne manquante est
+\item \textbf{conservation} (signalement, aucune hypothèse D03f
+  appliquée à la ligne)~: la borne manquante est
   inconnue, en lecture de Kleene~: la cotisation sort du calcul si sa fin
   de période est connue et au plus l'arrêté, quelle que soit sa date de
   début\fsp; sinon sa part n'est pas déterminée et le poste est arrêté
@@ -5542,7 +5594,25 @@ retenue du champ dont la date de début ou de fin de période manque
   dans \code{hypotheses\_defaut}. Une périodicité \code{unique} ou
   illisible, ou une date de mouvement manquante, rend la règle
   inapplicable~: le poste est arrêté (\code{parametre\_non\_determine},
-  premier contrat en cause).
+  premier contrat en cause)\fsp;
+\item \textbf{hypothèse déclarée pour un autre poste seulement} (aucune
+  hypothèse du poste ni de tous les postes, mais une hypothèse D03f de
+  comptes sociaux appliquée à la ligne pour un autre poste, repérée par
+  \code{hypothese\_vue()} et son argument \code{autre\_poste})~: ni la
+  règle ni la lecture de Kleene ne s'appliquent à la cotisation, dont la
+  fin de période n'est pas connue au plus l'arrêté, et l'appel est refusé
+  (\code{declaration\_manquante}, table \code{cotisations}, plus petite
+  cotisation en cause dans l'ordre des octets, avec la colonne de sa borne
+  manquante, \code{fin\_periode} si les deux manquent, borne qui fait
+  naître le refus\fsp; spécification, erratum~1.0.21, §~5.5, et
+  erratum~1.0.22, point~(D)\fsp; M756\fsp; issue~108 du dépôt).
+  \code{provisions\_collectives()} rend ce refus sans le lever (attributs
+  \code{refus\_d03f} et \code{colonne\_d03f}), après les arrêts du champ
+  collectif, et \code{calculer\_risque\_en\_cours()} le lève après tous les
+  arrêts du poste et après le refus du champ individuel (D03h, ci-dessus).
+  Le motif est celui de D03c (section~\ref{sec:engagement-capital})~: le
+  plan ne peut pas déclarer la conservation pour un poste et l'hypothèse
+  pour un autre.
 \end{itemize}
 
 \noindent La substitution des deux bornes est un jugement d'expert~: le
