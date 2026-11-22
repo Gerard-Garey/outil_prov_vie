@@ -1008,7 +1008,7 @@ documentera avec eux.
 \textcolor{financeblue}{\textbf{Motif}} & \textcolor{financeblue}{\textbf{Levé, dans l'état du code, par}} \\
 \endhead
 \code{plan\_incomplet} & \code{controler\_base()}~: date d'arrêté absente\fsp; \code{facteur\_revalorisation()} et \code{calculer\_engagement()}~: année sans taux de revalorisation (section~\ref{sec:engagement-capital})\fsp; \code{calculer\_engagement()}, par \code{capital\_deces\_dossier()}~: collège d'une affiliation absent de la valeur de l'hypothèse D03c lue\fsp; \code{valider\_plan()}, et par elle \code{canoniser\_plan()}, \code{ecrire\_plan()} et \code{construire\_fiche()}~: entrée du plan exigée et absente, le message nommant son chemin (section~\ref{sec:plan-schema}). \\
-\code{plan\_invalide} & \code{controler\_base()}~: date d'arrêté mal formée, déclaration ou convention mal formée ou hors de sa liste fermée\fsp; \code{calculer\_age()} et \code{date\_atteinte\_age()}~: convention hors de \code{CONVENTIONS\_AGE}\fsp; \code{valider\_plan()}, et par elle les mêmes fonctions que pour \code{plan\_incomplet}~: entrée du plan mal formée, hors de son domaine ou inconnue du schéma (section~\ref{sec:plan-schema})\fsp; \code{resoudre\_tables()}~: statut ou nature d'une table autres que ceux que déclarent le plan et l'usage\fsp; \code{lire\_declarations()}, et par elle \code{controler\_base()}, \code{vue\_a\_date()} et \code{valider\_plan()}~: valeur d'une hypothèse par défaut, lue ou non, de tout référentiel et de tout poste, hors de la forme de son motif (section~\ref{sec:donnees-bilan}, paragraphe «~Forme de la valeur des hypothèses par défaut~»). \\
+\code{plan\_invalide} & \code{controler\_base()}~: date d'arrêté mal formée, déclaration ou convention mal formée ou hors de sa liste fermée\fsp; \code{calculer\_age()} et \code{date\_atteinte\_age()}~: convention hors de \code{CONVENTIONS\_AGE}\fsp; \code{valider\_plan()}, et par elle les mêmes fonctions que pour \code{plan\_incomplet}~: entrée du plan mal formée, hors de son domaine ou inconnue du schéma (section~\ref{sec:plan-schema})\fsp; \code{resoudre\_tables()}~: statut ou nature d'une table autres que ceux que déclarent le plan et l'usage\fsp; \code{lire\_declarations()}, et par elle \code{controler\_base()}, \code{vue\_a\_date()} et \code{valider\_plan()}~: valeur d'une hypothèse par défaut, lue ou non, de tout référentiel et de tout poste, hors de la forme de son motif (section~\ref{sec:donnees-bilan}, paragraphe «~Forme de la valeur des hypothèses par défaut~»)\fsp; \code{calculer\_engagement()}~: capital reconstitué, solde revalorisé ou montant, avant ou après frais, infini ou indéterminé (\code{NaN}) d'un dossier dont l'assiette est lue sous l'hypothèse D03c, levé après tous les arrêts du poste (section~\ref{sec:engagement-capital}). \\
 \code{liste\_invalide} & \code{ecrire\_valeurs()}, \code{ecrire\_liste()} et \code{lire\_liste()}~: valeur, liste ou texte que l'écriture canonique ou le format de liste n'admet pas (sections~\ref{sec:ecriture} et~\ref{sec:format-liste})\fsp; \code{controler\_types()}, \code{constater\_forme()} et \code{controler\_base()}~: base qui n'est pas une liste nommée de \code{data.frame} aux tables connues\fsp; \code{ecrire\_base()}~: valeur que le CSV ne relirait pas à l'identique\fsp; \code{construire\_fiche()}, \code{ecrire\_fiche()}, \code{lire\_fiche()} et les contrôles du rejeu~: objet ou liste qui n'a pas la forme d'une fiche de calcul. \\
 \code{fichier\_invalide} & \code{lire\_base()}, \code{ecrire\_base()}, \code{ecrire\_jeu()} et \code{lire\_jeu()}~: chemin qui n'est pas une chaîne unique, dossier introuvable, non vide ou impossible à créer, fichier inconnu du dictionnaire, fichier dont la lecture ne rendrait pas le texte exact (section~\ref{sec:lecture-base})\fsp; pour \code{lire\_jeu()}, disposition d'un jeu, liste d'empreintes, volumétrie ou tables de vérité non conformes (section~\ref{sec:lecture-jeu}). \\
 \code{table\_base\_absente} & \code{controler\_base()}~: table obligatoire absente. \\
@@ -4612,7 +4612,7 @@ n'est exportée.
 \rowcolor{tableheader}
 \textcolor{financeblue}{\textbf{Fonction}} & \textcolor{financeblue}{\textbf{Arguments}} & \textcolor{financeblue}{\textbf{Rôle}} \\
 \endhead
-\code{calculer\_engagement()} & \code{vue}, \code{plan}, \code{tables}, \code{catalogue}, \code{garantie}, \code{poste} & Point d'appel d'un poste de la famille «~engagement~» (sinistres déclarés non réglés ou capitaux non réclamés)\fsp; rend les cellules, les dossiers (dont les unités restituées à montant nul), les échéanciers et les indicateurs\fsp; un poste arrêté rend une cellule \code{arrete} sans montant, avec l'identifiant en cause et, pour un arrêt par unité, les lignes de \code{refus\_tables} en cause (attribut \code{refus\_ligne}, issue~72). \\
+\code{calculer\_engagement()} & \code{vue}, \code{plan}, \code{tables}, \code{catalogue}, \code{garantie}, \code{poste} & Point d'appel d'un poste de la famille «~engagement~» (sinistres déclarés non réglés ou capitaux non réclamés)\fsp; rend les cellules, les dossiers (dont les unités restituées à montant nul), les échéanciers et les indicateurs\fsp; un poste arrêté rend une cellule \code{arrete} sans montant, avec l'identifiant en cause et, pour un arrêt par unité, les lignes de \code{refus\_tables} en cause (attribut \code{refus\_ligne}, issue~72)\fsp; refus \code{plan\_invalide} d'un dossier lu sous D03c dont le capital, le solde ou le montant n'est pas fini, levé après les arrêts du poste (issue~113). \\
 \code{capital\_deces\_dossier()} & \code{vue}, \code{plan}, \code{etats}, \code{methode}, \code{parametres}, \code{prestations}, \code{poste} & Calcule, sous l'une des quatre méthodes, le capital, le solde revalorisé à l'arrêté, le montant à l'horizon de la méthode et la date du flux de chaque dossier\fsp; signale le salaire déclaré sous l'hypothèse D03c du poste (colonne \code{d03c}) et le capital reconstitué (colonne \code{reconstitue}, qui décide des lignes lues pour la détection S2). \\
 \code{facteur\_revalorisation()} & \code{debut}, \code{fin}, \code{taux\_par\_annee}, \code{prorata}, \code{conventions}, \code{arrete}, \code{taux\_futur} & Facteur de revalorisation légale entre deux dates, produit sur les années civiles, au prorata simple ou composé\fsp; refus \code{plan\_incomplet} pour une année sans taux. Seule implémentation du package. \\
 \code{valeur\_actuelle\_probable()} & \code{echeancier}, \code{actualisation}, \code{conventions} & Seule fonction de valeur actuelle probable du package~: flux $\times$ probabilité $\times$ facteur d'actualisation, sommés par clé\fsp; un type d'actualisation admis sans branche de calcul est une erreur interne, jamais un facteur~1. Lue aussi par \code{risque\_en\_cours}. \\
@@ -4843,17 +4843,39 @@ version~1.6, un tel collège est hors domaine (M656), de sorte que la
 limite ne vise plus aucun collège admis~: la clé de la valeur suit le
 domaine de \code{college} (erratum~1.0.21, point~(D)), et le montant garde
 la forme stricte de M315, de préférence au «~décimal~» du dictionnaire de
-la base, version~1.6, §~9, dont un erratum est à prévoir (M757). Un
-montant fini mais énorme (de l'ordre de $10^{308}$) passe la forme et
-fait échouer plus loin le calcul de la valeur actuelle probable, par une
-erreur qui n'est pas un refus classé~: cette limite est ouverte
-(issue~113 du dépôt). La
+la base, version~1.6, §~9, dont un erratum est à prévoir (M757). La
 valeur est un jugement d'expert déclaré par l'utilisateur, l'outil n'en
 propose aucune~: un salaire par défaut bas minore le capital reconstitué,
 et la prudence de la valeur relève de qui la déclare. L'âge inconnu d'un
 enfant (défaut D03a) n'est pas lu sous l'hypothèse par défaut~: il arrête
 le poste quand il décide de la majoration (ci-dessous), en attendant une
 implémentation unique avec la rente d'éducation (issue~100 du dépôt).
+
+\textbf{Débordement sous D03c} (spécification, erratum~1.0.21, §~5.9
+et~§~6.2, option~(a) de l'issue~113 du dépôt, visée par le mainteneur le
+21~novembre~2026, M755). Un montant de forme admise et fini, mais énorme
+(de l'ordre de $10^{308}$), passe le contrôle du plan, et le capital
+reconstitué, le solde revalorisé ou le montant du dossier qui en découlent
+peuvent sortir de la plage des nombres en double précision. Un dossier dont
+l'assiette est lue sous D03c et dont l'une de ces grandeurs est infinie ou
+indéterminée (\code{NaN}) fait refuser l'appel (\code{plan\_invalide})~: le
+montant est contrôlé avant le calcul de la valeur actuelle probable, puis
+après, frais compris. Le message et le champ \code{identifiants} nomment le
+plus petit dossier en cause, dans l'ordre des octets. Ce refus naît à la
+lecture, parce qu'il dépend des données~: il n'est levé qu'une fois écartés
+tous les arrêts du poste (règles d'arrêt de la
+section~\ref{sec:garanties-arrets}, arrêts par une ligne refusée lue,
+appel différé compris, et arrêts nés du calcul), de sorte qu'un poste
+arrêté n'est pas refusé. Motif du rang (spécification, §~6.2)~: un poste
+arrêté n'a pas de montant, et la déclaration ne peut rien y changer, alors
+qu'un refus arrêterait les autres postes.
+Deux limites restent ouvertes~: le même débordement venu d'une valeur de la
+base (salaire, taux, capital forfaitaire), hors de D03c, n'est pas refusé
+et donne soit une erreur qui n'est pas un refus classé, soit un montant
+infini publié \code{calcule} quand des frais s'y ajoutent (issue~189 du
+dépôt)~; un total de poste, de garantie ou de référentiel qui déborde
+alors que chaque dossier est fini est publié sans refus (issue~190 du
+dépôt).
 
 Les majorations dépendent de l'instruction du sinistre. Instruit, chaque
 membre retenu de la famille rattaché au sinistre compte~: un conjoint
