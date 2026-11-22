@@ -864,6 +864,38 @@ verifier_egal("(4.13) .refuser_lecture_d03c(), rang inatteignable depuis les don
               list(refus_tc(ns$.refuser_lecture_d03c(calc_r, P1)), motif_de(ns$.refuser_lecture_d03c(calc_r[1L, ], P1)),
                    motif_de(ns$.refuser_lecture_d03c(transform(calc_r, refus = NA_character_), P1))),
               list(list("declaration_manquante", "affiliations", "salaire_reference", "AF2"), "plan_incomplet", "aucun"))
+# critère (4.14), #176 (§ 6.2, « Identifiant publié ») : R1 nomme le plus petit collège absent et
+# la plus petite affiliation en cause de ce collège ; R3 nomme le plus petit dossier en débordement ;
+# l'ordre des lignes est sans effet. « Avant » mesuré à ca84b9e (R1 : valeur et collège de la
+# première ligne, aucune affiliation nommée ; R3 : déjà le plus petit dossier).
+inverser <- function(b, tables) {
+  for (nom in tables) b[[nom]] <- b[[nom]][rev(seq_len(nrow(b[[nom]]))), , drop = FALSE]
+  b
+}
+ordres_176 <- c("dossiers", "affiliations")
+# R1 : DO1 (AF1, collège ensemble) et DO2 (AF2, collège cadres) sous la valeur autres=1, aucun des
+# deux collèges n'y figure : collège cadres, affiliation AF2, DO1 étant le premier dossier
+r1_176 <- function(b) {
+  e <- tryCatch({ calculer_provisions(b, plan_49(hyp_d("D03c", "autres=1")), tid); NULL }, refus_provie = function(e) e)
+  list(e$motif, e$identifiants, grepl("coll\u00e8ge cadres (affiliation AF2)", conditionMessage(e), fixed = TRUE))
+}
+verifier_egal("(4.14) #176, R1 : DO1 (collège ensemble, AF1) et DO2 (collège cadres, AF2) sans salaire pour leur collège (valeur autres=1) : refus plan_incomplet qui nomme le plus petit collège absent (cadres) et son affiliation AF2, lignes en ordre direct comme en ordre inverse (avant : collège ensemble, aucune affiliation nommée)",
+              list(r1_176(b_r13), r1_176(inverser(b_r13, ordres_176))),
+              rep(list(list("plan_incomplet", "AF2", TRUE)), 2L))
+# R1 par appel direct : collège cadres (AF3, AF2) et collège ensemble (AF1, plus petite affiliation
+# en cause mais d'un collège plus grand) : collège cadres, affiliation AF2 (la plus petite de ce collège)
+calc_r1 <- data.frame(id_dossier = c("DO1", "DO3", "DO2"), refus = "plan_incomplet", refus_ligne = c("AF1", "AF3", "AF2"),
+                      refus_valeur = "autres=1", refus_college = c("ensemble", "cadres", "cadres"), stringsAsFactors = FALSE)
+verifier_egal("(4.14) #176, R1 par appel direct de .refuser_lecture_d03c() : collèges ensemble (AF1) et cadres (AF3, AF2) absents : refus plan_incomplet, collège cadres, affiliations, salaire_reference, AF2, lignes de calc en ordre direct comme en ordre inverse",
+              lapply(list(calc_r1, calc_r1[3:1, ]), function(cc) {
+                refus_tc(ns$.refuser_lecture_d03c(cc, P1)) }),
+              rep(list(list("plan_incomplet", "affiliations", "salaire_reference", "AF2")), 2L))
+# R3 : DO1 et DO2 lus sous D03c (AF1 et AF2 sans salaire, collège ensemble, GS1), tous deux en
+# débordement (ensemble= suivi de 308 « 9 »), le premier dossier étant DO2 en ordre inverse
+verifier_egal("(4.14) #176, R3 : DO1 et DO2 en débordement sous D03c (ensemble= suivi de 308 « 9 ») : refus plan_invalide, DO1 (plus petit dossier), lignes de dossiers et d'affiliations en ordre direct comme en ordre inverse (inchangé : témoin de non-régression)",
+              list(refus_tc(calculer_provisions(b_r2, plan_49(d03c_n(308L)), tid))[c(1L, 4L)],
+                   refus_tc(calculer_provisions(inverser(b_r2, ordres_176), plan_49(d03c_n(308L)), tid))[c(1L, 4L)]),
+              rep(list(list("plan_invalide", "DO1")), 2L))
 # témoin de la limite (§ 5.9) : le même débordement depuis la base, sans D03c, n'est pas refusé
 # (#189) : salaire de 1e308, erreur brute ; salaire de 6e307 et frais de 0,1, P1 infini calculé.
 # Comportement visé : un refus classé ou une cellule arrêtée, jamais une erreur brute ni un

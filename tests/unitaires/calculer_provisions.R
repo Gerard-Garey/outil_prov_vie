@@ -1252,6 +1252,69 @@ verifier_egal("garde du point 1 de #112 : hypothèses de la vue D02b et D03g sur
               list(sort(vapply(h_g112, `[[`, "", "motif"), method = "radix"), unique(lapply(h_g112, `[[`, "colonnes"))),
               list(c("D02b", "D02b", "D03g", "D03g"), list("date_saisie_fin")))
 
+section("plus petit identifiant en cause : arrêts et refus de P1 et P2 indépendants de l'ordre des lignes (critère (4.14), #176)")
+# Spécification de B2, § 6.2, « Identifiant publié » : tout identifiant et tout motif publiés par un
+# arrêt ou un refus de `engagement` sont ceux du plus petit dossier en cause (tri radix), quel que
+# soit l'ordre des lignes de `dossiers`. Base construite, A = 2025-12-31 ; « avant » mesuré à
+# ca84b9e, lignes de `dossiers` en ordre inverse (le premier rencontré : DOR5B, DOR3, DOR5B,
+# DOR5B et, pour le motif, affiliation_non_determinee). Un arrêt n'a ni montant ni total.
+inv_dossiers <- function(b) { b$dossiers <- b$dossiers[rev(seq_len(nrow(b$dossiers))), , drop = FALSE]; b }
+deux_ordres <- function(b, plan, poste = P1) {
+  lapply(list(b, inv_dossiers(b)), function(x) arret_90(calculer_provisions(x, plan, tid), poste))
+}
+ev_sin <- function(b, id, k, effet, saisie) {
+  b <- ev_90(b, id, paste0("DOR", k), effet, saisie)
+  b$evenements$id_sinistre[b$evenements$id_evenement == id] <- paste0("SIR", k)
+  b
+}
+# partition non déterminée : critère sans_evenement (12 mois), DOR5A et DOR5B déclarés avant leur
+# survenance (R9) sans instruction, chacun avec une mise à jour datée avant la survenance
+# (R13 sans valeur substituée) : dates d'événements inconnues sous D02a H, P1 et P2 arrêtés
+b_176p <- base
+for (k in c("5A", "5B")) {
+  i_s <- b_176p$sinistres$id_sinistre == paste0("SIR", k)
+  b_176p$sinistres$date_declaration[i_s] <- D("2024-06-01")
+  b_176p$sinistres$date_instruction[i_s] <- as.Date(NA)
+  b_176p <- ev_sin(b_176p, paste0("EVX", k), k, "2024-05-01", "2025-02-01")
+}
+p_176p <- d02a_h(p_se, TRUE)
+p_176p$donnees$seuils$d07b_mois <- SEUIL_D07B_REFERENCE
+verifier_egal("(4.14) #176, partition non déterminée (sans_evenement, D02a H) de DOR5A et DOR5B : P1 et P2 arrêtés (parametre_non_determine, DOR5A), lignes de dossiers en ordre direct comme en ordre inverse (avant : DOR5B en ordre inverse)",
+              c(deux_ordres(b_176p, p_176p, P1), deux_ordres(b_176p, p_176p, P2)),
+              rep(list(list("parametre_non_determine", "DOR5A")), 4L))
+# date du sinistre tenue pour inconnue : SIR1 et SIR3 déclarés avant leur survenance (R9), D02a H
+# (partition déterminée : critère beneficiaire_non_identifie)
+b_176d <- base
+for (k in c("1", "3")) b_176d$sinistres$date_declaration[b_176d$sinistres$id_sinistre == paste0("SIR", k)] <- D("2024-06-01")
+verifier_egal("(4.14) #176, survenance de SIR1 et SIR3 inconnue (R9, D02a H) : P1 arrêté (parametre_non_determine, DOR1), lignes de dossiers en ordre direct comme en ordre inverse (avant : DOR3 en ordre inverse)",
+              deux_ordres(b_176d, d02a_h(p_c1, TRUE)), rep(list(list("parametre_non_determine", "DOR1")), 2L))
+# arrêt né du calcul : salaire de AFR5A manquant (D03c conserver : assiette_non_determinee) ;
+# AFR5C, copie de AFR5B, couvre aussi la survenance (affiliation_non_determinee) : le motif publié
+# est celui du plus petit dossier arrêté, DOR5A (m37)
+b_176m <- base
+b_176m$affiliations$salaire_reference[b_176m$affiliations$id_affiliation == "AFR5A"] <- NA_real_
+b_176m$affiliations <- rbind(b_176m$affiliations, transform(b_176m$affiliations[b_176m$affiliations$id_affiliation == "AFR5B", ],
+                                                          id_affiliation = "AFR5C"))
+p_176m <- p_c1
+p_176m$donnees$exclusions <- excl_x("D03c", "aucune")
+verifier_egal("(4.14) #176, m37 : DOR5A sans salaire (assiette_non_determinee) et DOR5B à deux affiliations (affiliation_non_determinee) : P1 arrêté, motif et identifiant du plus petit dossier (assiette_non_determinee, DOR5A), lignes de dossiers en ordre direct comme en ordre inverse (avant : affiliation_non_determinee, DOR5B en ordre inverse)",
+              deux_ordres(b_176m, p_176m), rep(list(list("assiette_non_determinee", "DOR5A")), 2L))
+# année de taux_par_annee absente : refus plan_incomplet qui nomme l'année et le plus petit dossier
+p_176a <- p_c1
+p_176a$revalorisation$capital_deces$taux_par_annee <- c(`2025` = 0.024)
+refus_176a <- function(b) {
+  e <- tryCatch({ calculer_provisions(b, p_176a, tid); NULL }, refus_provie = function(e) e)
+  list(e$motif, e$identifiants, grepl("2024 (plus petit dossier : DOR1)", conditionMessage(e), fixed = TRUE))
+}
+verifier_egal("(4.14) #176, taux_par_annee sans 2024 (survenance de tous les dossiers en 2024) : refus plan_incomplet, année 2024 et plus petit dossier DOR1, lignes de dossiers en ordre direct comme en ordre inverse (avant : DOR5B en ordre inverse)",
+              list(refus_176a(base), refus_176a(inv_dossiers(base))), rep(list(list("plan_incomplet", "DOR1", TRUE)), 2L))
+# montants identiques : base sans défaut, P1 et P2 égaux en ordre direct et en ordre inverse
+verifier_egal("(4.14) #176, base sans défaut : montants de P1 et de P2 identiques en ordre direct et en ordre inverse des lignes de dossiers",
+              lapply(list(base, inv_dossiers(base)), function(b) {
+                r <- calculer_provisions(b, p_c1, tid)
+                list(cel_x(r, P1)$montant, cel_x(r, P2)$montant) }),
+              rep(list(list(337225.959101369779, 103936)), 2L), tolerance = EPS)
+
 section("extrapolation de mortalite_tarif sous derniere_valeur : statut et trace (critère (4.8), § 5.8, S3, #91)")
 # Cas T8 du § 7.4 de bout en bout : base de P3 (b2_base_p3()) avec date_terme de CT2 au
 # 2028-01-01, A = 2025-01-01, plan b2_plan() complété de la section donnees du plan

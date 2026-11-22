@@ -147,14 +147,15 @@
 # ou si l'arrêté n'est pas une date de pas ou si la prime est unique),
 # nature_primes, date_effet, date_terme, date_souscription), echeancier (flux à l'arrêté,
 # taux retenu), arret (motif né de la famille : hors_axes, parametre_non_determine ; NA),
-# identifiant (contrat en cause : le plus petit des contrats à paramètre non déterminé, tri
-# radix, indépendant de l'ordre des lignes ; le premier rencontré pour les autres motifs), hors_axes (lignes d'indicateur
+# identifiant (contrat en cause : le plus petit des contrats en cause à l'étape qui décide, tri
+# radix, indépendant de l'ordre des lignes, spécification de B2, § 6.2, « Identifiant publié »,
+# #176), hors_axes (lignes d'indicateur
 # hors_axes_derniere_valeur de indicateur_hors_axes(), une par contrat extrapolé, dans l'ordre
 # des contrats ; NULL sans extrapolation), sortis (contrats sortis de la population par un
 # sinistre ou par leur date_fin au plus A, dont une ligne qui décide de la sortie porte une
 # hypothèse de la vue, source S2 du § 5.8 : unités restituées à 0, errata v1.0.17 et v1.0.18 ;
 # triés), refus_d03h (garantie souscrite d'un contrat valorisé au taux du tarif manquant sans
-# hypothèse D03h de P3 ou de `tous` appliquée, la première rencontrée, quand aucun arrêt du
+# hypothèse D03h de P3 ou de `tous` appliquée, la plus petite (tri radix), quand aucun arrêt du
 # champ n'est né : refus de lecture R2 différé, levé par calculer_risque_en_cours(), § 6.2,
 # erratum v1.0.21, #108 ; aucun contrat n'est alors valorisé ; NA sinon)). Sans point :
 # lue par les tests du module (cas T1 à T6) et par calculer_risque_en_cours() (`temoin` =
@@ -295,9 +296,10 @@ provisions_individuelles <- function(vue, plan, tables, temoin) {
                                   sortis = vide$sortis, refus_d03h = NA_character_))
   # taux du tarif ; hypothèse D03h déclarée s'il manque. Sans hypothèse D03h de P3 ou de `tous`
   # appliquée à la ligne (refus de lecture R2, spécification de B2, § 6.2, erratum v1.0.21,
-  # #108) : refus declaration_manquante différé, non levé ici ; la garantie souscrite en cause
-  # (première rencontrée) est rendue dans `refus_d03h`, après les arrêts hors_axes du champ, et
-  # calculer_risque_en_cours() le lève après tous les arrêts du poste, les deux champs compris
+  # #108) : refus declaration_manquante différé, non levé ici ; la plus petite garantie souscrite
+  # en cause (tri radix, § 6.2, « Identifiant publié », #176) est rendue dans `refus_d03h`, après
+  # les arrêts hors_axes du champ, et calculer_risque_en_cours() le lève après tous les arrêts du
+  # poste, les deux champs compris
   tarif <- vv("garanties_souscrites", "taux_technique_tarif")[gs]
   d03h <- rep(FALSE, length(gs))
   sans_d03h <- character(0)
@@ -318,25 +320,34 @@ provisions_individuelles <- function(vue, plan, tables, temoin) {
   # construite par indicateur_hors_axes() (`tables`, seule implémentation) ; contrat extrapolé
   extrapole <- rep(FALSE, length(gs))
   hors_axes <- list()
+  # sous hors_axes = refus, tous les contrats lus hors des axes sont recensés avant l'arrêt : le
+  # contrat publié est le plus petit (tri radix, § 6.2, « Identifiant publié », #176)
+  contrats_hors <- character(0)
   for (i in k) {
     n_annees <- 0L
     while (ajouter_mois(effet[i], 12L * n_annees) < fin_contractuelle[i]) n_annees <- n_annees + 1L
     points <- list(age = age0[i] + seq_len(n_annees) - 1L)
     q <- probabilite(tables$mortalite_tarif, age = points$age, hors_axes = hors)
     if (length(attr(q, "hors_axes"))) {
-      if (identical(hors, "refus")) return(list(contrats = NULL, echeancier = NULL, arret = "hors_axes",
-                                                identifiant = id_ct[i], hors_axes = NULL, sortis = vide$sortis,
-                                                refus_d03h = NA_character_))
+      if (identical(hors, "refus")) {
+        contrats_hors <- c(contrats_hors, id_ct[i])
+        next
+      }
       extrapole[i] <- TRUE
       hors_axes[[length(hors_axes) + 1L]] <- indicateur_hors_axes(tables$mortalite_tarif, points, q, "mortalite_tarif",
                                                                   id_ct[i], .POSTE_P3, "deces")
     }
     q_de[[as.character(i)]] <- as.vector(q)
   }
+  if (length(contrats_hors)) {
+    return(list(contrats = NULL, echeancier = NULL, arret = "hors_axes",
+                identifiant = sort(contrats_hors, method = "radix")[1L], hors_axes = NULL, sortis = vide$sortis,
+                refus_d03h = NA_character_))
+  }
   # refus de lecture R2 de D03h en attente (aucun arrêt du champ) : aucun contrat valorisé
   if (length(sans_d03h)) {
     return(list(contrats = NULL, echeancier = NULL, arret = NA_character_, identifiant = NA_character_,
-                hors_axes = NULL, sortis = vide$sortis, refus_d03h = sans_d03h[1L]))
+                hors_axes = NULL, sortis = vide$sortis, refus_d03h = sort(sans_d03h, method = "radix")[1L]))
   }
   lignes <- list()
   echeancier <- list()
@@ -465,7 +476,8 @@ provisions_individuelles <- function(vue, plan, tables, temoin) {
 # (declaration_manquante, § 6.2, erratum v1.0.21, #108), différé : si aucun arrêt n'est né dans
 # le champ, la plus petite cotisation en cause est rendue dans l'attribut `refus_d03f`, sans
 # contrat, et calculer_risque_en_cours() lève le refus. Identifiant en cause d'un arrêt :
-# premier contrat (ordre des lignes de cotisations de la vue). Aucun NA n'entre dans une
+# plus petit contrat en cause (tri radix, indépendant de l'ordre des lignes de cotisations,
+# § 6.2, « Identifiant publié », #176). Aucun NA n'entre dans une
 # somme : une part NA résiduelle est une erreur interne. Rend un data.frame (id_contrat,
 # montant), contrats triés, d'attributs
 # `arret` (motif ou NA), `identifiant` (contrat en cause ou NA), `refus_d03f` (cotisation en
@@ -524,7 +536,7 @@ provisions_collectives <- function(vue, plan) {
   inversee <- !inconnue & !autre_poste & !echue_connue & fin - debut + 1 <= 0
   non_determine <- inconnue | inversee
   if (any(non_determine)) {
-    return(resultat(character(0), numeric(0), "parametre_non_determine", contrat[which(non_determine)[1L]]))
+    return(resultat(character(0), numeric(0), "parametre_non_determine", sort(contrat[non_determine], method = "radix")[1L]))
   }
   # refus R2 en attente (aucun arrêt du champ) : plus petite cotisation en cause (tri radix,
   # § 6.2, « Identifiant publié »), levé par calculer_risque_en_cours() ; aucun contrat valorisé.
@@ -606,8 +618,8 @@ provisions_collectives <- function(vue, plan) {
 # parametre_non_determine, dont la période couverte non déterminée d'une cotisation du champ
 # (b) ; ligne de portée ligne de refus_tables dont une ligne refusée est lue pour un contrat,
 # arret_refus_ligne(), #72, lignes en cause dans l'attribut `refus_ligne`) : cellule `arrete`,
-# contrat en cause dans l'attribut `identifiant_arret` (le plus petit, tri radix, pour l'arrêt
-# par unité et pour parametre_non_determine du champ (a) ; le premier rencontré sinon). Refus
+# contrat en cause dans l'attribut `identifiant_arret` (le plus petit, tri radix, indépendant de
+# l'ordre des lignes, § 6.2, « Identifiant publié », #176). Refus
 # de lecture R2 (declaration_manquante : D03h du champ (a), D03f du champ (b) ; § 6.2, erratum
 # v1.0.21, #108) : levés seulement si aucun arrêt n'est né, les deux champs compris, le champ
 # (a) avant le champ (b). Un montant NA dans le total est une erreur interne.
