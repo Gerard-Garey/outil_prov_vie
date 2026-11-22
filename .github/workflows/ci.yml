@@ -80,6 +80,12 @@ jobs:
             sudo apt-get install -y --no-install-recommends r-base-core
           fi
           Rscript tests/controles/caracteres_controle.R
+      # Issue #186 : l'image du job « Tests (R 4.3.3) » n'a pas git, où la batterie unitaire SAUTE
+      # les témoins de la voie git ls-files des contrôles (une ligne [INFO] par témoin au journal,
+      # tests/unitaires/voie_git.R) ; ce job a git, et le lanceur exige que tous les témoins tournent.
+      # Rscript est présent (étape précédente) ; R de base seulement, comme le contrôle précédent.
+      - name: Témoins de la voie git des contrôles
+        run: Rscript tests/temoins_voie_git.R
       # ADR 0011, point 21 : tout commit qui touche tests/reference/ ne touche rien d'autre, a
       # pour unique parent le commit calculé (message et provenance.txt) et cite l'empreinte de
       # l'arbre ; témoins négatifs d'abord. Plage : commits de la PR, ou de la poussée sur main.
@@ -128,7 +134,9 @@ jobs:
     # OpenBLAS 0.3.20, LAPACK 3.10.0. Consigné dans CONTEXT.md, « Plateforme de référence ».
     container: rocker/r-ver:4.3.3@sha256:732d15020af326da9e919c07f70ca32bf5d3e409220af32e0a4b6d0a89437309
     steps:
-      # git peut manquer dans l'image : l'action télécharge alors l'archive par l'API.
+      # git manque dans l'image : l'action télécharge alors l'archive par l'API (journal du run
+      # 44831028775, #186) ; les témoins de la voie git sont sautés ici, visiblement, et rejoués
+      # dans le job « Contrôles du dépôt ».
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           persist-credentials: false
