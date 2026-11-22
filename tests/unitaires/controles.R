@@ -172,33 +172,7 @@ r <- cas_java(list("tests/t_temoin.R" = c(
   "writeLines(paste0(\"library(r\", \"Java)\"), f)", "m <- paste0(\"JAVA\", \"_HOME\")")))
 verifier("N2e : le même test avec les noms fabriqués par paste0() passe", .passe(r))
 
-# C5 : voie `git ls-files` (la racine examinee est la racine d'un depot git) : seuls les fichiers
-# suivis sont balayes. Copie temporaire initialisee par git init et git add.
-if (nzchar(Sys.which("git"))) {
-  .essai_git <- function(suivis, non_suivis) {
-    copie <- tempfile("temoin-git-")
-    dir.create(copie)
-    on.exit(unlink(copie, recursive = TRUE), add = TRUE)
-    for (chemin in c(names(suivis), names(non_suivis))) {
-      .deposer(file.path(copie, chemin), c(suivis, non_suivis)[[chemin]])
-    }
-    git <- function(...) suppressWarnings(system2("git", c("-C", shQuote(copie), ...), stdout = TRUE, stderr = TRUE))
-    git("init", "-q")
-    git("add", names(suivis))
-    sortie <- suppressWarnings(system2(file.path(R.home("bin"), "Rscript"),
-                                       c(shQuote(.script_controle("absence_java")), shQuote(copie)),
-                                       stdout = TRUE, stderr = TRUE))
-    statut <- attr(sortie, "status")
-    list(statut = if (is.null(statut)) 0L else statut, sortie = sortie)
-  }
-  r <- .essai_git(list(DESCRIPTION = DESC, "tests/t_java.R" = paste0("library(", RJ, ")")),
-                  list("tests/u_java.R" = paste0("library(", RJ, ")")))
-  verifier("C5 : fichier suivi interdit refuse (git ls-files), t_java.R:1", .echoue_en(r, "tests/t_java.R", 1L, RJ))
-  verifier("C5 : fichier non suivi ignore (git ls-files), pas de ligne pour u_java.R",
-           !any(grepl("u_java.R", r$sortie, fixed = TRUE)))
-  r <- .essai_git(list(DESCRIPTION = DESC), list("tests/u_java.R" = paste0("library(", RJ, ")")))
-  verifier("C5 : seul un fichier non suivi interdit : le controle passe (preuve de la voie git)", .passe(r))
-}
+# C5 (voie `git ls-files` d'absence_java.R) : témoins dans tests/unitaires/voie_git.R (#186).
 # Aucun fichier R analysé (tests/ sans fichier R) : rbind d'une liste vide vaudrait NULL (revue finale de Bo2, C-1).
 r <- .essai("recensement_tolerances", list("tests/vide.txt" = "aucun fichier R"))
 verifier("recensement : une racine sans fichier R donne le statut 0, sans [ECHEC] ni ligne [INFO] vide, et la rubrique « 0 marques »",
@@ -1586,28 +1560,30 @@ verifier("#182 : un binaire non liste de 1 Mo est refuse, x.dat:1 et reste de li
          .echoue_en(r, "docs/x.dat", 1L, "U+") && any(grepl("autre(s) ligne(s) atteinte(s)", r$sortie, fixed = TRUE)) &&
            sum(startsWith(r$sortie, "[ECHEC] docs/x.dat:")) == 20L && duree < 60)
 
-# Voie `git ls-files` : seuls les fichiers suivis sont examinés (copie initialisée par git init et git add).
-if (nzchar(Sys.which("git"))) {
-  .essai_git_cc <- function(suivis, non_suivis) {
-    copie <- tempfile("temoin-git-")
-    dir.create(copie)
-    on.exit(unlink(copie, recursive = TRUE), add = TRUE)
-    for (chemin in names(suivis)) .deposer(file.path(copie, chemin), suivis[[chemin]])
-    for (chemin in names(non_suivis)) .deposer(file.path(copie, chemin), non_suivis[[chemin]])
-    git <- function(...) suppressWarnings(system2("git", c("-C", shQuote(copie), ...), stdout = TRUE, stderr = TRUE))
-    git("init", "-q")
-    git("add", names(suivis))
-    sortie <- suppressWarnings(system2(file.path(R.home("bin"), "Rscript"),
-                                       c(shQuote(.script_controle(CC)), shQuote(copie)),
-                                       stdout = TRUE, stderr = TRUE))
-    statut <- attr(sortie, "status")
-    list(statut = if (is.null(statut)) 0L else statut, sortie = sortie)
-  }
-  r <- .essai_git_cc(list("docs/s.md" = c(txt("a\n"), octets(12L), txt("\n"))),
-                     list("docs/n.md" = c(octets(12L), txt("\n"))))
-  verifier("#182 : voie git : un fichier suivi qui porte U+000C est refusé, s.md:2 ; le fichier non suivi n'est pas cité",
-           .echoue_en(r, "docs/s.md", 2L, "U+000C") && !any(grepl("n.md", r$sortie, fixed = TRUE)))
-  r <- .essai_git_cc(list("docs/s.md" = "propre"), list("docs/n.md" = c(octets(12L), txt("\n"))))
-  verifier("#182 : voie git : seul un fichier non suivi porte U+000C, le contrôle passe (preuve de la voie git)",
-           .passe(r) && any(grepl("^\\[OK\\] 1 fichier", r$sortie)))
-}
+# Voie `git ls-files` de caracteres_controle.R : témoins dans tests/unitaires/voie_git.R (#186).
+section("contrôles : sans git, les témoins de la voie git sont sautés visiblement (#186)")
+# Sans git (l'image rocker/r-ver du job « Tests (R 4.3.3) »), voie_git.R saute ses témoins de la voie
+# git ; avant #186, le saut ne laissait aucune trace au journal. Un processus fils sourcé avec
+# Sys.which() masquée (git introuvable) en rend le journal.
+.sans_git <- local({
+  script <- tempfile(fileext = ".R")
+  on.exit(unlink(script), add = TRUE)
+  writeLines(c("options(warn = 2)", paste0("racine <- ", deparse(racine)),
+               paste0("source(", deparse(file.path(racine, "tests", "harnais.R")), ")"),
+               "Sys.which <- function(names) stats::setNames(character(length(names)), names)",
+               paste0("source(", deparse(file.path(racine, "tests", "unitaires", "voie_git.R")), ")"),
+               "bilan()"), script)
+  sortie <- suppressWarnings(system2(file.path(R.home("bin"), "Rscript"), shQuote(script), stdout = TRUE, stderr = TRUE))
+  statut <- attr(sortie, "status")
+  list(statut = if (is.null(statut)) 0L else statut, sortie = sortie)
+})
+.noms_sautes <- grep("^\\[INFO\\] SAUTE : [^0-9]", .sans_git$sortie, value = TRUE)
+verifier("#186 : sans git : statut 0, aucun [ECHEC], et chaque témoin de la voie git est nommé au journal par une ligne [INFO] SAUTE",
+         .sans_git$statut == 0L && !any(startsWith(.sans_git$sortie, "[ECHEC]")) && length(.noms_sautes) >= 10L &&
+           any(grepl("C5 : fichier suivi interdit", .noms_sautes, fixed = TRUE)) &&
+           !any(grepl("^\\[OK\\] C5 : fichier suivi interdit", .sans_git$sortie)))
+verifier("#186 : sans git : une ligne [INFO] compteur donne le nombre de témoins sautés, égal au nombre de lignes nommées",
+         any(.sans_git$sortie == paste0("[INFO] SAUTE : ", length(.noms_sautes), " témoin(s) de la voie git -- ",
+                                        "git absent du PATH ; rejoués par tests/temoins_voie_git.R dans le job « Contrôles du dépôt »")))
+verifier("#186 : sans git : les témoins qui n'ont pas besoin de git tournent (lien symbolique en arborescence)",
+         any(startsWith(.sans_git$sortie, "[OK] #186 : arborescence : un lien symbolique")))

@@ -72,6 +72,14 @@ masquer_version <- function(octets) {
   charToRaw(sub("(^|\n)(version_provie\tcharacter\t)[^\t\r\n]*", "\\1\\2", rawToChar(octets), useBytes = TRUE))
 }
 manifeste_hors_version <- function(fichier) masquer_version(readBin(fichier, "raw", n = 1e6))
+# Lignes de empreintes.md5 lues en octets, chacune avec sa fin de ligne (saut de ligne, ou retour chariot
+# et saut de ligne) ou sans elle (dernière ligne), hors la ligne de manifeste.txt : readLines() ignorerait
+# la fin de ligne finale (à l'avertissement près) et les retours chariot (#186, complément 3 ; même thème que #181).
+md5_hors_manifeste <- function(fichier) md5_lignes_hors_manifeste(rawToChar(readBin(fichier, "raw", n = 1e6)))
+md5_lignes_hors_manifeste <- function(texte) {
+  lignes <- regmatches(texte, gregexpr("[^\n]*\n|[^\n]+$", texte, useBytes = TRUE))[[1L]]
+  lignes[substring(sub("[\r\n]+$", "", lignes), 35L) != "manifeste.txt"]
+}
 for (nom in names(JEUX_V1)) {
   versionne <- file.path(racine, "inst", "extdata", "jeux", nom)
   if (!verifier(paste0(nom, " : jeu versionné présent sous inst/extdata/jeux/"), dir.exists(versionne))) next
@@ -96,11 +104,9 @@ for (nom in names(JEUX_V1)) {
   # octets (réserve m5) : empreintes.md5 hors la ligne de manifeste.txt (seul fichier qui porte
   # version_provie), puis manifeste.txt lui-même hors la valeur de cette ligne, quelle que soit
   # la version (#181 ; M733) : aucune comparaison d'octets n'est sautée à un relèvement de version
-  md5_regenere <- readLines(file.path(dossier, "empreintes.md5"))
-  md5_versionne <- readLines(file.path(versionne, "empreintes.md5"))
-  hors_manifeste <- function(l) l[substring(l, 35L) != "manifeste.txt"]
   verifier_egal(paste0(nom, " : mêmes octets que les fichiers versionnés, hors manifeste.txt (empreintes.md5)"),
-                hors_manifeste(md5_regenere), hors_manifeste(md5_versionne))
+                md5_hors_manifeste(file.path(dossier, "empreintes.md5")),
+                md5_hors_manifeste(file.path(versionne, "empreintes.md5")))
   verifier_egal(paste0(nom, " : mêmes octets de manifeste.txt que le fichier versionné, hors la valeur de la ligne version_provie"),
                 manifeste_hors_version(file.path(dossier, "manifeste.txt")),
                 manifeste_hors_version(file.path(versionne, "manifeste.txt")))
@@ -140,6 +146,24 @@ mf_champ <- sub("(version_provie\tcharacter\t[^\n]*)\n", "\\1\tjunk\n", mf_texte
 verifier("témoin manifeste.txt : la fin de fichier, la fin de ligne (retour chariot) et un champ supplémentaire après la version comptent",
          !identical(masque(mf_sans_fin), masque(mf_texte)) && !identical(masque(mf_cr), masque(mf_texte)) &&
            !identical(masque(mf_champ), masque(mf_texte)))
+
+# Témoin des octets de empreintes.md5 (#186, complément 3) : la fin de ligne finale, les retours chariot
+# et une ligne altérée comptent ; la ligne de manifeste.txt n'est pas comparée.
+md5_texte <- rawToChar(readBin(file.path(racine, "inst", "extdata", "jeux", names(JEUX_V1)[1L], "empreintes.md5"), "raw", n = 1e6))
+md5_ref <- md5_lignes_hors_manifeste(md5_texte)
+verifier("témoin empreintes.md5 : le fichier versionné se découpe en lignes terminées par un saut de ligne, sans la ligne de manifeste.txt",
+         length(md5_ref) >= 2L && all(endsWith(md5_ref, "\n")) && !any(grepl("manifeste.txt", md5_ref, fixed = TRUE)) &&
+           grepl("manifeste.txt", md5_texte, fixed = TRUE))
+verifier("témoin empreintes.md5 : sans saut de ligne final, la comparaison échoue (readLines() ne le distingue pas, à l'avertissement de ligne finale incomplète près)",
+         !identical(md5_lignes_hors_manifeste(sub("\n$", "", md5_texte)), md5_ref))
+verifier("témoin empreintes.md5 : en fin de ligne CRLF, la comparaison échoue (readLines() l'aurait ignoré)",
+         !identical(md5_lignes_hors_manifeste(gsub("\n", "\r\n", md5_texte, fixed = TRUE)), md5_ref))
+verifier("témoin empreintes.md5 : l'empreinte de manifeste.txt, seule modifiée, n'est pas comparée",
+         identical(md5_lignes_hors_manifeste(sub("[0-9a-f]{32}(  manifeste[.]txt)", "00000000000000000000000000000000\\1", md5_texte)),
+                   md5_ref))
+verifier("témoin empreintes.md5 : une empreinte altérée sur une autre ligne fait échouer la comparaison",
+         !identical(md5_lignes_hors_manifeste(paste0(if (substr(md5_texte, 1L, 1L) == "0") "1" else "0", substring(md5_texte, 2L))),
+                    md5_ref))
 
 section("références de non-régression : couples de référence (ADR 0011, points 6 à 10, 23 et 25 ; #67)")
 source(file.path(racine, "tests", "references.R"))
