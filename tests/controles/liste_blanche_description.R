@@ -7,6 +7,19 @@
 # parse() avec srcref, sans evaluation, les deux branches de chaque `if` etant visitees (le
 # texte d'une chaine contenant `#` ne masque rien ; tous les arguments de import(), sur
 # plusieurs lignes, hors `except = ...`).
+# Limites connues (#140 ; chacune mesuree sur un cas construit) :
+#   - seuls les champs et directives cites ci-dessus sont lus : VignetteBuilder,
+#     Config/Needs/*, SystemRequirements ne sont pas examines (`VignetteBuilder: knitr` et
+#     `SystemRequirements: Java (>= 8)` passent) ; useDynLib() de NAMESPACE n'est pas lu ;
+#   - le nom de champ est lu avec sa casse : `imports: ggplot2` passe, lu comme un champ vide ;
+#   - seul le premier paragraphe de DESCRIPTION est lu (un second paragraphe `Imports: ggplot2`
+#     passe) ; un champ ecrit deux fois : read.dcf() garde le dernier (`Imports: ggplot2` puis
+#     `Imports: stats` passe) ;
+#   - deux packages separes par un retour a la ligne sans virgule sont lus comme un seul nom :
+#     refus a tort, sans numero de ligne ;
+#   - NAMESPACE absent : aucune ligne [OK] ni [ECHEC] pour lui ;
+#   - LISTE_BLANCHE est ecrite dans le script, non relue des packages installes : elle est
+#     identique a l'ensemble des packages de priorite `base` installes sous R 4.3.3.
 # Usage, depuis la racine du depot : Rscript tests/controles/liste_blanche_description.R
 # Un argument facultatif designe une autre racine (copie du depot, pour les temoins).
 # Sortie : lignes [OK] / [ECHEC] fichier:ligne ; statut 1 au moindre [ECHEC].

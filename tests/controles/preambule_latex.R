@@ -12,6 +12,21 @@
 # charte, une suite de blocs differente de celle de la charte, un bloc non ferme sont des
 # [ECHEC].
 # Modele : docu_actu, outils/controles/preambule.R (reecrit, sans dependance).
+# Limites connues (#140 ; chacune mesuree sur un cas construit) :
+#   - le contenu d'un bloc A ADAPTER est libre : seuls le nombre, l'ordre et l'objet des blocs
+#     sont compares (`\usepackage{...}` et `\renewcommand{\section}{x}` ajoutes dans le bloc
+#     passent) ;
+#   - seul le preambule est compare : le corps apres \begin{document} n'est pas lu ; la ligne
+#     qui porte \begin{document} est exclue du preambule (`\usepackage{ajout}\begin{document}`
+#     passe) ;
+#   - un fichier sans \documentclass hors commentaire est un fragment, ignore sans ligne de
+#     sortie : la charte copiee sans sa ligne \documentclass, ou avec elle commentee, au
+#     preambule modifie, passe sans message ;
+#   - seuls les fichiers d'extension .tex, en toute casse, sont examines (un .ltx au preambule
+#     modifie passe) ;
+#   - dans un depot git, un document non suivi n'est pas examine, et un fichier suivi mais
+#     absent de l'arbre de travail est ecarte sans message (s'il est le seul document : "aucun
+#     document a comparer a la charte", statut 0, dans les deux cas).
 # Usage, depuis la racine du depot : Rscript tests/controles/preambule_latex.R
 # Un argument facultatif designe une autre racine (copie du depot, pour les temoins).
 # Sortie : lignes [OK] / [ECHEC] fichier:ligne ; statut 1 au moindre [ECHEC].
