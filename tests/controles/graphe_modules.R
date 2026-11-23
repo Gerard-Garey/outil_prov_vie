@@ -79,8 +79,8 @@
 # affectation locale, portee soeur) est comptee. Limite documentee (cote sur) : un nom local
 # homonyme d'une definition d'un autre module (variable locale lue, fonction locale appelee,
 # argument formel repris) produit une fausse arete, a lever en renommant le nom local.
-# Limites connues (chacune mesuree sur une racine fictive, statut 0 ; suivies par #184) :
-#   - noms interdits en chaine : seuls les appels de FONCTIONS_ORDRE_SUPERIEUR, a leur
+# Limites connues (chacune mesuree sur une racine fictive, statut 0) :
+#   - (#201) noms interdits en chaine : seuls les appels de FONCTIONS_ORDRE_SUPERIEUR, a leur
 #     argument-fonction, sans appariement partiel, sont vus ; ne le sont pas un nom passe par une
 #     variable (`n <- "eval"; lapply(x, n)`), dans c() ou list(), a une autre fonction d'ordre
 #     superieur (`integrate("get", 0, 1)`), ni sous un nom d'argument partiel (`FU = "eval"`) ;
