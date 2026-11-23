@@ -1430,3 +1430,102 @@ verifier_egal("#72 (g) et (h) : paiement refusé invisible à l'arrêté : P1 ca
               list(c72(eng(b72g, p)), c72(eng(b72h, p72_se, arrete = AX72)), c72(eng(b72h, p72_se, P2, arrete = AX72))),
               list(list(103936, NA_character_, NULL, NULL), list(NA_real_, "D02c", "DO1", 1L), list(NA_real_, "D02c", "DO1", 1L)),
               tolerance = TOL)
+
+section("engagement : constructeur unique des lignes lues par unité, voie du capital (#174, commit 1/2, résultats identiques)")
+# (1) test de suppression, statique (plan de Bdr-b4, P2) : lecture_unites() n'est appelée que par
+# les deux constructeurs des lignes lues par unité, .lectures_dossiers() (P1, P2) et
+# .lectures_contrats() (P3), et par l'exception nommée .sinistres_sous_hypothese() (unités : les
+# lignes de sinistres) ; chaque constructeur est appelé une fois par fonction de sa famille, avant
+# le premier retour de calculer_engagement() et de calculer_risque_en_cours() ; la population de P3
+# n'est lue que par .population_p3() et la voie du capital que par .voie_capital(). Avant (f387e10) :
+# lecture_unites() appelée aussi par calculer_risque_en_cours(), provisions_individuelles() et
+# provisions_collectives() ; .lectures_contrats(), .population_p3() et .voie_capital() absentes.
+appelants_174 <- function(f) {
+  Filter(function(n) is.function(ns[[n]]) && f %in% all.names(body(ns[[n]])), sort(ls(ns, all.names = TRUE), method = "radix"))
+}
+appels_174 <- function(f, g) sum(all.names(body(ns[[g]])) == f)
+avant_retour_174 <- function(f, g) {
+  d <- deparse(body(ns[[g]]), width.cutoff = 500L)
+  length(grep(paste0(f, "("), d, fixed = TRUE)) == 1L && grep(paste0(f, "("), d, fixed = TRUE) < min(grep("return(", d, fixed = TRUE))
+}
+famille_p3_174 <- c("calculer_risque_en_cours", "provisions_collectives", "provisions_individuelles")
+verifier_egal("#174 (1/2) suppression : lecture_unites() appelée par .lectures_contrats(), .lectures_dossiers() et l'exception .sinistres_sous_hypothese() seules ; .lectures_dossiers() par calculer_engagement() seule, une fois, avant tout retour ; .lectures_contrats() et .population_p3() par les trois fonctions de P3, une fois chacune, avant tout retour de calculer_risque_en_cours() ; .voie_capital() par .reconstituer_capital() et calculer_engagement()",
+              list(appelants_174("lecture_unites"), appelants_174(".lectures_dossiers"), appels_174(".lectures_dossiers", "calculer_engagement"),
+                   avant_retour_174(".lectures_dossiers", "calculer_engagement"),
+                   appelants_174(".lectures_contrats"), vapply(famille_p3_174, function(g) appels_174(".lectures_contrats", g), 0L),
+                   appelants_174(".population_p3"), vapply(famille_p3_174, function(g) appels_174(".population_p3", g), 0L),
+                   avant_retour_174(".lectures_contrats", "calculer_risque_en_cours"), appelants_174(".voie_capital")),
+              list(c(".lectures_contrats", ".lectures_dossiers", ".sinistres_sous_hypothese"), "calculer_engagement", 1L, TRUE,
+                   famille_p3_174, stats::setNames(rep(1L, 3L), famille_p3_174),
+                   famille_p3_174, stats::setNames(rep(1L, 3L), famille_p3_174), TRUE,
+                   c(".reconstituer_capital", "calculer_engagement")))
+# (2) une ligne rattache la même unité pour S2 et pour l'arrêt par unité (une seule liste, lue par
+# hypotheses_vue_unites() et par refus_ligne_unites()) : base R1 de (4.7) (EV1 de SI1 et DO1, date
+# de saisie manquante, D03g sous H, délai 0 : ligne placée, visible), plus un dossier DO0 (sinistre
+# SI0 de l'assuré AS0) rangé avant DO1. S2 : D03g à l'unité de DO1 seule ; arrêt (EV1 tenue pour
+# refusée) : unité de DO1 seule. Un élément de champ `s2` FALSE (lecture_unites(), V3 (c)) n'est
+# pas lu par S2 et reste lu par l'arrêt.
+b_174 <- b_87
+b_174$assures <- rbind(transform(b_174$assures, id_assure = "AS0"), b_174$assures)
+b_174$sinistres <- rbind(transform(b_174$sinistres, id_sinistre = "SI0", id_assure = "AS0"), b_174$sinistres)
+b_174$dossiers <- rbind(transform(b_174$dossiers, id_dossier = "DO0", id_sinistre = "SI0"), b_174$dossiers)
+v_174 <- local({ cp <- ns$canoniser_plan(plan_87(list(evenements = 0))); ns$vue_a_date(b_174, cp$arrete, cp$donnees, cp$conventions) })
+e_174 <- ns$etats_a_date(v_174, "deces", "engagement")
+l_174 <- ns$.lectures_dossiers(v_174, e_174, FALSE)
+l_174_sans_s2 <- lapply(l_174, function(l) { l$s2 <- FALSE; l })
+verifier_egal("#174 (1/2) même ligne, même unité : dossiers DO0, DO1 ; EV1 sous D03g : S2 à DO1 seul (\"\", \"D03g\") ; EV1 refusée : arrêt par DO1 seul ; éléments de champ s2 FALSE : aucun code S2, arrêt inchangé",
+              list(e_174$id_dossier, v_174$retenu$evenements,
+                   ns$hypotheses_vue_unites(v_174, "comptes_sociaux", P1, "engagement", 2L, l_174),
+                   ns$refus_ligne_unites(v_174, "engagement", 2L, l_174, "evenements", TRUE),
+                   ns$hypotheses_vue_unites(v_174, "comptes_sociaux", P1, "engagement", 2L, l_174_sans_s2),
+                   ns$refus_ligne_unites(v_174, "engagement", 2L, l_174_sans_s2, "evenements", TRUE)),
+              list(c("DO0", "DO1"), TRUE, c("", "D03g"), c(FALSE, TRUE), c("", ""), c(FALSE, TRUE)))
+# (3) voie du capital (.voie_capital(), seule fonction de choix, lue par .reconstituer_capital()) :
+# DO1 ouvert (capital non fixé), GS1 à taux_capital 2 : reconstitution, capital reconstitué
+# (`reconstitue`), aucun arrêt ; capital_forfaitaire 50 000 ajouté : forfait, capital 50 000 ;
+# taux_capital retiré : aucune, arrêt parametre_non_determine ; paramètres de GS1 exclus pour
+# engagement (vue altérée, comme pv158()) : non déterminée (NA), arrêt parametre_non_determine
+voie_174 <- function(b, exclus = FALSE) {
+  v <- b2_vue(b, A)
+  if (exclus) v$exclu$engagement$parametres[] <- TRUE
+  e <- ns$etats_a_date(v, "deces", "engagement")
+  r <- ns$.reconstituer_capital(v, e, p$postes$deces[[P1]]$parametres, p$conventions, P1)
+  list(ns$.voie_capital(v, "GS1")$voie, r$reconstitue, r$arret, r$capital)
+}
+b_174r <- b2_base_capital(capital = NA)
+verifier_egal("#174 (1/2) .voie_capital() et .reconstituer_capital() : reconstitution (82 500), forfait (50 000), aucune (arrêt), non déterminée (arrêt)",
+              list(voie_174(b_174r),
+                   voie_174(within(b_174r, parametres <- rbind(parametres, transform(parametres[1L, ], parametre = "capital_forfaitaire",
+                                                                                     valeur = 50000)))),
+                   voie_174(within(b_174r, parametres <- parametres[parametres$parametre != "taux_capital", ])),
+                   voie_174(b_174r, exclus = TRUE)),
+              list(list("reconstitution", TRUE, NA_character_, 82500), list("forfait", FALSE, NA_character_, 50000),
+                   list("aucune", FALSE, "parametre_non_determine", NA_real_),
+                   list(NA_character_, FALSE, "parametre_non_determine", NA_real_)), tolerance = TOL)
+# (4) lignes lues construites avant tout retour, lecture d'une colonne refusée : parametres.valeur
+# de chaînes (refus type_incompatible, portée colonne, que la vue garde brute) : P1 et P2 arrêtés
+# par le bilan (type_incompatible), sans lecture convertie de la colonne (le harnais tourne sous
+# options(warn = 2) : un avertissement de conversion serait une erreur). Mesure de la version de
+# travail avant ce test : avertissement « NAs introduced by coercion » dans parametre_vue() ;
+# f387e10 : même résultat, sans avertissement (colonne lue après le retour du bilan).
+b_174t <- within(b2_base_capital(capital = NA), { parametres$valeur <- as.character(parametres$valeur); parametres$valeur[1L] <- "abc" })
+verifier_egal("#174 (1/2) parametres.valeur de chaînes (type_incompatible) : P1 et P2 arrêtés par le bilan, sans avertissement de conversion",
+              lapply(c(P1, P2), function(q) eng(b_174t, p, q)$cellules[c("statut_calcul", "motif_arret")]),
+              rep(list(data.frame(statut_calcul = "arrete", motif_arret = "type_incompatible", stringsAsFactors = FALSE)), 2L))
+# (5) dossier de l'état sans identifiant, avant le retour du bilan (constat m1 de l'audit de #174
+# (1/2)) : base R1 à l'extraction (arrêté = extraction : vue totale, la table dossiers refusée
+# reste retenue, règle 3), dossier sans identifiant ajouté (sinistre SI0 de l'assuré AS0) :
+# dossiers refusée (manquant_obligatoire, portée table) ; appel direct de calculer_engagement() :
+# P1 et P2 arrêtés par le bilan (manquant_obligatoire), sans l'erreur interne « dossier de l'état
+# sans identifiant ». f387e10 : même résultat ; version de travail avant la reprise : erreur
+# interne pour P1 et P2.
+b_174m <- b2_base_capital(extraction = A)
+b_174m$assures <- rbind(transform(b_174m$assures, id_assure = "AS0"), b_174m$assures)
+b_174m$sinistres <- rbind(transform(b_174m$sinistres, id_sinistre = "SI0", id_assure = "AS0"), b_174m$sinistres)
+b_174m$dossiers <- rbind(transform(b_174m$dossiers, id_dossier = NA_character_, id_sinistre = "SI0"), b_174m$dossiers)
+verifier_egal("#174 (1/2) m1 : dossier retenu sans identifiant (vue totale, dossiers refusée) : état sans identifiant ; P1 et P2 arrêtés manquant_obligatoire par le bilan, sans erreur interne",
+              list(ns$etats_a_date(b2_vue(b_174m, A), "deces", "engagement")$id_dossier,
+                   lapply(c(P1, P2), function(q) motif_de(eng(b_174m, p, q)$cellules[c("statut_calcul", "motif_arret")])),
+                   lapply(c(P1, P2), function(q) eng(b_174m, p, q)$cellules[c("statut_calcul", "motif_arret")])),
+              list(c(NA, "DO1"), list("aucun", "aucun"),
+                   rep(list(data.frame(statut_calcul = "arrete", motif_arret = "manquant_obligatoire", stringsAsFactors = FALSE)), 2L)))

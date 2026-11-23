@@ -817,3 +817,41 @@ verifier_egal("#72 : CO9 de nature refusée (hors_domaine), montant 100 : pério
                    c72(risque(co9_72("zzz", "2021-01-01", "2021-12-31", 100), p3_72)),
                    c72(risque(co9_72("emission", "1800-01-01", "1800-12-31", 100, "2021-01-01"), p3_72))),
               list(list(NA_real_, "hors_domaine", "CT3", 1L), t3_72, list(NA_real_, "D02c", "CT3", 1:2)), tolerance = TOL)
+
+section("risque_en_cours : population et lignes lues par unité de P3 (#174, commit 1/2, résultats identiques)")
+# (1) population de P3 (.population_p3(), fonction à trois valeurs, aucun filtre évalué : tout
+# contrat d'appartenance NA, sur-ensemble de #72) : CT2 individuel, CT3 collectif ; nature de CT3
+# refusée (hors_domaine) : champ non déterminé (NA)
+pop_174 <- function(b) { v <- b2_vue(b, A1); ns$.population_p3(v, ns$.gs_deces_p3(v))[c("id_contrat", "individuel", "appartenance", "id_garantie_souscrite", "unite_gs")] }
+b3_174 <- b2_base_p3(cotisation = data.frame(debut = D("2024-07-01"), fin = D("2025-06-30"), montant = 1200))
+verifier_egal("#174 (1/2) .population_p3() : CT2 individuel, CT3 collectif, appartenance NA ; nature de CT3 refusée : individuel NA",
+              list(pop_174(b3_174), pop_174(within(b3_174, contrats$nature_contrat[2L] <- "zzz"))$individuel),
+              list(list(id_contrat = c("CT2", "CT3"), individuel = c(TRUE, FALSE), appartenance = c(NA, NA),
+                        id_garantie_souscrite = c("GS2", "GS3"), unite_gs = 1:2), c(TRUE, NA)))
+# (2) une ligne rattache la même unité pour S2 et pour l'arrêt par unité (liste de
+# .lectures_contrats(), lue par hypotheses_vue_unites() et par refus_ligne_unites()) : entrée de
+# vue$hypotheses écrite à la main, de la forme de vue_a_date() (D02a sous H) ; ligne de contrats de
+# CT2 : S2 et arrêt à CT2 seul ; cotisation CO1 (GS3, admise : emission, fin postérieure à A1) :
+# S2 et arrêt à CT3 seul
+lp_174 <- function(table, colonnes) {
+  v <- b2_vue(b3_174, A1)
+  v$hypotheses <- list(list(motif = "D02a", referentiel = "comptes_sociaux", poste = "tous", valeur = "regle", table = table,
+                            lignes = 1L, colonnes = colonnes))
+  pop <- ns$.population_p3(v, ns$.gs_deces_p3(v))
+  l <- ns$.lectures_contrats(v, pop, as.numeric(A1))
+  list(ns$hypotheses_vue_unites(v, "comptes_sociaux", P3, "risque_en_cours", 2L, l),
+       ns$refus_ligne_unites(v, "risque_en_cours", 2L, l, table, seq_len(nrow(b3_174[[table]])) == 1L))
+}
+verifier_egal("#174 (1/2) même ligne, même unité (P3) : ligne de contrats de CT2 : S2 et arrêt à CT2 ; cotisation CO1 de GS3 : S2 et arrêt à CT3",
+              list(lp_174("contrats", "date_fin"), lp_174("cotisations", c("debut_periode", "fin_periode"))),
+              list(list(c("D02a", ""), c(TRUE, FALSE)), list(c("", "D02a"), c(FALSE, TRUE))))
+# (3) lignes lues construites avant tout retour, lecture d'une colonne refusée : cotisations
+# .fin_periode de chaînes (refus type_incompatible, portée colonne, que la vue garde brute) : P3
+# arrêté par le bilan (type_incompatible), sans lecture convertie de la colonne (harnais sous
+# options(warn = 2)). Mesure de la version de travail avant ce test : avertissement « NAs
+# introduced by coercion » dans .cotisations_admises_p3() ; f387e10 : même résultat, sans
+# avertissement (colonne lue après le retour du bilan).
+b_174t <- within(b3_174, { cotisations$fin_periode <- as.character(cotisations$fin_periode); cotisations$fin_periode[1L] <- "abc" })
+verifier_egal("#174 (1/2) cotisations.fin_periode de chaînes (type_incompatible) : P3 arrêté par le bilan, sans avertissement de conversion",
+              risque(b_174t, plan_p3())$cellules[c("statut_calcul", "motif_arret")],
+              data.frame(statut_calcul = "arrete", motif_arret = "type_incompatible", stringsAsFactors = FALSE))
