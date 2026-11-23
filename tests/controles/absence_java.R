@@ -149,15 +149,31 @@ EXTENSIONS <- "\\.(R|Rmd|yml|yaml|sh|json|toml|lock|js|dockerfile)$"
 NOMS <- "^(NAMESPACE|Dockerfile(\\..*)?|Makefile|\\.Rprofile|Rprofile\\.site|\\.Renviron|Renviron\\.site|Brewfile|Aptfile)$"
 NOMS_R <- "^(NAMESPACE|\\.Rprofile|Rprofile\\.site)$"
 SANS_COMMENTAIRE <- "\\.(json|lock|js)$"  # aucun commentaire retire
+# Noms suivis par git, exacts : `git ls-files -z` (sortie lue en octets, decoupee sur \0). Sans -z,
+# git met entre guillemets, avec echappements, les noms qui portent un guillemet, une tabulation,
+# une barre inverse ou un saut de ligne, et le filtre sur l'extension les ecartait sans message
+# (#186). Rend NULL si git echoue ou si la sortie est tronquee (pas de \0 final).
+noms_git <- function() {
+  sortie <- tempfile("ls-files-")
+  on.exit(unlink(sortie), add = TRUE)
+  statut <- suppressWarnings(system2("git", c("-C", shQuote(racine), "ls-files", "-z"),
+                                     stdout = sortie, stderr = FALSE))
+  if (!identical(statut, 0L)) return(NULL)
+  b <- readBin(sortie, "raw", n = file.size(sortie))
+  if (!length(b)) return(character(0))
+  fin <- which(b == as.raw(0L))
+  if (!length(fin) || fin[length(fin)] != length(b)) return(NULL)
+  debut <- c(1L, fin[-length(fin)] + 1L)
+  vapply(seq_along(fin), function(i) rawToChar(b[debut[i]:(fin[i] - 1L)]), "")
+}
 # Fichiers suivis : git ls-files si `racine` est la racine d'un depot git, sinon l'arborescence.
 fichiers_suivis <- function() {
   if (nzchar(Sys.which("git"))) {
     haut <- suppressWarnings(system2("git", c("-C", shQuote(racine), "rev-parse", "--show-toplevel"),
                                      stdout = TRUE, stderr = FALSE))
     if (is.null(attr(haut, "status")) && length(haut) == 1L && normalizePath(haut) == racine) {
-      liste <- suppressWarnings(system2("git", c("-C", shQuote(racine), "-c", "core.quotepath=off", "ls-files"),
-                                        stdout = TRUE, stderr = FALSE))
-      if (is.null(attr(liste, "status"))) return(file.path(racine, liste))
+      liste <- noms_git()
+      if (!is.null(liste)) return(file.path(racine, liste))
     }
   }
   tout <- list.files(racine, recursive = TRUE, all.files = TRUE, include.dirs = FALSE)

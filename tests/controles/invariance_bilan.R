@@ -21,6 +21,24 @@
 # n'entre ni dans les batteries de CLAUDE.md ni dans circuit-technique.js (M603) ; il tourne
 # dans son propre job de .github/workflows/ci.yml.
 #
+# Limites connues (#140 ; chacune mesuree, sur le depot ou sur une racine reduite a un
+# donnees.R de deux appels, avec une instruction ajoutee a controler_base() dans la copie) :
+#   - seuls les appels de donnees.R sont rejoues : 1262 appels collectes sur le depot, dont 104
+#     refus ; les 14 mentions de controler_base( de garanties.R, plan.R et simulation.R ne sont
+#     pas executees ; un appel fait par une copie de l'espace de noms (copie_ns(), changement
+#     d'environnement de la fonction) n'est pas enregistre (quatre appels dont un par copie :
+#     trois enregistres) ;
+#   - les tables sont petites : 1236 des 1262 appels n'ont aucune table de plus de 20 lignes
+#     (26 appels en ont une) ; une dependance a l'ordre qui ne se manifeste que sur un plus
+#     gros volume n'est pas exercee ;
+#   - un seul ordre tire par table et par passe, en plus de l'ordre inverse : sur une table de
+#     trois lignes (six ordres), une dependance a l'ordre [AS2, AS1, AS3], [AS3, AS1, AS2] ou
+#     [AS2, AS3, AS1] passe, l'ordre [AS3, AS2, AS1] est vu par l'inversion, [AS1, AS3, AS2]
+#     par la permutation (graine GRAINE + 2, pour cet appel numero 2) ;
+#   - seules les lignes des data.frame de `donnees` sont transformees : une dependance a l'ordre
+#     des colonnes d'une table, a l'ordre des elements de `donnees`, ou a celui des entrees de
+#     `declarations` et de `conventions` (passees telles quelles) passe.
+#
 # Garde : tests/test_unitaires.R lance chaque tests/controles/*.R avec la racine en argument.
 # Sans l'option --complet, ce script ne fait donc rien (une ligne [INFO], statut 0).
 # Usage : Rscript tests/controles/invariance_bilan.R --complet [racine]

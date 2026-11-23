@@ -5,8 +5,9 @@
 #
 #  Controle des PAQUETS SYSTEME (apt, dpkg). Il complete absence_java.R, dont le
 #  perimetre est les FICHIERS du depot (DESCRIPTION, fichiers suivis) et qui ne voit
-#  aucun paquet systeme. Partage par le job « Documents LaTeX » de
-#  .github/workflows/ci.yml et par le hook .claude/hooks/installer_latex.sh.
+#  aucun paquet systeme. Partage par les jobs « Documents LaTeX » et « Controles du
+#  depot » (installation de r-base-core, #185) de .github/workflows/ci.yml et par le
+#  hook .claude/hooks/installer_latex.sh.
 #
 #  Usage :
 #    bash tests/controles/paquets_java.sh --lister > liste.txt

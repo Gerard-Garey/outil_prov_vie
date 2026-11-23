@@ -12,6 +12,21 @@
 # charte, une suite de blocs differente de celle de la charte, un bloc non ferme sont des
 # [ECHEC].
 # Modele : docu_actu, outils/controles/preambule.R (reecrit, sans dependance).
+# Limites connues (#140 ; chacune mesuree sur un cas construit) :
+#   - le contenu d'un bloc A ADAPTER est libre : seuls le nombre, l'ordre et l'objet des blocs
+#     sont compares (`\usepackage{...}` et `\renewcommand{\section}{x}` ajoutes dans le bloc
+#     passent) ;
+#   - seul le preambule est compare : le corps apres \begin{document} n'est pas lu ; la ligne
+#     qui porte \begin{document} est exclue du preambule (`\usepackage{ajout}\begin{document}`
+#     passe) ;
+#   - un fichier sans \documentclass hors commentaire est un fragment, ignore sans ligne de
+#     sortie : la charte copiee sans sa ligne \documentclass, ou avec elle commentee, au
+#     preambule modifie, passe sans message ;
+#   - seuls les fichiers d'extension .tex, en toute casse, sont examines (un .ltx au preambule
+#     modifie passe) ;
+#   - dans un depot git, un document non suivi n'est pas examine, et un fichier suivi mais
+#     absent de l'arbre de travail est ecarte sans message (s'il est le seul document : "aucun
+#     document a comparer a la charte", statut 0, dans les deux cas).
 # Usage, depuis la racine du depot : Rscript tests/controles/preambule_latex.R
 # Un argument facultatif designe une autre racine (copie du depot, pour les temoins).
 # Sortie : lignes [OK] / [ECHEC] fichier:ligne ; statut 1 au moindre [ECHEC].
@@ -114,15 +129,31 @@ if (!is.null(ref$erreur)) {
   echec(ref$erreur, charte, ref$ligne)
   fin()
 }
+# Noms suivis par git, exacts : `git ls-files -z` (sortie lue en octets, decoupee sur \0). Sans -z,
+# git met entre guillemets, avec echappements, les noms qui portent un guillemet, une tabulation,
+# une barre inverse ou un saut de ligne, et le filtre sur l'extension les ecartait sans message
+# (#186). Rend NULL si git echoue ou si la sortie est tronquee (pas de \0 final).
+noms_git <- function() {
+  sortie <- tempfile("ls-files-")
+  on.exit(unlink(sortie), add = TRUE)
+  statut <- suppressWarnings(system2("git", c("-C", shQuote(racine), "ls-files", "-z"),
+                                     stdout = sortie, stderr = FALSE))
+  if (!identical(statut, 0L)) return(NULL)
+  b <- readBin(sortie, "raw", n = file.size(sortie))
+  if (!length(b)) return(character(0))
+  fin <- which(b == as.raw(0L))
+  if (!length(fin) || fin[length(fin)] != length(b)) return(NULL)
+  debut <- c(1L, fin[-length(fin)] + 1L)
+  vapply(seq_along(fin), function(i) rawToChar(b[debut[i]:(fin[i] - 1L)]), "")
+}
 # Fichiers .tex suivis : git ls-files si `racine` est la racine d'un depot git, sinon l'arborescence.
 fichiers_suivis <- function() {
   if (nzchar(Sys.which("git"))) {
     haut <- suppressWarnings(system2("git", c("-C", shQuote(racine), "rev-parse", "--show-toplevel"),
                                      stdout = TRUE, stderr = FALSE))
     if (is.null(attr(haut, "status")) && length(haut) == 1L && normalizePath(haut) == racine) {
-      liste <- suppressWarnings(system2("git", c("-C", shQuote(racine), "-c", "core.quotepath=off", "ls-files"),
-                                        stdout = TRUE, stderr = FALSE))
-      if (is.null(attr(liste, "status"))) return(file.path(racine, liste))
+      liste <- noms_git()
+      if (!is.null(liste)) return(file.path(racine, liste))
     }
   }
   tout <- list.files(racine, recursive = TRUE, all.files = TRUE, include.dirs = FALSE)

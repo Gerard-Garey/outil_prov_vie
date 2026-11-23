@@ -172,33 +172,7 @@ r <- cas_java(list("tests/t_temoin.R" = c(
   "writeLines(paste0(\"library(r\", \"Java)\"), f)", "m <- paste0(\"JAVA\", \"_HOME\")")))
 verifier("N2e : le même test avec les noms fabriqués par paste0() passe", .passe(r))
 
-# C5 : voie `git ls-files` (la racine examinee est la racine d'un depot git) : seuls les fichiers
-# suivis sont balayes. Copie temporaire initialisee par git init et git add.
-if (nzchar(Sys.which("git"))) {
-  .essai_git <- function(suivis, non_suivis) {
-    copie <- tempfile("temoin-git-")
-    dir.create(copie)
-    on.exit(unlink(copie, recursive = TRUE), add = TRUE)
-    for (chemin in c(names(suivis), names(non_suivis))) {
-      .deposer(file.path(copie, chemin), c(suivis, non_suivis)[[chemin]])
-    }
-    git <- function(...) suppressWarnings(system2("git", c("-C", shQuote(copie), ...), stdout = TRUE, stderr = TRUE))
-    git("init", "-q")
-    git("add", names(suivis))
-    sortie <- suppressWarnings(system2(file.path(R.home("bin"), "Rscript"),
-                                       c(shQuote(.script_controle("absence_java")), shQuote(copie)),
-                                       stdout = TRUE, stderr = TRUE))
-    statut <- attr(sortie, "status")
-    list(statut = if (is.null(statut)) 0L else statut, sortie = sortie)
-  }
-  r <- .essai_git(list(DESCRIPTION = DESC, "tests/t_java.R" = paste0("library(", RJ, ")")),
-                  list("tests/u_java.R" = paste0("library(", RJ, ")")))
-  verifier("C5 : fichier suivi interdit refuse (git ls-files), t_java.R:1", .echoue_en(r, "tests/t_java.R", 1L, RJ))
-  verifier("C5 : fichier non suivi ignore (git ls-files), pas de ligne pour u_java.R",
-           !any(grepl("u_java.R", r$sortie, fixed = TRUE)))
-  r <- .essai_git(list(DESCRIPTION = DESC), list("tests/u_java.R" = paste0("library(", RJ, ")")))
-  verifier("C5 : seul un fichier non suivi interdit : le controle passe (preuve de la voie git)", .passe(r))
-}
+# C5 (voie `git ls-files` d'absence_java.R) : témoins dans tests/unitaires/voie_git.R (#186).
 # Aucun fichier R analysé (tests/ sans fichier R) : rbind d'une liste vide vaudrait NULL (revue finale de Bo2, C-1).
 r <- .essai("recensement_tolerances", list("tests/vide.txt" = "aucun fichier R"))
 verifier("recensement : une racine sans fichier R donne le statut 0, sans [ECHEC] ni ligne [INFO] vide, et la rubrique « 0 marques »",
@@ -580,7 +554,112 @@ verifier("#178 : faux positif levé, l'affectation d'un champ (x$globalenv <- 1)
 r <- .essai("graphe_modules", list("R/outils.R" = "avec_graine <- function(graine, expr) { x <- list(); x$globalenv <- 1; globalenv() }"))
 verifier("#178 : le cas de l'issue (faux positif), sur une seule ligne : le contrôle passe", .passe(r))
 r <- .essai("graphe_modules", list("R/outils.R" = c("avec_graine <- function(graine, expr, nom) {", "  assign(nom, function() 1)", "  globalenv()", "}")))
-verifier("#178, limite documentée : assign() sur un nom calculé (assign(nom, f)) n'est pas vu, le contrôle passe", .passe(r))
+verifier("#178 puis #184 : assign() sur un nom calculé (assign(nom, f)) n'est plus une limite, l'exception est inapplicable, outils.R:3 (limite levée, règle stricte de M746)",
+         .echoue_en(r, "R/outils.R", 3L, "exception declaree inapplicable"))
+
+# #184 (M746) : règle stricte pour assign() à nom calculé et formes voisines, cible de remplacement,
+# noms interdits écrits en chaîne, do.call(`what` = ...). Les témoins positifs ont le statut 0 sur le
+# script de b15886e ; les cas licites et les limites sont mesurés sur la règle de #184.
+section("contrôles : graphe_modules.R, assign() à nom calculé, remplacement, chaînes, what (#184)")
+# avec_graine() fictive : l'exception globalenv() (M412) s'y applique ; `...` est inséré avant `globalenv()`.
+AG184 <- function(...) c("avec_graine <- function(graine, expr, nom = 1, f = NULL) {", c(...), "  globalenv()", "}")
+INAPPLICABLE <- "exception declaree inapplicable"
+cas_ag <- function(...) .essai("graphe_modules", list("R/outils.R" = AG184(...)))
+r <- cas_ag("  assign(nom, function() 1)")
+verifier("#184 : assign(nom, f) (nom calculé) avant globalenv() dans avec_graine(), outils.R:3 (règle stricte)",
+         .echoue_en(r, "R/outils.R", 3L, INAPPLICABLE))
+r <- cas_ag("  assign(r\"(globalenv)\", function() 1)")
+verifier("#184 : assign(r\"(globalenv)\", f) (chaîne brute), outils.R:3", .echoue_en(r, "R/outils.R", 3L, INAPPLICABLE))
+r <- cas_ag("  assign(\"glob\\x61lenv\", function() 1)")
+verifier("#184 : assign(\"glob\\x61lenv\", f) (échappement dans la chaîne), outils.R:3", .echoue_en(r, "R/outils.R", 3L, INAPPLICABLE))
+r <- cas_ag("  assign(`globalenv`, function() 1)")
+verifier("#184 : assign(`globalenv`, f) (nom en symbole, donc calculé), outils.R:3", .echoue_en(r, "R/outils.R", 3L, INAPPLICABLE))
+r <- cas_ag("  do.call(assign, list('globalenv', function() 1))")
+verifier("#184 : do.call(assign, list('globalenv', f)) (assign référencé sans appel), outils.R:3", .echoue_en(r, "R/outils.R", 3L, INAPPLICABLE))
+r <- cas_ag("  delayedAssign('globalenv', function() 1)")
+verifier("#184 : delayedAssign('globalenv', f), outils.R:3", .echoue_en(r, "R/outils.R", 3L, INAPPLICABLE))
+r <- cas_ag("  delayedAssign(nom, function() 1)")
+verifier("#184 : delayedAssign(nom, f) (nom calculé), outils.R:3", .echoue_en(r, "R/outils.R", 3L, INAPPLICABLE))
+r <- cas_ag("  (assign)(\"globalenv\", function() 1)")
+verifier("#184 : (assign)(\"globalenv\", f) (assign en symbole), outils.R:3", .echoue_en(r, "R/outils.R", 3L, INAPPLICABLE))
+r <- cas_ag(c("  g <- assign", "  g(\"globalenv\", function() 1)"))
+verifier("#184 : alias g <- assign ; g(\"globalenv\", f), outils.R:4", .echoue_en(r, "R/outils.R", 4L, INAPPLICABLE))
+r <- .essai("graphe_modules", list("R/outils.R" = c("poser <- assign", AG184("  poser(\"globalenv\", function() 1)"))))
+verifier("#184 : alias de assign défini au premier niveau du fichier, outils.R:4", .echoue_en(r, "R/outils.R", 4L, INAPPLICABLE))
+r <- cas_ag(c("  assign(\"autre\", 1)", "  delayedAssign('autre2', 2)", "  assign(\".Random.seed\", 3, envir = globalenv())"))
+verifier("#184, cas licite : assign() et delayedAssign() d'un nom littéral autre que l'exception : le contrôle passe", .passe(r))
+r <- cas_ag("  x <- list(assign = 1, delayedAssign = 2) ; x$assign ; x$delayedAssign")
+verifier("#184, cas licite : assign en champ ou en nom d'argument n'est pas une référence : le contrôle passe", .passe(r))
+r <- cas_ag("  body(globalenv) <- quote(new.env())")
+verifier("#184 : body(globalenv) <- v (cible de remplacement, masque globalenv), globalenv() inapplicable, outils.R:3",
+         .echoue_en(r, "R/outils.R", 3L, INAPPLICABLE))
+r <- cas_ag("  formals(body(globalenv)) <- NULL")
+verifier("#184 : formals(body(globalenv)) <- NULL (remplacement imbriqué), outils.R:3", .echoue_en(r, "R/outils.R", 3L, INAPPLICABLE))
+r <- cas_ag(c("  x <- list()", "  x[globalenv()] <- 1", "  x[[1L]] <- globalenv()", "  x$globalenv[1L] <- 1", "  body(f) -> y"))
+verifier("#184, cas licite : globalenv en indice, en valeur, en champ ou à droite de -> n'est pas une cible de remplacement : le contrôle passe",
+         .passe(r))
+r <- cas_graphe("calcul_e <- function(x) { body(get) <- x ; x }")
+verifier("#184 : hors exception, body(get) <- x reste une référence refusée, engagement.R:1", .echoue_en(r, "R/engagement.R", 1L, "get sans appel"))
+r <- cas_graphe("calcul_e <- function(x) lapply(1, \"sys.call\")")
+verifier("#184 (m3) : lapply(1, \"sys.call\"), engagement.R:1", .echoue_en(r, "R/engagement.R", 1L, "\"sys.call\" ecrit en chaine"))
+r <- cas_graphe(c("calcul_e <- function(x) {", "  a <- vapply(x, \"dynGet\", 1)", "  b <- Map(f = 'get', x)", "  c <- sapply(x, FUN = \"eval\")",
+                  "  d <- lapply(FUN = \"parse\", x)", "  e <- lapply(x, r\"(source)\")", "  x", "}"))
+verifier("#184 (m3) : vapply(x, \"dynGet\", 1), engagement.R:2", .echoue_en(r, "R/engagement.R", 2L, "\"dynGet\" ecrit en chaine"))
+verifier("#184 (m3) : Map(f = 'get', x) (argument nommé, guillemets simples), engagement.R:3", .echoue_en(r, "R/engagement.R", 3L, "\"get\" ecrit en chaine"))
+verifier("#184 (m3) : sapply(x, FUN = \"eval\"), engagement.R:4", .echoue_en(r, "R/engagement.R", 4L, "\"eval\" ecrit en chaine"))
+verifier("#184 (m3) : lapply(FUN = \"parse\", x) (argument-fonction nommé en tête), engagement.R:5", .echoue_en(r, "R/engagement.R", 5L, "\"parse\" ecrit en chaine"))
+verifier("#184 (m3) : lapply(x, r\"(source)\") (chaîne brute), engagement.R:6", .echoue_en(r, "R/engagement.R", 6L, "\"source\" ecrit en chaine"))
+r <- cas_graphe(c("calcul_e <- function(x) {", "  a <- lapply(x, \"[[\", \"source\")", "  b <- x[[\"environment\"]]", "  c <- sapply(x, \"[\", \"get\")",
+                  "  d <- lapply(FUN = \"[[\", x, \"parse\")", "  e <- mapply(\"+\", 1, 2)", "  f <- x[, \"eval\"]", "  names(x) == \"source\"", "}"))
+verifier("#184 (m3), cas licite : noms de colonnes en chaîne (lapply(x, \"[[\", \"source\"), x[[\"environment\"]], sapply(x, \"[\", \"get\")) : le contrôle passe",
+         .passe(r))
+r <- .essai("graphe_modules", list("R/outils.R" = c("avec_graine <- function(graine, expr) {", "  lapply(1, \"globalenv\")", "}")))
+verifier("#184 (m3) : l'exception de globalenv couvre aussi la chaîne \"globalenv\" en position de fonction dans avec_graine() : le contrôle passe, exception constatée",
+         .passe(r) && any(grepl("M409, M412 : 2 declaree(s), 1 constatee(s)", r$sortie, fixed = TRUE)))
+r <- cas_graphe("calcul_e <- function(l) do.call(`what` = rbind, l)")
+verifier("#184 : do.call(`what` = rbind, l) (nom d'argument entre accents graves) n'est plus refusé à tort : le contrôle passe", .passe(r))
+r <- cas_graphe("calcul_e <- function(l) do.call(\"what\" = rbind, l)")
+verifier("#184 : do.call(\"what\" = rbind, l) (nom d'argument en chaîne) n'est plus refusé à tort : le contrôle passe", .passe(r))
+r <- cas_graphe("calcul_e <- function(l) do.call(args = l, rbind)")
+verifier("#184 : do.call(args = l, rbind) (what en second, positionnel) n'est plus refusé à tort : le contrôle passe", .passe(r))
+r <- cas_graphe("calcul_e <- function(l) do.call(`what` = get, list())")
+verifier("#184 : do.call(`what` = get, list()) reste refusé (règle do.call), engagement.R:1", .echoue_en(r, "R/engagement.R", 1L, "do.call()"))
+r <- .essai("graphe_modules", list("R/outils.R" = "avec_graine <- function(graine, expr) do.call(`what` = globalenv, list())"))
+verifier("#184 : do.call(`what` = globalenv, list()) dans avec_graine() : exception déclarée, le contrôle passe", .passe(r))
+# Limites documentées (mesurées sur la règle de #184, statut 0).
+r <- cas_graphe("calcul_e <- function(x) { n <- \"eval\"; lapply(x, n) }")
+verifier("#184, limite documentée : un nom interdit passé par une variable (n <- \"eval\" ; lapply(x, n)) n'est pas vu, le contrôle passe", .passe(r))
+r <- cas_graphe("calcul_e <- function(x) lapply(x, c(\"eval\"))")
+verifier("#184, limite documentée : un nom interdit dans c() ou list() à la place de la fonction n'est pas vu, le contrôle passe", .passe(r))
+r <- cas_graphe("calcul_e <- function(x) integrate(\"get\", 0, 1)")
+verifier("#184, limite documentée : une fonction d'ordre supérieur hors FONCTIONS_ORDRE_SUPERIEUR (integrate) n'est pas vue, le contrôle passe", .passe(r))
+r <- cas_graphe("calcul_e <- function(x) lapply(x, FU = \"eval\")")
+verifier("#184, limite documentée : un nom d'argument partiel (FU = \"eval\") n'est pas apparié, le contrôle passe", .passe(r))
+r <- .essai("graphe_modules", list("R/outils.R" = c("poser <- function(n, v) assign(n, v)", AG184("  poser(\"globalenv\", function() 1)"))))
+verifier("#184, limite documentée : un assign() à nom calculé dans une autre fonction du fichier (poser(\"globalenv\", f)) n'est pas vu, le contrôle passe",
+         .passe(r))
+r <- cas_ag("  with(list(globalenv = function() 1), globalenv())")
+verifier("#184, limite documentée : with(list(globalenv = f), globalenv()) n'est pas vu, le contrôle passe", .passe(r))
+# Constats mineurs de l'audit de #184, corrigés par la session (chacun au statut 0, ou refusé à tort, sur
+# le script issu du workflow ; mesure citée dans le commit).
+r <- cas_ag("  \"glob\\x61lenv\" <- function() 1")
+verifier("#184 (audit, m1) : \"glob\\x61lenv\" <- f (cible en chaîne avec échappement) masque globalenv, outils.R:3",
+         .echoue_en(r, "R/outils.R", 3L, INAPPLICABLE))
+r <- cas_ag("  r\"(globalenv)\" <- function() 1")
+verifier("#184 (audit, m1) : r\"(globalenv)\" <- f (cible en chaîne brute) masque globalenv, outils.R:3",
+         .echoue_en(r, "R/outils.R", 3L, INAPPLICABLE))
+r <- .essai("graphe_modules", list("R/outils.R" = c("delayedAssign(\"zz\", 1)", "avec_graine <- function(graine, expr) globalenv()")))
+verifier("#184 (audit, m2) : delayedAssign() au premier niveau refusé comme assign(), outils.R:1",
+         .echoue_en(r, "R/outils.R", 1L, "assign() au premier niveau"))
+r <- cas_graphe(c("calcul_e <- function(x) {", "  a <- x$lapply(1, \"get\")", "  b <- x@lapply(1, \"eval\")", "  x", "}"))
+verifier("#184 (audit, m3), cas licite : x$lapply(1, \"get\") et x@lapply(1, \"eval\") (appels de champ) ne sont pas refusés : le contrôle passe",
+         .passe(r))
+# M768 : assign employé sans appel n'importe où dans R/ rend les exceptions inapplicables (alias défini
+# dans un autre module : statut 0 sur la portée au fichier, mesure d'actuary).
+r <- .essai("graphe_modules", list("R/donnees.R" = "alias_assign <- function(...) assign(...) ; alias_bis <- assign",
+                                   "R/outils.R" = "avec_graine <- function(graine, expr) globalenv()"))
+verifier("#184 (M768) : alias de assign défini dans un autre module (donnees.R), exception de outils.R inapplicable, outils.R:1",
+         .echoue_en(r, "R/outils.R", 1L, INAPPLICABLE))
 
 # m1 : un nom d'auxiliaire à point passé en chaîne (match.fun) est un emploi (issue #74, audit).
 section("contrôles : graphe_modules.R, noms passés en chaîne (#74, m1)")
@@ -1262,6 +1341,39 @@ verifier("#179 tolérance positionnelle : lue par l'appariement : 0 (temoin.R:2,
                      c("[INFO]   tests/unitaires/temoin.R:3 tolerance 1e-08", "[INFO]   tests/unitaires/temoin.R:4 tolerance 1e-08",
                        "[INFO]   tests/unitaires/temoin.R:7 tolerance non resolue", "[INFO]   tests/unitaires/temoin.R:9 tolerance 1e-08")))
 
+# #187 : la position (ligne, colonne) et l'appel analysé viennent du noeud de chaque appel, non d'un appariement
+# par rang entre l'arbre (parcours préfixe) et le source : des appels imbriqués par `|>` sont dans deux ordres
+# différents (le premier argument ajouté par le tube est visité après l'appel qui le reçoit). Chaque témoin
+# échoue sur le script d'avant #187 (la ligne du zéro y est celle de l'autre appel).
+r <- cas_recensement(c("# zero_compense : motif",
+                       "verifier_egal(\"a\", x - y, list(f(y), 0), tolerance = 1e-8) |>",
+                       "  verifier_egal(nom = \"b\", attendu = list(f(y), 1), tolerance = 1e-6)"))
+zeros <- grep("^\\[INFO\\] ZEROS ATTENDUS A TOLERANCE > 0 ", r$sortie)
+comp <- grep("^\\[INFO\\] ZERO DE COMPENSATION DECLARE \\(", r$sortie)
+verifier("#187 : deux appels imbriqués par `|>` sur deux lignes : le zéro marqué est celui de l'appel intérieur, à sa ligne (temoin.R:2, déclaré, tolérance 1e-08), non à celle de l'appel extérieur ; aucun zéro à corriger, statut 0",
+         .passe(r) && length(zeros) == 1L && length(comp) == 1L && grepl(" : 0 appels$", r$sortie[zeros]) &&
+           grepl(" : 1 appels$", r$sortie[comp]) && identical(r$sortie[comp + 1L], "[INFO]   tests/unitaires/temoin.R:2 tolerance 1e-08"))
+r <- cas_recensement(c("verifier_egal(\"a\", x, list(f(y), 1), tolerance = 1e-8) |>",
+                       "  verifier_egal(nom = \"b\", attendu = list(f(y), 1), tolerance = 1e-8) |>",
+                       "# zero_compense : motif",
+                       "  verifier_egal(nom = \"c\", attendu = list(f(y), 0), tolerance = 1e-8)"))
+zeros <- grep("^\\[INFO\\] ZEROS ATTENDUS A TOLERANCE > 0 ", r$sortie)
+comp <- grep("^\\[INFO\\] ZERO DE COMPENSATION DECLARE \\(", r$sortie)
+verifier("#187 : trois appels chaînés par `|>` : le zéro de l'appel extérieur est lu à sa propre ligne (temoin.R:4, marque de la ligne 3, déclaré), non à celle du premier appel (:1) ; trois appels de verifier_egal() comptés, aucun zéro à corriger",
+         .passe(r) && length(zeros) == 1L && length(comp) == 1L && grepl(" : 0 appels$", r$sortie[zeros]) &&
+           grepl(" : 1 appels$", r$sortie[comp]) && identical(r$sortie[comp + 1L], "[INFO]   tests/unitaires/temoin.R:4 tolerance 1e-08") &&
+           any(grepl("appels de verifier_egal() : 3", r$sortie, fixed = TRUE)))
+# Exemple de l'issue : la constante est lue à la position de chaque appel. Sur le script d'avant #187, la
+# tolérance de l'appel intérieur est « non resolue » à :2 et celle de l'appel extérieur vaut 1 à :3.
+r <- cas_recensement(c("N <- 1",
+                       "verifier_egal(\"a\", x, y, N) |>",
+                       "  verifier_egal(\"b\", z, rep(0, N))",
+                       "N <- 0"))
+verifier("#187 : exemple de l'issue (constante N redéfinie après un tube) : la tolérance de l'appel intérieur est lue à sa position (temoin.R:2 tolerance 1), celle de l'appel extérieur non résolue (:3, rep(0, N) dans le même tube)",
+         .passe(r) && any(r$sortie == "[INFO]   tests/unitaires/temoin.R:2 tolerance 1 ") &&
+           any(r$sortie == "[INFO]   tests/unitaires/temoin.R:3 tolerance non resolue ") &&
+           !any(grepl("temoin.R:2 tolerance non resolue", r$sortie, fixed = TRUE)))
+
 # --- paquets_java.sh (#120 ; #95, point 5) --------------------------------------------------
 # Script bash : appelé par bash (system2), les listes avant / après sont des fichiers texte. Les
 # noms de paquets Java interdits par absence_java.R sont fabriqués comme ailleurs dans ce fichier
@@ -1586,28 +1698,30 @@ verifier("#182 : un binaire non liste de 1 Mo est refuse, x.dat:1 et reste de li
          .echoue_en(r, "docs/x.dat", 1L, "U+") && any(grepl("autre(s) ligne(s) atteinte(s)", r$sortie, fixed = TRUE)) &&
            sum(startsWith(r$sortie, "[ECHEC] docs/x.dat:")) == 20L && duree < 60)
 
-# Voie `git ls-files` : seuls les fichiers suivis sont examinés (copie initialisée par git init et git add).
-if (nzchar(Sys.which("git"))) {
-  .essai_git_cc <- function(suivis, non_suivis) {
-    copie <- tempfile("temoin-git-")
-    dir.create(copie)
-    on.exit(unlink(copie, recursive = TRUE), add = TRUE)
-    for (chemin in names(suivis)) .deposer(file.path(copie, chemin), suivis[[chemin]])
-    for (chemin in names(non_suivis)) .deposer(file.path(copie, chemin), non_suivis[[chemin]])
-    git <- function(...) suppressWarnings(system2("git", c("-C", shQuote(copie), ...), stdout = TRUE, stderr = TRUE))
-    git("init", "-q")
-    git("add", names(suivis))
-    sortie <- suppressWarnings(system2(file.path(R.home("bin"), "Rscript"),
-                                       c(shQuote(.script_controle(CC)), shQuote(copie)),
-                                       stdout = TRUE, stderr = TRUE))
-    statut <- attr(sortie, "status")
-    list(statut = if (is.null(statut)) 0L else statut, sortie = sortie)
-  }
-  r <- .essai_git_cc(list("docs/s.md" = c(txt("a\n"), octets(12L), txt("\n"))),
-                     list("docs/n.md" = c(octets(12L), txt("\n"))))
-  verifier("#182 : voie git : un fichier suivi qui porte U+000C est refusé, s.md:2 ; le fichier non suivi n'est pas cité",
-           .echoue_en(r, "docs/s.md", 2L, "U+000C") && !any(grepl("n.md", r$sortie, fixed = TRUE)))
-  r <- .essai_git_cc(list("docs/s.md" = "propre"), list("docs/n.md" = c(octets(12L), txt("\n"))))
-  verifier("#182 : voie git : seul un fichier non suivi porte U+000C, le contrôle passe (preuve de la voie git)",
-           .passe(r) && any(grepl("^\\[OK\\] 1 fichier", r$sortie)))
-}
+# Voie `git ls-files` de caracteres_controle.R : témoins dans tests/unitaires/voie_git.R (#186).
+section("contrôles : sans git, les témoins de la voie git sont sautés visiblement (#186)")
+# Sans git (l'image rocker/r-ver du job « Tests (R 4.3.3) »), voie_git.R saute ses témoins de la voie
+# git ; avant #186, le saut ne laissait aucune trace au journal. Un processus fils sourcé avec
+# Sys.which() masquée (git introuvable) en rend le journal.
+.sans_git <- local({
+  script <- tempfile(fileext = ".R")
+  on.exit(unlink(script), add = TRUE)
+  writeLines(c("options(warn = 2)", paste0("racine <- ", deparse(racine)),
+               paste0("source(", deparse(file.path(racine, "tests", "harnais.R")), ")"),
+               "Sys.which <- function(names) stats::setNames(character(length(names)), names)",
+               paste0("source(", deparse(file.path(racine, "tests", "unitaires", "voie_git.R")), ")"),
+               "bilan()"), script)
+  sortie <- suppressWarnings(system2(file.path(R.home("bin"), "Rscript"), shQuote(script), stdout = TRUE, stderr = TRUE))
+  statut <- attr(sortie, "status")
+  list(statut = if (is.null(statut)) 0L else statut, sortie = sortie)
+})
+.noms_sautes <- grep("^\\[INFO\\] SAUTE : [^0-9]", .sans_git$sortie, value = TRUE)
+verifier("#186 : sans git : statut 0, aucun [ECHEC], et chaque témoin de la voie git est nommé au journal par une ligne [INFO] SAUTE",
+         .sans_git$statut == 0L && !any(startsWith(.sans_git$sortie, "[ECHEC]")) && length(.noms_sautes) >= 10L &&
+           any(grepl("C5 : fichier suivi interdit", .noms_sautes, fixed = TRUE)) &&
+           !any(grepl("^\\[OK\\] C5 : fichier suivi interdit", .sans_git$sortie)))
+verifier("#186 : sans git : une ligne [INFO] compteur donne le nombre de témoins sautés, égal au nombre de lignes nommées",
+         any(.sans_git$sortie == paste0("[INFO] SAUTE : ", length(.noms_sautes), " témoin(s) de la voie git -- ",
+                                        "git absent du PATH ; rejoués par tests/temoins_voie_git.R dans le job « Contrôles du dépôt »")))
+verifier("#186 : sans git : les témoins qui n'ont pas besoin de git tournent (lien symbolique en arborescence)",
+         any(startsWith(.sans_git$sortie, "[OK] #186 : arborescence : un lien symbolique")))

@@ -73,7 +73,8 @@
 # (statut 1). Aucune ligne [ECHEC] pour un signalement.
 # Les reserves r1 a r3 d'audit de #111 (marque en fin de ligne, rep(0, k) non evaluable, attendu lu par
 # position) et le motif non controle sont corrigees par #136 (Q-32 (a)) ; la constante redefinie,
-# numeric(k), double(k), rep_len et la tolerance positionnelle d'un appel non appariable, par #179.
+# numeric(k), double(k), rep_len et la tolerance positionnelle d'un appel non appariable, par #179 ; la
+# position et le langage de chaque appel, lus dans son propre noeud et non apparies par rang (appels imbriques par `|>`), par #187.
 # Usage, depuis la racine du depot : Rscript tests/controles/recensement_tolerances.R
 # Un argument facultatif designe une autre racine. Code ASCII, R de base seulement.
 
@@ -109,7 +110,9 @@ est_appel_de <- function(e, nom) {
     is.symbol(f[[3L]]) && identical(as.character(f[[3L]]), nom)
 }
 
-# Appels (langage) a `nom` dans l'ordre du source.
+# Appels (langage) a `nom`, dans l'ordre de l'arbre (parcours prefixe, qui n'est pas celui du source pour des
+# appels imbriques par `|>` : le premier argument ajoute par le tube est visite apres l'appel qui le recoit) ;
+# ils ne servent qu'a verifier la coherence du decompte, la position et l'appel analyses viennent de appels_positionnes().
 appels_de <- function(x, nom) {
   trouves <- list()
   visite <- function(e) {
@@ -283,18 +286,40 @@ resoudre_tolerance <- function(expr, constantes) {
   NA_real_
 }
 
-lignes_de <- function(chemin, jeton) {
-  d <- getParseData(parse(chemin, keep.source = TRUE))
-  if (is.null(d)) return(integer(0))
-  # jetons terminaux dans l'ordre du source ; un champ (`x$nom(...)`) n'est pas un appel
-  t <- d[d$terminal & d$token != "COMMENT", ]
+# Appels a `jeton` dans l'ordre du source, chacun avec SA position (ligne, colonne du jeton du nom) et son propre
+# langage, lus dans son noeud des donnees d'analyse (#187), et non apparies par rang a ceux de appels_de() : les deux
+# ordres divergent pour des appels imbriques par `|>`. Le noeud de l'appel est le parent du noeud du nom (`nom`,
+# `pkg::nom`) ; si cet appel est la partie droite d'un `|>`, le tube est remonte d'un cran (l'appel porte alors son
+# premier argument, comme dans l'arbre). Un champ (`x$nom(...)`) n'est pas un appel. Rend list(appels, lignes,
+# colonnes) ; un appel dont le noeud ne se relit pas en un appel a `jeton` est NULL dans `appels`.
+appels_positionnes <- function(chemin, jeton) {
+  vide <- list(appels = list(), lignes = integer(0), colonnes = integer(0))
+  complet <- getParseData(parse(chemin, keep.source = TRUE))
+  if (is.null(complet)) return(vide)
+  # jetons terminaux dans l'ordre du source
+  t <- complet[complet$terminal & complet$token != "COMMENT", ]
   t <- t[order(t$line1, t$col1), ]
   precedent <- c(NA_character_, t$token[-nrow(t)])
   garde <- t$token == "SYMBOL_FUNCTION_CALL" & gsub("`", "", t$text, fixed = TRUE) == jeton &
     !(precedent %in% c("'$'", "'@'"))
-  lignes <- t$line1[garde]
-  attr(lignes, "col") <- t$col1[garde]
-  lignes
+  t <- t[garde, ]
+  parent_de <- function(id) complet$parent[match(id, complet$id)]
+  # enfants `expr` et `PIPE` de chaque noeud, calcules une fois
+  enfants <- split(seq_len(nrow(complet)), complet$parent)
+  appels <- vector("list", nrow(t))
+  for (i in seq_len(nrow(t))) {
+    noeud <- parent_de(parent_de(t$id[i]))
+    p <- parent_de(noeud)
+    f <- complet[enfants[[as.character(p)]], ]
+    freres <- f[f$token == "expr", ]
+    if (any(f$token == "PIPE") && noeud == freres$id[order(freres$line1, freres$col1)][nrow(freres)]) noeud <- p
+    # getParseText() sur le seul noeud : la recherche de ligne par nom dans toutes les donnees est lente
+    u <- complet[match(noeud, complet$id), ]
+    attr(u, "srcfile") <- attr(complet, "srcfile")
+    a <- tryCatch(str2lang(getParseText(u, noeud)), error = function(e) NULL)
+    if (is.call(a) && est_appel_de(a, jeton)) appels[i] <- list(a)
+  }
+  list(appels = appels, lignes = t$line1, colonnes = t$col1)
 }
 
 # Affectations `<-` de premier niveau d'un fichier analysable, dans l'ordre du source : nom, valeur (NA si
@@ -364,13 +389,21 @@ for (chemin in fichiers) {
     next
   }
   for (jeton in c("verifier_egal", "all.equal")) {
-    appels <- appels_de(exprs, jeton)
-    lignes <- lignes_de(chemin, jeton)
-    colonnes <- attr(lignes, "col")
-    lignes <- as.vector(lignes)
-    if (length(appels) != length(lignes)) {
+    positionnes <- appels_positionnes(chemin, jeton)
+    appels <- positionnes$appels
+    lignes <- positionnes$lignes
+    colonnes <- positionnes$colonnes
+    n_arbre <- length(appels_de(exprs, jeton))
+    if (n_arbre != length(lignes)) {
       echec(sprintf("recensement incoherent pour %s : %d appels dans l'arbre, %d dans l'analyse du source", jeton,
-                    length(appels), length(lignes)), rel(chemin))
+                    n_arbre, length(lignes)), rel(chemin))
+      next
+    }
+    # garde-fou defensif (#187) : aucune forme de source connue ne le declenche (lambda dans un tube, appel d'appel,
+    # placeholder `_`, `pkg::nom` et nom entre accents graves dans un tube, commentaire dans un tube, affectations
+    # des deux sens essayes) ; il rend visible une remontee de noeud qui se tromperait sur une forme non prevue
+    if (any(vapply(appels, is.null, logical(1L)))) {
+      echec(sprintf("appel de %s non relu dans les donnees d'analyse", jeton), rel(chemin))
       next
     }
     if (jeton == "verifier_egal") {

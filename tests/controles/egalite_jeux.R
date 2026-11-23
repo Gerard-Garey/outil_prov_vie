@@ -23,6 +23,31 @@
 # Un champ CSV est lu tel qu'ecrit (guillemets compris) : "" et une cellule vide restent
 # distincts. Une ligne CSV a guillemets non refermes (champ sur plusieurs lignes) n'est pas
 # prise en charge : [ECHEC] (cote sur).
+# Limites connues (#140 ; chacune mesuree sur un couple de dossiers construit) :
+#   - les fichiers et dossiers dont le nom commence par un point ne sont pas listes
+#     (list.files sans all.files) : un .cache ou un .d/z ajoute au nouveau seul passe ;
+#   - les exceptions se reconnaissent au nom de base, a toute profondeur : un manifeste.txt
+#     ou un garanties_souscrites.csv de verite/ beneficie des memes exceptions que ceux de la
+#     racine ou de base/ (un verite/manifeste.txt de champ nom different passe) ;
+#   - la presence des fichiers attendus n'est pas exigee : deux dossiers vides donnent
+#     "0 fichiers egaux", statut 0 ; sans garanties_souscrites.csv des deux cotes, la colonne
+#     maintien_deces n'est pas cherchee ;
+#   - seuls les noms des exceptions sont fermes, pas leurs valeurs : version_dictionnaire de
+#     extraction.csv ("n importe quoi"), valeurs de maintien_deces ("xyz"), champs nom,
+#     version_dictionnaire, version_provie, version_simulateur et date_visa du manifeste, type
+#     compris ("integer 99"), passent ; la ligne de manifeste.txt dans empreintes.md5 n'est pas
+#     comparee a la somme du fichier (une somme a zeros passe) ;
+#   - les quatre fichiers lus en texte (manifeste.txt, empreintes.md5, extraction.csv,
+#     garanties_souscrites.csv) sont decoupes sur "\n" : l'absence de fin de ligne finale est
+#     ignoree (passe, alors que verite/flux.csv sans fin de ligne est un [ECHEC] d'octets) ; une
+#     ligne vide en fin est un ecart de nombre de lignes ;
+#   - un CSV a fins de ligne CRLF garde le "\r" dans le dernier champ : refuse sous le message
+#     "guillemets non refermes" si ce champ est entre guillemets, compare tel quel sinon (deux
+#     cotes CRLF identiques passent) ; un octet non UTF-8 (latin-1) dans un de
+#     ces fichiers arrete le script sur une erreur R ("invalid UTF-8", statut 1), sans ligne
+#     [ECHEC] ni comparaison des autres fichiers ;
+#   - avec un seul argument, ce n'est pas un dossier a comparer : les temoins s'executent et
+#     donnent [OK] (statut 0) sans rien comparer.
 # Usage, depuis la racine du depot :
 #   Rscript tests/controles/egalite_jeux.R <ancien> <nouveau> [<ancien> <nouveau> ...]
 # (anciens jeux : git archive a5e8970 inst/extdata/jeux | tar -x -C <dossier>). Avec un seul

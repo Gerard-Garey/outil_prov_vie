@@ -7,6 +7,20 @@
 # regeneration (consignee dans provenance.txt) est la meme chaine.
 # Temoins negatifs integres : un digest different, une image non epinglee et deux images dans
 # un fichier sont refuses par la meme fonction de lecture.
+# Limites connues (#140 ; chacune mesuree sur un cas construit) :
+#   - (#196) les fichiers sont lus ligne a ligne, non comme du YAML : le job d'une ligne container:
+#     n'est pas identifie (le `container:` du job "Tests" deplace vers le job "Controles du
+#     depot" passe ; l'une des deux lignes container: de ci.yml supprimee passe, tant qu'il en
+#     reste une) ; `image:` d'un service (`image: postgres:latest`) n'est pas lue ;
+#   - seule la forme `container: <image>` sur une ligne est reconnue : une valeur entre
+#     guillemets, un commentaire en fin de ligne ou la forme mapping (`container:` puis
+#     `image:`) sont refuses a tort, comme "image non epinglee" ;
+#   - un digest n'est controle que par sa forme (64 hexadecimaux) et par l'accord des fichiers :
+#     qu'il designe l'image qui a produit les references n'est pas verifie (64 `a` partout
+#     passent) ;
+#   - (#196) le digest de CONTEXT.md est le premier digest epingle qui suit le libelle
+#     "Plateforme de reference", meme hors de son entree (entree sans image, image d'une
+#     autre entree plus loin : passe).
 # Usage, depuis la racine du depot : Rscript tests/controles/image_reference.R
 # Un argument facultatif designe une autre racine (copie du depot, pour les temoins).
 # Sortie : lignes [OK] / [ECHEC] fichier:ligne ; statut 1 au moindre [ECHEC].

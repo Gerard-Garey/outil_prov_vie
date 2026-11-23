@@ -10,6 +10,23 @@
 #   3. a un unique parent, qui est le commit calculé nommé par « Commit calculé : » et par
 #      tests/reference/provenance.txt (champ commit) à ce commit ;
 #   4. a pour « Empreinte : » le MD5 de tests/reference/empreintes.md5 à ce commit.
+# Limites connues (#140 ; chacune mesurée sur un dépôt temporaire) :
+#   - (#195) une plage dont une borne est inconnue (« inconnu..HEAD ») fait écrire « fatal: » par git,
+#     puis « [OK] 0 commit(s) contrôlé(s) », statut 0 ; une plage vide donne la même ligne. Le
+#     nombre de commits annoncé est à lire ;
+#   - (#195) les fusions sont écartées (--no-merges) : une fusion qui ajoute tests/reference/evil.txt
+#     passe (la plage compte deux commits, les deux parents) ;
+#   - (#195) les noms de fichiers sont lus sans -z : git met entre guillemets un nom non ASCII
+#     (réglage par défaut core.quotePath=true) ou à guillemet (tout réglage), que le motif ^tests/reference/ ne voit pas : un commit qui ne touche que
+#     tests/reference/é.txt (ou a"b.txt) est tenu pour étranger à tests/reference/ et passe sans
+#     contrôle ;
+#   - le contenu des lignes n'est pas lu, hors les champs du squelette : « Image : n importe
+#     quoi » passe (l'image n'est pas comparée à celle d'image_reference.R) et le visa n'est pas
+#     vérifié ; un « < » dans une ligne est lu comme un champ du squelette (« Plateforme : R
+#     version 4.3.3 <x86_64> » refusée à tort) ;
+#   - « Empreinte : » est comparée au MD5 du fichier empreintes.md5 ; la concordance de ce
+#     fichier avec les fichiers de référence n'est pas lue ici (un empreintes.md5 qui porte un
+#     MD5 faux passe).
 # Usage, depuis la racine du dépôt :
 #   bash tests/controles/commit_reference.sh <base>..<tête>   (plage de commits à contrôler)
 #   bash tests/controles/commit_reference.sh --temoins          (témoins négatifs, dépôt temporaire)

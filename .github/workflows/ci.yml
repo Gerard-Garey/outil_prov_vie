@@ -32,7 +32,9 @@ jobs:
   controles:
     name: Contrôles du dépôt
     runs-on: ubuntu-24.04
-    timeout-minutes: 5
+    # 10 minutes (5 jusqu'à Bo5) : deux runs annulés pendant le téléchargement apt de r-base-core
+    # (revue finale de Bo5, PR #193, décision du mainteneur du 23/11/2026) ; apt réessaie (Retries=3).
+    timeout-minutes: 10
     steps:
       # Historique complet : commit_reference.sh lit les commits de la PR et leurs parents ;
       # couloir.sh lit le diff avec origin/main.
@@ -66,20 +68,37 @@ jobs:
             echo "::error::fichier sensible versionné (voir la liste ci-dessus)"; exit 1
           fi
           echo "Aucun fichier sensible versionné."
-      # Issue #182 : aucun caractère de contrôle (hors tabulation et fin de ligne) dans les
-      # fichiers texte suivis ; binaires exclus par extension (liste motivée dans l'en-tête du
-      # script, qui écrit aussi ses limites ; témoins : tests/unitaires/controles.R). R de base
-      # seulement, non épinglé (ni version 4.3.3 ni package) : Rscript de l'image s'il existe,
-      # sinon r-base-core d'Ubuntu, installé sans paquets recommandés (précaution, comme dans le
-      # job « Documents LaTeX » ; contrôle par paquets_java.sh suivi par #185).
-      - name: Aucun caractère de contrôle dans les fichiers versionnés
+      # R de base, non épinglé (ni version 4.3.3 ni package), pour les contrôles R de ce job :
+      # Rscript de l'image s'il existe, sinon r-base-core d'Ubuntu, installé sans paquets recommandés
+      # (précaution, non parade à une dépendance Java constatée ; ADR 0004, annotation du 20 novembre
+      # 2026 (seconde), (c)). Issue #185 : dans la branche d'installation, paquets_java.sh établit la
+      # liste des paquets avant et contrôle la différence après, comme le job « Documents LaTeX »
+      # (contrôle par nom de paquet, limite dans l'en-tête du script) ; sans installation (Rscript de
+      # l'image), l'étape n'installe rien, donc rien à contrôler, et le dit au journal.
+      - name: R de base (Rscript de l'image, sinon r-base-core), sans paquet Java installé
         run: |
           set -euo pipefail
           if ! command -v Rscript >/dev/null; then
-            sudo apt-get update
-            sudo apt-get install -y --no-install-recommends r-base-core
+            bash tests/controles/paquets_java.sh --lister > "$RUNNER_TEMP/paquets-avant-r.txt"
+            sudo apt-get -o Acquire::Retries=3 update
+            sudo apt-get -o Acquire::Retries=3 install -y --no-install-recommends r-base-core
+            bash tests/controles/paquets_java.sh --lister > "$RUNNER_TEMP/paquets-apres-r.txt"
+            bash tests/controles/paquets_java.sh "$RUNNER_TEMP/paquets-avant-r.txt" "$RUNNER_TEMP/paquets-apres-r.txt"
+          else
+            echo "Rscript de l'image : aucune installation, aucun paquet à contrôler."
           fi
-          Rscript tests/controles/caracteres_controle.R
+      # Issue #182 : aucun caractère de contrôle (hors tabulation et fin de ligne) dans les
+      # fichiers texte suivis ; binaires exclus par extension (liste motivée dans l'en-tête du
+      # script, qui écrit aussi ses limites ; témoins : tests/unitaires/controles.R). R de base
+      # seulement (étape précédente).
+      - name: Aucun caractère de contrôle dans les fichiers versionnés
+        run: Rscript tests/controles/caracteres_controle.R
+      # Issue #186 : l'image du job « Tests (R 4.3.3) » n'a pas git, où la batterie unitaire SAUTE
+      # les témoins de la voie git ls-files des contrôles (une ligne [INFO] par témoin au journal,
+      # tests/unitaires/voie_git.R) ; ce job a git, et le lanceur exige que tous les témoins tournent.
+      # Rscript est présent (étape « R de base ») ; R de base seulement, comme le contrôle précédent.
+      - name: Témoins de la voie git des contrôles
+        run: Rscript tests/temoins_voie_git.R
       # ADR 0011, point 21 : tout commit qui touche tests/reference/ ne touche rien d'autre, a
       # pour unique parent le commit calculé (message et provenance.txt) et cite l'empreinte de
       # l'arbre ; témoins négatifs d'abord. Plage : commits de la PR, ou de la poussée sur main.
@@ -128,7 +147,9 @@ jobs:
     # OpenBLAS 0.3.20, LAPACK 3.10.0. Consigné dans CONTEXT.md, « Plateforme de référence ».
     container: rocker/r-ver:4.3.3@sha256:732d15020af326da9e919c07f70ca32bf5d3e409220af32e0a4b6d0a89437309
     steps:
-      # git peut manquer dans l'image : l'action télécharge alors l'archive par l'API.
+      # git manque dans l'image : l'action télécharge alors l'archive par l'API (journal du run
+      # 44831028775, #186) ; les témoins de la voie git sont sautés ici, visiblement, et rejoués
+      # dans le job « Contrôles du dépôt ».
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           persist-credentials: false

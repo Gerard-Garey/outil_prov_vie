@@ -16,6 +16,24 @@
 # fiche hors EXCLUSIONS_FICHE) ; une ligne par ecart (chemin, cle, reference, obtenu, ecart,
 # nature, visa requis), puis le decompte des ecarts sous provisions/ et de ceux qui demandent le
 # visa du mainteneur.
+# Limites connues (#140 ; chacune mesuree sur une copie de tests/reference/) :
+#   - seuls resultat.txt et fiche.txt d'un couple sont lus : un fichier ajoute dans le dossier
+#     du couple (extra.txt, rapport.html) passe ; un dossier est un couple si et seulement s'il
+#     porte un resultat.txt : un dossier de fiche.txt seule, des deux cotes, n'est ni compare
+#     ni signale (un couple de moins au total) ; un resultat.txt sans fiche.txt arrete le
+#     script sur une erreur R ("cannot open file", statut 1), sans ligne [ECHEC], apres les
+#     couples deja imprimes ;
+#   - les dossiers dont le nom commence par un point ne sont pas parcourus : les couples sous
+#     .v1-modeste-06/, des deux cotes, ne sont ni compares ni signales (deux couples de moins au
+#     total) ;
+#   - un ecart sous la tolerance EPS_REFERENCE x max(1, |reference|) n'est pas liste (+1e-11
+#     sur un montant nul : 0 ecart ; +1e-9 : 1 ecart) ;
+#   - le statut ne dit rien des ecarts : un ecart de valeur donne la ligne [OK] de tableau et
+#     le statut 0 ; le visa se lit dans le tableau ;
+#   - un arbre absent (normalizePath), ou un seul argument qui n'est pas une racine du depot
+#     (tests/harnais.R absent), arrete le script sur une erreur R, statut 1, sans ligne [ECHEC] ;
+#   - la cle d'alignement s'ecrit avec "|" entre ses composantes : une ligne du tableau se
+#     coupe en plus de sept colonnes sur "|".
 # Usage, depuis la racine du depot :
 #   Rscript tests/controles/references_renommees.R <arbre avant> <arbre apres> <avant>=<apres>...
 # Une correspondance designe deux couples (<donnees>/<plan>/<arrete>), ou deux noms de donnees

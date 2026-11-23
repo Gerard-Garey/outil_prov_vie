@@ -24,7 +24,15 @@
 #     extension serait refuse (il faut alors l'ajouter a la liste, avec sa raison) ;
 #   - en dehors d'un depot git (copie de travail), les fichiers non suivis sont examines
 #     aussi ; sous git, un fichier non suivi (ajoute avant "git add") ne l'est pas, le
-#     controle du job "Controles du depot" portant sur ce qui sera versionne.
+#     controle du job "Controles du depot" portant sur ce qui sera versionne ;
+#   - un lien symbolique n'est pas examine (sa cible peut etre hors du depot) : une ligne [INFO]
+#     le signale ; en arborescence, list.files() parcourt pourtant un dossier lie : les fichiers
+#     reels de ce dossier sont examines sous le chemin du lien (sous git, le lien de dossier est
+#     un fichier suivi, ecarte) ; un fichier suivi mais absent de l'arbre de travail est signale
+#     de meme ;
+#   - la voie suivie est annoncee par une ligne [INFO] voie : ... ; si git est present mais ne
+#     rend pas la liste (depot illisible), le controle bascule sur l'arborescence, ligne [INFO]
+#     a l'appui, sans refus.
 # Usage, depuis la racine du depot : Rscript tests/controles/caracteres_controle.R
 # Un argument facultatif designe une autre racine (copie du depot, pour les temoins).
 # Sortie : lignes [OK] / [INFO] / [ECHEC] fichier:ligne ; statut 1 au moindre [ECHEC].
@@ -65,15 +73,38 @@ MAX_LIGNES_PAR_FICHIER <- 20L
 # --- Fichiers suivis -------------------------------------------------------------------
 
 DOSSIERS_EXCLUS <- c(".git/", ".claude/worktrees/")
+# Noms suivis par git, exacts : `git ls-files -z` (sortie lue en octets, decoupee sur \0). Sans -z,
+# git met entre guillemets, avec echappements, les noms qui portent un guillemet, une tabulation,
+# une barre inverse ou un saut de ligne ; file.exists() les ecartait ensuite sans message (#186).
+# Rend NULL si git echoue ou si la sortie est tronquee (pas de \0 final).
+noms_git <- function() {
+  sortie <- tempfile("ls-files-")
+  on.exit(unlink(sortie), add = TRUE)
+  statut <- suppressWarnings(system2("git", c("-C", shQuote(racine), "ls-files", "-z"),
+                                     stdout = sortie, stderr = FALSE))
+  if (!identical(statut, 0L)) return(NULL)
+  b <- readBin(sortie, "raw", n = file.size(sortie))
+  if (!length(b)) return(character(0))
+  fin <- which(b == as.raw(0L))
+  if (!length(fin) || fin[length(fin)] != length(b)) return(NULL)
+  debut <- c(1L, fin[-length(fin)] + 1L)
+  vapply(seq_along(fin), function(i) rawToChar(b[debut[i]:(fin[i] - 1L)]), "")
+}
+# Voie suivie, annoncee par une ligne [INFO] : l'echec silencieux de git rev-parse (depot dont le
+# proprietaire differe, par exemple) bascule sur l'arborescence ; le journal le dit.
+VOIE <- "arborescence (git absent du PATH)"
 # Fichiers suivis : git ls-files si `racine` est la racine d'un depot git, sinon l'arborescence.
 fichiers_suivis <- function() {
   if (nzchar(Sys.which("git"))) {
+    VOIE <<- "arborescence (racine hors d'un depot git, ou depot illisible par git)"
     haut <- suppressWarnings(system2("git", c("-C", shQuote(racine), "rev-parse", "--show-toplevel"),
                                      stdout = TRUE, stderr = FALSE))
     if (is.null(attr(haut, "status")) && length(haut) == 1L && normalizePath(haut) == racine) {
-      liste <- suppressWarnings(system2("git", c("-C", shQuote(racine), "-c", "core.quotepath=off", "ls-files"),
-                                        stdout = TRUE, stderr = FALSE))
-      if (is.null(attr(liste, "status"))) return(file.path(racine, liste))
+      liste <- noms_git()
+      if (!is.null(liste)) {
+        VOIE <<- "git ls-files"
+        return(file.path(racine, liste))
+      }
     }
   }
   tout <- list.files(racine, recursive = TRUE, all.files = TRUE, include.dirs = FALSE)
@@ -82,8 +113,18 @@ fichiers_suivis <- function() {
   file.path(racine, tout[!exclu])
 }
 fichiers <- fichiers_suivis()
-# Un fichier suivi mais absent de l'arbre de travail (supprime avant "git add") n'est pas lu.
-fichiers <- fichiers[file.exists(fichiers) & !dir.exists(fichiers)]
+info(paste0("voie : ", VOIE))
+# Un lien symbolique n'est pas suivi : readBin() lirait sa cible, qui peut se trouver hors du
+# depot (un lien vers un binaire donnerait des [ECHEC] a tort, un lien vers un dossier serait
+# ignore sans message) ; chaque lien ecarte est signale.
+cible_lien <- Sys.readlink(fichiers)     # "" : pas un lien ; NA : erreur (fichier absent)
+lien <- !is.na(cible_lien) & nzchar(cible_lien)
+for (f in vapply(fichiers[lien], rel, character(1), USE.NAMES = FALSE)) info(paste0(f, " : lien symbolique, cible non examinee"))
+fichiers <- fichiers[!lien]
+# Un fichier suivi mais absent de l'arbre de travail (supprime avant "git add") n'est pas lu ; chacun est signale.
+absent <- !file.exists(fichiers)
+for (f in vapply(fichiers[absent], rel, character(1), USE.NAMES = FALSE)) info(paste0(f, " : suivi mais absent de l'arbre de travail, non lu"))
+fichiers <- fichiers[!absent & !dir.exists(fichiers)]
 relatifs <- vapply(fichiers, rel, character(1), USE.NAMES = FALSE)
 extension <- tolower(sub(".*\\.", "", basename(fichiers)))
 extension[!grepl("\\.", basename(fichiers))] <- ""
