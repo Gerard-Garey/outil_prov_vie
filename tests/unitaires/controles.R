@@ -1341,6 +1341,39 @@ verifier("#179 tolérance positionnelle : lue par l'appariement : 0 (temoin.R:2,
                      c("[INFO]   tests/unitaires/temoin.R:3 tolerance 1e-08", "[INFO]   tests/unitaires/temoin.R:4 tolerance 1e-08",
                        "[INFO]   tests/unitaires/temoin.R:7 tolerance non resolue", "[INFO]   tests/unitaires/temoin.R:9 tolerance 1e-08")))
 
+# #187 : la position (ligne, colonne) et l'appel analysé viennent du noeud de chaque appel, non d'un appariement
+# par rang entre l'arbre (parcours préfixe) et le source : des appels imbriqués par `|>` sont dans deux ordres
+# différents (le premier argument ajouté par le tube est visité après l'appel qui le reçoit). Chaque témoin
+# échoue sur le script d'avant #187 (la ligne du zéro y est celle de l'autre appel).
+r <- cas_recensement(c("# zero_compense : motif",
+                       "verifier_egal(\"a\", x - y, list(f(y), 0), tolerance = 1e-8) |>",
+                       "  verifier_egal(nom = \"b\", attendu = list(f(y), 1), tolerance = 1e-6)"))
+zeros <- grep("^\\[INFO\\] ZEROS ATTENDUS A TOLERANCE > 0 ", r$sortie)
+comp <- grep("^\\[INFO\\] ZERO DE COMPENSATION DECLARE \\(", r$sortie)
+verifier("#187 : deux appels imbriqués par `|>` sur deux lignes : le zéro marqué est celui de l'appel intérieur, à sa ligne (temoin.R:2, déclaré, tolérance 1e-08), non à celle de l'appel extérieur ; aucun zéro à corriger, statut 0",
+         .passe(r) && length(zeros) == 1L && length(comp) == 1L && grepl(" : 0 appels$", r$sortie[zeros]) &&
+           grepl(" : 1 appels$", r$sortie[comp]) && identical(r$sortie[comp + 1L], "[INFO]   tests/unitaires/temoin.R:2 tolerance 1e-08"))
+r <- cas_recensement(c("verifier_egal(\"a\", x, list(f(y), 1), tolerance = 1e-8) |>",
+                       "  verifier_egal(nom = \"b\", attendu = list(f(y), 1), tolerance = 1e-8) |>",
+                       "# zero_compense : motif",
+                       "  verifier_egal(nom = \"c\", attendu = list(f(y), 0), tolerance = 1e-8)"))
+zeros <- grep("^\\[INFO\\] ZEROS ATTENDUS A TOLERANCE > 0 ", r$sortie)
+comp <- grep("^\\[INFO\\] ZERO DE COMPENSATION DECLARE \\(", r$sortie)
+verifier("#187 : trois appels chaînés par `|>` : le zéro de l'appel extérieur est lu à sa propre ligne (temoin.R:4, marque de la ligne 3, déclaré), non à celle du premier appel (:1) ; trois appels de verifier_egal() comptés, aucun zéro à corriger",
+         .passe(r) && length(zeros) == 1L && length(comp) == 1L && grepl(" : 0 appels$", r$sortie[zeros]) &&
+           grepl(" : 1 appels$", r$sortie[comp]) && identical(r$sortie[comp + 1L], "[INFO]   tests/unitaires/temoin.R:4 tolerance 1e-08") &&
+           any(grepl("appels de verifier_egal() : 3", r$sortie, fixed = TRUE)))
+# Exemple de l'issue : la constante est lue à la position de chaque appel. Sur le script d'avant #187, la
+# tolérance de l'appel intérieur est « non resolue » à :2 et celle de l'appel extérieur vaut 1 à :3.
+r <- cas_recensement(c("N <- 1",
+                       "verifier_egal(\"a\", x, y, N) |>",
+                       "  verifier_egal(\"b\", z, rep(0, N))",
+                       "N <- 0"))
+verifier("#187 : exemple de l'issue (constante N redéfinie après un tube) : la tolérance de l'appel intérieur est lue à sa position (temoin.R:2 tolerance 1), celle de l'appel extérieur non résolue (:3, rep(0, N) dans le même tube)",
+         .passe(r) && any(r$sortie == "[INFO]   tests/unitaires/temoin.R:2 tolerance 1 ") &&
+           any(r$sortie == "[INFO]   tests/unitaires/temoin.R:3 tolerance non resolue ") &&
+           !any(grepl("temoin.R:2 tolerance non resolue", r$sortie, fixed = TRUE)))
+
 # --- paquets_java.sh (#120 ; #95, point 5) --------------------------------------------------
 # Script bash : appelé par bash (system2), les listes avant / après sont des fichiers texte. Les
 # noms de paquets Java interdits par absence_java.R sont fabriqués comme ailleurs dans ce fichier
