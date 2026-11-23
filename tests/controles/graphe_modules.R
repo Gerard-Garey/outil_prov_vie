@@ -32,9 +32,11 @@
 #      premier niveau, la cible d'une affectation locale (`globalenv <- f ; globalenv()`, #137 ;
 #      un champ `x$globalenv <- 1` n'en est pas une, #178), un argument formel
 #      (`function(graine, expr, globalenv)`), une variable de for (`for (globalenv in l)`) ou le
-#      nom en chaine simple d'un assign() (`assign("globalenv", f)`) (#178 ; un appel de champ
-#      `x$assign("globalenv", f)` n'est pas un assign()) : l'exception couvre l'appel
-#      de la fonction de base, non celui d'une variable locale ;
+#      nom en chaine d'un assign() ou delayedAssign() (`assign("globalenv", f)`) (#178 ; un appel de champ
+#      `x$assign("globalenv", f)` n'est pas un assign()), ou si cette fonction contient un assign()
+#      ou delayedAssign() a nom calcule, une cible de remplacement (`body(globalenv) <- f`), ou si
+#      assign / delayedAssign est employe sans appel dans R/ (#184, M768) : l'exception couvre
+#      l'appel de la fonction de base, non celui d'une variable locale ;
 #      Ces noms sont interdits aussi sans appel (#109) : toute reference (symbole hors
 #      position d'appel, ex. `g <- parent.frame`, `lapply(1, sys.call)`, `do.call(get, l)`,
 #      `base::get`) est un [ECHEC] au meme titre que l'appel, sauf champ (`x$get`), nom
@@ -63,9 +65,12 @@
 # module n'est pas comptee comme arete de la regle 2 (sur R/, des noms de colonnes comme
 # "probabilite" ou "empreinte" valent des noms de fonctions : fausses aretes) ;
 # `vapply(x, "calculer_x", 1)` vers un module non permis passe donc.
-# Limite documentee (appels dynamiques, regle 3) : un nom interdit ecrit en chaine
-# (`lapply(1, "sys.call")`, `do.call("get", l)` hors position d'appel) n'est pas une
-# reference vue par le symbole ; `do.call` avec une chaine est deja refuse (nom nu requis).
+# Noms interdits ecrits en chaine (#184, m3) : un nom de la liste ci-dessus ecrit en chaine a la
+# place de l'argument-fonction d'une des quinze fonctions de base qui le passent par match.fun
+# (FONCTIONS_ORDRE_SUPERIEUR : lapply(1, "sys.call"), Map(f = 'get', x), raw string comprise) est une
+# reference refusee, et couverte comme les autres par une exception declaree ; les chaines ailleurs
+# (noms de colonnes : lapply(x, "[[", "source"), x[["environment"]]) ne le sont pas. do.call avec une
+# chaine est deja refuse (nom nu requis).
 # Les noms utilises comme champ (`x$nom`) ne sont pas des appels ; un appel ecrit entre
 # accents graves ou entre guillemets (`f`(x), "f"(x)) vaut l'appel de f. Portee (M236,
 # decision du mainteneur du 10 novembre 2026) : ne compte pas comme reference la seule cible
@@ -74,16 +79,22 @@
 # affectation locale, portee soeur) est comptee. Limite documentee (cote sur) : un nom local
 # homonyme d'une definition d'un autre module (variable locale lue, fonction locale appelee,
 # argument formel repris) produit une fausse arete, a lever en renommant le nom local.
-# Limites connues (reserves d'audit non corrigees ; chacune mesuree sur une racine fictive).
-# La premiere, m3, est une reserve de #137 ; la seconde est une limite de #178 ; toutes deux
-# sont suivies par #184 :
-#   - m3 (#137) : les noms interdits ecrits en chaine ne sont pas vus (`"dynGet"` hors position
-#     d'appel, comme `lapply(1, "sys.call")` plus haut) ; aucune chaine de R/ ne porte ces noms ;
-#   - assign() dans la fonction de l'exception : seul un nom ecrit en chaine simple ('...' ou
-#     "...", positionnel ou `x =`, avec ou sans accents graves ou guillemets autour du nom
-#     d'argument) est vu ; `assign(nom, function() 1); globalenv()` dans avec_graine (nom
-#     calcule), `assign(r"(globalenv)", 1)` (chaine brute), `do.call(assign, list('globalenv', f))`
-#     et `delayedAssign('globalenv', f)` ne le sont pas (statut 0).
+# Limites connues (chacune mesuree sur une racine fictive, statut 0 ; suivies par #184) :
+#   - noms interdits en chaine : seuls les appels de FONCTIONS_ORDRE_SUPERIEUR, a leur
+#     argument-fonction, sans appariement partiel, sont vus ; ne le sont pas un nom passe par une
+#     variable (`n <- "eval"; lapply(x, n)`), dans c() ou list(), a une autre fonction d'ordre
+#     superieur (`integrate("get", 0, 1)`), ni sous un nom d'argument partiel (`FU = "eval"`) ;
+#   - exception d'introspection : un assign() a nom calcule dans une autre fonction du fichier que
+#     celle de l'exception (`poser <- function(n, v) assign(n, v)`, appelee par avec_graine : cet
+#     appel est une reference interne au module) et une liaison par un environnement de donnees,
+#     `with(list(globalenv = f), globalenv())`, `local(globalenv(), envir = list2env(...))`
+#     (mesures) ou within (meme mecanisme, non mesure), ne sont pas vus (#194).
+# Levees par #184 (regle stricte, M746 ; aucun signalement nouveau sur R/, mesure) : dans la fonction
+# d'une exception declaree, un assign() ou delayedAssign() a nom calcule, en chaine brute ou avec
+# echappement, une cible de remplacement (`body(globalenv) <- f`, `formals(body(globalenv)) <- NULL`),
+# et, dans tout R/ (M768), assign ou delayedAssign employe sans appel (`(assign)("globalenv", f)`,
+# `do.call(assign, ...)`, alias `g <- assign`, y compris au premier niveau du fichier) rendent
+# l'exception inapplicable.
 # Usage, depuis la racine du depot : Rscript tests/controles/graphe_modules.R
 # Un argument facultatif designe une autre racine (copie du depot, pour les temoins).
 # Sortie : lignes [OK] / [ECHEC] fichier:ligne ; statut 1 au moindre [ECHEC].
@@ -160,21 +171,34 @@ APPELS_DYNAMIQUES <- c("match.fun", "get", "get0", "mget", "eval", "evalq", "eva
                        "sys.on.exit", "match.call", "globalenv", "dynGet", ".GlobalEnv", "environment<-",
                        "parent.env<-")
 
+# Fonctions de base qui passent un de leurs arguments par match.fun() (mesure : parmi les
+# fonctions de base, stats et utils dont le corps contient match.fun, ce sont les quinze de base a
+# argument-fonction ; stats::integrate, aggregate, dendrapply et d'autres n'y sont pas) :
+# nom -> argument-fonction. Une chaine a cette position est un nom de fonction passe en texte (#184, m3).
+FONCTIONS_ORDRE_SUPERIEUR <- c(lapply = "FUN", sapply = "FUN", vapply = "FUN", mapply = "FUN", Map = "f",
+                               Reduce = "f", Filter = "f", Find = "f", Position = "f", Negate = "f",
+                               outer = "FUN", apply = "FUN", tapply = "FUN", eapply = "FUN", sweep = "FUN")
+# assign() et delayedAssign() lient un nom dans l'environnement courant (premier argument `x`).
+FONCTIONS_ASSIGN <- c("assign", "delayedAssign")
+
 # --- Analyse d'un fichier --------------------------------------------------------------
 # Rend list(defs, jetons, assign_haut) : defs = noms definis au premier niveau ; jetons =
 # data.frame des symboles (appels, noms, packages) avec ligne, token, texte (sans accents
 # graves ni guillemets), def (definition de premier niveau qui les contient), prec / suiv
-# (jeton voisin), local (cible d'une affectation, hors champ), liaison (argument formel ou
-# variable de for, #178), assigne (appel a assign() : nom litteral de la cible, "" si calcule,
-# NA hors assign), statique (do.call : premier argument acceptable), cible (do.call : nom nu
-# du premier argument, NA sinon) ; assign_haut = lignes
+# (jeton voisin), local (cible d'une affectation, hors champ), liaison (argument formel, variable
+# de for ou cible de remplacement `f(sym) <- v`, #178, #184), assigne (appel a assign() ou
+# delayedAssign() : nom litteral de la cible, "" si calcule, NA hors de ces appels), ref_assign
+# (assign ou delayedAssign reference hors position d'appel, #184), chaine_fn (chaine en position
+# de fonction d'une fonction d'ordre superieur, #184), statique (do.call : premier argument
+# acceptable), cible (do.call : nom nu du premier argument, NA sinon) ; assign_haut = lignes
 # des appels a assign() au premier niveau.
 analyser <- function(chemin) {
   exprs <- parse(file = chemin, keep.source = TRUE, encoding = "UTF-8")
   vide <- list(defs = character(0), assign_haut = integer(0), jetons = data.frame(
     ligne = integer(0), token = character(0), texte = character(0), def = character(0),
     prec = character(0), suiv = character(0), local = logical(0), liaison = logical(0),
-    assigne = character(0), statique = logical(0), cible = character(0), stringsAsFactors = FALSE))
+    assigne = character(0), ref_assign = logical(0), chaine_fn = logical(0), statique = logical(0),
+    cible = character(0), stringsAsFactors = FALSE))
   pd <- getParseData(exprs)
   if (is.null(pd)) return(vide)
   pd <- pd[pd$token != "COMMENT", ]
@@ -194,14 +218,15 @@ analyser <- function(chemin) {
     }
     NA_character_
   }
-  # Appel a assign() qui est une expression de premier niveau (`assign(...)`, `base::assign(...)`).
+  # Appel a assign() ou delayedAssign() qui est une expression de premier niveau (`assign(...)`,
+  # `base::assign(...)` ; delayedAssign au meme titre, constat mineur de l'audit de #184).
   appel_assign <- function(i) {
     k <- lignes_de(pd$id[i])
     if (length(k) >= 3L && pd$token[k[1L]] == "expr" && pd$token[k[2L]] == "'('") {
       f <- lignes_de(pd$id[k[1L]])
       dernier <- f[length(f)]
       return(pd$token[dernier] %in% c("SYMBOL_FUNCTION_CALL", "STR_CONST") &&
-               gsub("[\"'`]", "", pd$text[dernier]) == "assign")
+               gsub("[\"'`]", "", pd$text[dernier]) %in% FONCTIONS_ASSIGN)
     }
     FALSE
   }
@@ -224,6 +249,32 @@ analyser <- function(chemin) {
       nom_def[haut == pd$id[i]] <- n
     }
     if (appel_assign(i)) assign_haut <- c(assign_haut, pd$line1[i])
+  }
+  # Arguments d'un appel (enfants de l'expr d'appel) : les ids de l'expression de chaque argument,
+  # nomme (`x = ...`) ou non, dans l'ordre ; le nom, NA si positionnel.
+  arguments_appel <- function(appel) {
+    args <- appel[-(1:2)]
+    args <- args[pd$token[args] != "')'"]
+    if (length(args) == 0L) return(list())
+    groupe <- cumsum(c(TRUE, pd$token[args][-length(args)] == "','"))
+    res <- list()
+    for (g in unique(groupe)) {
+      ids <- args[groupe == g & pd$token[args] != "','"]
+      if (length(ids) == 0L) next
+      # Nom d'argument : SYMBOL_SUB, ou chaine suivie de EQ_SUB (`"x" = 1`) ; accents graves et
+      # guillemets retires (`x` = 1, "x" = 1 valent x = 1).
+      nomme <- pd$token[ids[1L]] == "SYMBOL_SUB" ||
+        (pd$token[ids[1L]] == "STR_CONST" && length(ids) >= 2L && pd$token[ids[2L]] == "EQ_SUB")
+      res[[length(res) + 1L]] <- list(nom = if (nomme) gsub("[\"'`]", "", pd$text[ids[1L]]) else NA_character_,
+                                      expr = if (nomme) ids[3L] else ids[1L])
+    }
+    res
+  }
+  # Valeur d'une constante chaine (raw string r"(...)", echappements) : parse() d'un litteral, sans
+  # evaluation ; "" si le jeton n'en est pas une (#184).
+  valeur_chaine <- function(texte) {
+    v <- tryCatch(parse(text = texte, keep.source = FALSE)[[1L]], error = function(e) NULL, warning = function(w) NULL)
+    if (is.character(v) && length(v) == 1L && !is.na(v)) v else ""
   }
   # Jetons terminaux, dans l'ordre du source. Une chaine en position d'appel ("f"(x), : son
   # expression est suivie de `(`) est un appel ; les accents graves et guillemets sont retires.
@@ -250,7 +301,51 @@ analyser <- function(chemin) {
   nom_argument <- c(pd$token[term][-1L], NA_character_) %in% "EQ_SUB"
   chaine_simple <- token_eff == "STR_CONST" & !nom_argument & grepl("^([\"']).*\\1$", pd$text[term])
   texte_eff[chaine_simple] <- substring(pd$text[term][chaine_simple], 2L, nchar(pd$text[term][chaine_simple]) - 1L)
-  interessants <- token_eff %in% c("SYMBOL_FUNCTION_CALL", "SYMBOL", "SYMBOL_PACKAGE", "SYMBOL_FORMALS") | chaine_simple
+  # Valeur decodee d'une chaine avec echappement ou d'une chaine brute (constat mineur de l'audit de
+  # #184) : `"glob\x61lenv" <- f` et `r"(globalenv)" <- f` lient le nom `globalenv` comme cible
+  # d'affectation locale. valeur_chaine() rend "" pour une chaine qui n'en est pas une : texte garde.
+  chaine_codee <- token_eff == "STR_CONST" & !nom_argument & (grepl("\\", pd$text[term], fixed = TRUE) | !chaine_simple)
+  if (any(chaine_codee)) {
+    v <- vapply(pd$text[term][chaine_codee], valeur_chaine, character(1), USE.NAMES = FALSE)
+    texte_eff[chaine_codee] <- ifelse(nzchar(v), v, texte_eff[chaine_codee])
+  }
+  # Chaine en position de fonction (#184, m3) : valeur d'argument d'un appel direct d'une fonction de
+  # FONCTIONS_ORDRE_SUPERIEUR, a la place de son argument-fonction (`lapply(1, "sys.call")`,
+  # `Map(f = "dynGet", x)`) ; l'appariement des arguments suit R (nom exact, puis rang parmi les arguments
+  # sans nom avant `...`), sans appariement partiel. La chaine est gardee avec sa valeur decodee.
+  chaine_fn <- rep(FALSE, length(term))
+  for (r in which(pd$token[term] == "STR_CONST")) {
+    e <- parent_de[term[r]]
+    if (is.na(e) || pd$token[e] != "expr" || length(lignes_de(pd$id[e])) != 1L) next
+    g <- parent_de[e]
+    if (is.na(g)) next
+    k <- lignes_de(pd$id[g])
+    if (length(k) < 3L || pd$token[k[1L]] != "expr" || pd$token[k[2L]] != "'('") next
+    f <- lignes_de(pd$id[k[1L]])
+    dernier <- f[length(f)]
+    if (pd$token[dernier] != "SYMBOL_FUNCTION_CALL" || !(pd$text[dernier] %in% names(FONCTIONS_ORDRE_SUPERIEUR))) next
+    # Un appel de champ (`x$lapply(1, "get")`, `x@lapply(...)`) n'est pas un appel de la fonction de base
+    # (meme regle que pour assign, #178 ; constat mineur de l'audit de #184).
+    if (length(f) >= 2L && pd$token[f[length(f) - 1L]] %in% c("'$'", "'@'")) next
+    formels <- names(formals(get(pd$text[dernier], envir = baseenv(), mode = "function")))
+    cible_f <- FONCTIONS_ORDRE_SUPERIEUR[[pd$text[dernier]]]
+    args <- arguments_appel(k)
+    noms <- vapply(args, function(a) a$nom, character(1))
+    libres <- setdiff(formels, noms[!is.na(noms)])
+    libres <- libres[seq_len(match("...", libres, nomatch = length(libres) + 1L) - 1L)]
+    sans_nom <- which(is.na(noms))
+    rang <- match(cible_f, libres)
+    designe <- if (cible_f %in% noms) which(noms %in% cible_f)[1L]
+               else if (!is.na(rang) && rang <= length(sans_nom)) sans_nom[rang] else NA_integer_
+    if (!is.na(designe) && identical(args[[designe]]$expr, e)) {
+      v <- valeur_chaine(pd$text[term[r]])
+      if (v %in% APPELS_DYNAMIQUES) {
+        chaine_fn[r] <- TRUE
+        texte_eff[r] <- v
+      }
+    }
+  }
+  interessants <- token_eff %in% c("SYMBOL_FUNCTION_CALL", "SYMBOL", "SYMBOL_PACKAGE", "SYMBOL_FORMALS") | chaine_simple | chaine_codee | chaine_fn
   idx <- term[interessants]
   # Cible seule : un symbole est local s'il est la cible d'une affectation (M236).
   est_cible <- function(t) {
@@ -267,6 +362,27 @@ analyser <- function(chemin) {
     e <- parent_de[t]
     !is.na(e) && pd$token[e] == "forcond"
   }
+  # Cible de remplacement (#184) : `f(sym) <- v`, `f(g(sym), y) <- v`, `sym[i] <- v` lient `sym` dans la
+  # fonction (`body(globalenv) <- v` cree un `globalenv` local qui masque celui de base) ; le symbole est
+  # le premier argument d'un appel ou l'objet d'un `[`, `[[`, `$`, `@`, a tout niveau d'imbrication.
+  est_cible_remplacement <- function(t) {
+    e <- parent_de[t]
+    repeat {
+      g <- parent_de[e]
+      if (is.na(e) || is.na(g)) return(FALSE)
+      k <- lignes_de(pd$id[g])
+      if (length(k) >= 3L && pd$token[k[2L]] %in% jetons_affectation) {
+        return((if (pd$token[k[2L]] == "RIGHT_ASSIGN") k[length(k)] else k[1L]) == e && e != parent_de[t])
+      }
+      if (length(k) >= 4L && pd$token[k[2L]] == "'('" && k[3L] == e && pd$token[k[1L]] == "expr") {
+        e <- g
+      } else if (length(k) >= 3L && pd$token[k[2L]] %in% c("'['", "LBB", "'$'", "'@'") && k[1L] == e) {
+        e <- g
+      } else {
+        return(FALSE)
+      }
+    }
+  }
   # Un champ (`x$nom <- 1`) n'est pas la cible d'une affectation du nom (#178). La branche '@' est
   # par symetrie : le nom apres `@` porte le jeton SLOT, non retenu comme symbole (mesure : sans
   # elle, `x@globalenv <- 2` ne declenche pas le faux positif).
@@ -276,32 +392,17 @@ analyser <- function(chemin) {
     def = nom_def[idx], prec = precedent[interessants], suiv = suivant[interessants],
     local = token_eff[interessants] %in% c("SYMBOL", "STR_CONST") & vapply(idx, est_cible, logical(1)) & !champ_avant,
     liaison = token_eff[interessants] == "SYMBOL_FORMALS" |
-      (token_eff[interessants] == "SYMBOL" & vapply(idx, est_variable_for, logical(1))),
-    assigne = NA_character_, statique = NA, cible = NA_character_, stringsAsFactors = FALSE)
-  # Arguments d'un appel (enfants de l'expr d'appel) : les ids de l'expression de chaque argument,
-  # nomme (`x = ...`) ou non, dans l'ordre ; le nom, NA si positionnel.
-  arguments_appel <- function(appel) {
-    args <- appel[-(1:2)]
-    args <- args[pd$token[args] != "')'"]
-    if (length(args) == 0L) return(list())
-    groupe <- cumsum(c(TRUE, pd$token[args][-length(args)] == "','"))
-    res <- list()
-    for (g in unique(groupe)) {
-      ids <- args[groupe == g & pd$token[args] != "','"]
-      if (length(ids) == 0L) next
-      # Nom d'argument : SYMBOL_SUB, ou chaine suivie de EQ_SUB (`"x" = 1`) ; accents graves et
-      # guillemets retires (`x` = 1, "x" = 1 valent x = 1).
-      nomme <- pd$token[ids[1L]] == "SYMBOL_SUB" ||
-        (pd$token[ids[1L]] == "STR_CONST" && length(ids) >= 2L && pd$token[ids[2L]] == "EQ_SUB")
-      res[[length(res) + 1L]] <- list(nom = if (nomme) gsub("[\"'`]", "", pd$text[ids[1L]]) else NA_character_,
-                                      expr = if (nomme) ids[3L] else ids[1L])
-    }
-    res
-  }
-  # assign() : nom en chaine simple de la cible (argument x, ou premier argument positionnel) ; "" si le
-  # nom est calcule (limite documentee, #178). Un appel de champ (`x$assign(...)`, `x@assign(...)`)
-  # n'est pas un appel de assign() de base.
-  for (r in which(jetons$token == "SYMBOL_FUNCTION_CALL" & jetons$texte == "assign" &
+      (token_eff[interessants] == "SYMBOL" & vapply(idx, est_variable_for, logical(1))) |
+      (token_eff[interessants] == "SYMBOL" & vapply(idx, est_cible_remplacement, logical(1)) & !champ_avant),
+    assigne = NA_character_, ref_assign = FALSE, chaine_fn = chaine_fn[interessants],
+    statique = NA, cible = NA_character_, stringsAsFactors = FALSE)
+  # assign et delayedAssign references hors position d'appel (#184) : `(assign)("globalenv", f)`,
+  # `do.call(assign, list(...))`, `g <- assign` ; ni champ, ni cible seule d'une affectation.
+  jetons$ref_assign <- jetons$token == "SYMBOL" & jetons$texte %in% FONCTIONS_ASSIGN & !champ_avant & !jetons$local
+  # assign() et delayedAssign() : nom en chaine de la cible (argument x, ou premier argument positionnel ;
+  # raw string comprise) ; "" si le nom est calcule, ce qui rend l'exception inapplicable (regle stricte,
+  # #184, M746). Un appel de champ (`x$assign(...)`, `x@assign(...)`) n'est pas un appel de base.
+  for (r in which(jetons$token == "SYMBOL_FUNCTION_CALL" & jetons$texte %in% FONCTIONS_ASSIGN &
                     !(jetons$prec %in% c("'$'", "'@'")))) {
     i <- idx[r]
     nom_fonction <- match(pd$parent[i], pd$id)
@@ -311,7 +412,7 @@ analyser <- function(chemin) {
     nom_cible <- ""
     if (!is.na(choix) && !is.na(args[[choix]]$expr) && pd$token[args[[choix]]$expr] == "expr") {
       k <- lignes_de(pd$id[args[[choix]]$expr])
-      if (length(k) == 1L && pd$token[k] == "STR_CONST") nom_cible <- gsub("[\"'`]", "", pd$text[k])
+      if (length(k) == 1L && pd$token[k] == "STR_CONST") nom_cible <- valeur_chaine(pd$text[k])
     }
     jetons$assigne[r] <- nom_cible
   }
@@ -319,10 +420,11 @@ analyser <- function(chemin) {
   for (r in which(jetons$token == "SYMBOL_FUNCTION_CALL" & jetons$texte == "do.call")) {
     i <- idx[r]
     nom_fonction <- match(pd$parent[i], pd$id)               # expr du nom de fonction
-    appel <- lignes_de(pd$parent[nom_fonction])              # enfants de l'expr d'appel
-    args <- appel[-(1:2)]
-    premier <- args[1L]
-    if (!is.na(premier) && pd$token[premier] == "SYMBOL_SUB" && pd$text[premier] == "what") premier <- args[3L]
+    args <- arguments_appel(lignes_de(pd$parent[nom_fonction]))
+    noms <- vapply(args, function(a) a$nom, character(1))
+    # what = (accents graves et chaine compris, #184) sinon premier argument sans nom
+    choix <- if (any(noms %in% "what")) which(noms %in% "what")[1L] else which(is.na(noms))[1L]
+    premier <- if (is.na(choix)) NA_integer_ else args[[choix]]$expr
     statique <- FALSE
     cible <- NA_character_
     if (!is.na(premier) && pd$token[premier] == "expr") {
@@ -390,6 +492,10 @@ if (.n_echec == avant) ok(sprintf("%d nom(s) de premier niveau, chacun defini da
 avant <- .n_echec
 n_aretes <- 0L
 introspections_vues <- integer(0)
+# assign / delayedAssign employe sans appel n'importe ou dans R/ (alias, do.call, `(assign)(...)`) rend
+# les exceptions inapplicables (#184, M768 : un alias defini dans un autre module, appele depuis une
+# fonction d'exception, echappait a la portee au fichier).
+assign_sans_appel <- any(vapply(analyses, function(a) any(a$jetons$ref_assign), logical(1)))
 emplois_point <- data.frame(appelant = character(0), identifiant = character(0),
                             defini_dans = character(0), ligne = integer(0), stringsAsFactors = FALSE)
 for (m in names(analyses)) {
@@ -416,7 +522,10 @@ for (m in names(analyses)) {
     couverte <- any(EXCEPTIONS_INTROSPECTION$module == m & EXCEPTIONS_INTROSPECTION$appel == texte &
       EXCEPTIONS_INTROSPECTION$fonction %in% j$def[r])
     reference_dyn <- j$token[r] == "SYMBOL" && !champ && !j$local[r] && !(j$liaison[r] && couverte)
-    if ((appel_dyn || reference_dyn) && texte %in% APPELS_DYNAMIQUES) {
+    # nom interdit ecrit en chaine a la place de l'argument-fonction d'une fonction d'ordre superieur
+    # (#184, m3) : une reference, couverte comme les autres par l'exception declaree.
+    chaine_dyn <- j$token[r] == "STR_CONST" && isTRUE(j$chaine_fn[r])
+    if ((appel_dyn || reference_dyn || chaine_dyn) && texte %in% APPELS_DYNAMIQUES) {
       declaree <- EXCEPTIONS_INTROSPECTION$module == m & EXCEPTIONS_INTROSPECTION$appel == texte &
         EXCEPTIONS_INTROSPECTION$fonction %in% j$def[r]
       if (any(declaree)) {
@@ -424,14 +533,21 @@ for (m in names(analyses)) {
         # #137 : le nom est aussi la cible d'une affectation locale de la meme fonction de
         # premier niveau (`globalenv <- f`) : l'appel ou la reference peut viser la variable.
         # #178 : ou un argument formel, une variable de for, ou un nom assigne par assign().
+        # #184 (regle stricte, M746) : ou une cible de remplacement (`body(globalenv) <- f`), un assign()
+        # ou delayedAssign() a nom calcule ou en chaine brute (le nom lu est "" ou decode) dans la fonction,
+        # ou assign / delayedAssign reference sans appel dans R/ (alias, do.call, `(assign)(...)` ; M768).
         meme_def <- !is.na(j$def) & j$def == j$def[r]
         if (any(meme_def & j$texte == texte & ((j$local & j$token %in% c("SYMBOL", "STR_CONST")) | j$liaison)) ||
-            any(meme_def & !is.na(j$assigne) & j$assigne == texte)) {
-          echec(sprintf("exception declaree inapplicable : `%s` est aussi la cible d'une affectation locale, un argument formel, une variable de for ou un nom assigne par assign() dans `%s` (#137, #178) ; renommer le nom local",
+            any(meme_def & !is.na(j$assigne) & (j$assigne == texte | j$assigne == "")) ||
+            assign_sans_appel) {
+          echec(sprintf("exception declaree inapplicable : `%s` est aussi la cible d'une affectation locale, d'un remplacement, un argument formel, une variable de for ou un nom assigne par assign() ou delayedAssign() (nom calcule compris) dans `%s`, ou assign / delayedAssign est employe sans appel dans R/ (#137, #178, #184) ; renommer le nom local",
                         texte, j$def[r]), chemin, j$ligne[r])
         }
       } else if (appel_dyn) {
         echec(sprintf("appel dynamique interdit : %s()", texte), chemin, j$ligne[r])
+      } else if (chaine_dyn) {
+        echec(sprintf("reference dynamique interdite : \"%s\" ecrit en chaine a la place de la fonction d'une fonction d'ordre superieur (#184, m3)", texte),
+              chemin, j$ligne[r])
       } else {
         echec(sprintf("reference dynamique interdite : %s sans appel (#109)", texte), chemin, j$ligne[r])
       }
