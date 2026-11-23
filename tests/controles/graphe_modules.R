@@ -84,6 +84,12 @@
 #     argument-fonction, sans appariement partiel, sont vus ; ne le sont pas un nom passe par une
 #     variable (`n <- "eval"; lapply(x, n)`), dans c() ou list(), a une autre fonction d'ordre
 #     superieur (`integrate("get", 0, 1)`), ni sous un nom d'argument partiel (`FU = "eval"`) ;
+#     ni, mesure par la revue finale de Bo5 : une chaine entre parentheses ou accolades
+#     (`lapply(x, ("get"))`), un appel de .mapply (absent de la liste) ; derriere un tube `|>`,
+#     le premier argument insere n'est pas compte, d'ou un faux negatif (`x |> lapply("get")`)
+#     et un refus a tort (`x |> lapply("[[", "source")`) ; R/ n'a aucun `|>` ;
+#   - (#201) regle stricte (M746) : une cible de remplacement dont le premier argument est nomme
+#     (`attr(x = globalenv, "k") <- 1`) n'est pas vue (mesure par la revue finale de Bo5) ;
 #   - exception d'introspection : un assign() a nom calcule dans une autre fonction du fichier que
 #     celle de l'exception (`poser <- function(n, v) assign(n, v)`, appelee par avec_graine : cet
 #     appel est une reference interne au module) et une liaison par un environnement de donnees,
