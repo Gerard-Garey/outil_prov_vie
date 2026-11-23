@@ -788,7 +788,7 @@ La prévision du projet (« la rangée `D11 … non_implemente` devient `D11a` �
   - Or `decide_fin` (`R/risque_en_cours.R:222`) lit toute hypothèse de la ligne de `contrats` comme portant sur la partie de fin. Le test de garde de la première forme de #112 échouerait par construction.
   - Forme retenue : chaque entrée de `vue$hypotheses` porte ses colonnes ; `decide_fin` ne retient que les entrées dont une colonne est dans la partie de fin.
   - Commit de #90 ; aucun effet sur les couples. `vue$hypotheses` est interne : `donnees$vue` du résultat ne porte que `date_arrete`, `date_extraction`, `visibilite_non_determinee` et `provisoire` (mesuré).
-  - Le point 2 de #112 reste à la ligne « plan et valeurs `H` ».
+  - Le point 2 de #112 reste à la ligne « plan et valeurs `H` ». *Annotation du 23/11/2026 : point 2 de #112 tranché au visa 0d de Bdr-b4 (V6 (b), M780 ; spécification de B2, erratum v1.0.24, « Colonnes lues »).*
 - Effet de #90 : aucun sur les couples. D02a n'est déclaré qu'en `exclusions` dans les plans de J3 et J4, jamais en `hypotheses` (mesuré) ; aucun autre couple ne porte D02a. Échec attendu `tests/unitaires/calculer_provisions.R:881-895`.
 
 ### 11.8 #124 et #128 (M633)
