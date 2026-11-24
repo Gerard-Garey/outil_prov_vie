@@ -4741,7 +4741,7 @@ n'est exportée.
 \code{duree\_annees()} & \code{debut}, \code{fin}, \code{conventions} & Durée en années entre deux dates selon la convention de décompte des jours (\code{exact\_exact} ou \code{exact\_365}). \\
 \code{parametre\_vue()} & \code{vue}, \code{nom}, \code{gs}, \code{famille = NULL} & Rend un paramètre de chaque garantie souscrite dans la vue\fsp; \code{NA} s'il manque, \code{ambigu} s'il porte plusieurs valeurs\fsp; si une famille de calcul est donnée, \code{exclu} signale une ligne retenue du paramètre exclue pour cette famille\fsp; \code{refuse}, toujours rendu, signale une ligne retenue du paramètre dont la valeur porte un refus de portée ligne, ou une colonne \code{valeur} non numérique, gardée brute par la vue sous un refus de type de portée colonne et alors non lue (valeurs inconnues)\fsp; une valeur refusée n'est pas masquée, et le lecteur qui en décide d'une population la lit comme inconnue (issue~174)\fsp; une clé manquante ou vide, de la garantie ou de la ligne de paramètre, ne s'apparie à rien (issue~158). Seule lecture des paramètres d'une garantie souscrite, appelée par les familles «~engagement~» et «~risque en cours~». \\
 \code{hypothese\_vue()} & \code{vue}, \code{motif}, \code{referentiel}, \code{table}, \code{lignes}, \code{poste}, \code{colonnes = NULL}, \code{autre\_poste = FALSE} & Seule sélection d'une hypothèse placée par la vue pour chaque ligne d'une table, lue par un poste~: hypothèse du poste de préférence à celle de \code{tous}, puis la première placée\fsp; avec \code{colonnes}, seules comptent les hypothèses dont une colonne est lue par le poste (garde par colonnes, M661, issue~90)\fsp; \code{NA} sans hypothèse appliquée\fsp; avec \code{autre\_poste} vrai, seules comptent les hypothèses placées pour un autre poste que celui du calcul et que \code{tous} (refus de lecture \code{declaration\_manquante}, issue~108)\fsp; la forme de la valeur n'est pas contrôlée ici, mais au plan, par \code{lire\_declarations()} (module \code{donnees}). Avec \code{cles\_lignes\_hypothese()}, seule lectrice des hypothèses placées par la vue. Appelée aussi par \code{risque\_en\_cours} (D03h, D03f). \\
-\code{hypotheses\_vue\_unites()} & \code{vue}, \code{referentiel}, \code{poste}, \code{famille}, \code{n}, \code{lectures} & Seule détection des hypothèses appliquées par la vue (source S2~: D02a, D02b, D03g) aux lignes lues pour chaque unité d'un poste, visibles ou non, hors lignes exclues pour la famille\fsp; une lecture marquée \code{s2} faux, lue par l'arrêt par unité seulement, est ignorée (issue~174)\fsp; une clé composée n'est jointe que si chacune de ses composantes est renseignée (issue~158)\fsp; rend les codes de chaque unité. Appelée aussi par \code{risque\_en\_cours}. \\
+\code{hypotheses\_vue\_unites()} & \code{vue}, \code{referentiel}, \code{poste}, \code{famille}, \code{n}, \code{lectures} & Seule détection des hypothèses appliquées par la vue (source S2~: D02a, D02b, D03g) aux lignes lues pour chaque unité d'un poste, visibles ou non, hors lignes exclues pour la famille\fsp; avec le champ \code{lues} d'une lecture, seules comptent les hypothèses dont l'emprise contient une colonne lue, la ligne entière comptant sans lui (issues~112 et~171)\fsp; une lecture marquée \code{s2} faux, lue par l'arrêt par unité seulement, est ignorée (issue~174)\fsp; une clé composée n'est jointe que si chacune de ses composantes est renseignée (issue~158)\fsp; rend les codes de chaque unité. Appelée aussi par \code{risque\_en\_cours}. \\
 \code{joindre\_codes()} & \code{...} & Seule réunion des codes d'hypothèse d'une unité (sources S1 et S2)~: codes uniques, triés, joints par «~;~». Appelée aussi par \code{risque\_en\_cours}. \\
 \code{lecture\_unites()} & \code{table}, \code{colonnes}, \code{cles}, \code{unite}, \code{garde}, \code{admises}, \code{lues}, \code{s2 = TRUE} & Décrit la lecture d'une table par les unités d'un poste, lue par l'arrêt par unité et par la détection S2 (clés, unités, lignes admises\fsp; avec \code{lues}, colonnes lues, seules les hypothèses qui portent sur l'une d'elles comptant, garde par colonnes, issue~90)\fsp; \code{s2} faux marque une lecture de l'arrêt seul, que S2 ne lit pas (lignes de \code{garanties\_souscrites} et de \code{parametres}, issue~174)\fsp; une clé manquante ou vide ne rattache rien (issue~158). Construite par les seuls constructeurs des lignes lues par unité, \code{.lectures\_dossiers()} et \code{.lectures\_contrats()}. Appelée aussi par \code{risque\_en\_cours}. \\
 \code{refus\_ligne\_unites()} & \code{vue}, \code{famille}, \code{n}, \code{lectures}, \code{table}, \code{refusees} & Seule détection de la condition~(2) de l'arrêt par unité (issue~72)~: rend, pour chaque unité, vrai si une ligne refusée de portée ligne, retenue à l'arrêté, non exclue pour la famille et admise par la lecture, lui est rattachée par ses clés. Appelée aussi par \code{risque\_en\_cours}. \\
@@ -5390,6 +5390,20 @@ par la fin du contrat\fsp; \code{id\_assure}, \code{nature\_sinistre},
 sinistre) sont des restrictions de ces colonnes, que la batterie
 unitaire contrôle incluses en elles.
 
+\noindent La règle vaut pour toute lecture de S2, aux trois postes et aux
+deux champs~: statut, codes de \code{hypotheses\_\allowbreak defaut} et filtres de
+restitution de l'unité à montant nul (paragraphe suivant). Pour les deux
+postes du capital décès, chaque ligne lue par S2 porte ainsi les colonnes
+lues du poste~: \code{dossiers}, \code{sinistres}, \code{evenements} (par
+sinistre et par dossier), \code{prestations}, \code{beneficiaires},
+\code{contrats}, \code{affiliations} et \code{famille} (issue~171\fsp;
+décision du mainteneur M780, V8~(a)). Les motifs de S2 sont ceux dont la
+vue applique l'hypothèse~: la liste de la détection (module
+\code{engagement}) et celle de la vue (module \code{donnees}) désignent le
+même ensemble, D02a, D02b et D03g, et leur égalité est un invariant
+contrôlé par la batterie unitaire (décision du mainteneur M722\fsp;
+spécification du module \code{donnees}, §~9.4, erratum~1.9.5).
+
 \noindent Conséquences dans l'état du code~: aucune hypothèse de la vue
 n'a d'emprise sur \code{contrats.id\_contrat} ni sur
 \code{contrats.nature\_contrat}, seules colonnes de \code{contrats} que
@@ -5424,9 +5438,11 @@ M320 et M321)~:
 \begin{itemize}[itemsep=2pt]
 \item \textbf{dossier de solde au plus nul}~: le salaire déclaré sous
   D03c entre dans son capital, ou une ligne de \code{prestations} du
-  dossier porte une hypothèse de la vue\fsp;
+  dossier porte une hypothèse de la vue dont l'emprise contient une
+  colonne que le poste lit (issue~171)\fsp;
 \item \textbf{dossier clos}~: une ligne d'\code{evenements} \emph{du
-  dossier} porte une hypothèse de la vue et décide de la clôture, soit
+  dossier} porte une hypothèse de la vue dont l'emprise contient une
+  colonne lue, et cette ligne décide de la clôture, soit
   visible et de type \code{cloture\_dossier} ou
   \code{reouverture\_dossier}, soit cachée à l'arrêté, quel que soit son
   type (une réouverture cachée laisse le dossier clos). Seules les lignes
@@ -5502,6 +5518,33 @@ lues ou non par un poste (\code{hypotheses\_defaut} du bilan).
   une source S2 dans l'état du code. Si une hypothèse de la vue venait à
   porter sur cette table, il faudrait une règle comme celle de la date de
   fin (E18-2) pour dire si le contrat qu'elle ferait sortir est restitué.
+\item \textbf{Grain de S2} (spécification de la branche B2, §~5.8,
+  erratum de la version~1.0.24\fsp; décision du mainteneur M780, V8~(a)\fsp;
+  limites prudentes, communes avec l'arrêt, qui donnent un statut plus
+  faible, jamais un montant, renvoyées à l'issue~210). (i)~\code{lectures.csv}
+  est tenu par poste, non par champ~: le champ collectif de la provision
+  mathématique compte la partie de fin et les dates de \code{contrats},
+  qu'il ne lit pas. (ii)~\code{sinistres.date\_declaration} et
+  \code{date\_instruction} comptent pour un dossier des sinistres déclarés
+  non réglés ou des capitaux non réclamés au capital fixé, qui ne les lit
+  pas~: une D02a de la relation R10 sur ces dates y fait naître S2\fsp; la
+  batterie unitaire le code en échec attendu, avec renvoi à l'issue~210.
+  (iii)~\code{famille.date\_naissance} d'un conjoint (relation R11) compte,
+  alors qu'elle n'est jamais lue.
+\item \textbf{Filtres de restitution sans témoin discriminant} (constat de
+  la validation de l'issue~171). Le filtre du dossier clos lit les lignes
+  d'\code{evenements} du dossier sous la garde par colonnes, mais aucun
+  test ne la distingue de la ligne entière~: toute emprise qu'une
+  hypothèse de la vue peut avoir sur une ligne d'\code{evenements}
+  contient une colonne lue par ces postes (date d'effet pour D02a, ligne
+  entière pour D02b et D03g, constatés sur la date de saisie). Le filtre du
+  dossier de solde au plus nul est vérifié au niveau de la fonction~: une
+  D02a injectée sur \code{prestations.debut\_periode} et
+  \code{fin\_periode}, que ces postes ne lisent pas, ne fait plus naître de
+  code ni restituer le dossier, contrairement à une D02a sur
+  \code{date\_reglement} (contre-témoin)\fsp; ce cas n'est pas atteignable
+  par une base en v1 (changement visé au niveau de la fonction, décision du
+  mainteneur M786).
 \end{itemize}
 
 
