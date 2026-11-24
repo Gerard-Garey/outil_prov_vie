@@ -272,7 +272,7 @@ COLONNES_TABLES_RETENUES <- c("usage", "garantie", "identifiant", "statut", "for
   res$revalorisation <- .v_revalorisation(garanties, methodes)(x[["revalorisation"]], "revalorisation")
   res$conventions <- .v_conventions()(x[["conventions"]], "conventions")
   res$postes <- postes
-  res$donnees <- .v_donnees(dico)(x[["donnees"]], "donnees")
+  res$donnees <- .v_donnees(dico, catalogue)(x[["donnees"]], "donnees")
   res$restitution <- .v_noeud(list(
     echeanciers = .v_echeanciers(),
     triangles = .v_chaine("aucun", "seule valeur admise avant B3 : aucun")))(x[["restitution"]], "restitution")
@@ -489,7 +489,11 @@ COLONNES_TABLES_RETENUES <- c("usage", "garantie", "identifiant", "statut", "for
 # du schéma (spécification de B2, § 2.3). Canonisation : rubriques dans l'ordre de
 # RUBRIQUES_DECLARATIONS ; `exclusions` et `hypotheses` en liste de listes nommées (noms
 # "1", "2"...), lignes triées par leurs colonnes ; seuils triés par nom, valeurs entières.
-.v_donnees <- function(dico) {
+# Poste d'une hypothèse (spécification de B2, erratum v1.0.24, § 2.3, #192) : contrôlé ici,
+# après lire_declarations() et tous les refus des seuils (seuil inconnu, seuil au-delà des
+# entiers de R), qui gardent leur premier refus (.v_postes_hypotheses()), jamais par
+# controler_base() ni vue_a_date().
+.v_donnees <- function(dico, catalogue) {
   function(x, chemin) {
     if (!.liste_nommee(x)) .refus_invalide(chemin, "liste nomm\u00e9e attendue (sous-sch\u00e9ma donnees)")
     lu <- tryCatch(lire_declarations(x, dico), refus_provie = function(e) {
@@ -509,8 +513,37 @@ COLONNES_TABLES_RETENUES <- c("usage", "garantie", "identifiant", "statut", "for
         seuils = .seuils_canoniques(x[["seuils"]], .sous_chemin(chemin, "seuils")),
         evaluations_gestion = list(diagnostics = x[["evaluations_gestion"]][["diagnostics"]]))
     }
+    .v_postes_hypotheses(lu$hypotheses, dico, catalogue, .sous_chemin(chemin, "hypotheses"))
     if (length(res) == 0L) list() else res
   }
+}
+
+# Poste d'une ligne de `hypotheses` (spécification de B2, erratum v1.0.24, § 2.3, #192 ;
+# V9 (c1)) : `tous`, ou un poste du catalogue (postes.csv, toute garantie) qui lit au moins
+# une table du motif (defauts.csv, colonne `tables`) : colonnes_lues() non vide pour l'un de
+# ses couples (garantie, poste) et l'une de ces tables (seule dérivation de « ce qu'un poste lit
+# dans une table », #112) ; un poste hors du périmètre du plan est admis. Sinon plan_invalide,
+# qui nomme le motif, le référentiel, le poste et les postes admis. `hy` : data.frame rendu par
+# lire_declarations() (motifs déjà contrôlés, sous-cas lettrés compris).
+.v_postes_hypotheses <- function(hy, dico, catalogue, chemin) {
+  cp <- catalogue$postes
+  postes <- unique(cp$poste)
+  parties <- parties_ligne()
+  for (i in seq_len(nrow(hy))) {
+    if (identical(hy$poste[i], "tous")) next
+    tables <- eclater_champ(dico$defauts$tables[match(hy$motif[i], dico$defauts$code)])
+    lit <- vapply(seq_len(nrow(cp)), function(j) {
+      any(vapply(tables, function(t) length(colonnes_lues(catalogue, cp$code_garantie[j], cp$poste[j], t, parties)) > 0L, NA))
+    }, NA)
+    admis <- postes[postes %in% cp$poste[lit]]
+    if (!(hy$poste[i] %in% admis)) {
+      .refus_invalide(chemin, paste0(hy$motif[i], " (", hy$referentiel[i], ", ", hy$poste[i],
+                                     ") : poste inconnu du catalogue ou qui ne lit aucune table du motif (",
+                                     paste(tables, collapse = ", "), ") ; postes admis : ",
+                                     paste(c("tous", admis), collapse = ", ")))
+    }
+  }
+  invisible(NULL)
 }
 
 .lignes_canoniques <- function(df) {
