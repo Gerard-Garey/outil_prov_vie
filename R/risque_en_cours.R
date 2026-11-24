@@ -84,7 +84,8 @@
 # en vigueur à A (date_effet au plus A, date_fin absente ou postérieure à A) ou d'âge de fin
 # connu atteint au plus A (age_fin_garantie de la version, parametre_vue() : ni ambigu, ni exclu,
 # ni refusé, entier de 0 à AGE_MAXIMUM ; date de naissance de l'assuré connue,
-# date_atteinte_age()) ; date_terme connue au plus A ; date_fin connue au plus A dont la partie de
+# date_atteinte_age() ; un paramètre lu absent, âge de fin manquant, rend son prédicat inconnu,
+# NA, selon B2 § 5.5) ; date_terme connue au plus A ; date_fin connue au plus A dont la partie de
 # fin ne porte aucune hypothèse de la vue (voie observée) ; sinistre observé de l'assuré (retenu,
 # non exclu, deces ou iad et survenu au plus A, valeurs connues, sans hypothèse de la vue sur
 # .LUES_SINISTRE_P3). Une sortie qu'une hypothèse de la vue décide (contrat restitué à 0,

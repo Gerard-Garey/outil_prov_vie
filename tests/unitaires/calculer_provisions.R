@@ -1954,36 +1954,87 @@ verifier_egal("#175 C175-2 : ligne D09 d'AF1 : postes_arretes deces/sinistres_de
                      "sinistres_declares_non_regles prestations montant D09 prestations_ecartees"),
                    c("capitaux_non_reclames calcule NA", "provision_mathematique_temporaire_deces calcule NA",
                      "sinistres_declares_non_regles arrete D09", "total arrete poste_arrete:sinistres_declares_non_regles")))
-# C175-3 (invariance) : trois causes, nature_contrat de type integer (type_incompatible, arrêt du
+# C175-3 (invariance) : quatre causes, nature_contrat de type integer (type_incompatible, arrêt du
 # bilan sur contrats, qui ne décide pas de la population de P1), PR1 négatif (D09, prestations,
-# phase 1), salaire de AF1 négatif (D09, affiliations, table différée) ; base à deux paiements
-# (PR1, PR2) et deux affiliations (AF1, AF9 d'un assuré AS9 sans sinistre). Les lignes D09
-# listent P1 avec les trois causes, sans chacune des autres, seules, et lignes de prestations,
-# d'affiliations et d'assures en ordre inverse ; motif publié avec les trois causes :
-# type_incompatible (inchangé). Avant (a3219d4) : NA avec les trois causes (arrêt du bilan).
+# phase 1), salaire de AF1 négatif (D09, affiliations, table différée), ligne de parametres de GS1
+# au nom manquant (manquant_obligatoire, table parametres refusée en portée table : voie du
+# capital non déterminée, reconstitution possible ; constat M1 de la revue finale) ; base à deux
+# paiements (PR1, PR2) et deux affiliations (AF1, AF9 d'un assuré AS9 sans sinistre). Les lignes
+# D09 listent P1 avec les quatre causes, sans chacune des autres, seules, AF1 avec chaque autre
+# cause seule, et lignes de prestations, d'affiliations, d'assures et de parametres en ordre
+# inverse ; motif publié avec les quatre causes : type_incompatible (mesuré). Avant (a3219d4) : NA
+# avec les trois premières causes (arrêt du bilan) ; avant (eeb6ce1) : NA pour la ligne
+# d'affiliations dès que la cause parametres est présente.
 b3_175 <- b2_base_capital(capital = NA, paiements = data.frame(date = D(c("2024-10-01", "2024-11-01")), montant = c(10000, 5000)))
 b3_175$affiliations <- rbind(b3_175$affiliations, transform(b3_175$affiliations, id_affiliation = "AF9", id_assure = "AS9"))
 b3_175$assures <- rbind(b3_175$assures, transform(b3_175$assures, id_assure = "AS9"))
 causes_175 <- list(bilan = function(b) { b$contrats$nature_contrat <- 1L; b },
                    pr1 = function(b) { b$prestations$montant[1L] <- -10000; b },
-                   af1 = function(b) { b$affiliations$salaire_reference[1L] <- -30000; b })
+                   af1 = function(b) { b$affiliations$salaire_reference[1L] <- -30000; b },
+                   parametres = function(b) { b$parametres <- rbind(b$parametres, b2_tab("parametres", id_garantie_souscrite = "GS1",
+                                                                                        parametre = NA_character_, valeur = 1)); b })
 avec_175 <- function(noms) Reduce(function(x, f) f(x), causes_175[noms], b3_175)
 d09_175 <- function(b) { r <- calculer_provisions(b, p_c1, tid); x <- r$donnees$refus_tables
   list(paste(x$table, x$postes_arretes)[x$motif == "D09"], arr_175(r)[3L]) }
 inverse_175 <- local({ b <- avec_175(names(causes_175))
-  for (t in c("prestations", "affiliations", "assures")) b[[t]] <- b[[t]][rev(seq_len(nrow(b[[t]]))), ]
+  for (t in c("prestations", "affiliations", "assures", "parametres")) b[[t]] <- b[[t]][rev(seq_len(nrow(b[[t]]))), ]
   b })
 p1_175 <- "deces/sinistres_declares_non_regles"
-verifier_egal("#175 C175-3 : postes_arretes des lignes D09 identiques avec les trois causes, sans le bilan, sans PR1, sans AF1, chaque ligne seule, et en ordre inverse des lignes ; P1 arrêté type_incompatible avec le bilan, D09 sans",
-              list(d09_175(avec_175(names(causes_175))), d09_175(avec_175(c("pr1", "af1"))), d09_175(avec_175(c("bilan", "af1"))),
-                   d09_175(avec_175(c("bilan", "pr1"))), d09_175(avec_175("pr1")), d09_175(avec_175("af1")), d09_175(inverse_175)),
+verifier_egal("#175 C175-3 : postes_arretes des lignes D09 identiques avec les quatre causes, sans le bilan, sans PR1, sans AF1, sans parametres, PR1 et AF1 seules, AF1 avec chaque autre cause seule, et en ordre inverse des lignes ; P1 arrêté type_incompatible avec le bilan, manquant_obligatoire avec parametres sans le bilan, D09 sinon",
+              list(d09_175(avec_175(names(causes_175))), d09_175(avec_175(c("pr1", "af1", "parametres"))),
+                   d09_175(avec_175(c("bilan", "af1", "parametres"))), d09_175(avec_175(c("bilan", "pr1", "parametres"))),
+                   d09_175(avec_175(c("bilan", "pr1", "af1"))), d09_175(avec_175("pr1")), d09_175(avec_175("af1")),
+                   d09_175(avec_175(c("af1", "bilan"))), d09_175(avec_175(c("af1", "pr1"))), d09_175(avec_175(c("af1", "parametres"))),
+                   d09_175(inverse_175)),
               list(list(paste(c("affiliations", "prestations"), p1_175), "sinistres_declares_non_regles arrete type_incompatible"),
-                   list(paste(c("affiliations", "prestations"), p1_175), "sinistres_declares_non_regles arrete D09"),
+                   list(paste(c("affiliations", "prestations"), p1_175), "sinistres_declares_non_regles arrete manquant_obligatoire"),
                    list(paste("affiliations", p1_175), "sinistres_declares_non_regles arrete type_incompatible"),
                    list(paste("prestations", p1_175), "sinistres_declares_non_regles arrete type_incompatible"),
+                   list(paste(c("affiliations", "prestations"), p1_175), "sinistres_declares_non_regles arrete type_incompatible"),
                    list(paste("prestations", p1_175), "sinistres_declares_non_regles arrete D09"),
                    list(paste("affiliations", p1_175), "sinistres_declares_non_regles arrete D09"),
+                   list(paste("affiliations", p1_175), "sinistres_declares_non_regles arrete type_incompatible"),
+                   list(paste(c("affiliations", "prestations"), p1_175), "sinistres_declares_non_regles arrete D09"),
+                   list(paste("affiliations", p1_175), "sinistres_declares_non_regles arrete manquant_obligatoire"),
                    list(paste(c("affiliations", "prestations"), p1_175), "sinistres_declares_non_regles arrete type_incompatible")))
+# C175-3 bis (constat M1 de la revue finale ; erratum donnees 1.9.4, (iii) (e)) : capital
+# reconstitué, salaire de AF1 négatif (D09), table parametres refusée en portée table par une
+# autre cause que le nom manquant : nom hors du domaine (capital_forfaitair, hors_domaine) ou
+# ligne d'une garantie souscrite GSX absente (D04b) ; la ligne d'affiliations liste P1, ses deux
+# copies refus de l'enjeu y sont (P1 exposé à AF1) ; motif publié : celui de parametres.
+# Témoin de restriction : parametres à zéro ligne (absence connue, voie « aucune ») : la ligne
+# reste à NA, aucune copie, P1 arrêté parametre_non_determine. Avant (eeb6ce1) : NA et aucune
+# copie dans les deux premiers cas.
+k_175 <- within(b2_base_capital(capital = NA), affiliations$salaire_reference[1L] <- -30000)
+kr_175 <- function(b) { r <- calculer_provisions(b, p_c1, tid)
+  list(rt_175(r), grep(" affiliations ", cop_175(r), value = TRUE), arr_175(r)[3L]) }
+af1_cop_175 <- c("sinistres_declares_non_regles affiliations salaire_reference D09 paiements_cumules",
+                 "sinistres_declares_non_regles affiliations salaire_reference D09 capital_fixe")
+verifier_egal("#175 C175-3 bis : table parametres refusée (hors_domaine, D04b) : ligne D09 d'AF1 à P1, deux copies refus ; parametres vide (témoin) : NA, aucune copie, P1 arrêté parametre_non_determine",
+              list(kr_175(within(k_175, parametres <- rbind(parametres, b2_tab("parametres", id_garantie_souscrite = "GS1",
+                                                                               parametre = "capital_forfaitair", valeur = 1)))),
+                   kr_175(within(k_175, parametres <- rbind(parametres, b2_tab("parametres", id_garantie_souscrite = "GSX",
+                                                                               parametre = "capital_forfaitaire", valeur = 1)))),
+                   kr_175(within(k_175, parametres <- parametres[0L, ]))),
+              list(list(c("parametres parametre hors_domaine deces/capitaux_non_reclames;deces/provision_mathematique_temporaire_deces;deces/sinistres_declares_non_regles",
+                          paste("affiliations salaire_reference D09", p1_175)), af1_cop_175, "sinistres_declares_non_regles arrete hors_domaine"),
+                   list(c("parametres id_garantie_souscrite D04b deces/capitaux_non_reclames;deces/provision_mathematique_temporaire_deces;deces/sinistres_declares_non_regles",
+                          paste("affiliations salaire_reference D09", p1_175)), af1_cop_175, "sinistres_declares_non_regles arrete D04b"),
+                   list("affiliations salaire_reference D09 NA", character(0), "sinistres_declares_non_regles arrete parametre_non_determine")))
+# C175-3 ter (non-régression de P3, témoin) : base de P3 à cotisation (b2_base_p3()), nature du
+# premier contrat hors du domaine (portée ligne) et ligne de parametres de GS2 au nom manquant
+# (table refusée) : la ligne de contrats liste toujours P3 (le prédicat de l'âge de fin reste
+# inconnu, .population_p3(), sans changement de code) ; les trois postes arrêtés
+# manquant_obligatoire.
+p3_175 <- within(b2_base_p3(cotisation = data.frame(debut = D("2025-07-01"), fin = D("2026-06-30"), montant = 1200)),
+                 { contrats$nature_contrat[1L] <- "hors"
+                   parametres <- rbind(parametres, b2_tab("parametres", id_garantie_souscrite = "GS2", parametre = NA_character_, valeur = 1)) })
+r_175_p3 <- calculer_provisions(p3_175, p_c1, tid)
+verifier_egal("#175 C175-3 ter : nature hors domaine et parametres refusée : la ligne de contrats liste P3 ; trois postes arrêtés manquant_obligatoire",
+              list(rt_175(r_175_p3)[1L], arr_175(r_175_p3)[1:3]),
+              list("contrats nature_contrat hors_domaine deces/provision_mathematique_temporaire_deces",
+                   c("capitaux_non_reclames arrete manquant_obligatoire", "provision_mathematique_temporaire_deces arrete manquant_obligatoire",
+                     "sinistres_declares_non_regles arrete manquant_obligatoire")))
 # C175-4 (cas (b)) : id_beneficiaire de BE1 manquant (portée table : beneficiaires décide de la
 # partition, P1 et P2 arrêtés par le bilan) et PR1 négatif : la ligne D09 liste P1 et P2 (NA
 # avant) ; deux copies refus de plus (prestations_ecartees, P1 et P2)

@@ -4522,6 +4522,19 @@ lignes_refus_ligne_vue <- function(vue, table, colonne, motif = NULL) {
   res
 }
 
+# Table `table` refusée en portée table dans la vue `vue` (objet vue_a_date()), quelle qu'en
+# soit la cause (clé, domaine, D04b, refus induit...) : même source que le masquage de la vue
+# (`ctx$refus_pv$tables`, .refus_regle_b(), lu par .construire_vue()), et que les lignes de
+# vue$bilan$refus_tables de portée `table` de cette table. Rend un statut (TRUE, FALSE) ; à
+# une vue totale, la table n'est pas masquée, mais elle reste refusée. Lue par `engagement`
+# (.voie_capital() : table `parametres` illisible, voie non déterminée et reconstitution
+# possible ; spécification `donnees` v1.9, erratum 1.9.4, (iii) (e) ; #175). Sans point :
+# appelée par la famille engagement ; non exportée.
+table_refusee_vue <- function(vue, table) {
+  if (!inherits(vue, "vue_provie")) stop("table_refusee_vue() : `vue` doit \u00eatre un objet vue_provie", call. = FALSE)
+  !is.null(vue$ctx$refus_pv$tables[[table]])
+}
+
 # D02a : ordre des dates violé (dictionnaire, § 9), sur la vue ; la colonne du constat est
 # la date qui devrait être la plus tardive. Un enfant à naître n'est jamais rejeté.
 .regle_v_ordre_dates <- function(ctx) {

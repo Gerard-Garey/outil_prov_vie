@@ -241,8 +241,10 @@ valeur_actuelle_probable <- function(echeancier, actualisation, conventions) {
 # (lignes_refus_ligne_vue() de `donnees`), ou la colonne `valeur` n'est pas numérique ; la
 # valeur n'est pas masquée (une valeur refusée reste lue brute dans `valeur`, jamais tenue pour
 # absente) : le lecteur qui en décide d'une population la lit comme inconnue (.population_p3()
-# de `risque_en_cours` ; spécification `donnees` v1.9, § 9.2, erratum 1.9.4, (iii) ; #174).
-# Sans point : seule lecture des paramètres d'une garantie souscrite, lue aussi par
+# de `risque_en_cours` ; spécification `donnees` v1.9, § 9.2, erratum 1.9.4, (iii) ; #174). À une
+# vue totale, les valeurs d'une table `parametres` refusée en portée table sont lues ; un lecteur
+# qui en tire un prédicat de Kleene hors du cas (b) les tient pour inconnues (table_refusee_vue() ;
+# #175). Sans point : seule lecture des paramètres d'une garantie souscrite, lue aussi par
 # `risque_en_cours` (famille « risque_en_cours ») ; non exportée.
 parametre_vue <- function(vue, nom, gs, famille = NULL) {
   id <- valeurs_vue(vue, "parametres", "id_garantie_souscrite")
@@ -705,15 +707,18 @@ garanties_code_refuse <- function(vue, famille) {
 # majoration_conjoint, majoration_enfant, reconstitution_possible) (paramètres : éléments de
 # parametre_vue()) ; `voie`, une valeur par dossier : NA (non déterminée : l'un des quatre
 # paramètres est lu à plusieurs valeurs, ou une de ses lignes retenues est exclue pour
-# engagement, erratum v1.0.7), sinon
+# engagement, erratum v1.0.7, ou la table `parametres` est refusée en portée table,
+# table_refusee_vue(), quelle qu'en soit la cause ; #175), sinon
 # "forfait" (capital_forfaitaire présent), "reconstitution" (taux_capital présent, sans
 # capital_forfaitaire : affiliations, et famille si le dossier est instruit, lues) ou "aucune"
 # (ni l'un ni l'autre). `reconstitution_possible`, une valeur par dossier (lecture de Kleene,
 # erratum 1.9.4, (iii) (e) ; #175) : FALSE seulement si une valeur connue exclut la
 # reconstitution, capital_forfaitaire unique, connu, non exclu et non refusé (parametre_vue(),
 # élément `refuse`), ou ni capital_forfaitaire ni taux_capital présent (absence connue : aucune
-# ligne, ni ambiguë, ni exclue, ni refusée) ; une garantie souscrite hors de la vue (non retenue,
-# ses paramètres masqués, ou clé manquante) la laisse possible. Elle coïncide avec la voie
+# ligne, ni ambiguë, ni exclue, ni refusée, dans une table `parametres` lue) ; table
+# `parametres` refusée en portée table : non déterminée, reconstitution possible ; une garantie
+# souscrite hors de la vue (non retenue, ses paramètres masqués, ou clé manquante) la laisse
+# possible. Elle coïncide avec la voie
 # "reconstitution" quand ces valeurs sont déterminées. Calcule la voie sans calculer le montant.
 # Seule fonction de choix de la voie, lue par .reconstituer_capital() (calcul du capital) et par
 # calculer_engagement() (lignes d'affiliations et de famille lues par unité, arrêt par unité et
@@ -723,8 +728,11 @@ garanties_code_refuse <- function(vue, famille) {
   taux <- parametre_vue(vue, "taux_capital", gs, "engagement")
   mc <- parametre_vue(vue, "majoration_conjoint", gs, "engagement")
   me <- parametre_vue(vue, "majoration_enfant", gs, "engagement")
+  # table parametres refusée en portée table : ses lignes sont illisibles, l'absence n'est pas
+  # connue (erratum 1.9.4, (iii) (e) ; #175)
+  illisible <- table_refusee_vue(vue, "parametres")
   indetermine <- forfait$ambigu | taux$ambigu | mc$ambigu | me$ambigu |
-    forfait$exclu | taux$exclu | mc$exclu | me$exclu
+    forfait$exclu | taux$exclu | mc$exclu | me$exclu | illisible
   voie <- rep(NA_character_, length(gs))
   voie[!indetermine] <- "aucune"
   voie[!indetermine & !is.na(taux$valeur)] <- "reconstitution"
@@ -734,7 +742,7 @@ garanties_code_refuse <- function(vue, famille) {
   exclue <- (!is.na(forfait$valeur) & sur(forfait)) |
     (is.na(forfait$valeur) & sur(forfait) & is.na(taux$valeur) & sur(taux))
   list(voie = voie, forfait = forfait, taux = taux, majoration_conjoint = mc, majoration_enfant = me,
-       reconstitution_possible = !dans_vue | !exclue)
+       reconstitution_possible = !dans_vue | illisible | !exclue)
 }
 
 # Capital reconstitué des dossiers `ouvert` (spécification de B2, § 5.3) : `etats` (lignes de

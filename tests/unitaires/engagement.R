@@ -1699,3 +1699,21 @@ q1_175 <- function(deux) {
 verifier_egal("#175 1.9.6 (i) : EV1 exclu pour engagement : seule fixation, P1 arrêté (D09, DO1), ligne 1 ; deux fixations, P1 calculé 103 936, sans exposition",
               list(q1_175(FALSE), q1_175(TRUE)),
               list(list(NA_real_, "D09", "DO1", 1L), list(103936, NA_character_, NULL, NULL)), tolerance = TOL)
+# (5) constat M1 de la revue finale (#175 ; erratum donnees 1.9.4, (iii) (e)) : table parametres
+# refusée en portée table (ligne au nom manquant, manquant_obligatoire) : ses lignes sont
+# illisibles, l'absence de capital_forfaitaire et de taux_capital n'est pas connue : voie non
+# déterminée (NA), reconstitution possible. Témoins : parametres à zéro ligne (absence connue :
+# « aucune », FALSE) ; base intacte (« reconstitution », TRUE). Vue totale (A = extraction,
+# 2026-03-31 : la table refusée n'est pas masquée, ses valeurs sont lues), ligne taux_capital
+# retirée et ligne au nom manquant : voie NA, reconstitution possible. Avant (eeb6ce1) :
+# « aucune », FALSE pour la table refusée (lue comme une absence connue), à A comme à la vue
+# totale.
+vc_175 <- function(b, a = A) { x <- ns$.voie_capital(b2_vue(b, a), "GS1"); list(x$voie, x$reconstitution_possible) }
+nm_175 <- b2_tab("parametres", id_garantie_souscrite = "GS1", parametre = NA_character_, valeur = 1)
+verifier_egal("#175 .voie_capital() : table parametres refusée en portée table (nom manquant) : voie NA, reconstitution possible, à A et à la vue totale (sans taux_capital) ; parametres vide : aucune, FALSE ; base intacte : reconstitution, TRUE",
+              list(vc_175(within(b2_base_capital(capital = NA), parametres <- rbind(parametres, nm_175))),
+                   vc_175(within(b2_base_capital(capital = NA), parametres <- rbind(parametres[parametres$parametre != "taux_capital", ], nm_175)),
+                          D("2026-03-31")),
+                   vc_175(within(b2_base_capital(capital = NA), parametres <- parametres[0L, ])),
+                   vc_175(b2_base_capital(capital = NA))),
+              list(list(NA_character_, TRUE), list(NA_character_, TRUE), list("aucune", FALSE), list("reconstitution", TRUE)))

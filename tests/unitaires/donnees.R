@@ -7179,3 +7179,33 @@ verifier_egal("#175 lignes_visibilite_nd_vue() : cohérence avec visibilite_non_
               list(c(contrats = TRUE, garanties_souscrites = TRUE, parametres = TRUE, affiliations = TRUE, cotisations = TRUE),
                    c(contrats = TRUE, garanties_souscrites = TRUE, parametres = TRUE, affiliations = TRUE, cotisations = TRUE),
                    16L, FALSE, "autre"))
+
+section("table_refusee_vue() : table refusée en portée table dans la vue (spécification donnees v1.9, erratum 1.9.4, (iii) (e) ; #175, constat M1 de la revue finale)")
+# Même source que le masquage de la vue (ctx$refus_pv$tables) : TRUE si et seulement si
+# vue$bilan$refus_tables porte une ligne de portée table pour la table, pour chaque table de la
+# base, à A = 2025-12-31 et à la vue totale (A = extraction, 2026-03-31 : la table n'est pas
+# masquée, mais reste refusée). Bases : R5 (a) intacte ; ligne de parametres au nom manquant
+# (parametres seule) ; identifiant de GS1 manquant (garanties_souscrites et ses refus induits) ;
+# parametres.valeur de type character (portée colonne : FALSE). Objet qui n'est pas une vue :
+# refus. Avant (eeb6ce1) : fonction absente.
+b_tr175 <- b2_base_capital(capital = NA)
+tr175 <- function(b, a) {
+  v <- b2_vue(b, D(a))
+  rt <- v$bilan$refus_tables
+  t <- names(v$ctx$base)
+  acc <- vapply(t, function(x) ns$table_refusee_vue(v, x), NA)
+  list(identical(unname(acc), t %in% rt$table[rt$portee == "table"]), t[acc])
+}
+verifier_egal("#175 table_refusee_vue() : vrai si et seulement si refus_tables porte une ligne de portée table pour la table, à A et à la vue totale ; refus hors vue",
+              c(lapply(c("2025-12-31", "2026-03-31"), function(a) list(
+                  tr175(b_tr175, a),
+                  tr175(within(b_tr175, parametres <- rbind(parametres, b2_tab("parametres", id_garantie_souscrite = "GS1",
+                                                                               parametre = NA_character_, valeur = 1))), a),
+                  tr175(within(b_tr175, garanties_souscrites$id_garantie_souscrite[1L] <- NA), a),
+                  tr175(within(b_tr175, parametres$valeur <- as.character(parametres$valeur)), a))),
+                list(motif_de(ns$table_refusee_vue(list(), "parametres")))),
+              c(rep(list(list(list(TRUE, character(0)), list(TRUE, "parametres"),
+                              list(TRUE, c("garanties_souscrites", "parametres", "affiliations", "dossiers", "beneficiaires", "rentes",
+                                           "evenements", "prestations", "cotisations")),
+                              list(TRUE, character(0)))), 2L),
+                list("autre")))
