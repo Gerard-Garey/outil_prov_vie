@@ -291,6 +291,8 @@ hypothese_vue <- function(vue, motif, referentiel, table, lignes, poste, colonne
 
 # Motifs des hypothèses appliquées par la vue (spécification de B2, § 5.8, source S2 : D02b,
 # D03g ; D02a, dates rejetées tenues pour inconnues, spécification `donnees` v1.9, § 9.4, #90).
+# Même ensemble que .MOTIFS_HYPOTHESE_VUE_COMMUNE de `donnees` (règle du plan) : invariant
+# contrôlé par un test (M722 ; spécification `donnees` v1.9, § 9.4, erratum 1.9.5, #171).
 .MOTIFS_HYPOTHESE_VUE <- c("D02a", "D02b", "D03g")
 
 # Codes des hypothèses appliquées par la vue (source S2 du § 5.8, erratum v1.0.17, #87 ;
@@ -299,7 +301,9 @@ hypothese_vue <- function(vue, motif, referentiel, table, lignes, poste, colonne
 # figure parmi les lignes d'une hypothèse d'un motif de .MOTIFS_HYPOTHESE_VUE placée pour
 # `referentiel` et le poste `poste` ou `tous` (hypothese_vue(), seule sélection), qu'elle l'ait
 # rendue visible ou invisible (provenance, non effet), si elle n'est pas exclue pour la famille
-# (vue$exclu[[famille]] : une ligne exclue n'est pas lue) et si elle est admise par la lecture ;
+# (vue$exclu[[famille]] : une ligne exclue n'est pas lue), si elle est admise par la lecture et
+# si l'emprise de l'hypothèse contient une colonne du champ `lues` de l'élément (`lues` NULL : la
+# ligne entière ; spécification de B2, § 5.8, erratum v1.0.24, « Colonnes lues », #112, #171) ;
 # elle est rattachée à une unité par ses clés, lues par cles_lignes_hypothese() (`donnees`),
 # seul accès aux clés d'une ligne cachée ; une clé qui ne rattache la ligne à aucune unité ne
 # produit rien. Un élément de `lectures` dont le champ `s2` vaut FALSE (lecture_unites()) n'est
@@ -517,10 +521,10 @@ garanties_code_refuse <- function(vue, famille) {
 # arret_refus_ligne().
 # `lues` : fonction d'une table qui rend les colonnes que le poste y lit (colonnes_lues() de
 # `garanties`, seule dérivation ; spécification de B2, § 5.8, erratum v1.0.24, « Colonnes lues »,
-# #112 point 2) : champ `lues` des lignes de contrats (une hypothèse de la vue n'y compte dans S2
-# que si son emprise contient une colonne lue : id_contrat et nature_contrat en v1, ni partie de
-# fin ni dates) ; sans effet sur l'arrêt, refus_ligne_unites() ne lisant pas `lues`. Les autres
-# tables gardent la ligne entière (garde étendue par #171).
+# #112 point 2, #171) : champ `lues` de chaque élément lu par S2, toutes tables (une hypothèse de
+# la vue n'y compte dans S2 que si son emprise contient une colonne lue ; contrats : id_contrat et
+# nature_contrat en v1, ni partie de fin ni dates) ; sans effet sur l'arrêt, refus_ligne_unites()
+# ne lisant pas `lues`.
 # `exposition` (#175 ; spécification `donnees` v1.9, § 9.2, erratum 1.9.4, (iii)) : NULL, ou
 # list(etats, possible) : unités possibles du poste, sans tenir compte de ses autres causes d'arrêt
 # (lignes de même forme que `etats`, dossiers des garanties invisibles compris, cas (c)), et
@@ -572,15 +576,16 @@ garanties_code_refuse <- function(vue, famille) {
     lit_par <- etats$etat_dossier %in% "ouvert" | nd
     lit_af <- if (kleene) lit_par & reconstitue else reconstitue
     lit_fam <- if (kleene) lit_af & !(etats$instruit %in% FALSE) else reconstitue & etats$instruit %in% TRUE
-    res <- list(lecture_unites("dossiers", "id_dossier", d),
-                lecture_unites("sinistres", "id_sinistre", s),
-                lecture_unites("evenements", "id_sinistre", s),
-                lecture_unites("evenements", "id_dossier", d),
-                lecture_unites("prestations", "id_dossier", d),
-                lecture_unites("beneficiaires", "id_dossier", d),
+    res <- list(lecture_unites("dossiers", "id_dossier", d, lues = lues("dossiers")),
+                lecture_unites("sinistres", "id_sinistre", s, lues = lues("sinistres")),
+                lecture_unites("evenements", "id_sinistre", s, lues = lues("evenements")),
+                lecture_unites("evenements", "id_dossier", d, lues = lues("evenements")),
+                lecture_unites("prestations", "id_dossier", d, lues = lues("prestations")),
+                lecture_unites("beneficiaires", "id_dossier", d, lues = lues("beneficiaires")),
                 lecture_unites("contrats", "id_contrat", contrat, lues = lues("contrats")),
-                lecture_unites("affiliations", c("id_assure", "id_contrat"), cle_af, garde = lit_af),
-                lecture_unites("famille", "id_sinistre", s, garde = lit_fam),
+                lecture_unites("affiliations", c("id_assure", "id_contrat"), cle_af, garde = lit_af,
+                               lues = lues("affiliations")),
+                lecture_unites("famille", "id_sinistre", s, garde = lit_fam, lues = lues("famille")),
                 lecture_unites("garanties_souscrites", "id_garantie_souscrite", gs, s2 = FALSE),
                 lecture_unites("parametres", "id_garantie_souscrite", gs, garde = lit_par, admises = adm_par,
                                s2 = FALSE))
@@ -603,7 +608,7 @@ garanties_code_refuse <- function(vue, famille) {
       res <- c(res, list(
         lecture_unites("contrats", "id_contrat", ct, unite = rep(u[1L], length(ct)), lues = lues("contrats")),
         lecture_unites("affiliations", c("id_assure", "id_contrat"), ca, unite = rep(u[1L], length(ca)),
-                       garde = any(lit_af[u]))))
+                       garde = any(lit_af[u]), lues = lues("affiliations"))))
     }
     res
   }

@@ -171,7 +171,8 @@ CONVENTIONS_LIMITE_AGE <- c("revolu", "millesime")
 # Motifs dont l'hypothèse s'applique à la vue, commune aux postes et aux deux référentiels :
 # ceux de la règle P et D02a (dates rejetées tenues pour inconnues, M717) ; leur hypothèse se
 # déclare pour le poste `tous`, avec la même valeur pour les deux référentiels
-# (lire_declarations()).
+# (lire_declarations()). Même ensemble que .MOTIFS_HYPOTHESE_VUE de `engagement` (détection S2) :
+# invariant contrôlé par un test (M722 ; spécification `donnees` v1.9, § 9.4, erratum 1.9.5, #171).
 .MOTIFS_HYPOTHESE_VUE_COMMUNE <- c("D02a", .MOTIFS_REGLE_P)
 # Motifs à traitement unique (dictionnaire, § 1.10 et § 9 : X et H y sont deux alternatives
 # pour toute ligne) : une exclusion et une hypothèse déclarées pour un même motif de cette

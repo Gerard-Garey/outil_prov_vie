@@ -1406,10 +1406,9 @@ verifier_egal("#112 C112-7 (statique) : colonnes de constat D02b (dérivées du 
 # C112-8 (statique) : (a) restrictions contrôlées de P3 (.LUES_SINISTRE_P3, sortie par un sinistre ;
 # partie de fin de contrats, sortie par la fin) incluses dans les colonnes lues par P3 ; (b) les
 # éléments de S2 (champ s2 vrai) des constructeurs portent `lues` = colonnes_lues() du poste : tous
-# ceux de .lectures_contrats() (P3) ; pour .lectures_dossiers() (P1, P2), la ligne de contrats seule
-# (id_contrat, nature_contrat), les autres tables gardant la ligne entière (`lues` NULL). Assertion
-# transitoire : #171 étend la garde aux autres tables de .lectures_dossiers() et la renversera
-# (lues = colonnes_lues() pour chacune) ; (c) catalogue$lectures n'est lu que par .valider_catalogue(), colonnes_lues()
+# ceux de .lectures_contrats() (P3) et, depuis #171 (C171-1 ; assertion transitoire de #112
+# renversée), tous ceux de .lectures_dossiers() (P1, P2 ; contrats : id_contrat, nature_contrat),
+# aucun ne valant NULL ; (c) catalogue$lectures n'est lu que par .valider_catalogue(), colonnes_lues()
 # et postes_a_arreter() (énumération des postes, colonnes par colonnes_lues()). lecture_unites()
 # sans `lues` garde la ligne entière (C90-5, plus haut, inchangé).
 v_112 <- b2_vue(bR_112, A1)
@@ -1424,26 +1423,129 @@ l1_112 <- lues_112(ns$.lectures_dossiers(v_112, ns$etats_a_date(v_112, "deces", 
                                          function(t) lit_112(P1, t)))
 lisent_lectures_112 <- Filter(function(n) is.function(ns[[n]]) && any(grepl("$lectures", deparse(ns[[n]]), fixed = TRUE)),
                               sort(ls(ns, all.names = TRUE), method = "radix"))
-verifier_egal("#112 C112-8 (statique) : .LUES_SINISTRE_P3 et partie de fin de contrats incluses dans les colonnes lues par P3 ; lues des éléments S2 : P3, colonnes_lues() de chaque table ; P1, contrats seule (id_contrat, nature_contrat), autres tables NULL (#171) ; catalogue$lectures lu par .valider_catalogue(), colonnes_lues() et postes_a_arreter() seules",
+# Avant #171 (008ec3f) : éléments de P1 autres que contrats NULL ; P1 et P2, un seul élément non NULL.
+l2_112 <- lues_112(ns$.lectures_dossiers(v_112, ns$etats_a_date(v_112, "deces", "engagement"), TRUE,
+                                         function(t) lit_112(P2, t)))
+verifier_egal("#112 et #171 C112-8 (statique) : .LUES_SINISTRE_P3 et partie de fin de contrats incluses dans les colonnes lues par P3 ; lues des éléments S2 : P3, colonnes_lues() de chaque table ; P1 et P2, colonnes_lues() de chaque table, aucun NULL (contrats : id_contrat, nature_contrat) ; catalogue$lectures lu par .valider_catalogue(), colonnes_lues() et postes_a_arreter() seules",
               list(all(ns$.LUES_SINISTRE_P3 %in% lit_112(P3, "sinistres")),
                    all(Filter(function(q) q$table == "contrats", ns$parties_ligne())[[1L]]$colonnes %in% lit_112(P3, "contrats")),
                    names(l3_112), all(unlist(Map(function(t, x) identical(x, lit_112(P3, t)), names(l3_112), l3_112))),
-                   names(l1_112), l1_112[["contrats"]], all(vapply(l1_112[names(l1_112) != "contrats"], is.null, NA))),
+                   names(l1_112), l1_112[["contrats"]],
+                   all(unlist(Map(function(t, x) identical(x, lit_112(P1, t)), names(l1_112), l1_112))),
+                   all(unlist(Map(function(t, x) identical(x, lit_112(P2, t)), names(l2_112), l2_112)))),
               list(TRUE, TRUE, c("contrats", "assures", "sinistres", "cotisations"), TRUE,
                    c("dossiers", "sinistres", "evenements", "evenements", "prestations", "beneficiaires", "contrats",
                      "affiliations", "famille"),
-                   c("id_contrat", "nature_contrat"), TRUE))
+                   c("id_contrat", "nature_contrat"), TRUE, TRUE))
 # m4 : tout élément de S2 qui porte `lues` en porte au moins une colonne (un `lues` vide retirerait
-# en silence toute hypothèse de la ligne) : P3 (chaque table) et ligne de contrats de P1 et P2.
-l2_112 <- lues_112(ns$.lectures_dossiers(v_112, ns$etats_a_date(v_112, "deces", "engagement"), TRUE,
-                                         function(t) lit_112(P2, t)))
+# en silence toute hypothèse de la ligne) ; depuis #171, aucun élément S2 de P1 ni de P2 ne vaut
+# NULL (avant, 008ec3f : un seul non NULL, contrats, pour chacun).
 non_vide_112 <- function(l) all(vapply(Filter(Negate(is.null), l), function(x) length(x) > 0L, NA))
-verifier_egal("#112 C112-8 : `lues` non vide pour tout élément S2 qui le porte (P3 : contrats, assures, sinistres, cotisations ; P1 et P2 : contrats)",
+verifier_egal("#112 et #171 C112-8 : `lues` non vide pour tout élément S2 qui le porte ; aucun élément S2 NULL (P3 : 4 ; P1 et P2 : 9)",
               list(non_vide_112(l3_112), length(Filter(Negate(is.null), l3_112)), non_vide_112(l1_112),
-                   length(Filter(Negate(is.null), l1_112)), non_vide_112(l2_112), length(Filter(Negate(is.null), l2_112))),
-              list(TRUE, 4L, TRUE, 1L, TRUE, 1L))
+                   length(Filter(Negate(is.null), l1_112)), non_vide_112(l2_112), length(Filter(Negate(is.null), l2_112)),
+                   any(vapply(c(l1_112, l2_112), is.null, NA))),
+              list(TRUE, 4L, TRUE, 9L, TRUE, 9L, FALSE))
 verifier_egal("#112 C112-8 (statique) : catalogue$lectures lu par .valider_catalogue(), colonnes_lues() et postes_a_arreter() seules (seule dérivation des colonnes lues par un poste)",
               lisent_lectures_112, c(".valider_catalogue", "colonnes_lues", "postes_a_arreter"))
+
+section("garde par colonnes de S2 étendue à toutes les lignes lues de P1 et P2 (#171 ; spécification de B2, § 5.8, erratum v1.0.24)")
+# Spécification de B2, § 5.8, erratum v1.0.24, « Colonnes lues » (visa M780, V6 (b), V8 (a)) : la
+# garde vaut pour toute ligne lue par S2 de P1 et de P2, chaque élément de .lectures_dossiers()
+# portant `lues` = colonnes_lues() du poste (C112-8, plus haut). C171-1 : plus haut (#112). Base
+# b0_112 (DO1 au capital fixé, paiement PR1 de 10 000 au 2024-10-01), D02a sous H.
+# Garde au niveau de la fonction : D02a de R7 (période d'une prestation) n'est pas atteignable par
+# la base en v1 (R7 inatteignable en décès : retour 0b-2, corrections au plan, P2) ; l'entrée de
+# vue$hypotheses est injectée. D02a sur prestations, colonnes debut_periode et fin_periode (non
+# lues par P1 ni P2, lectures.csv), ligne de PR1 : DO1 sans code. Avant (008ec3f) : "D02a" pour P1
+# et P2 (ligne entière). Contre-témoin, D02a sur date_reglement (lue) : "D02a" avant comme après.
+v_171 <- ns$vue_a_date(b0_112, A1, plan_112("D02a")$donnees, p_c1$conventions)
+s2_171 <- function(colonnes, poste) {
+  w <- v_171
+  w$hypotheses <- c(w$hypotheses, list(list(motif = "D02a", referentiel = "comptes_sociaux", poste = "tous", valeur = "regle",
+                                            table = "prestations", lignes = 1L, colonnes = colonnes)))
+  et <- ns$etats_a_date(w, "deces", "engagement")
+  l <- ns$.lectures_dossiers(w, et, FALSE, function(t) lit_112(poste, t))
+  list(et$id_dossier, ns$hypotheses_vue_unites(w, "comptes_sociaux", poste, "engagement", nrow(et), l))
+}
+verifier_egal("#171 garde au niveau de la fonction (non atteignable par la base en v1) : D02a sur prestations.debut_periode et fin_periode (non lues), ligne de PR1 : DO1 sans code pour P1 et P2 (avant : D02a) ; contre-témoin, date_reglement (lue) : D02a",
+              list(length(v_171$hypotheses), s2_171(c("debut_periode", "fin_periode"), P1), s2_171(c("debut_periode", "fin_periode"), P2),
+                   s2_171("date_reglement", P1), s2_171("date_reglement", P2)),
+              list(0L, list("DO1", ""), list("DO1", ""), list("DO1", "D02a"), list("DO1", "D02a")))
+# Filtre de restitution de l'unité à montant nul (E18-1, E16-5 ; sortie_h de calculer_engagement(),
+# s2_de("prestations")) soumis à la même garde, au niveau de la fonction : non atteignable par la
+# base en v1 (R7 inatteignable en décès), l'entrée D02a de prestations est injectée dans
+# vue$hypotheses avant l'appel de calculer_engagement(). DO1 au solde au plus nul (paiement PR1
+# de 200 000, au-delà du capital), plan recommandees, D02a sous H. D02a sur debut_periode et
+# fin_periode (non lues) : DO1 n'est pas restitué. Avant (008ec3f) : DO1 restitué à 0,
+# jugement_expert, D02a, pour P1 et P2. Contre-témoin, date_reglement (lue) : DO1 restitué à 0,
+# jugement_expert, D02a, avant comme après.
+cp_171 <- ns$canoniser_plan(plan_112("D02a"))
+rt_171 <- ns$resoudre_tables(cp_171$tables, tid, ns$.usages_exiges(ns$.postes_plan(cp_171, cat_112), cp_171, cat_112))
+nul_171 <- function(b, colonnes, poste) {
+  v <- ns$vue_a_date(b, cp_171$arrete, cp_171$donnees, cp_171$conventions)
+  v$hypotheses <- c(v$hypotheses, list(list(motif = "D02a", referentiel = "comptes_sociaux", poste = "tous", valeur = "regle",
+                                            table = "prestations", lignes = 1L, colonnes = colonnes)))
+  d <- ns$calculer_engagement(v, cp_171, rt_171$tables, cat_112, "deces", poste)$dossiers
+  d <- d[d$referentiel == "comptes_sociaux", , drop = FALSE]
+  if (nrow(d) == 0L) "aucun dossier" else list(d$id_dossier, d$statut_resultat, d$hypotheses_defaut, d$montant)
+}
+bS_171 <- b2_base_capital(paiements = data.frame(date = D("2024-10-01"), montant = 200000))
+bSn_171 <- b2_base_capital(paiements = data.frame(date = D("2024-10-01"), montant = 200000), qualite = "non_identifie")
+verifier_egal("#171 filtre de restitution de l'unité à montant nul (E18-1, E16-5), au niveau de la fonction (non atteignable par la base en v1) : DO1 au solde au plus nul, D02a sur prestations.debut_periode et fin_periode (non lues) : DO1 non restitué pour P1 et P2 (avant : restitué à 0, jugement_expert, D02a) ; contre-témoin, date_reglement (lue) : restitué à 0, jugement_expert, D02a",
+              list(nul_171(bS_171, c("debut_periode", "fin_periode"), P1), nul_171(bSn_171, c("debut_periode", "fin_periode"), P2),
+                   nul_171(bS_171, "date_reglement", P1), nul_171(bSn_171, "date_reglement", P2)),
+              list("aucun dossier", "aucun dossier", list("DO1", "jugement_expert", "D02a", 0), list("DO1", "jugement_expert", "D02a", 0)))
+# C171-2 (contre-témoin, base S4) : mise à jour EVX de DO1, effet 2024-06-01 avant la survenance,
+# saisie 2025-04-01 (R13, date substituée) ; D02a sous H sur evenements.date_effet, colonne lue par
+# P1 et P2 : les quatre méthodes gardent D02a, aux montants de C171-1. Identique avant (008ec3f).
+ev13_171 <- function(b) {
+  e <- b$evenements[1L, ]
+  e$id_evenement <- "EVX"; e$type_evenement <- "mise_a_jour"; e$montant <- NA_real_
+  e$date_effet <- D("2024-06-01"); e$date_saisie <- D("2025-04-01")
+  b$evenements <- rbind(b$evenements, e)
+  b
+}
+verifier_egal("#171 C171-2 (contre-témoin) : D02a de R13 sur evenements.date_effet (lue par P1 et P2) : capital_dossier, capital_dossier_reglement, capital_revalorise et capital_revalorise_reglement jugement_expert, D02a, 94 555,8158688524 ; 94 742,3369302924 ; 93 619,6196721311 ; 114 995,003530171",
+              list(dossier_112(ev13_171(b0_112), plan_112("D02a"), P1)[1:4],
+                   dossier_112(ev13_171(b0_112), plan_112("D02a", q = p_alt), P1)[1:4],
+                   dossier_112(ev13_171(b0n_112), plan_112("D02a"), P2)[1:4],
+                   dossier_112(ev13_171(b0n_112), plan_112("D02a", q = p_alt), P2)[1:4]),
+              list(list("DO1", "jugement_expert", "D02a", 94555.8158688524),
+                   list("DO1", "jugement_expert", "D02a", 94742.3369302924),
+                   list("DO1", "jugement_expert", "D02a", 93619.6196721311),
+                   list("DO1", "jugement_expert", "D02a", 114995.003530171)),
+              tolerance = EPS)
+# C171-3 (limite (ii) du bloc « Colonnes lues », V8 (a), M780 ; échec attendu, #210) : base S6,
+# instruction de SI1 au 2024-08-15, avant sa déclaration (R10) ; D02a sous H tient date_declaration
+# et date_instruction pour inconnues. Au capital fixé, ni capital_dossier ni capital_revalorise ne
+# les lisent, mais lectures.csv, tenu par poste, les compte pour P1 et P2 : DO1 reste
+# jugement_expert, D02a (008ec3f et après #171). Comportement visé : capital_dossier exact, sans
+# code, 94 555,8158688524 ; capital_dossier_reglement sans code ; capital_revalorise exact, sans
+# code, 93 619,6196721311 ; capital_revalorise_reglement arrêté (parametre_non_determine), avant
+# comme après.
+r10_171 <- function(b) { b$sinistres$date_instruction <- D("2024-08-15"); b }
+attendu_echec("#171 C171-3 limite : D02a de R10 sur sinistres.date_declaration et date_instruction, capital fixé : DO1 sans code (capital_dossier exact 94 555,8158688524 ; capital_dossier_reglement sans code ; capital_revalorise exact 93 619,6196721311 ; capital_revalorise_reglement arrêté parametre_non_determine) (aujourd'hui : jugement_expert, D02a)", "#210",
+              { cd <- dossier_112(r10_171(b0_112), plan_112("D02a"), P1)
+                cdr <- dossier_112(r10_171(b0_112), plan_112("D02a", q = p_alt), P1)
+                cr <- dossier_112(r10_171(b0n_112), plan_112("D02a"), P2)
+                r <- calculer_provisions(r10_171(b0n_112), plan_112("D02a", q = p_alt), tid)$provisions
+                crr <- r[r$poste == P2 & r$referentiel == "comptes_sociaux" & r$segmentation == "ensemble", , drop = FALSE]
+                identical(cd[1:3], list("DO1", "exact", "")) && isTRUE(abs(cd[[4L]] - 94555.8158688524) <= EPS * 94555.8158688524) &&
+                  identical(cdr[c(1L, 3L)], list("DO1", "")) &&
+                  identical(cr[1:3], list("DO1", "exact", "")) && isTRUE(abs(cr[[4L]] - 93619.6196721311) <= EPS * 93619.6196721311) &&
+                  identical(list(crr$statut_calcul, crr$motif_arret), list("arrete", "parametre_non_determine")) })
+# C171-4 (M722, critère (i) ; spécification `donnees` v1.9, § 9.4, erratum 1.9.5) : les motifs dont
+# l'hypothèse est appliquée par la vue, .MOTIFS_HYPOTHESE_VUE_COMMUNE (`donnees`, règle du plan) et
+# .MOTIFS_HYPOTHESE_VUE (`engagement`, détection S2), désignent le même ensemble : invariant déjà
+# vrai à 008ec3f ; garde de non-régression (M722, critère (i)).
+# C171-5 (V3 (c), base S8) : C174-12, plus bas, et test statique C174-14 de tests/unitaires/engagement.R
+# (D02a, seul motif de .MOTIFS_HYPOTHESE_VUE qui admet garanties_souscrites). C174-12 reste
+# discriminant sous la garde étendue : date_effet de garanties_souscrites est dans l'emprise de
+# D02a et lue par P1, seul le champ s2 FALSE de la ligne l'écarte de S2.
+verifier_egal("#171 C171-4 : .MOTIFS_HYPOTHESE_VUE_COMMUNE et .MOTIFS_HYPOTHESE_VUE égaux (D02a, D02b, D03g)",
+              list(sort(ns$.MOTIFS_HYPOTHESE_VUE_COMMUNE, method = "radix"), sort(ns$.MOTIFS_HYPOTHESE_VUE, method = "radix")),
+              list(c("D02a", "D02b", "D03g"), c("D02a", "D02b", "D03g")))
 
 section("plus petit identifiant en cause : arrêts et refus de P1 et P2 indépendants de l'ordre des lignes (critère (4.14), #176)")
 # Spécification de B2, § 6.2, « Identifiant publié » : tout identifiant et tout motif publiés par un
