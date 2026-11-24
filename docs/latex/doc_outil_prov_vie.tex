@@ -4623,9 +4623,14 @@ sont distingués~:
   lues pour une unité possible d'état \code{ouvert} ou non déterminé, sauf
   si une valeur connue exclut la reconstitution du capital
   (\code{capital\_forfaitaire} unique, connu, non exclu et non refusé, ou
-  ni \code{capital\_forfaitaire} ni \code{taux\_capital})\fsp; la
-  \code{famille} l'est sous la même condition, si de plus l'instruction
-  n'est pas connue fausse. Ce prédicat est rendu par
+  ni \code{capital\_forfaitaire} ni \code{taux\_capital} dans une table
+  \code{parametres} lue). Une table \code{parametres} refusée en portée
+  table, quelle qu'en soit la cause (clé, domaine, D04b, refus induit),
+  laisse ces valeurs non déterminées et la reconstitution possible, à tout
+  arrêté, vue totale comprise (\code{table\_refusee\_vue()}, module
+  \code{donnees}\fsp; issue~175)\fsp; une table vide, non refusée, est une
+  absence connue. La \code{famille} est lue sous la même condition, si de
+  plus l'instruction n'est pas connue fausse. Ce prédicat est rendu par
   \code{.voie\_capital()}, seule fonction de choix de la voie du capital,
   sans calculer le montant, et coïncide avec la voie de reconstitution
   quand ces valeurs sont déterminées\fsp;
@@ -4746,7 +4751,7 @@ n'est exportée.
 \code{facteur\_revalorisation()} & \code{debut}, \code{fin}, \code{taux\_par\_annee}, \code{prorata}, \code{conventions}, \code{arrete}, \code{taux\_futur} & Facteur de revalorisation légale entre deux dates, produit sur les années civiles, au prorata simple ou composé\fsp; refus \code{plan\_incomplet} pour une année sans taux. Seule implémentation du package. \\
 \code{valeur\_actuelle\_probable()} & \code{echeancier}, \code{actualisation}, \code{conventions} & Seule fonction de valeur actuelle probable du package~: flux $\times$ probabilité $\times$ facteur d'actualisation, sommés par clé\fsp; un type d'actualisation admis sans branche de calcul est une erreur interne, jamais un facteur~1. Lue aussi par \code{risque\_en\_cours}. \\
 \code{duree\_annees()} & \code{debut}, \code{fin}, \code{conventions} & Durée en années entre deux dates selon la convention de décompte des jours (\code{exact\_exact} ou \code{exact\_365}). \\
-\code{parametre\_vue()} & \code{vue}, \code{nom}, \code{gs}, \code{famille = NULL} & Rend un paramètre de chaque garantie souscrite dans la vue\fsp; \code{NA} s'il manque, \code{ambigu} s'il porte plusieurs valeurs\fsp; si une famille de calcul est donnée, \code{exclu} signale une ligne retenue du paramètre exclue pour cette famille\fsp; \code{refuse}, toujours rendu, signale une ligne retenue du paramètre dont la valeur porte un refus de portée ligne, ou une colonne \code{valeur} non numérique, gardée brute par la vue sous un refus de type de portée colonne et alors non lue (valeurs inconnues)\fsp; une valeur refusée n'est pas masquée, et le lecteur qui en décide d'une population la lit comme inconnue (issue~174)\fsp; une clé manquante ou vide, de la garantie ou de la ligne de paramètre, ne s'apparie à rien (issue~158). Seule lecture des paramètres d'une garantie souscrite, appelée par les familles «~engagement~» et «~risque en cours~». \\
+\code{parametre\_vue()} & \code{vue}, \code{nom}, \code{gs}, \code{famille = NULL} & Rend un paramètre de chaque garantie souscrite dans la vue\fsp; \code{NA} s'il manque, \code{ambigu} s'il porte plusieurs valeurs\fsp; si une famille de calcul est donnée, \code{exclu} signale une ligne retenue du paramètre exclue pour cette famille\fsp; \code{refuse}, toujours rendu, signale une ligne retenue du paramètre dont la valeur porte un refus de portée ligne, ou une colonne \code{valeur} non numérique, gardée brute par la vue sous un refus de type de portée colonne et alors non lue (valeurs inconnues)\fsp; une valeur refusée n'est pas masquée, et le lecteur qui en décide d'une population la lit comme inconnue (issue~174)\fsp; à une vue totale, les valeurs d'une table \code{parametres} refusée en portée table sont lues, et un prédicat de Kleene hors du cas~(b) les tient pour inconnues (\code{table\_refusee\_vue()}, issue~175)\fsp; une clé manquante ou vide, de la garantie ou de la ligne de paramètre, ne s'apparie à rien (issue~158). Seule lecture des paramètres d'une garantie souscrite, appelée par les familles «~engagement~» et «~risque en cours~». \\
 \code{hypothese\_vue()} & \code{vue}, \code{motif}, \code{referentiel}, \code{table}, \code{lignes}, \code{poste}, \code{colonnes = NULL}, \code{autre\_poste = FALSE} & Seule sélection d'une hypothèse placée par la vue pour chaque ligne d'une table, lue par un poste~: hypothèse du poste de préférence à celle de \code{tous}, puis la première placée\fsp; avec \code{colonnes}, seules comptent les hypothèses dont une colonne est lue par le poste (garde par colonnes, M661, issue~90)\fsp; \code{NA} sans hypothèse appliquée\fsp; avec \code{autre\_poste} vrai, seules comptent les hypothèses placées pour un autre poste que celui du calcul et que \code{tous} (refus de lecture \code{declaration\_manquante}, issue~108)\fsp; la forme de la valeur n'est pas contrôlée ici, mais au plan, par \code{lire\_declarations()} (module \code{donnees}). Avec \code{cles\_lignes\_hypothese()}, seule lectrice des hypothèses placées par la vue. Appelée aussi par \code{risque\_en\_cours} (D03h, D03f). \\
 \code{hypotheses\_vue\_unites()} & \code{vue}, \code{referentiel}, \code{poste}, \code{famille}, \code{n}, \code{lectures} & Seule détection des hypothèses appliquées par la vue (source S2~: D02a, D02b, D03g) aux lignes lues pour chaque unité d'un poste, visibles ou non, hors lignes exclues pour la famille\fsp; avec le champ \code{lues} d'une lecture, seules comptent les hypothèses dont l'emprise contient une colonne lue, la ligne entière comptant sans lui (issues~112 et~171)\fsp; une lecture marquée \code{s2} faux, lue par l'arrêt par unité seulement, est ignorée (issue~174)\fsp; une clé composée n'est jointe que si chacune de ses composantes est renseignée (issue~158)\fsp; rend les codes de chaque unité. Appelée aussi par \code{risque\_en\_cours}. \\
 \code{joindre\_codes()} & \code{...} & Seule réunion des codes d'hypothèse d'une unité (sources S1 et S2)~: codes uniques, triés, joints par «~;~». Appelée aussi par \code{risque\_en\_cours}. \\
@@ -4873,6 +4878,13 @@ reconstitution ou aucune) est choisie par une seule fonction,
 \code{.voie\_capital()}, lue par le calcul du capital et par la
 construction des lignes lues~: les affiliations et la famille d'un dossier
 ne sont lues que si le capital calculé est celui qu'elles reconstituent.
+La voie est non déterminée si l'un des quatre paramètres est lu à
+plusieurs valeurs ou a une ligne retenue exclue pour la famille, ou si la
+table \code{parametres} est refusée en portée table, quelle qu'en soit la
+cause (issue~175)~: ses lignes sont alors illisibles, et l'absence d'un
+paramètre n'est pas connue. Le poste, qui lit cette table, est alors déjà
+arrêté par le bilan (règle~(i))~; la voie non déterminée n'agit que sur
+l'exposition (section~\ref{sec:garanties-arrets}, cas~(e)).
 L'arrêt est évalué avant toute lecture des valeurs des unités, sauf pour
 les affiliations et la famille, évaluées après le calcul du capital et
 avant ses propres arrêts.
@@ -5695,8 +5707,9 @@ valeurs~: vraie, fausse ou non déterminée. Une valeur est connue si elle
 n'est ni refusée par un refus de portée \code{ligne}, ni tenue pour
 inconnue (D02a sous l'hypothèse par défaut), ni portée par une ligne
 exclue pour la famille «~risque en cours~», ni ambiguë, ni dans une
-colonne de type incompatible, gardée brute par la vue\fsp; une inconnue
-ne retire jamais un contrat. Un contrat sort s'il est sorti, par une
+colonne de type incompatible, gardée brute par la vue\fsp; un paramètre
+lu absent (âge de fin manquant) rend son prédicat inconnu (spécification
+de la branche B2, §~5.5)\fsp; une inconnue ne retire jamais un contrat. Un contrat sort s'il est sorti, par une
 valeur connue, des deux champs qui le concernent~: champ individuel,
 aucune version \code{deces} de la sélection en vigueur à l'arrêté, ou
 fin de couverture connue au plus l'arrêté (terme, date de fin par la voie
