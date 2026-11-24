@@ -7144,3 +7144,68 @@ verifier_egal("#72, enjeu (h) : PR1 de visibilité non déterminée (D03g) et de
                    cne72(r72j, "prestations_ecartees")),
               list(c("incapacite prestations_ecartees euro NA D09", "ensemble prestations_ecartees euro NA D09"), "D09",
                    "prestations montant D09"))
+
+section("lignes_visibilite_nd_vue() : lignes de visibilité entière non déterminée (spécification donnees v1.9, § 9.2, erratum 1.9.6, (iii) ; #175)")
+# Même source que vue$visibilite_non_determinee (ctx$lignes_nd, colonne NA), sans troncature :
+# base construite, date d'effet de CTC1 manquante (D03i, conserver), A = 2025-12-31 ; témoin à
+# cinq affiliations sous CTC1 (AFR1, AFR3, AFR4, AFR5A, AFR5B, parente_non_determinee) ; onze
+# affiliations de plus (AFA01 à AFA11) : seize lignes, identifiants publiés tronqués à dix. Pour
+# chaque table de colonne NA : mêmes identifiants (.identifiants()) que la publication quand les
+# lignes sont dix au plus ; au-delà, nombre de TRUE égal au nombre de lignes inscrites. Vue
+# totale (A = extraction) : tout FALSE ; objet qui n'est pas une vue : refus. Avant (a3219d4 et
+# état de la reprise) : fonction absente.
+b_nd175 <- b2_base_construite_deces_02()
+b_nd175$contrats$date_effet[b_nd175$contrats$id_contrat == "CTC1"] <- NA
+x_nd175 <- b_nd175$affiliations[b_nd175$affiliations$id_affiliation == "AFR5A", ]
+b_nd175b <- b_nd175
+b_nd175b$affiliations <- rbind(b_nd175b$affiliations, do.call(rbind, lapply(sprintf("AFA%02d", 1:11), function(i) transform(x_nd175, id_affiliation = i))))
+d_nd175 <- list(exclusions = data.frame(motif = "D03i", famille = ns$FAMILLES_CALCUL, action = "conserver", stringsAsFactors = FALSE))
+coherence_nd175 <- function(b) {
+  v <- ns$vue_a_date(b, D("2025-12-31"), d_nd175, list(age = "revolu"))
+  nd <- v$bilan$vue$visibilite_non_determinee
+  nd <- nd[is.na(nd$colonne), , drop = FALSE]
+  vapply(unique(nd$table), function(t) {
+    x <- which(ns$lignes_visibilite_nd_vue(v, t))
+    n <- sum(nd$nombre[nd$table == t])
+    if (n <= 10L) identical(sort(unlist(lapply(nd$identifiants[nd$table == t], ns$eclater_champ)), method = "radix"),
+                            ns$eclater_champ(ns$.identifiants(v$ctx, t, x))) else length(x) == n
+  }, NA)
+}
+verifier_egal("#175 lignes_visibilite_nd_vue() : cohérence avec visibilite_non_determinee (cinq tables ; seize affiliations au-delà de dix) ; 16 lignes d'affiliations ; vue totale tout FALSE ; refus hors vue",
+              list(coherence_nd175(b_nd175), coherence_nd175(b_nd175b),
+                   sum(ns$lignes_visibilite_nd_vue(ns$vue_a_date(b_nd175b, D("2025-12-31"), d_nd175, list(age = "revolu")), "affiliations")),
+                   any(ns$lignes_visibilite_nd_vue(ns$vue_a_date(b_nd175b, D("2026-03-31"), d_nd175, list(age = "revolu")), "affiliations")),
+                   motif_de(ns$lignes_visibilite_nd_vue(list(), "affiliations"))),
+              list(c(contrats = TRUE, garanties_souscrites = TRUE, parametres = TRUE, affiliations = TRUE, cotisations = TRUE),
+                   c(contrats = TRUE, garanties_souscrites = TRUE, parametres = TRUE, affiliations = TRUE, cotisations = TRUE),
+                   16L, FALSE, "autre"))
+
+section("table_refusee_vue() : table refusée en portée table dans la vue (spécification donnees v1.9, erratum 1.9.4, (iii) (e) ; #175, constat M1 de la revue finale)")
+# Même source que le masquage de la vue (ctx$refus_pv$tables) : TRUE si et seulement si
+# vue$bilan$refus_tables porte une ligne de portée table pour la table, pour chaque table de la
+# base, à A = 2025-12-31 et à la vue totale (A = extraction, 2026-03-31 : la table n'est pas
+# masquée, mais reste refusée). Bases : R5 (a) intacte ; ligne de parametres au nom manquant
+# (parametres seule) ; identifiant de GS1 manquant (garanties_souscrites et ses refus induits) ;
+# parametres.valeur de type character (portée colonne : FALSE). Objet qui n'est pas une vue :
+# refus. Avant (eeb6ce1) : fonction absente.
+b_tr175 <- b2_base_capital(capital = NA)
+tr175 <- function(b, a) {
+  v <- b2_vue(b, D(a))
+  rt <- v$bilan$refus_tables
+  t <- names(v$ctx$base)
+  acc <- vapply(t, function(x) ns$table_refusee_vue(v, x), NA)
+  list(identical(unname(acc), t %in% rt$table[rt$portee == "table"]), t[acc])
+}
+verifier_egal("#175 table_refusee_vue() : vrai si et seulement si refus_tables porte une ligne de portée table pour la table, à A et à la vue totale ; refus hors vue",
+              c(lapply(c("2025-12-31", "2026-03-31"), function(a) list(
+                  tr175(b_tr175, a),
+                  tr175(within(b_tr175, parametres <- rbind(parametres, b2_tab("parametres", id_garantie_souscrite = "GS1",
+                                                                               parametre = NA_character_, valeur = 1))), a),
+                  tr175(within(b_tr175, garanties_souscrites$id_garantie_souscrite[1L] <- NA), a),
+                  tr175(within(b_tr175, parametres$valeur <- as.character(parametres$valeur)), a))),
+                list(motif_de(ns$table_refusee_vue(list(), "parametres")))),
+              c(rep(list(list(list(TRUE, character(0)), list(TRUE, "parametres"),
+                              list(TRUE, c("garanties_souscrites", "parametres", "affiliations", "dossiers", "beneficiaires", "rentes",
+                                           "evenements", "prestations", "cotisations")),
+                              list(TRUE, character(0)))), 2L),
+                list("autre")))

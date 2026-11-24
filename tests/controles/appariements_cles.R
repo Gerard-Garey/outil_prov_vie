@@ -99,6 +99,14 @@ LISTE_BLANCHE <- c(
     "metadonnee",
   "R/engagement.R | arret_refus_ligne | t %in% evaluees" =
     "metadonnee",
+  "R/engagement.R | calculer_engagement | cle_poste %in% x" =
+    "metadonnee",
+  "R/engagement.R | arret_bilan_population | rt $ table %in% tables" =
+    "metadonnee",
+  "R/engagement.R | arret_bilan_population | nd $ table %in% tables" =
+    "metadonnee",
+  "R/risque_en_cours.R | calculer_risque_en_cours | cle_p3 %in% x" =
+    "metadonnee",
   "R/risque_en_cours.R | .retrospective | a %in% dates_pas" =
     "code",
   "R/risque_en_cours.R | .retrospective | a %in% ajouter_mois ( rep ( e , n_pas ) , periode * seq_len ( n_pas ) )" =

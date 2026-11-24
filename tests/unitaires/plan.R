@@ -574,6 +574,133 @@ verifier_egal("(4.11) canonisation : valeur d'une liste par clé et écriture d'
                 unname(vapply(canoniser_plan(p)$donnees$hypotheses, `[[`, "", "valeur")) },
               c("enfant=F;assure=M", "1e-2"))
 
+section("plan : poste d'une hypothèse (C192-1 à C192-5, #192 ; spécification de B2, erratum v1.0.24, § 2.3)")
+
+# Le poste d'une ligne de `hypotheses` est `tous`, ou un poste du catalogue qui lit au moins une
+# table du motif (defauts.csv, colonne `tables`, croisée avec lectures.csv) ; sinon plan_invalide
+# par valider_plan(), donc calculer_provisions(), jamais par controler_base() ni vue_a_date().
+# Avant (mesuré sur a3219d4) : valider_plan() accepte C192-1 et C192-2, et calculer_provisions()
+# refuse C192-1 au calcul (declaration_manquante, affiliations, salaire_reference, AF1). Les
+# contre-témoins (C192-3, C192-5) passent avant comme après.
+source(file.path(racine, "tests", "references.R"), local = TRUE)
+hyp192 <- function(motif, valeur, poste) {
+  lapply(ns$REFERENTIELS, function(r) list(motif = motif, referentiel = r, poste = poste, valeur = valeur))
+}
+tb192 <- b2_tables()
+plan192 <- function(h) {
+  p <- b2_plan(tb192, D("2025-12-31"))
+  p$donnees <- list(hypotheses = h, seuils = list(
+    d02c_age_min = list(assures_sinistre = 16, assures_affiliation = 16, famille = 0),
+    d02c_age_max = list(assures_sinistre = 75, assures_affiliation = 70, famille = 110)))
+  p
+}
+# base de 4.9 (engagement) : capital non fixé, salaire de référence de AF1 manquant (D03c lue par P1)
+b192 <- b2_base_capital(capital = NA)
+b192$affiliations$salaire_reference <- NA_real_
+msg192 <- function(motif, poste, tables, admis) {
+  paste0("plan : donnees$hypotheses : ", motif, " (comptes_sociaux, ", poste,
+         ") : poste inconnu du catalogue ou qui ne lit aucune table du motif (", tables, ") ; postes admis : ", admis)
+}
+admis_p1p2 <- "tous, sinistres_declares_non_regles, capitaux_non_reclames"
+typo192 <- hyp192("D03c", "ensemble=30000", "sinistres_declares_non_regle")
+d03c_p3 <- hyp192("D03c", "ensemble=30000", "provision_mathematique_temporaire_deces")
+# échoue sur a3219d4 : valider_plan() accepte, calculer_provisions() refuse declaration_manquante
+r <- refus_de(valider_plan(plan192(typo192)))
+verifier_egal("C192-1 D03c déclarée pour un poste mal orthographié (sinistres_declares_non_regle) : plan_invalide par valider_plan(), message nommant motif, référentiel, poste et postes admis",
+              if (is.null(r)) NULL else list(r$motif, r$attendu, conditionMessage(r)),
+              list("plan_invalide", "donnees$hypotheses",
+                   msg192("D03c", "sinistres_declares_non_regle", "affiliations", admis_p1p2)))
+r <- refus_de(calculer_provisions(b192, plan192(typo192), par_identifiant(tb192)))
+verifier_egal("C192-1 calculer_provisions() refuse le même plan plan_invalide avant tout calcul (avant : declaration_manquante, affiliations, salaire_reference, AF1)",
+              if (is.null(r)) NULL else list(r$motif, conditionMessage(r)),
+              list("plan_invalide", msg192("D03c", "sinistres_declares_non_regle", "affiliations", admis_p1p2)))
+# échoue sur a3219d4 : valider_plan() accepte
+r <- refus_de(valider_plan(plan192(d03c_p3)))
+verifier_egal("C192-2 D03c déclarée pour P3 (qui ne lit pas affiliations) : plan_invalide par valider_plan()",
+              if (is.null(r)) NULL else list(r$motif, conditionMessage(r)),
+              list("plan_invalide", msg192("D03c", "provision_mathematique_temporaire_deces", "affiliations", admis_p1p2)))
+# échoue sur a3219d4 : D05 pour P3 acceptée
+r <- refus_de(valider_plan(plan192(hyp192("D05", "motif=sans_suite;decompte=compte", "provision_mathematique_temporaire_deces"))))
+verifier_egal("C192-3 D05 déclarée pour P3 (qui ne lit pas evenements) : plan_invalide",
+              if (is.null(r)) NULL else list(r$motif, conditionMessage(r)),
+              list("plan_invalide", msg192("D05", "provision_mathematique_temporaire_deces", "evenements", admis_p1p2)))
+# échoue sur a3219d4 : signalement d'un motif alternatif pour un poste inconnu accepté ; la règle
+# vaut pour toute ligne de `hypotheses`, signalement compris
+r <- refus_de(valider_plan(plan192(list(list(motif = "D13", referentiel = "comptes_sociaux", poste = "xx",
+                                              valeur = "signalement")))))
+verifier_egal("C192-3 signalement de D13 déclaré pour un poste inconnu (xx) : plan_invalide, les trois postes de B2 admis",
+              if (is.null(r)) NULL else list(r$motif, conditionMessage(r)),
+              list("plan_invalide", msg192("D13", "xx", "sinistres", paste0(admis_p1p2, ", provision_mathematique_temporaire_deces"))))
+# contre-témoins (acceptés avant comme après) : tous ; D03c pour P2 (engagement.R, D03c lue par
+# P2) ; D03h et D03f pour P1 (tables lues, colonnes non lues : R2, spécification de B2, § 6.2) ;
+# D03f, D03a et D03d pour P3
+for (cas in list(c("D03c", "ensemble=30000", "tous"), c("D03c", "ensemble=30000", "capitaux_non_reclames"),
+                 c("D03h", "0", "sinistres_declares_non_regles"), c("D03f", "regle", "sinistres_declares_non_regles"),
+                 c("D03f", "regle", "provision_mathematique_temporaire_deces"),
+                 c("D03a", "regle", "provision_mathematique_temporaire_deces"),
+                 c("D03d", "regle", "provision_mathematique_temporaire_deces"))) {
+  verifier(paste0("C192-3 contre-témoin : ", cas[[1L]], " déclarée pour ", cas[[3L]], " : admise par valider_plan()"),
+           is.null(refus_de(valider_plan(plan192(hyp192(cas[[1L]], cas[[2L]], cas[[3L]]))))))
+}
+verifier_egal("C192-3 contre-témoin : D03c pour tous, calculer_provisions() rend la PSAP de b192 (85 747,2, calcule)",
+              { pr <- calculer_provisions(b192, plan192(hyp192("D03c", "ensemble=30000", "tous")), par_identifiant(tb192))$provisions
+                pr <- pr[pr$segmentation == "ensemble" & pr$poste == "sinistres_declares_non_regles", ]
+                list(pr$montant, pr$statut_calcul) },
+              list(85747.199999999983, "calcule"))
+# échoue sur a3219d4 : valider_plan() accepte ; controler_base() et vue_a_date() acceptent avant
+# comme après (sans plan, le poste n'est lu par aucun calcul)
+ctrl192 <- function(h) {
+  m <- function(expr) tryCatch({ expr; "aucun" }, refus_provie = function(e) e$motif)
+  d <- list(hypotheses = h)
+  c(valider_plan = m(valider_plan(plan192(h))),
+    controler_base = m(controler_base(b192, D("2025-12-31"), d, list(age = "revolu"))),
+    vue_a_date = m(ns$vue_a_date(b192, D("2025-12-31"), d, list(age = "revolu"))))
+}
+for (cas in list(list("C192-1", typo192), list("C192-2", d03c_p3))) {
+  verifier_egal(paste0("C192-4 ", cas[[1L]], " : plan_invalide par valider_plan() seul ; controler_base() et vue_a_date() l'acceptent"),
+                ctrl192(cas[[2L]]),
+                c(valider_plan = "plan_invalide", controler_base = "aucun", vue_a_date = "aucun"))
+}
+# contre-témoin (passe avant comme après) : le contrôle suit lire_declarations(), qui garde son
+# premier refus (forme de la valeur, #99) pour une ligne mal formée déclarée pour un poste refusé
+r <- refus_de(valider_plan(plan192(hyp192("D03c", "ensemble=3e4", "sinistres_declares_non_regle"))))
+verifier("C192-5 forme et poste fautifs : le refus est celui de lire_declarations() (forme de la valeur), pas celui du poste",
+         !is.null(r) && identical(r$motif, "plan_invalide") && identical(r$attendu, "donnees") &&
+           all(vapply(c("D03c (comptes_sociaux, sinistres_declares_non_regle)", "ensemble=3e4", "forme attendue"),
+                      grepl, NA, conditionMessage(r), fixed = TRUE)) &&
+           !grepl("postes admis", conditionMessage(r), fixed = TRUE))
+verifier_chemin("C192-5 seuil inconnu et poste fautif : le refus est celui du seuil inconnu (donnees$seuils$zz)",
+                valider_plan({ p <- plan192(typo192); p$donnees$seuils$zz <- 1; p }), "plan_invalide", "donnees$seuils$zz")
+# contre-témoin (passe avant comme après ; constat M1 de l'audit léger) : un seuil au-delà des
+# entiers de R (.seuils_canoniques()) garde son refus devant un poste fautif
+verifier_chemin("C192-5 seuil au-delà des entiers de R et poste fautif : le refus est celui du seuil (donnees$seuils$d02c_age_max$famille)",
+                valider_plan({ p <- plan192(typo192); p$donnees$seuils$d02c_age_max$famille <- 1e10; p }),
+                "plan_invalide", "donnees$seuils$d02c_age_max$famille")
+# échoue sur a3219d4 (avis d'actuary) : D03d (table assures) déclarée pour P1, qui ne lit pas assures
+r <- refus_de(valider_plan(plan192(hyp192("D03d", "regle", "sinistres_declares_non_regles"))))
+verifier_egal("C192-3 D03d déclarée pour P1 (qui ne lit pas assures) : plan_invalide, seul P3 admis",
+              if (is.null(r)) NULL else list(r$motif, conditionMessage(r)),
+              list("plan_invalide", msg192("D03d", "sinistres_declares_non_regles", "assures",
+                                           "tous, provision_mathematique_temporaire_deces")))
+# échoue sur a3219d4 (.v_postes_hypotheses() absente ; constat M2 de l'audit léger) : catalogue
+# fictif à deux garanties, poste `pt` d'une garantie fictive `arret` (hors du périmètre de tout
+# plan de B2) qui lit affiliations : admis pour D03c (affiliations), refusé pour D05 (evenements)
+cat192 <- catalogue_garanties()
+cat192$postes <- rbind(cat192$postes, transform(cat192$postes[1L, ], code_garantie = "arret", poste = "pt"))
+cat192$lectures <- rbind(cat192$lectures, data.frame(code_garantie = "arret", poste = "pt", table = "affiliations",
+                                                     colonne = "salaire_reference", stringsAsFactors = FALSE))
+hy192 <- function(motif, valeur) data.frame(motif = motif, referentiel = "comptes_sociaux", poste = "pt", valeur = valeur,
+                                            stringsAsFactors = FALSE)
+verifier_egal("C192-3 catalogue à deux garanties : D03c déclarée pour le poste pt d'une autre garantie, qui lit affiliations : admise",
+              tryCatch({ ns$.v_postes_hypotheses(hy192("D03c", "ensemble=1"), dictionnaire(), cat192, "donnees$hypotheses"); "admise" },
+                       refus_provie = function(e) e$motif, error = function(e) conditionMessage(e)),
+              "admise")
+r <- tryCatch({ ns$.v_postes_hypotheses(hy192("D05", "motif=refus;decompte=compte"), dictionnaire(), cat192, "donnees$hypotheses"); NULL },
+              refus_provie = function(e) list(e$motif, conditionMessage(e)), error = function(e) conditionMessage(e))
+verifier_egal("C192-3 catalogue à deux garanties : D05 déclarée pour le poste pt, qui ne lit pas evenements : plan_invalide",
+              r,
+              list("plan_invalide", msg192("D05", "pt", "evenements", admis_p1p2)))
+
 section("plan : exports (critère 1.9)")
 
 exports <- getNamespaceExports("provie")

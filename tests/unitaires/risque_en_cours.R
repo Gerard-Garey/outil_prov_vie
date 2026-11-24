@@ -817,3 +817,169 @@ verifier_egal("#72 : CO9 de nature refusée (hors_domaine), montant 100 : pério
                    c72(risque(co9_72("zzz", "2021-01-01", "2021-12-31", 100), p3_72)),
                    c72(risque(co9_72("emission", "1800-01-01", "1800-12-31", 100, "2021-01-01"), p3_72))),
               list(list(NA_real_, "hors_domaine", "CT3", 1L), t3_72, list(NA_real_, "D02c", "CT3", 1:2)), tolerance = TOL)
+
+section("risque_en_cours : population et lignes lues par unité de P3 (#174, commit 1/2, résultats identiques)")
+# (1) population de P3 (.population_p3(), fonction à trois valeurs) : CT2 individuel, CT3
+# collectif ; arrêté A1 (2025-01-01) : CT2 sans sortie, critères connus, CT3 de cotisation admise
+# (fin 2025-06-30 > A1) : appartenance TRUE, TRUE ; nature de CT3 refusée (hors_domaine) : champ
+# non déterminé (NA), appartenance NA. Avant 2/2 (9847b90) : aucun filtre évalué, appartenance NA,
+# NA (sur-ensemble de #72) ; changement validé par actuary (V2 (ii), #174 (2/2))
+pop_174 <- function(b) { v <- b2_vue(b, A1); ns$.population_p3(v, ns$.gs_deces_p3(v), plan_p3())[c("id_contrat", "individuel", "appartenance", "id_garantie_souscrite", "unite_gs")] }
+b3_174 <- b2_base_p3(cotisation = data.frame(debut = D("2024-07-01"), fin = D("2025-06-30"), montant = 1200))
+verifier_egal("#174 (1/2, attendu de 2/2) .population_p3() : CT2 individuel, CT3 collectif, appartenance TRUE, TRUE ; nature de CT3 refusée : individuel NA, appartenance TRUE, NA",
+              list(pop_174(b3_174), pop_174(within(b3_174, contrats$nature_contrat[2L] <- "zzz"))[c("individuel", "appartenance")]),
+              list(list(id_contrat = c("CT2", "CT3"), individuel = c(TRUE, FALSE), appartenance = c(TRUE, TRUE),
+                        id_garantie_souscrite = c("GS2", "GS3"), unite_gs = 1:2),
+                   list(individuel = c(TRUE, NA), appartenance = c(TRUE, NA))))
+# (2) une ligne rattache la même unité pour S2 et pour l'arrêt par unité (liste de
+# .lectures_contrats(), lue par hypotheses_vue_unites() et par refus_ligne_unites()) : entrée de
+# vue$hypotheses écrite à la main, de la forme de vue_a_date() (D02a sous H) ; ligne de contrats de
+# CT2 : S2 et arrêt à CT2 seul ; cotisation CO1 (GS3, admise : emission, fin postérieure à A1) :
+# S2 et arrêt à CT3 seul
+lp_174 <- function(table, colonnes) {
+  v <- b2_vue(b3_174, A1)
+  v$hypotheses <- list(list(motif = "D02a", referentiel = "comptes_sociaux", poste = "tous", valeur = "regle", table = table,
+                            lignes = 1L, colonnes = colonnes))
+  pop <- ns$.population_p3(v, ns$.gs_deces_p3(v), plan_p3())
+  l <- ns$.lectures_contrats(v, pop, as.numeric(A1), "prospective_prime_pure", ns$.lues_p3(cat_g))
+  list(ns$hypotheses_vue_unites(v, "comptes_sociaux", P3, "risque_en_cours", 2L, l),
+       ns$refus_ligne_unites(v, "risque_en_cours", 2L, l, table, seq_len(nrow(b3_174[[table]])) == 1L))
+}
+verifier_egal("#174 (1/2) même ligne, même unité (P3) : ligne de contrats de CT2 : S2 et arrêt à CT2 ; cotisation CO1 de GS3 : S2 et arrêt à CT3",
+              list(lp_174("contrats", "date_fin"), lp_174("cotisations", c("debut_periode", "fin_periode"))),
+              list(list(c("D02a", ""), c(TRUE, FALSE)), list(c("", "D02a"), c(FALSE, TRUE))))
+# (3) lignes lues construites avant tout retour, lecture d'une colonne refusée : cotisations
+# .fin_periode de chaînes (refus type_incompatible, portée colonne, que la vue garde brute) : P3
+# arrêté par le bilan (type_incompatible), sans lecture convertie de la colonne (harnais sous
+# options(warn = 2)). Mesure de la version de travail avant ce test : avertissement « NAs
+# introduced by coercion » dans .cotisations_admises_p3() ; f387e10 : même résultat, sans
+# avertissement (colonne lue après le retour du bilan).
+b_174t <- within(b3_174, { cotisations$fin_periode <- as.character(cotisations$fin_periode); cotisations$fin_periode[1L] <- "abc" })
+verifier_egal("#174 (1/2) cotisations.fin_periode de chaînes (type_incompatible) : P3 arrêté par le bilan, sans avertissement de conversion",
+              risque(b_174t, plan_p3())$cellules[c("statut_calcul", "motif_arret")],
+              data.frame(statut_calcul = "arrete", motif_arret = "type_incompatible", stringsAsFactors = FALSE))
+
+section("risque_en_cours : population de P3 à trois valeurs (V2 (ii)), table de vérité et témoins de la vue (#174, commit 2/2 ; erratum B2 v1.0.23, avis d'actuary Q3 et Q5 ; M780)")
+# (1) C174-18, table de vérité de .population_p3() (avis d'actuary, Q3), une assertion par case ;
+# arrêté 2025-12-31 (plan p3_72), base b3_72 : CT2 individuel (GS2 en vigueur, terme 2027-01-01,
+# âge de fin 70, AS2 né en 1984), CT3 collectif (CO1 emission du 2025-07-01 au 2026-06-30).
+# Appartenance de CT2 puis de CT3 ; vue de vue_174() (déclarations du plan, ou `declarations`) ;
+# `vue` : altération de la vue (exclusion) après vue_a_date().
+vue_174 <- function(b, plan, declarations = NULL) {
+  ns$vue_a_date(b, plan$arrete, if (is.null(declarations)) plan$donnees else declarations, plan$conventions)
+}
+app_174 <- function(b, plan = p3_72, declarations = NULL, vue = identity) {
+  v <- vue(vue_174(b, plan, declarations))
+  pop <- ns$.population_p3(v, ns$.gs_deces_p3(v), plan)
+  stats::setNames(pop$appartenance, pop$id_contrat)
+}
+ct2_174 <- function(b, colonne, valeur) { b$contrats[[colonne]][b$contrats$id_contrat == "CT2"] <- valeur; b }
+par2_174 <- function(b, nom, valeur) { b$parametres$valeur[b$parametres$id_garantie_souscrite == "GS2" & b$parametres$parametre == nom] <- valeur; b }
+fin2_174 <- function(b, saisie) {
+  b <- ct2_174(ct2_174(b, "date_fin", D("2025-06-30")), "motif_fin", "resiliation_adherent")
+  ct2_174(b, "date_saisie_fin", saisie)
+}
+hyp_174 <- function(motif) lapply(ns$REFERENTIELS, function(r) list(motif = motif, referentiel = r, poste = "tous", valeur = "regle"))
+p_d03g_174 <- p3_72
+p_d03g_174$donnees$seuils <- list(d03g_delai_jours = list(contrats = 0))
+p_d03g_174$donnees$hypotheses <- hyp_174("D03g")
+p_d02a_174 <- p3_72
+p_d02a_174$donnees$hypotheses <- hyp_174("D02a")
+p_d03f_174 <- p3_72
+p_d03f_174$donnees$hypotheses <- hyp_174("D03f")
+b2s_174 <- within(b3_72, garanties_souscrites$date_fin[1L] <- D("2025-06-30"))
+verifier_egal("#174 (2/2) C174-18, champ (a) (CT2), FALSE : aucune version deces en vigueur ; date_terme au plus A ; date_fin au plus A observée ; âge de fin (40) atteint ; sinistre deces observé ; TRUE : témoin (aucune sortie, critères connus) ; date_fin au plus A rendue visible par D03g (restitué à 0)",
+              list(app_174(b2s_174)[["CT2"]], app_174(ct2_174(b3_72, "date_terme", D("2025-06-30")))[["CT2"]],
+                   app_174(fin2_174(b3_72, D("2025-07-01")))[["CT2"]], app_174(par2_174(b3_72, "age_fin_garantie", 40))[["CT2"]],
+                   app_174(avec_si2(b3_72))[["CT2"]], app_174(b3_72)[["CT2"]],
+                   app_174(fin2_174(b3_72, as.Date(NA)), p_d03g_174)[["CT2"]]),
+              list(FALSE, FALSE, FALSE, FALSE, FALSE, TRUE, TRUE))
+verifier_egal("#174 (2/2) C174-18, champ (a) (CT2), NA : date_terme refusée (D02c) ; date_terme tenue pour inconnue (D02a sous H) ; date_fin au plus A saisie, motif_fin refusé (partie de fin inconnue, § 6.2, erratum v1.0.5 ; audit B1) ; sinistre deces de AS2 exclu ; âge de fin exclu (vue altérée ; un paramètre ambigu n'est atteint que par une ligne exclue, avis d'actuary, Q4) ; âge de fin refusé (D09) ; code de garantie de GS2 refusé",
+              list(app_174(ct2_174(b3_72, "date_terme", D("1890-01-01")))[["CT2"]],
+                   app_174(ct2_174(b3_72, "date_terme", D("2023-01-01")), p_d02a_174)[["CT2"]],
+                   app_174(ct2_174(fin2_174(b3_72, D("2025-07-01")), "motif_fin", "zzz"))[["CT2"]],
+                   app_174(avec_si2(b3_72), vue = function(v) { v$exclu$risque_en_cours$sinistres[1L] <- TRUE; v })[["CT2"]],
+                   app_174(b3_72, vue = function(v) { v$exclu$risque_en_cours$parametres[2L] <- TRUE; v })[["CT2"]],
+                   app_174(par2_174(b3_72, "age_fin_garantie", -67))[["CT2"]],
+                   app_174(within(b3_72, garanties_souscrites$code_garantie[1L] <- "Deces"))[["CT2"]]),
+              rep(list(NA), 7L))
+co1_174 <- function(b, colonne, valeur) { b$cotisations[[colonne]][1L] <- valeur; b }
+verifier_egal("#174 (2/2) C174-18, champ (b) (CT3), FALSE : seule cotisation échue (fin_periode 2025-06-30) ; aucune cotisation ; TRUE : témoin (cotisation admise) ; fin_periode manquante sous D03f H (règle) ; NA : nature refusée ; fin_periode refusée (D02c) ; cotisation exclue (début manquant, D03f exclure)",
+              list(app_174(co1_174(co1_174(b3_72, "debut_periode", D("2024-07-01")), "fin_periode", D("2025-06-30")))[["CT3"]],
+                   app_174(b2_base_p3(periodicite = "annuelle", prime = 500))[["CT3"]], app_174(b3_72)[["CT3"]],
+                   app_174(co1_174(b3_72, "fin_periode", as.Date(NA)), p_d03f_174)[["CT3"]],
+                   app_174(co1_174(b3_72, "nature_mouvement", "zzz"))[["CT3"]],
+                   app_174(co1_174(co1_174(b3_72, "debut_periode", D("1800-01-01")), "fin_periode", D("1800-12-31")))[["CT3"]],
+                   app_174(co1_174(b3_72, "debut_periode", as.Date(NA)), declarations = ex72)[["CT3"]]),
+              list(FALSE, FALSE, TRUE, TRUE, NA, NA, NA))
+ct3n_174 <- within(b3_72, contrats$nature_contrat[2L] <- "zzz")
+verifier_egal("#174 (2/2) C174-18, champ non déterminé (nature de CT3 refusée) : FALSE si les deux champs sont sortis (terme au plus A, aucune cotisation) ; NA sinon (cotisation admise)",
+              list(app_174(within(ct3n_174, { cotisations <- cotisations[0L, ]; contrats$date_terme[2L] <- D("2025-06-30") }))[["CT3"]],
+                   app_174(ct3n_174)[["CT3"]]),
+              list(FALSE, NA))
+# Invariant (C174-18) : un contrat d'appartenance FALSE n'est ni calculé, ni restitué, ni identifiant
+# d'un arrêt de P3, sur les bases de cette section, celles de #72 et les cas T1 à T7.
+bases_174 <- list(list(b2s_174), list(ct2_174(b3_72, "date_terme", D("2025-06-30"))), list(fin2_174(b3_72, D("2025-07-01"))),
+                  list(par2_174(b3_72, "age_fin_garantie", 40)), list(avec_si2(b3_72)), list(b3_72),
+                  list(fin2_174(b3_72, as.Date(NA)), p_d03g_174), list(ct2_174(b3_72, "date_terme", D("1890-01-01"))),
+                  list(par2_174(b3_72, "age_fin_garantie", -67)), list(within(b3_72, garanties_souscrites$code_garantie[1L] <- "Deces")),
+                  list(co1_174(co1_174(b3_72, "debut_periode", D("2024-07-01")), "fin_periode", D("2025-06-30"))),
+                  list(co1_174(b3_72, "fin_periode", as.Date(NA)), p_d03f_174), list(co1_174(b3_72, "nature_mouvement", "zzz")),
+                  list(within(b3_72, assures$date_naissance[1L] <- D("1800-01-01"))), list(nat72), list(as9_72),
+                  list(fin2_174(within(b3_72, assures$date_naissance[1L] <- D("1890-01-01")), D("2025-07-01"))),
+                  list(ct2_174(fin2_174(b3_72, D("2025-07-01")), "motif_fin", "zzz")),
+                  list(ct2_174(fin2_174(within(b3_72, cotisations <- cotisations[0L, ]), D("2025-07-01")), "motif_fin", NA_character_)),
+                  list(b2_base_p3(), plan_p3()), list(b2_base_p3("annuelle"), plan_p3()),
+                  list(b2_base_p3(cotisation = data.frame(debut = D("2024-07-01"), fin = D("2025-06-30"), montant = 1200)), plan_p3()))
+inv_174 <- vapply(bases_174, function(x) {
+  plan <- if (length(x) > 1L) x[[2L]] else p3_72
+  a <- app_174(x[[1L]], plan)
+  sortis <- names(a)[a %in% FALSE]
+  r <- ns$calculer_risque_en_cours(vue_174(x[[1L]], plan), plan, tb, cat_g, "deces", P3)
+  !any(c(r$contrats$id_contrat, attr(r$cellules, "identifiant_arret")) %in% sortis)
+}, NA)
+verifier_egal("#174 (2/2) C174-18 invariant : contrat d'appartenance FALSE ni calculé, ni restitué, ni identifiant d'un arrêt (22 bases, dont deux à partie de fin refusée)",
+              inv_174, rep(TRUE, 22L))
+# (2) C174-19, témoins construits par vue_a_date() (avis d'actuary, Q5 ; le test (2) de 1/2, écrit à
+# la main, reste le seul témoin de la branche des cotisations, que la vue ne sait pas produire en
+# v1, R7 inatteignable) : base b3_72, date_fin au 2025-06-30, motif_fin renseigné, date_saisie_fin
+# manquante, D03g sous H, délai 0, (a) sur CT2, (b) sur CT3 : la source S2 rend un code pour ce
+# contrat seul, et l'arrêt (ligne de contrats tenue pour refusée) vise ce contrat seul.
+temoin_174 <- function(id) {
+  b <- b3_72
+  k <- b$contrats$id_contrat == id
+  b$contrats$date_fin[k] <- D("2025-06-30"); b$contrats$motif_fin[k] <- "resiliation_adherent"; b$contrats$date_saisie_fin[k] <- as.Date(NA)
+  v <- vue_174(b, p_d03g_174)
+  pop <- ns$.population_p3(v, ns$.gs_deces_p3(v), p_d03g_174)
+  l <- ns$.lectures_contrats(v, pop, as.numeric(p_d03g_174$arrete), "prospective_prime_pure", ns$.lues_p3(cat_g))
+  list(pop$id_contrat, ns$hypotheses_vue_unites(v, "comptes_sociaux", P3, "risque_en_cours", length(pop$id_contrat), l),
+       ns$refus_ligne_unites(v, "risque_en_cours", length(pop$id_contrat), l, "contrats", k))
+}
+verifier_egal("#174 (2/2) C174-19 : même ligne, même unité, témoins de vue_a_date() : date_saisie_fin manquante sous D03g (délai 0) de CT2 : S2 et arrêt à CT2 seul ; de CT3 : S2 et arrêt à CT3 seul",
+              list(temoin_174("CT2"), temoin_174("CT3")),
+              list(list(c("CT2", "CT3"), c("D03g", ""), c(TRUE, FALSE)), list(c("CT2", "CT3"), c("", "D03g"), c(FALSE, TRUE))))
+
+section("risque_en_cours : exposition de P3 aux lignes de portée ligne (#175 ; spécification donnees v1.9, § 9.2, erratum 1.9.4, (iii) (b))")
+# Cas (b) : fin_periode de cotisations de type character (type_incompatible, portée colonne : P3
+# arrêté par le bilan sur une table de sa population, ligne 2 de refus_tables) et naissance de
+# AS2, assuré de CT2, hors bornes (D02c, portée ligne, ligne 1) : la population n'est pas
+# déterminée, P3 est exposé à la ligne 1 ; motif (type_incompatible) et identifiant (NA)
+# inchangés. Témoin : sans le refus de type, P3 arrêté par la ligne (D02c, CT2), exposé à la
+# ligne 1 (inchangé). Avant (a3219d4) : attribut NULL sous l'arrêt du bilan.
+b3_175 <- b2_base_p3(periodicite = "annuelle", prime = 500,
+                     cotisation = data.frame(debut = D("2025-07-01"), fin = D("2026-06-30"), montant = 1200))
+verifier_egal("#175 P3, cas (b) : arrêté par le bilan (type_incompatible, NA), exposé à la ligne D02c de AS2 ; témoin : arrêté (D02c, CT2), ligne 1",
+              list(c72(risque(within(b3_175, { cotisations$fin_periode <- as.character(cotisations$fin_periode)
+                                               assures$date_naissance[1L] <- D("1800-01-01") }), p3_72)),
+                   c72(risque(within(b3_175, assures$date_naissance[1L] <- D("1800-01-01")), p3_72))),
+              list(list(NA_real_, "type_incompatible", NA_character_, 1L), list(NA_real_, "D02c", "CT2", 1L)))
+# .TABLES_POPULATION_P3 (statique) : les tables que P3 lit dans lectures.csv, hors extraction (refus
+# d'appel) ; .TABLES_POPULATION_ENGAGEMENT (`engagement`) : tables lues par P1 et par P2. Avant
+# (a3219d4) : constantes absentes.
+lec_175 <- cat_g$lectures[cat_g$lectures$code_garantie == "deces", , drop = FALSE]
+verifier_egal("#175 tables de population : .TABLES_POPULATION_P3 = tables de P3 dans lectures.csv hors extraction ; .TABLES_POPULATION_ENGAGEMENT incluse dans les tables de P1 et dans celles de P2",
+              list(sort(ns$.TABLES_POPULATION_P3, method = "radix"),
+                   vapply(c("sinistres_declares_non_regles", "capitaux_non_reclames"),
+                          function(q) all(ns$.TABLES_POPULATION_ENGAGEMENT %in% lec_175$table[lec_175$poste == q]), NA)),
+              list(sort(setdiff(unique(lec_175$table[lec_175$poste == P3]), "extraction"), method = "radix"),
+                   c(sinistres_declares_non_regles = TRUE, capitaux_non_reclames = TRUE)))

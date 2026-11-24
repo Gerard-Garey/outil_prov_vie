@@ -101,8 +101,9 @@ calculer_provisions <- function(donnees, plan, tables = list(), provenance = NUL
   segments <- segments_vue(vue, cp$perimetre$segmentations, garanties)
   # agregats
   provisions <- .agreger(postes_plan, sorties, segments, names(cp$perimetre$segmentations), cp, catalogue)
-  # postes arrêtés par leur famille sur une ligne de portée ligne de refus_tables (attribut
-  # `refus_ligne` de la cellule, #72 ; arret_refus_ligne()) : ajoutés à postes_arretes
+  # postes exposés par leur famille à une ligne de portée ligne de refus_tables (attribut
+  # `refus_ligne` de la cellule, arrêtée ou non, #72, #175 ; arret_refus_ligne()) : ajoutés à
+  # postes_arretes
   arrets$refus_tables <- .postes_arretes_ligne(arrets$refus_tables, postes_plan, sorties)
   # enjeu
   bilan <- vue$bilan
@@ -407,10 +408,12 @@ print.resultat_provie <- function(x, ...) {
 }
 
 # postes_arretes des lignes de portée ligne de refus_tables (spécification `donnees` v1.9,
-# § 9.2 ; erratum du projet de dictionnaire 1.6, § 11.5, #72) : postes arrêtés par la règle
-# (iii) (postes_a_arreter()) et postes dont la famille a été arrêtée par la ligne (attribut
-# `refus_ligne` de la cellule, indices dans refus_tables), « garantie/poste » joints par « ; »,
-# triés ; NA si aucun. Les autres lignes sont rendues inchangées.
+# § 9.2, erratum 1.9.4, (iii) ; erratum du projet de dictionnaire 1.6, § 11.5, #72, #175) :
+# postes arrêtés par la règle (iii) (postes_a_arreter()) et postes exposés à la ligne (attribut
+# `refus_ligne` de la cellule rendue par la famille, arrêtée ou non, indices dans refus_tables :
+# condition (2) évaluée sans tenir compte des autres causes d'arrêt, indépendante de leur
+# préséance), « garantie/poste » joints par « ; », triés ; NA si aucun. Les autres lignes sont
+# rendues inchangées.
 .postes_arretes_ligne <- function(refus_tables, postes_plan, sorties) {
   ajout <- vector("list", nrow(refus_tables))
   for (i in seq_len(nrow(postes_plan))) {
@@ -449,7 +452,6 @@ print.resultat_provie <- function(x, ...) {
 #     pour `ensemble`) qui lisent la table de la rangée et, quand elle est renseignée, sa colonne.
 .enjeu_par_poste <- function(enjeu, postes_plan, catalogue, refus_tables) {
   if (nrow(enjeu) == 0L) return(enjeu)
-  lec <- catalogue$lectures
   pp <- unique(postes_plan[c("garantie", "poste", "famille")])
   idx <- integer(0)
   poste <- character(0)
@@ -467,10 +469,12 @@ print.resultat_provie <- function(x, ...) {
       lit <- if (identical(enjeu$action[i], "refus")) {
         paste(pp$garantie[j], pp$poste[j], sep = "/") %in% arretes
       } else {
+        # colonnes lues par le poste (colonnes_lues(), seule dérivation, #112), à la colonne près :
+        # sans les parties de ligne (`parties` vide), règle de l'enjeu inchangée
+        lues <- colonnes_lues(catalogue, pp$garantie[j], pp$poste[j], enjeu$table[i], list())
         regle_table <- identical(enjeu$action[i], "exclure")
-        enjeu$famille[i] %in% c(pp$famille[j], "ensemble") &&
-          any(lec$code_garantie == pp$garantie[j] & lec$poste == pp$poste[j] & lec$table == enjeu$table[i] &
-                (regle_table | is.na(enjeu$colonne[i]) | lec$colonne %in% enjeu$colonne[i]))
+        enjeu$famille[i] %in% c(pp$famille[j], "ensemble") && length(lues) > 0L &&
+          (regle_table || is.na(enjeu$colonne[i]) || enjeu$colonne[i] %in% lues)
       }
       if (lit) {
         idx <- c(idx, i)

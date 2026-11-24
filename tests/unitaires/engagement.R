@@ -17,6 +17,8 @@ cat_g <- catalogue_garanties()
 A <- D("2025-12-31")
 P1 <- "sinistres_declares_non_regles"
 P2 <- "capitaux_non_reclames"
+# colonnes lues par P1 dans une table (argument `lues` de .lectures_dossiers(), #112)
+lues_p1 <- function(t) ns$colonnes_lues(cat_g, "deces", P1, t, ns$parties_ligne())
 eng <- function(base, plan, poste = P1, arrete = A, declarations = NULL) {
   ns$calculer_engagement(b2_vue(base, arrete, declarations), plan, tb, cat_g, "deces", poste)
 }
@@ -562,11 +564,13 @@ verifier_egal("(3.17) (e) cas (c), affiliation cadres exclue pour engagement : a
                    cel(eng(base_college("GSC", c("non_cadres", "cadres", "cadres"), c(30000, 50000, 50000)), pB))),
               list(arret_af, arret_af))
 col_b <- base_college("GSC", "cadres", 30000)
-# #72 : le refus de garanties_souscrites.college est de portée ligne ; garanties_souscrites n'a pas
-# de liste de lignes lues par unité (§ 5.8) : rattachement non établi, P1 et P2 arrêtés par leur
-# famille (arret_refus_ligne()), sans identifiant ; postes_a_arreter() ne remplit pas
-# postes_arretes (calculer_provisions() le fait ; avant #72 : portée colonne, règle (ii))
-verifier_egal("(3.17) (g) college de GSC à NA : refus de portée ligne (garanties_souscrites, college) qui arrête P1 et P2 (rattachement non établi, motif de la ligne ; #72) ; college de l'affiliation à NA : P1 arrêté type_incompatible (témoin)",
+# #72 : le refus de garanties_souscrites.college est de portée ligne ; la ligne de
+# garanties_souscrites de la garantie du dossier est lue par unité (§ 5.8, erratum v1.0.23,
+# #174 (2/2)) : DO1 (sur GSC) la lit, P1 et P2 arrêtés par leur famille (arret_refus_ligne()),
+# identifiant DO1 (avant #174 (2/2) : table sans liste, repli de #72, sans identifiant) ;
+# postes_a_arreter() ne remplit pas postes_arretes (calculer_provisions() le fait ; avant #72 :
+# portée colonne, règle (ii))
+verifier_egal("(3.17) (g) college de GSC à NA : refus de portée ligne (garanties_souscrites, college) lu par DO1, qui arrête P1 et P2 (motif de la ligne, DO1 ; #72, #174) ; college de l'affiliation à NA : P1 arrêté type_incompatible (témoin)",
               { b <- col_b; b$garanties_souscrites$college[2L] <- NA
                 v <- b2_vue(b, A)
                 rt <- ns$postes_a_arreter(cat_g, v$bilan, p$postes, ns$parties_ligne())$refus_tables
@@ -575,8 +579,8 @@ verifier_egal("(3.17) (g) college de GSC à NA : refus de portée ligne (garanti
                 b2 <- col_b; b2$affiliations$college <- NA   # NA logique : type de colonne incompatible
                 list(l$portee, l$motif, l$postes_arretes, cel(eng(b, pB)), cel(eng(bp, p, P2)), eng(b2, pB)$cellules$motif_arret) },
               list("ligne", "manquant_obligatoire", NA_character_,
-                   list(NA_real_, NA_integer_, NA_character_, "manquant_obligatoire", NA_character_),
-                   list(NA_real_, NA_integer_, NA_character_, "manquant_obligatoire", NA_character_), "type_incompatible"))
+                   list(NA_real_, NA_integer_, NA_character_, "manquant_obligatoire", "DO1"),
+                   list(NA_real_, NA_integer_, NA_character_, "manquant_obligatoire", "DO1"), "type_incompatible"))
 verifier_egal("(3.17) (h) P2 (beneficiaire_non_identifie) : cas (a) arrêt affiliation_non_determinee (DO1) ; cas (c) 194 880 exact",
               list(cel(eng(base_college("GSC", "non_cadres", 30000, "non_identifie"), p, P2)),
                    cel(eng(base_college("GSC", c("non_cadres", "cadres"), c(30000, 50000), "non_identifie"), p, P2))),
@@ -1203,7 +1207,7 @@ verifier_egal("#158 (1) lecture_unites() : clés \"ASI1\", \"\" et NA : seule AS
 lect158 <- function(mut = NULL, cle = NULL, d = "DO1", s = "SI1") {
   v <- vue158(mut, cle)
   e <- data.frame(id_dossier = d, id_sinistre = s, instruit = TRUE, stringsAsFactors = FALSE)
-  l <- ns$.lectures_dossiers(v, e, TRUE)
+  l <- ns$.lectures_dossiers(v, e, TRUE, lues_p1)
   list(dossiers = l[[1L]]$cles, sinistres = l[[2L]]$cles, contrats = l[[7L]]$cles, affiliations = l[[8L]]$cles)
 }
 verifier_egal("#158 (2) témoin renseigné : DO1, SI1, CT1 et la clé d'affiliation AS1 / CT1",
@@ -1407,16 +1411,19 @@ verifier_egal("#72 (c) et (d) : qualité de BE1 refusée : P1 et P2 arrêtés (h
                    c72(eng(b72d, p72_se, arrete = AX72))[[2L]], c72(eng(b72d, p72_se, P2, arrete = AX72))[[2L]]),
               list(list(NA_real_, "hors_domaine", "DO1", 1L), list(NA_real_, "hors_domaine", "DO1", 1L), "D02c",
                    "D02c", NA_character_, "D02c", "D02c"))
-# (e) table sans liste de lignes lues par unité (garanties_souscrites, § 5.8) : rattachement non
-# établi, P1 et P2 arrêtés sans identifiant ; (f) salaire de AF1 négatif (D09) : lu pour un
+# (e) type_assiette de GS1 refusé : la ligne de garanties_souscrites de la garantie du dossier est
+# lue par unité (§ 5.8, erratum v1.0.23, #174 (2/2)) : P1 arrêté (hors_domaine, DO1) ; DO1 est de
+# P1 (bénéficiaire identifié), P2 n'a aucune unité qui lise la ligne : calculé, 0 (avant #174
+# (2/2) : table sans liste, repli de #72, P1 et P2 arrêtés sans identifiant ; visa M780) ;
+# (f) salaire de AF1 négatif (D09) : lu pour un
 # capital reconstitué (DO1 sans fixation) : P1 arrêté (D09, DO1) après le calcul du capital ;
 # capital fixé : l'affiliation n'est pas lue, P1 calculé (témoin)
 b72f <- within(b2_base_capital(capital = NA), affiliations$salaire_reference[1L] <- -30000)
-verifier_egal("#72 (e) et (f) : type_assiette de GS1 refusé : P1 et P2 arrêtés sans identifiant ; salaire de AF1 refusé (D09) : capital reconstitué, P1 arrêté (D09, DO1) ; capital fixé, P1 calculé",
+verifier_egal("#72 (e) et (f) : type_assiette de GS1 refusé : P1 arrêté (hors_domaine, DO1), P2 calculé 0 (#174) ; salaire de AF1 refusé (D09) : capital reconstitué, P1 arrêté (D09, DO1) ; capital fixé, P1 calculé",
               list(c72(eng(within(b72, garanties_souscrites$type_assiette[1L] <- "autre"), p)),
                    c72(eng(within(b72, garanties_souscrites$type_assiette[1L] <- "autre"), p, P2)),
                    c72(eng(b72f, p)), c72(eng(within(b72, affiliations$salaire_reference[1L] <- -30000), p))),
-              list(list(NA_real_, "hors_domaine", NA_character_, 1L), list(NA_real_, "hors_domaine", NA_character_, 1L),
+              list(list(NA_real_, "hors_domaine", "DO1", 1L), list(0, NA_character_, NULL, NULL),
                    list(NA_real_, "D09", "DO1", 1L), t72))
 # (g) paiement PR1 négatif (D09) saisi après l'arrêté (2026-02-01, invisible à A, visibilité
 # déterminée) : la ligne n'est pas dans la vue, le calcul ne la lit pas : P1 calculé (103 936,
@@ -1430,3 +1437,283 @@ verifier_egal("#72 (g) et (h) : paiement refusé invisible à l'arrêté : P1 ca
               list(c72(eng(b72g, p)), c72(eng(b72h, p72_se, arrete = AX72)), c72(eng(b72h, p72_se, P2, arrete = AX72))),
               list(list(103936, NA_character_, NULL, NULL), list(NA_real_, "D02c", "DO1", 1L), list(NA_real_, "D02c", "DO1", 1L)),
               tolerance = TOL)
+
+section("engagement : constructeur unique des lignes lues par unité, voie du capital (#174, commit 1/2, résultats identiques)")
+# (1) test de suppression, statique (plan de Bdr-b4, P2) : lecture_unites() n'est appelée que par
+# les deux constructeurs des lignes lues par unité, .lectures_dossiers() (P1, P2) et
+# .lectures_contrats() (P3), et par l'exception nommée .lignes_sous_hypothese() (unités : les
+# lignes de la table, sinistres ou contrats ; nommée .sinistres_sous_hypothese() en 1/2) ; chaque constructeur est appelé une fois par fonction de sa famille, avant
+# le premier retour de calculer_engagement() et de calculer_risque_en_cours() ; la population de P3
+# n'est lue que par .population_p3() et la voie du capital que par .voie_capital(). Avant (f387e10) :
+# lecture_unites() appelée aussi par calculer_risque_en_cours(), provisions_individuelles() et
+# provisions_collectives() ; .lectures_contrats(), .population_p3() et .voie_capital() absentes.
+appelants_174 <- function(f) {
+  Filter(function(n) is.function(ns[[n]]) && f %in% all.names(body(ns[[n]])), sort(ls(ns, all.names = TRUE), method = "radix"))
+}
+appels_174 <- function(f, g) sum(all.names(body(ns[[g]])) == f)
+avant_retour_174 <- function(f, g) {
+  d <- deparse(body(ns[[g]]), width.cutoff = 500L)
+  length(grep(paste0(f, "("), d, fixed = TRUE)) == 1L && grep(paste0(f, "("), d, fixed = TRUE) < min(grep("return(", d, fixed = TRUE))
+}
+famille_p3_174 <- c("calculer_risque_en_cours", "provisions_collectives", "provisions_individuelles")
+verifier_egal("#174 (1/2) suppression : lecture_unites() appelée par .lectures_contrats(), .lectures_dossiers() et l'exception .lignes_sous_hypothese() seules ; .lectures_dossiers() par calculer_engagement() seule, une fois, avant tout retour ; .lectures_contrats() et .population_p3() par les trois fonctions de P3, une fois chacune, avant tout retour de calculer_risque_en_cours() ; .voie_capital() par .reconstituer_capital() et calculer_engagement()",
+              list(appelants_174("lecture_unites"), appelants_174(".lectures_dossiers"), appels_174(".lectures_dossiers", "calculer_engagement"),
+                   avant_retour_174(".lectures_dossiers", "calculer_engagement"),
+                   appelants_174(".lectures_contrats"), vapply(famille_p3_174, function(g) appels_174(".lectures_contrats", g), 0L),
+                   appelants_174(".population_p3"), vapply(famille_p3_174, function(g) appels_174(".population_p3", g), 0L),
+                   avant_retour_174(".lectures_contrats", "calculer_risque_en_cours"), appelants_174(".voie_capital")),
+              list(c(".lectures_contrats", ".lectures_dossiers", ".lignes_sous_hypothese"), "calculer_engagement", 1L, TRUE,
+                   famille_p3_174, stats::setNames(rep(1L, 3L), famille_p3_174),
+                   famille_p3_174, stats::setNames(rep(1L, 3L), famille_p3_174), TRUE,
+                   c(".reconstituer_capital", "calculer_engagement")))
+# (2) une ligne rattache la même unité pour S2 et pour l'arrêt par unité (une seule liste, lue par
+# hypotheses_vue_unites() et par refus_ligne_unites()) : base R1 de (4.7) (EV1 de SI1 et DO1, date
+# de saisie manquante, D03g sous H, délai 0 : ligne placée, visible), plus un dossier DO0 (sinistre
+# SI0 de l'assuré AS0) rangé avant DO1. S2 : D03g à l'unité de DO1 seule ; arrêt (EV1 tenue pour
+# refusée) : unité de DO1 seule. Un élément de champ `s2` FALSE (lecture_unites(), V3 (c)) n'est
+# pas lu par S2 et reste lu par l'arrêt.
+b_174 <- b_87
+b_174$assures <- rbind(transform(b_174$assures, id_assure = "AS0"), b_174$assures)
+b_174$sinistres <- rbind(transform(b_174$sinistres, id_sinistre = "SI0", id_assure = "AS0"), b_174$sinistres)
+b_174$dossiers <- rbind(transform(b_174$dossiers, id_dossier = "DO0", id_sinistre = "SI0"), b_174$dossiers)
+v_174 <- local({ cp <- ns$canoniser_plan(plan_87(list(evenements = 0))); ns$vue_a_date(b_174, cp$arrete, cp$donnees, cp$conventions) })
+e_174 <- ns$etats_a_date(v_174, "deces", "engagement")
+l_174 <- ns$.lectures_dossiers(v_174, e_174, FALSE, lues_p1)
+l_174_sans_s2 <- lapply(l_174, function(l) { l$s2 <- FALSE; l })
+verifier_egal("#174 (1/2) même ligne, même unité : dossiers DO0, DO1 ; EV1 sous D03g : S2 à DO1 seul (\"\", \"D03g\") ; EV1 refusée : arrêt par DO1 seul ; éléments de champ s2 FALSE : aucun code S2, arrêt inchangé",
+              list(e_174$id_dossier, v_174$retenu$evenements,
+                   ns$hypotheses_vue_unites(v_174, "comptes_sociaux", P1, "engagement", 2L, l_174),
+                   ns$refus_ligne_unites(v_174, "engagement", 2L, l_174, "evenements", TRUE),
+                   ns$hypotheses_vue_unites(v_174, "comptes_sociaux", P1, "engagement", 2L, l_174_sans_s2),
+                   ns$refus_ligne_unites(v_174, "engagement", 2L, l_174_sans_s2, "evenements", TRUE)),
+              list(c("DO0", "DO1"), TRUE, c("", "D03g"), c(FALSE, TRUE), c("", ""), c(FALSE, TRUE)))
+# (3) voie du capital (.voie_capital(), seule fonction de choix, lue par .reconstituer_capital()) :
+# DO1 ouvert (capital non fixé), GS1 à taux_capital 2 : reconstitution, capital reconstitué
+# (`reconstitue`), aucun arrêt ; capital_forfaitaire 50 000 ajouté : forfait, capital 50 000 ;
+# taux_capital retiré : aucune, arrêt parametre_non_determine ; paramètres de GS1 exclus pour
+# engagement (vue altérée, comme pv158()) : non déterminée (NA), arrêt parametre_non_determine
+voie_174 <- function(b, exclus = FALSE) {
+  v <- b2_vue(b, A)
+  if (exclus) v$exclu$engagement$parametres[] <- TRUE
+  e <- ns$etats_a_date(v, "deces", "engagement")
+  r <- ns$.reconstituer_capital(v, e, p$postes$deces[[P1]]$parametres, p$conventions, P1)
+  list(ns$.voie_capital(v, "GS1")$voie, r$reconstitue, r$arret, r$capital)
+}
+b_174r <- b2_base_capital(capital = NA)
+verifier_egal("#174 (1/2) .voie_capital() et .reconstituer_capital() : reconstitution (82 500), forfait (50 000), aucune (arrêt), non déterminée (arrêt)",
+              list(voie_174(b_174r),
+                   voie_174(within(b_174r, parametres <- rbind(parametres, transform(parametres[1L, ], parametre = "capital_forfaitaire",
+                                                                                     valeur = 50000)))),
+                   voie_174(within(b_174r, parametres <- parametres[parametres$parametre != "taux_capital", ])),
+                   voie_174(b_174r, exclus = TRUE)),
+              list(list("reconstitution", TRUE, NA_character_, 82500), list("forfait", FALSE, NA_character_, 50000),
+                   list("aucune", FALSE, "parametre_non_determine", NA_real_),
+                   list(NA_character_, FALSE, "parametre_non_determine", NA_real_)), tolerance = TOL)
+# (4) lignes lues construites avant tout retour, lecture d'une colonne refusée : parametres.valeur
+# de chaînes (refus type_incompatible, portée colonne, que la vue garde brute) : P1 et P2 arrêtés
+# par le bilan (type_incompatible), sans lecture convertie de la colonne (le harnais tourne sous
+# options(warn = 2) : un avertissement de conversion serait une erreur). Mesure de la version de
+# travail avant ce test : avertissement « NAs introduced by coercion » dans parametre_vue() ;
+# f387e10 : même résultat, sans avertissement (colonne lue après le retour du bilan).
+b_174t <- within(b2_base_capital(capital = NA), { parametres$valeur <- as.character(parametres$valeur); parametres$valeur[1L] <- "abc" })
+verifier_egal("#174 (1/2) parametres.valeur de chaînes (type_incompatible) : P1 et P2 arrêtés par le bilan, sans avertissement de conversion",
+              lapply(c(P1, P2), function(q) eng(b_174t, p, q)$cellules[c("statut_calcul", "motif_arret")]),
+              rep(list(data.frame(statut_calcul = "arrete", motif_arret = "type_incompatible", stringsAsFactors = FALSE)), 2L))
+# (5) dossier de l'état sans identifiant, avant le retour du bilan (constat m1 de l'audit de #174
+# (1/2)) : base R1 à l'extraction (arrêté = extraction : vue totale, la table dossiers refusée
+# reste retenue, règle 3), dossier sans identifiant ajouté (sinistre SI0 de l'assuré AS0) :
+# dossiers refusée (manquant_obligatoire, portée table) ; appel direct de calculer_engagement() :
+# P1 et P2 arrêtés par le bilan (manquant_obligatoire), sans l'erreur interne « dossier de l'état
+# sans identifiant ». f387e10 : même résultat ; version de travail avant la reprise : erreur
+# interne pour P1 et P2.
+b_174m <- b2_base_capital(extraction = A)
+b_174m$assures <- rbind(transform(b_174m$assures, id_assure = "AS0"), b_174m$assures)
+b_174m$sinistres <- rbind(transform(b_174m$sinistres, id_sinistre = "SI0", id_assure = "AS0"), b_174m$sinistres)
+b_174m$dossiers <- rbind(transform(b_174m$dossiers, id_dossier = NA_character_, id_sinistre = "SI0"), b_174m$dossiers)
+verifier_egal("#174 (1/2) m1 : dossier retenu sans identifiant (vue totale, dossiers refusée) : état sans identifiant ; P1 et P2 arrêtés manquant_obligatoire par le bilan, sans erreur interne",
+              list(ns$etats_a_date(b2_vue(b_174m, A), "deces", "engagement")$id_dossier,
+                   lapply(c(P1, P2), function(q) motif_de(eng(b_174m, p, q)$cellules[c("statut_calcul", "motif_arret")])),
+                   lapply(c(P1, P2), function(q) eng(b_174m, p, q)$cellules[c("statut_calcul", "motif_arret")])),
+              list(c(NA, "DO1"), list("aucun", "aucun"),
+                   rep(list(data.frame(statut_calcul = "arrete", motif_arret = "manquant_obligatoire", stringsAsFactors = FALSE)), 2L)))
+
+section("engagement : lignes lues par unité complétées, repli de #72 retiré, code de garantie refusé (#174, commit 2/2 ; erratum B2 v1.0.23 et v1.0.24, donnees 1.9.4 ; M780)")
+# Critères de valeur (C174-1 à C174-17) : tests/unitaires/calculer_provisions.R ; population de P3
+# (C174-18, C174-19) : tests/unitaires/risque_en_cours.R.
+# (1) C174-13, couverture (statique) : pour chaque poste de deces, les tables de lectures.csv, hors
+# extraction (refus d'appel, erratum donnees 1.9.4, (ii)), sont des tables des constructeurs des
+# lignes lues par unité (.lectures_dossiers() pour P1 et P2, .lectures_contrats() pour P3) ;
+# argument `repli` retiré d'arret_refus_ligne() ; une ligne candidate sur une table hors de
+# `listees` est une erreur interne (appel direct : PR1 refusée D09, liste réduite à dossiers).
+# Avant (9847b90) : garanties_souscrites et parametres absentes des deux constructeurs, repli
+# (arrêt sans identifiant).
+v_174b <- b2_vue(b2_base_capital(capital = NA), A)
+pp_174b <- p
+pop_174b <- ns$.population_p3(v_174b, ns$.gs_deces_p3(v_174b), pp_174b)
+tables_174b <- list(P1 = unique(vapply(ns$.lectures_dossiers(v_174b, ns$etats_a_date(v_174b, "deces", "engagement"), TRUE, lues_p1), `[[`, "", "table")),
+                    P3 = unique(vapply(ns$.lectures_contrats(v_174b, pop_174b, as.numeric(A), "prospective_prime_declaree", ns$.lues_p3(cat_g)), `[[`, "", "table")))
+lect_174b <- cat_g$lectures[cat_g$lectures$code_garantie == "deces" & cat_g$lectures$table != "extraction", , drop = FALSE]
+b_174e <- within(b2_base_capital(paiements = data.frame(date = D("2024-10-01"), montant = 10000)), prestations$montant[1L] <- -10000)
+v_174e <- b2_vue(b_174e, A)
+pa_174e <- ns$postes_a_arreter(cat_g, v_174e$bilan, p$postes, ns$parties_ligne())
+verifier_egal("#174 (2/2) C174-13 : tables de lectures.csv (hors extraction) incluses dans les tables des constructeurs, par poste ; `repli` absent des arguments d'arret_refus_ligne() ; table candidate hors de `listees` : erreur interne",
+              list(vapply(split(lect_174b$table, lect_174b$poste)[c(P1, P2, "provision_mathematique_temporaire_deces")],
+                          function(t) all(t %in% tables_174b[[if ("cotisations" %in% t) "P3" else "P1"]]), NA),
+                   "repli" %in% names(formals(ns$arret_refus_ligne)),
+                   tryCatch(ns$arret_refus_ligne(v_174e, pa_174e, paste("deces", P1, sep = "/"), "engagement", 1L, list(), "DO1", "dossiers"),
+                            error = function(e) grepl("arret_refus_ligne() : ligne de port", conditionMessage(e), fixed = TRUE) &&
+                              grepl("table prestations lue par deces/sinistres_declares_non_regles, table sans liste", conditionMessage(e),
+                                    fixed = TRUE))),
+              list(c(sinistres_declares_non_regles = TRUE, capitaux_non_reclames = TRUE, provision_mathematique_temporaire_deces = TRUE),
+                   FALSE, TRUE))
+# (2) C174-14, extension du test de suppression de 1/2 : seuls les éléments de garanties_souscrites
+# et de parametres portent `s2` FALSE (V3 (c)), dans les deux constructeurs ; statique : D02a est
+# le seul motif de .MOTIFS_HYPOTHESE_VUE dont les tables (defauts.csv) admettent
+# garanties_souscrites, aucun n'admet parametres (motif de V3 (c) : ces lignes n'entrent dans
+# aucune source S2 en v1).
+s2_faux_174 <- function(l) sort(unique(vapply(Filter(function(x) identical(x$s2, FALSE), l), `[[`, "", "table")), method = "radix")
+def_174 <- ns$dictionnaire()$defauts
+tables_motif_174 <- lapply(stats::setNames(ns$.MOTIFS_HYPOTHESE_VUE, ns$.MOTIFS_HYPOTHESE_VUE),
+                           function(m) strsplit(def_174$tables[def_174$code == m], ";", fixed = TRUE)[[1L]])
+verifier_egal("#174 (2/2) C174-14 : éléments de champ s2 FALSE : garanties_souscrites et parametres seuls (P1, P2 et P3) ; motifs de S2 admettant garanties_souscrites : D02a seul ; admettant parametres : aucun ; admettant cotisations : D02a seul (dates inconnues, jamais une ligne cachée : la case « cotisation cachée » de .population_p3() n'est pas codée)",
+              list(s2_faux_174(ns$.lectures_dossiers(v_174b, ns$etats_a_date(v_174b, "deces", "engagement"), TRUE, lues_p1)),
+                   s2_faux_174(ns$.lectures_contrats(v_174b, pop_174b, as.numeric(A), "prospective_prime_declaree", ns$.lues_p3(cat_g))),
+                   names(Filter(function(t) "garanties_souscrites" %in% t, tables_motif_174)),
+                   names(Filter(function(t) "parametres" %in% t, tables_motif_174)),
+                   names(Filter(function(t) "cotisations" %in% t, tables_motif_174))),
+              list(c("garanties_souscrites", "parametres"), c("garanties_souscrites", "parametres"), "D02a", character(0), "D02a"))
+# (3) parametre_vue(), élément `refuse` (avis d'actuary, Q1) : ligne retenue du paramètre refusée de
+# portée ligne sur `valeur` (age_fin_garantie de GS1 à -67, D09), valeur non masquée (-67) ;
+# colonne `valeur` de chaînes (type_incompatible) : refusé pour tout paramètre présent, valeur NA ;
+# paramètre absent : non refusé. Témoin : aucune valeur refusée.
+pv_174 <- function(b, nom) { r <- ns$parametre_vue(b2_vue(b, A), nom, c("GS1", "GSX")); r[c("valeur", "refuse")] }
+verifier_egal("#174 (2/2) parametre_vue() : élément refuse (ligne refusée de portée ligne, colonne non numérique ; paramètre absent : FALSE), valeur non masquée",
+              list(pv_174(within(bR_174 <- b2_base_capital(capital = NA), parametres$valeur[2L] <- -67), "age_fin_garantie"),
+                   pv_174(bR_174, "age_fin_garantie"),
+                   pv_174(within(bR_174, parametres$valeur <- as.character(parametres$valeur)), "taux_capital"),
+                   pv_174(bR_174, "capital_forfaitaire")),
+              list(list(valeur = c(-67, NA), refuse = c(TRUE, FALSE)), list(valeur = c(67, NA), refuse = c(FALSE, FALSE)),
+                   list(valeur = c(NA_real_, NA), refuse = c(TRUE, FALSE)), list(valeur = c(NA_real_, NA), refuse = c(FALSE, FALSE))))
+# (4) état non déterminé et filtre par nom des lignes de parametres (P1, P2) : chaque ligne de
+# parametres de GS1 (taux_capital, age_fin_garantie, majoration_conjoint, majoration_enfant) est
+# tenue pour refusée seule, les autres non : est-elle lue par DO1 (refus_ligne_unites()) ? bR
+# (ouvert) : lignes 1, 3 et 4 (noms de .PARAMETRES_CAPITAL), jamais age_fin_garantie (ligne 2,
+# non refusée quand une ligne de capital l'est) ; b0 (capital_du) : aucune ; b0 dont le montant
+# de EV1 (colonne lue par l'automate) est refusé (D09, portée ligne : état non déterminé) :
+# lignes 1, 3 et 4 ; b0 dont EV1 est exclu pour engagement (vue altérée après etats_a_date(),
+# comme pv158()) : aucune. Ajusté à la reprise de #175 (erratum donnees 1.9.6, (i), visé) : un
+# événement exclu sort de la famille et ne rend plus l'état non déterminé (avant : lignes 1, 3
+# et 4) ; le cas du montant refusé est ajouté pour garder la couverture de l'état non déterminé.
+lp_par_174 <- function(b, exclure_ev = FALSE) {
+  v <- b2_vue(b, A)
+  e <- ns$etats_a_date(v, "deces", "engagement")
+  if (exclure_ev) v$exclu$engagement$evenements[1L] <- TRUE
+  l <- ns$.lectures_dossiers(v, e, FALSE, lues_p1)
+  vapply(seq_len(nrow(b$parametres)), function(k) ns$refus_ligne_unites(v, "engagement", nrow(e), l, "parametres",
+                                                                         seq_len(nrow(b$parametres)) == k), NA)
+}
+b0_174p <- b2_base_capital()
+verifier_egal("#174 (2/2) parametres lus, ligne par ligne : bR (ouvert) lignes 1, 3, 4 (age_fin_garantie non lue) ; b0 (capital_du) aucune ; b0, montant de EV1 refusé : lignes 1, 3, 4 ; b0, EV1 exclu pour engagement : aucune (1.9.6 (i))",
+              list(lp_par_174(bR_174), lp_par_174(b0_174p), lp_par_174(within(b0_174p, evenements$montant[1L] <- -1e5)),
+                   lp_par_174(b0_174p, TRUE)),
+              list(c(TRUE, FALSE, TRUE, TRUE), rep(FALSE, 4L), c(TRUE, FALSE, TRUE, TRUE), rep(FALSE, 4L)))
+# (5) colonnes lues par l'automate (.COLONNES_AUTOMATE_EVENEMENTS, état non déterminé) : celles
+# d'evenements que lisent P1 et P2 dans lectures.csv, hors id_sinistre (test statique ; avis
+# d'actuary sur 2/2, correction 1)
+verifier_egal("#174 (2/2) .COLONNES_AUTOMATE_EVENEMENTS = colonnes d'evenements de lectures.csv pour P1 et pour P2, hors id_sinistre",
+              lapply(c(P1, P2), function(q) setdiff(cat_g$lectures$colonne[cat_g$lectures$code_garantie == "deces" &
+                                                                         cat_g$lectures$poste == q & cat_g$lectures$table == "evenements"],
+                                                    "id_sinistre")),
+              rep(list(ns$.COLONNES_AUTOMATE_EVENEMENTS), 2L))
+
+section("engagement : exposition aux lignes de portée ligne, postes_arretes indépendant de la préséance (#175 ; spécification donnees v1.9, § 9.2, erratum 1.9.4, (iii))")
+# Condition (2) de postes_arretes évaluée par la famille avant tout retour, sans tenir compte des
+# autres causes d'arrêt du poste ; son résultat (lignes de refus_tables) est l'attribut
+# `refus_ligne` de toute cellule rendue ; motif et identifiant d'arrêt inchangés (première cause).
+# Avant (a3219d4) : l'attribut ne portait que les lignes qui arrêtaient le poste par leur propre
+# retour (NULL sous un arrêt antérieur ; sans les lignes différées sous un arrêt de phase 1).
+c175 <- function(r) list(r$cellules$montant, r$cellules$motif_arret, attr(r$cellules, "identifiant_arret"),
+                         attr(r$cellules, "refus_ligne"))
+b0_175 <- b2_base_capital(paiements = data.frame(date = D("2024-10-01"), montant = 10000))
+bR_175 <- b2_base_capital(capital = NA, paiements = data.frame(date = D("2024-10-01"), montant = 10000))
+# (1) .voie_capital(), élément reconstitution_possible (cas (e)) : GS1 et GSX (garantie hors de la
+# vue) ; taux_capital seul : reconstitution possible ; capital_forfaitaire de 50 000 ajouté : FALSE
+# (valeur connue) ; ce capital refusé (D09, -50 000) : possible (inconnu) ; ni taux_capital ni
+# capital_forfaitaire : FALSE (absence connue) ; paramètres de GS1 exclus pour engagement (vue
+# altérée) : possible ; GSX : toujours possible. Avant (a3219d4) : élément absent.
+rp_175 <- function(b, exclus = FALSE) {
+  v <- b2_vue(b, A)
+  if (exclus) v$exclu$engagement$parametres[] <- TRUE
+  ns$.voie_capital(v, c("GS1", "GSX"))$reconstitution_possible
+}
+bF_175 <- within(b2_base_capital(capital = NA), parametres <- rbind(parametres, b2_tab("parametres", id_garantie_souscrite = "GS1",
+                                                                                     parametre = "capital_forfaitaire", valeur = 50000)))
+verifier_egal("#175 .voie_capital() reconstitution_possible : taux seul TRUE ; capital forfaitaire connu FALSE, refusé TRUE ; ni l'un ni l'autre FALSE ; paramètres exclus TRUE ; garantie hors de la vue TRUE",
+              list(rp_175(b2_base_capital(capital = NA)), rp_175(bF_175), rp_175(within(bF_175, parametres$valeur[5L] <- -50000)),
+                   rp_175(within(b2_base_capital(capital = NA), parametres <- parametres[parametres$parametre != "taux_capital", ])),
+                   rp_175(bF_175, exclus = TRUE)),
+              list(c(TRUE, TRUE), c(FALSE, TRUE), c(TRUE, TRUE), c(FALSE, TRUE), c(TRUE, TRUE)))
+# (2) cas (a) : salaire_reference de type character (type_incompatible, portée colonne : P1 et P2
+# arrêtés par le bilan, table affiliations, qui ne décide pas de la population) et PR1 de DO1
+# négatif (D09, ligne 2 de refus_tables) : P1, dont DO1 est l'unité, est exposé à la ligne 2 ;
+# P2 ne l'est pas. Cas (b) : id_beneficiaire de BE1 manquant (portée table, beneficiaires décide
+# de la partition) et PR1 négatif : P1 et P2 exposés à la ligne 2. Avant (a3219d4) : NULL partout.
+verifier_egal("#175 cas (a) et (b) : P1 et P2 arrêtés par le bilan, motif inchangé ; (a) P1 exposé à PR1 (ligne 2), P2 non ; (b) P1 et P2 exposés",
+              list(c175(eng(within(b0_175, { affiliations$salaire_reference <- as.character(affiliations$salaire_reference)
+                                             prestations$montant[1L] <- -10000 }), p)),
+                   c175(eng(within(b0_175, { affiliations$salaire_reference <- as.character(affiliations$salaire_reference)
+                                             prestations$montant[1L] <- -10000 }), p, P2)),
+                   c175(eng(within(b0_175, { beneficiaires$id_beneficiaire[1L] <- NA; prestations$montant[1L] <- -10000 }), p)),
+                   c175(eng(within(b0_175, { beneficiaires$id_beneficiaire[1L] <- NA; prestations$montant[1L] <- -10000 }), p, P2))),
+              list(list(NA_real_, "type_incompatible", NA_character_, 2L), list(NA_real_, "type_incompatible", NA_character_, NULL),
+                   list(NA_real_, "manquant_obligatoire", NA_character_, 2L), list(NA_real_, "manquant_obligatoire", NA_character_, 2L)))
+# (3) cas (e) et (f) : capital reconstitué (DO1 ouvert, taux_capital), salaire de AF1 négatif
+# (D09, ligne 1, affiliations, table différée) et PR1 négatif (D09, ligne 2) : P1 arrêté par PR1
+# (phase 1 : D09, DO1, motif et identifiant inchangés), exposé aux deux lignes ; P2 calculé (0),
+# sans exposition. Cas (d) : qualité de BE1 refusée (hors_domaine, ligne 2 ; partition non
+# déterminée, DO1 unité possible des deux postes) et salaire de AF1 négatif (ligne 1) : P1 et P2
+# arrêtés (hors_domaine, DO1), exposés aux deux lignes ; capital fixé (DO1 capital_du, état
+# déterminé) : affiliations non lues, exposés à la ligne 2 seule. Avant (a3219d4) : 2L partout.
+verifier_egal("#175 cas (d), (e) et (f) : arrêt de phase 1 ou de partition, motif et identifiant inchangés ; ligne différée d'affiliations comprise dans l'exposition d'une unité ouverte de capital reconstitué ; non lue d'un dossier capital_du",
+              list(c175(eng(within(bR_175, { affiliations$salaire_reference[1L] <- -30000; prestations$montant[1L] <- -10000 }), p)),
+                   c175(eng(within(bR_175, { affiliations$salaire_reference[1L] <- -30000; prestations$montant[1L] <- -10000 }), p, P2)),
+                   c175(eng(within(bR_175, { affiliations$salaire_reference[1L] <- -30000; beneficiaires$qualite[1L] <- "ami" }), p)),
+                   c175(eng(within(bR_175, { affiliations$salaire_reference[1L] <- -30000; beneficiaires$qualite[1L] <- "ami" }), p, P2)),
+                   c175(eng(within(b0_175, { affiliations$salaire_reference[1L] <- -30000; beneficiaires$qualite[1L] <- "ami" }), p, P2))),
+              list(list(NA_real_, "D09", "DO1", 1:2), list(0, NA_character_, NULL, NULL),
+                   list(NA_real_, "hors_domaine", "DO1", 1:2), list(NA_real_, "hors_domaine", "DO1", 1:2),
+                   list(NA_real_, "hors_domaine", "DO1", 2L)))
+# (4) erratum donnees 1.9.6, (i) (reprise ; visé) : capital fixé (b2_base_capital(), taux_capital
+# présent), salaire de AF1 négatif (D09). T3 (garde) : EV1, seule fixation, exclu pour engagement
+# (vue altérée) : l'automate ne le lit pas, DO1 ouvert, capital reconstitué : P1 arrêté (D09, DO1),
+# ligne 1 (inchangé). Cas de Q1 : seconde fixation EV2, EV1 exclu : DO1 capital_du, état
+# déterminé, affiliations non lues : P1 calculé (103 936), sans exposition. Avant la reprise :
+# exposé à la ligne 1 (postes_arretes listait un poste calculé) ; a3219d4 : sans exposition.
+q1_175 <- function(deux) {
+  b <- within(b2_base_capital(), affiliations$salaire_reference[1L] <- -30000)
+  if (deux) b$evenements <- rbind(b$evenements, transform(b$evenements, id_evenement = "EV2"))
+  v <- b2_vue(b, A)
+  v$exclu$engagement$evenements[1L] <- TRUE
+  c175(ns$calculer_engagement(v, p, tb, cat_g, "deces", P1))
+}
+verifier_egal("#175 1.9.6 (i) : EV1 exclu pour engagement : seule fixation, P1 arrêté (D09, DO1), ligne 1 ; deux fixations, P1 calculé 103 936, sans exposition",
+              list(q1_175(FALSE), q1_175(TRUE)),
+              list(list(NA_real_, "D09", "DO1", 1L), list(103936, NA_character_, NULL, NULL)), tolerance = TOL)
+# (5) constat M1 de la revue finale (#175 ; erratum donnees 1.9.4, (iii) (e)) : table parametres
+# refusée en portée table (ligne au nom manquant, manquant_obligatoire) : ses lignes sont
+# illisibles, l'absence de capital_forfaitaire et de taux_capital n'est pas connue : voie non
+# déterminée (NA), reconstitution possible. Témoins : parametres à zéro ligne (absence connue :
+# « aucune », FALSE) ; base intacte (« reconstitution », TRUE). Vue totale (A = extraction,
+# 2026-03-31 : la table refusée n'est pas masquée, ses valeurs sont lues), ligne taux_capital
+# retirée et ligne au nom manquant : voie NA, reconstitution possible. Avant (eeb6ce1) :
+# « aucune », FALSE pour la table refusée (lue comme une absence connue), à A comme à la vue
+# totale.
+vc_175 <- function(b, a = A) { x <- ns$.voie_capital(b2_vue(b, a), "GS1"); list(x$voie, x$reconstitution_possible) }
+nm_175 <- b2_tab("parametres", id_garantie_souscrite = "GS1", parametre = NA_character_, valeur = 1)
+verifier_egal("#175 .voie_capital() : table parametres refusée en portée table (nom manquant) : voie NA, reconstitution possible, à A et à la vue totale (sans taux_capital) ; parametres vide : aucune, FALSE ; base intacte : reconstitution, TRUE",
+              list(vc_175(within(b2_base_capital(capital = NA), parametres <- rbind(parametres, nm_175))),
+                   vc_175(within(b2_base_capital(capital = NA), parametres <- rbind(parametres[parametres$parametre != "taux_capital", ], nm_175)),
+                          D("2026-03-31")),
+                   vc_175(within(b2_base_capital(capital = NA), parametres <- parametres[0L, ])),
+                   vc_175(b2_base_capital(capital = NA))),
+              list(list(NA_character_, TRUE), list(NA_character_, TRUE), list("aucune", FALSE), list("reconstitution", TRUE)))

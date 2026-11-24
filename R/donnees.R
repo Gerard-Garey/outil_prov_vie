@@ -171,7 +171,8 @@ CONVENTIONS_LIMITE_AGE <- c("revolu", "millesime")
 # Motifs dont l'hypothèse s'applique à la vue, commune aux postes et aux deux référentiels :
 # ceux de la règle P et D02a (dates rejetées tenues pour inconnues, M717) ; leur hypothèse se
 # déclare pour le poste `tous`, avec la même valeur pour les deux référentiels
-# (lire_declarations()).
+# (lire_declarations()). Même ensemble que .MOTIFS_HYPOTHESE_VUE de `engagement` (détection S2) :
+# invariant contrôlé par un test (M722 ; spécification `donnees` v1.9, § 9.4, erratum 1.9.5, #171).
 .MOTIFS_HYPOTHESE_VUE_COMMUNE <- c("D02a", .MOTIFS_REGLE_P)
 # Motifs à traitement unique (dictionnaire, § 1.10 et § 9 : X et H y sont deux alternatives
 # pour toute ligne) : une exclusion et une hypothèse déclarées pour un même motif de cette
@@ -445,6 +446,11 @@ cles_lignes_hypothese <- function(vue, table, lignes, colonne) {
 # Garanties dont etats_a_date() reconstitue les dossiers (B2 : deces seule ; spécification de
 # B2, § 4.2) ; colonnes rendues, dans cet ordre.
 .GARANTIES_ETATS <- "deces"
+# Types d'événement lus par l'automate du dossier (etats_a_date() ; spécification de B2, § 4.2,
+# erratum v1.0.5) : les autres types sont sans effet sur l'état. Seule liste, lue aussi par
+# `engagement` (état non déterminé des lignes lues par unité, .lectures_dossiers() ;
+# spécification `donnees` v1.9, § 9.2, erratum 1.9.6, (i), #175).
+TYPES_AUTOMATE <- c("fixation_capital", "cloture_dossier", "reouverture_dossier")
 .COLONNES_ETATS <- c("id_sinistre", "id_dossier", "etat", "date_entree_etat", "categorie_invalidite",
                      "montant_en_vigueur", "etat_dossier", "date_etat_dossier", "motif_cloture", "instruit")
 
@@ -462,7 +468,7 @@ cles_lignes_hypothese <- function(vue, table, lignes, colonne) {
 #   etat_dossier ("ouvert", "capital_du", "clos"), date_etat_dossier (date d'effet de
 #     l'événement qui l'a fixé, date_ouverture pour l'ouvert initial), motif_cloture (motif du
 #     cloture_dossier en vigueur si clos, NA sinon) : automate du dossier deces sur les
-#     événements de la vue de niveau dossier non exclus pour la famille
+#     événements de la vue de niveau dossier, de type de TYPES_AUTOMATE, non exclus pour la famille
 #     (vue$exclu[[famille]]$evenements), de date d'effet au plus l'arrêté (comme les
 #     composantes de l'enjeu et D07 (c)), dans l'ordre de .dernier_evenement() (date d'effet,
 #     ordre des types du § 4, date de saisie, id_evenement) : départ ouvert ; fixation_capital
@@ -505,7 +511,7 @@ etats_a_date <- function(vue, garanties, famille) {
   a <- as.numeric(ctx$arrete)
   type <- vv("evenements", "type_evenement")
   effet <- as.numeric(vv("evenements", "date_effet"))
-  ev <- which(!is.na(type) & !is.na(effet) & effet <= a & !is.na(vv("evenements", "id_dossier")) &
+  ev <- which(type %in% TYPES_AUTOMATE & !is.na(effet) & effet <= a & !is.na(vv("evenements", "id_dossier")) &
                 !vue$exclu[[famille]]$evenements)
   p <- .paires(vv("evenements", "id_dossier")[ev], id_dossier)
   etat_dossier <- rep("ouvert", n)
@@ -4477,6 +4483,25 @@ dates_inconnues_vue <- function(vue, table, colonne) {
   if (is.null(d$valeur)) d$masque else d$masque & is.na(d$valeur)
 }
 
+# Lignes de la table `table` (toutes les lignes de la base, retenues ou non) dont la visibilité
+# entière est non déterminée à l'arrêté dans la vue `vue` (objet vue_a_date()) : lignes des
+# inscriptions de `ctx$lignes_nd` de cette table et de colonne NA, quel que soit le motif
+# (parente_non_determinee compris) ; même source que vue$visibilite_non_determinee
+# (.visibilite_non_determinee(), qui en publie les identifiants, dix au plus), sans tronquer.
+# Rend un statut, jamais une valeur (E17-1) ; tout FALSE à une vue totale (aucune inscription).
+# Lue par `engagement` pour postes_arretes d'une ligne de portée ligne refusée hors de la vue
+# (spécification `donnees` v1.9, § 9.2, erratum 1.9.6, (iii) ; #175). Sans point : appelée par
+# la famille engagement ; non exportée.
+lignes_visibilite_nd_vue <- function(vue, table) {
+  if (!inherits(vue, "vue_provie")) {
+    stop("lignes_visibilite_nd_vue() : `vue` doit \u00eatre un objet vue_provie", call. = FALSE)
+  }
+  ctx <- vue$ctx
+  res <- rep(FALSE, NROW(ctx$base[[table]]))
+  for (k in ctx$lignes_nd) if (identical(k$table, table) && is.na(k$colonne)) res[k$lignes] <- TRUE
+  res
+}
+
 # Lignes de `table` dont la valeur de `colonne` est refusée par un refus de portée ligne
 # (refus R de valeur identifié par ligne sur une colonne non clé, .portee_effective() ;
 # spécification `donnees` v1.9, § 9.2, #72), de motif `motif` (NULL : tout motif) : vecteur
@@ -4495,6 +4520,19 @@ lignes_refus_ligne_vue <- function(vue, table, colonne, motif = NULL) {
     if (.portee_effective(ctx$dico, k$code, k$table, k$colonne) == "ligne") res[k$lignes] <- TRUE
   }
   res
+}
+
+# Table `table` refusée en portée table dans la vue `vue` (objet vue_a_date()), quelle qu'en
+# soit la cause (clé, domaine, D04b, refus induit...) : même source que le masquage de la vue
+# (`ctx$refus_pv$tables`, .refus_regle_b(), lu par .construire_vue()), et que les lignes de
+# vue$bilan$refus_tables de portée `table` de cette table. Rend un statut (TRUE, FALSE) ; à
+# une vue totale, la table n'est pas masquée, mais elle reste refusée. Lue par `engagement`
+# (.voie_capital() : table `parametres` illisible, voie non déterminée et reconstitution
+# possible ; spécification `donnees` v1.9, erratum 1.9.4, (iii) (e) ; #175). Sans point :
+# appelée par la famille engagement ; non exportée.
+table_refusee_vue <- function(vue, table) {
+  if (!inherits(vue, "vue_provie")) stop("table_refusee_vue() : `vue` doit \u00eatre un objet vue_provie", call. = FALSE)
+  !is.null(vue$ctx$refus_pv$tables[[table]])
 }
 
 # D02a : ordre des dates violé (dictionnaire, § 9), sur la vue ; la colonne du constat est
