@@ -233,6 +233,23 @@ methodes_poste <- function(x, poste, colonne) {
 # manquante, inconnue, n'est jamais lue par une famille).
 .MOTIFS_ND_ARRET_X <- "D03i"
 
+# Colonnes que le poste `poste` de la garantie `garantie` lit dans la table `table` (spécification
+# de B2, § 5.8, erratum v1.0.24, « Colonnes lues », #112 point 2 ; V6 (b)) : colonnes de
+# lectures.csv (`catalogue` : catalogue_garanties()) pour (garantie, poste, table), dans l'ordre du
+# catalogue, puis les colonnes de toute partie de ligne de la table dont le poste lit une colonne
+# (`parties` : donnees::parties_ligne(), passée en argument, aucune arête garanties -> donnees ;
+# une colonne d'une partie vaut pour toute la partie, erratum v1.0.5). character(0) si le poste ne
+# lit pas la table. Seule dérivation de « ce qu'un poste lit dans une table », lue par la condition
+# (1) de l'arrêt (postes_a_arreter()), par la détection S2 des familles (argument `lues` des
+# éléments de lecture_unites() : même grain, colonne au poste, ligne à l'unité) et par
+# l'enjeu par poste de `calculer_provisions` ; non exportée.
+colonnes_lues <- function(catalogue, garantie, poste, table, parties) {
+  lec <- catalogue$lectures
+  res <- unique(lec$colonne[lec$code_garantie == garantie & lec$poste == poste & lec$table == table])
+  for (q in parties) if (identical(q$table, table) && any(res %in% q$colonnes)) res <- union(res, q$colonnes)
+  res
+}
+
 # Postes arrêtés par le bilan (M239 ; ADR 0010, point 11 (b), annoté ; spécification de B2,
 # § 6.2). `catalogue` : catalogue_garanties() (lectures.csv : colonnes lues par poste) ;
 # `bilan` : bilan de controler_base() (refus_tables, vue$visibilite_non_determinee), passé en
@@ -277,13 +294,18 @@ postes_a_arreter <- function(catalogue, bilan, postes, parties) {
   cles <- paste(g, p, sep = "/")
   lec <- catalogue$lectures
   lec_cle <- paste(lec$code_garantie, lec$poste, sep = "/")
-  lit_table <- function(tables) unique(lec_cle[lec$table %in% tables])
-  # colonnes de la partie de ligne de `t` qui contient `c1` ; c1 seule hors de toute partie
-  colonnes_partie <- function(t, c1) {
-    for (q in parties) if (identical(q$table, t) && c1 %in% q$colonnes) return(q$colonnes)
-    c1
+  # postes du catalogue (« garantie/poste », ordre du catalogue) qui lisent la table `t` (c1 NA) ou,
+  # dans `t`, la colonne `c1`, partie de ligne comprise : colonnes_lues(), seule dérivation (#112)
+  un <- which(!duplicated(lec_cle))
+  lisent <- function(t, c1 = NA_character_) {
+    lu <- vapply(un, function(j) {
+      cl <- colonnes_lues(catalogue, lec$code_garantie[j], lec$poste[j], t, parties)
+      if (is.na(c1)) length(cl) > 0L else c1 %in% cl
+    }, NA)
+    lec_cle[un][lu]
   }
-  lit_colonne <- function(t, c1) unique(lec_cle[lec$table == t & lec$colonne %in% colonnes_partie(t, c1)])
+  lit_table <- function(tables) unique(unlist(lapply(tables, lisent), use.names = FALSE))
+  lit_colonne <- function(t, c1) lisent(t, c1)
   # tables descendantes : clés étrangères simples (fille -> parente), jusqu'au point fixe
   col <- dico$colonnes
   ref <- col[nzchar(col$reference) & !grepl(";", col$reference, fixed = TRUE), , drop = FALSE]

@@ -1252,6 +1252,199 @@ verifier_egal("garde du point 1 de #112 : hypothèses de la vue D02b et D03g sur
               list(sort(vapply(h_g112, `[[`, "", "motif"), method = "radix"), unique(lapply(h_g112, `[[`, "colonnes"))),
               list(c("D02b", "D02b", "D03g", "D03g"), list("date_saisie_fin")))
 
+section("grain de la source S2 : colonnes lues par le poste (#112 point 2, Q-6 ; spécification de B2, § 5.8, erratum v1.0.24)")
+# Spécification de B2, § 5.8, erratum v1.0.24, « Colonnes lues » (visa du mainteneur M780, V6 (b),
+# V7 (a)) : une ligne lue pour une unité ne compte dans S2 que par les hypothèses de la vue dont
+# l'emprise contient une colonne que le poste lit dans sa table (colonnes_lues() de `garanties`,
+# lectures.csv, partie de ligne comprise ; seule dérivation, partagée avec la condition (1) de
+# l'arrêt). Aucun montant ne change ; le statut et hypotheses_defaut de l'unité changent. Arrêté
+# 2025-12-31, plan recommandees. b0_112 : DO1 au capital fixé (capital_du), paiement de 10 000 au
+# 2024-10-01 (P1) ; b0n_112 : même base, bénéficiaire non identifié (P2) ; bR_112 : capital
+# reconstitué (P1 lit les affiliations).
+b0_112 <- b2_base_capital(paiements = data.frame(date = D("2024-10-01"), montant = 10000))
+b0n_112 <- b2_base_capital(paiements = data.frame(date = D("2024-10-01"), montant = 10000), qualite = "non_identifie")
+bR_112 <- b2_base_capital(capital = NA)
+plan_112 <- function(motif, delai = NULL, q = p_c1) {
+  q$donnees$hypotheses <- c(q$donnees$hypotheses, hyp_x(motif))
+  if (!is.null(delai)) q$donnees$seuils$d03g_delai_jours <- delai
+  q
+}
+# fin du contrat CT1 du dossier au 2025-06-30, saisie le `saisie` (NA : D03g ; 2019-06-01, avant
+# l'effet du contrat : D02b)
+fin_112 <- function(b, saisie) {
+  b$contrats$date_fin <- D("2025-06-30")
+  b$contrats$motif_fin <- "resiliation_adherent"
+  b$contrats$date_saisie_fin <- saisie
+  b
+}
+# dossiers du poste (identifiant, statut, hypotheses_defaut, montant) et cellule ensemble (statut,
+# montant), comptes sociaux
+dossier_112 <- function(b, q, poste) {
+  r <- calculer_provisions(b, q, tid)
+  d <- r$dossiers[r$dossiers$poste == poste & r$dossiers$referentiel == "comptes_sociaux", , drop = FALSE]
+  ce <- r$provisions[r$provisions$poste == poste & r$provisions$referentiel == "comptes_sociaux" &
+                       r$provisions$segmentation == "ensemble", , drop = FALSE]
+  list(d$id_dossier, d$statut_resultat, d$hypotheses_defaut, d$montant, ce$statut_resultat, ce$montant)
+}
+# C112-1 (base S1) : la partie de fin de CT1 (date_fin, motif_fin, date_saisie_fin) n'est pas lue par
+# P1 ni par P2, qui ne lisent de contrats que id_contrat et nature_contrat : D03g sur
+# contrats.date_saisie_fin (délai de contrats 0) ne fait plus naître S2 pour DO1. Avant (aa64245) :
+# DO1 et la cellule jugement_expert, hypotheses_defaut D03g, mêmes montants.
+verifier_egal("#112 C112-1 : D03g sur contrats.date_saisie_fin (partie de fin non lue par P1 ni P2) : DO1 exact, sans code, P1 94 555,8158688524 ; P2 (non identifié) 93 619,6196721311 exact (avant : jugement_expert, D03g)",
+              list(dossier_112(fin_112(b0_112, as.Date(NA)), plan_112("D03g", list(contrats = 0)), P1),
+                   dossier_112(fin_112(b0n_112, as.Date(NA)), plan_112("D03g", list(contrats = 0)), P2)),
+              list(list("DO1", "exact", "", 94555.8158688524, "exact", 94555.8158688524),
+                   list("DO1", "exact", "", 93619.6196721311, "exact", 93619.6196721311)),
+              tolerance = EPS)
+# C112-2 (base S1 bis) : fin de CT1 saisie le 2019-06-01, avant l'effet du contrat : D02b sur
+# contrats.date_saisie_fin. Avant (aa64245) : DO1 jugement_expert, hypotheses_defaut D02b.
+verifier_egal("#112 C112-2 : D02b sur contrats.date_saisie_fin : DO1 exact, sans code, P1 94 555,8158688524 (avant : jugement_expert, D02b)",
+              dossier_112(fin_112(b0_112, D("2019-06-01")), plan_112("D02b"), P1),
+              list("DO1", "exact", "", 94555.8158688524, "exact", 94555.8158688524),
+              tolerance = EPS)
+# C112-3 (contre-témoin, champ (b) de P3) : P3 lit la partie de fin de contrats (lectures.csv, tenu
+# par poste ; limite (i) du bloc « Colonnes lues ») : tests (4.7) (v) de
+# tests/unitaires/risque_en_cours.R (CT3 sous D03g sur date_saisie_fin : jugement_expert,
+# 3 482,0047792826), inchangés.
+# C112-4 (contre-témoin) : D03g sur evenements.date_saisie (date de visibilité de la ligne : emprise,
+# toutes les colonnes de la ligne, que P1 lit) : S2 gardé. C112-5 (contre-témoin, partie de ligne
+# d'affiliations, capital reconstitué) : P1 lit affiliations.date_fin, donc toute la partie de fin ;
+# D03g sur affiliations.date_saisie_fin reste S2. Identiques avant (aa64245).
+verifier_egal("#112 C112-4 et C112-5 (contre-témoins) : D03g sur evenements.date_saisie : DO1 jugement_expert, D03g, 94 555,8158688524 ; D03g sur affiliations.date_saisie_fin, capital reconstitué : DO1 jugement_expert, D03g, 86 604,672",
+              list(dossier_112(within(b0_112, evenements$date_saisie <- as.Date(NA)), plan_112("D03g", list(evenements = 0)), P1),
+                   dossier_112(within(bR_112, { affiliations$date_fin <- D("2025-06-30"); affiliations$motif_fin <- "depart_entreprise"
+                                                affiliations$date_saisie_fin <- as.Date(NA) }),
+                               plan_112("D03g", list(affiliations = 0)), P1)),
+              list(list("DO1", "jugement_expert", "D03g", 94555.8158688524, "jugement_expert", 94555.8158688524),
+                   list("DO1", "jugement_expert", "D03g", 86604.672, "jugement_expert", 86604.672)),
+              tolerance = EPS)
+# C112-6 (base S5 ; V7 (a), P3 champ (a)) : sinistre SX (arret_travail) de AS2, instruit le
+# 2025-03-10 avant sa déclaration du 2025-03-20 (R10) ; D02a sous H tient date_declaration et
+# date_instruction pour inconnues, que P3 ne lit pas : la ligne de sinistres, lue pour le contrat
+# de AS2, ne fait plus naître S2. Avant (aa64245) : cellule jugement_expert, même montant.
+b5_112 <- b2_base_p3()
+b5_112$sinistres <- b2_tab("sinistres", id_sinistre = "SX", id_assure = "AS2", nature_sinistre = "arret_travail",
+                           date_survenance = D("2025-03-01"), date_declaration = D("2025-03-20"),
+                           date_instruction = D("2025-03-10"), canal_declaration = "assure", gestionnaire = "interne",
+                           date_saisie = D("2025-03-21"))
+verifier_egal("#112 C112-6 : D02a de R10 sur un sinistre de l'assuré (date_declaration, date_instruction, non lues par P3) : cellule ensemble de P3 3 046,43211955517 exact (avant : jugement_expert)",
+              dossier_112(b5_112, plan_112("D02a"), P3)[5:6],
+              list("exact", 3046.43211955517),
+              tolerance = EPS)
+# C171-1 (base S3 ; même règle, visa M780, V6 (b)) : CT1 de date_debut_gestion 2019-01-01, avant
+# sa date d'effet (D02a, R3), sous H : les dates tenues pour inconnues (date_effet,
+# date_debut_gestion) ne sont pas lues par P1 ni P2 ; la ligne de contrats ne fait plus naître S2,
+# pour les quatre méthodes. capital_dossier_reglement et capital_revalorise_reglement restent
+# jugement_expert pour une autre cause (sans code d'hypothèse). Variante R1 : fin de CT1 au
+# 2019-06-01, saisie le 2020-02-01 (D02a sur date_effet et date_fin), P1. Avant (aa64245) : les cinq
+# dossiers jugement_expert, hypotheses_defaut D02a, mêmes montants.
+s3_112 <- function(b) { b$contrats$date_debut_gestion <- D("2019-01-01"); b }
+r1_112 <- function(b) {
+  b$contrats$date_fin <- D("2019-06-01")
+  b$contrats$motif_fin <- "resiliation_adherent"
+  b$contrats$date_saisie_fin <- D("2020-02-01")
+  b
+}
+verifier_egal("#112 C171-1 : D02a de R3 sur CT1 (date_effet, date_debut_gestion, non lues par P1 ni P2) : capital_dossier exact, sans code, 94 555,8158688524 ; capital_dossier_reglement jugement_expert, sans code, 94 742,3369302924 ; capital_revalorise exact, sans code, 93 619,6196721311 ; capital_revalorise_reglement jugement_expert, sans code, 114 995,003530171 ; variante R1 (P1) : exact, sans code (avant : jugement_expert, D02a)",
+              list(dossier_112(s3_112(b0_112), plan_112("D02a"), P1)[1:4],
+                   dossier_112(s3_112(b0_112), plan_112("D02a", q = p_alt), P1)[1:4],
+                   dossier_112(s3_112(b0n_112), plan_112("D02a"), P2)[1:4],
+                   dossier_112(s3_112(b0n_112), plan_112("D02a", q = p_alt), P2)[1:4],
+                   dossier_112(r1_112(b0_112), plan_112("D02a"), P1)[1:4]),
+              list(list("DO1", "exact", "", 94555.8158688524),
+                   list("DO1", "jugement_expert", "", 94742.3369302924),
+                   list("DO1", "exact", "", 93619.6196721311),
+                   list("DO1", "jugement_expert", "", 114995.003530171),
+                   list("DO1", "exact", "", 94555.8158688524)),
+              tolerance = EPS)
+# C112-7 (statique ; spécification `donnees`, § 9.4, erratum 1.9.5) : les colonnes d'une entrée de
+# vue$hypotheses suffisent à l'emprise. Toute colonne de constat D02b ou D03g de niveau ligne (date
+# qui décide de la visibilité de la ligne : .COLONNES_D03G ; colonnes de D02b, dérivées du code de
+# .regle_prealable(), appels regle_p(ctx, "D02b", table, colonne) et liste `filles`, hors partie de
+# ligne ; complétude : leurs tables, partie de fin de contrats comprise, sont celles de D02b dans
+# defauts.csv) est lue par tout poste du catalogue qui lit la table ;
+# la seule colonne de constat hors de ce cas, date_saisie_fin de contrats et d'affiliations, est une
+# colonne de la partie de fin (emprise : la partie, colonnes_lues()).
+cat_112 <- catalogue_garanties()
+lec_112 <- cat_112$lectures
+d02b_code_112 <- local({
+  paires <- list()
+  marcher <- function(e) {
+    if (!is.call(e)) return(invisible(NULL))
+    a <- as.list(e)
+    if (identical(a[[1L]], as.name("regle_p")) && length(a) >= 5L && identical(a[[3L]], "D02b") && is.character(a[[4L]]) &&
+        is.character(a[[5L]])) paires[[length(paires) + 1L]] <<- c(a[[4L]], a[[5L]])
+    if (identical(a[[1L]], as.name("<-")) && identical(a[[2L]], as.name("filles"))) {
+      for (f in eval(a[[3L]], baseenv())) paires[[length(paires) + 1L]] <<- c(f[[1L]], f[[2L]])
+    }
+    for (x in a[-1L]) marcher(x)
+  }
+  marcher(body(ns$.regle_prealable))
+  p <- unique(do.call(rbind, paires))
+  lapply(split(p[, 2L], p[, 1L]), unique)
+})
+en_partie_112 <- function(t, c1) any(vapply(ns$parties_ligne(), function(q) identical(q$table, t) && c1 %in% q$colonnes, NA))
+d02b_112 <- Filter(length, Map(function(t, cs) cs[!vapply(cs, function(c1) en_partie_112(t, c1), NA)], names(d02b_code_112),
+                               d02b_code_112))
+def_112 <- ns$dictionnaire()$defauts
+ligne_112 <- c(as.list(ns$.COLONNES_D03G), d02b_112)
+lue_par_lecteurs_112 <- function(t, c1) {
+  k <- unique(lec_112[lec_112$table == t, c("code_garantie", "poste")])
+  all(vapply(seq_len(nrow(k)), function(j) c1 %in% ns$colonnes_lues(cat_112, k$code_garantie[j], k$poste[j], t, ns$parties_ligne()),
+             NA))
+}
+verifier_egal("#112 C112-7 (statique) : colonnes de constat D02b (dérivées du code, tables complètes au regard de defauts.csv) et D03g de niveau ligne lues par tout poste qui lit leur table ; date_saisie_fin de contrats et d'affiliations, colonne de leur partie de fin",
+              list(sort(names(d02b_code_112), method = "radix"),
+                   sort(strsplit(def_112$tables[def_112$code == "D02b"], ";", fixed = TRUE)[[1L]], method = "radix"),
+                   d02b_code_112$contrats,
+                   all(unlist(Map(function(t, cs) all(vapply(cs, function(c1) lue_par_lecteurs_112(t, c1), NA)), names(ligne_112), ligne_112))),
+                   vapply(c("contrats", "affiliations"), function(t) "date_saisie_fin" %in%
+                            Filter(function(q) q$table == t, ns$parties_ligne())[[1L]]$colonnes, NA)),
+              list(sort(strsplit(def_112$tables[def_112$code == "D02b"], ";", fixed = TRUE)[[1L]], method = "radix"),
+                   sort(strsplit(def_112$tables[def_112$code == "D02b"], ";", fixed = TRUE)[[1L]], method = "radix"),
+                   "date_saisie_fin", TRUE, c(contrats = TRUE, affiliations = TRUE)))
+# C112-8 (statique) : (a) restrictions contrôlées de P3 (.LUES_SINISTRE_P3, sortie par un sinistre ;
+# partie de fin de contrats, sortie par la fin) incluses dans les colonnes lues par P3 ; (b) les
+# éléments de S2 (champ s2 vrai) des constructeurs portent `lues` = colonnes_lues() du poste : tous
+# ceux de .lectures_contrats() (P3) ; pour .lectures_dossiers() (P1, P2), la ligne de contrats seule
+# (id_contrat, nature_contrat), les autres tables gardant la ligne entière (`lues` NULL). Assertion
+# transitoire : #171 étend la garde aux autres tables de .lectures_dossiers() et la renversera
+# (lues = colonnes_lues() pour chacune) ; (c) catalogue$lectures n'est lu que par .valider_catalogue(), colonnes_lues()
+# et postes_a_arreter() (énumération des postes, colonnes par colonnes_lues()). lecture_unites()
+# sans `lues` garde la ligne entière (C90-5, plus haut, inchangé).
+v_112 <- b2_vue(bR_112, A1)
+pop_112 <- ns$.population_p3(v_112, ns$.gs_deces_p3(v_112), p_c1)
+lues_112 <- function(l) {
+  l <- Filter(function(x) !identical(x$s2, FALSE), l)
+  stats::setNames(lapply(l, function(x) x$lues), vapply(l, `[[`, "", "table"))
+}
+lit_112 <- function(poste, t) ns$colonnes_lues(cat_112, "deces", poste, t, ns$parties_ligne())
+l3_112 <- lues_112(ns$.lectures_contrats(v_112, pop_112, as.numeric(A1), "prospective_prime_pure", ns$.lues_p3(cat_112)))
+l1_112 <- lues_112(ns$.lectures_dossiers(v_112, ns$etats_a_date(v_112, "deces", "engagement"), TRUE,
+                                         function(t) lit_112(P1, t)))
+lisent_lectures_112 <- Filter(function(n) is.function(ns[[n]]) && any(grepl("$lectures", deparse(ns[[n]]), fixed = TRUE)),
+                              sort(ls(ns, all.names = TRUE), method = "radix"))
+verifier_egal("#112 C112-8 (statique) : .LUES_SINISTRE_P3 et partie de fin de contrats incluses dans les colonnes lues par P3 ; lues des éléments S2 : P3, colonnes_lues() de chaque table ; P1, contrats seule (id_contrat, nature_contrat), autres tables NULL (#171) ; catalogue$lectures lu par .valider_catalogue(), colonnes_lues() et postes_a_arreter() seules",
+              list(all(ns$.LUES_SINISTRE_P3 %in% lit_112(P3, "sinistres")),
+                   all(Filter(function(q) q$table == "contrats", ns$parties_ligne())[[1L]]$colonnes %in% lit_112(P3, "contrats")),
+                   names(l3_112), all(unlist(Map(function(t, x) identical(x, lit_112(P3, t)), names(l3_112), l3_112))),
+                   names(l1_112), l1_112[["contrats"]], all(vapply(l1_112[names(l1_112) != "contrats"], is.null, NA))),
+              list(TRUE, TRUE, c("contrats", "assures", "sinistres", "cotisations"), TRUE,
+                   c("dossiers", "sinistres", "evenements", "evenements", "prestations", "beneficiaires", "contrats",
+                     "affiliations", "famille"),
+                   c("id_contrat", "nature_contrat"), TRUE))
+# m4 : tout élément de S2 qui porte `lues` en porte au moins une colonne (un `lues` vide retirerait
+# en silence toute hypothèse de la ligne) : P3 (chaque table) et ligne de contrats de P1 et P2.
+l2_112 <- lues_112(ns$.lectures_dossiers(v_112, ns$etats_a_date(v_112, "deces", "engagement"), TRUE,
+                                         function(t) lit_112(P2, t)))
+non_vide_112 <- function(l) all(vapply(Filter(Negate(is.null), l), function(x) length(x) > 0L, NA))
+verifier_egal("#112 C112-8 : `lues` non vide pour tout élément S2 qui le porte (P3 : contrats, assures, sinistres, cotisations ; P1 et P2 : contrats)",
+              list(non_vide_112(l3_112), length(Filter(Negate(is.null), l3_112)), non_vide_112(l1_112),
+                   length(Filter(Negate(is.null), l1_112)), non_vide_112(l2_112), length(Filter(Negate(is.null), l2_112))),
+              list(TRUE, 4L, TRUE, 1L, TRUE, 1L))
+verifier_egal("#112 C112-8 (statique) : catalogue$lectures lu par .valider_catalogue(), colonnes_lues() et postes_a_arreter() seules (seule dérivation des colonnes lues par un poste)",
+              lisent_lectures_112, c(".valider_catalogue", "colonnes_lues", "postes_a_arreter"))
+
 section("plus petit identifiant en cause : arrêts et refus de P1 et P2 indépendants de l'ordre des lignes (critère (4.14), #176)")
 # Spécification de B2, § 6.2, « Identifiant publié » : tout identifiant et tout motif publiés par un
 # arrêt ou un refus de `engagement` sont ceux du plus petit dossier en cause (tri radix), quel que

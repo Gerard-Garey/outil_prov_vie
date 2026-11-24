@@ -452,7 +452,6 @@ print.resultat_provie <- function(x, ...) {
 #     pour `ensemble`) qui lisent la table de la rangée et, quand elle est renseignée, sa colonne.
 .enjeu_par_poste <- function(enjeu, postes_plan, catalogue, refus_tables) {
   if (nrow(enjeu) == 0L) return(enjeu)
-  lec <- catalogue$lectures
   pp <- unique(postes_plan[c("garantie", "poste", "famille")])
   idx <- integer(0)
   poste <- character(0)
@@ -470,10 +469,12 @@ print.resultat_provie <- function(x, ...) {
       lit <- if (identical(enjeu$action[i], "refus")) {
         paste(pp$garantie[j], pp$poste[j], sep = "/") %in% arretes
       } else {
+        # colonnes lues par le poste (colonnes_lues(), seule dérivation, #112), à la colonne près :
+        # sans les parties de ligne (`parties` vide), règle de l'enjeu inchangée
+        lues <- colonnes_lues(catalogue, pp$garantie[j], pp$poste[j], enjeu$table[i], list())
         regle_table <- identical(enjeu$action[i], "exclure")
-        enjeu$famille[i] %in% c(pp$famille[j], "ensemble") &&
-          any(lec$code_garantie == pp$garantie[j] & lec$poste == pp$poste[j] & lec$table == enjeu$table[i] &
-                (regle_table | is.na(enjeu$colonne[i]) | lec$colonne %in% enjeu$colonne[i]))
+        enjeu$famille[i] %in% c(pp$famille[j], "ensemble") && length(lues) > 0L &&
+          (regle_table || is.na(enjeu$colonne[i]) || enjeu$colonne[i] %in% lues)
       }
       if (lit) {
         idx <- c(idx, i)

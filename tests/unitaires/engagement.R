@@ -17,6 +17,8 @@ cat_g <- catalogue_garanties()
 A <- D("2025-12-31")
 P1 <- "sinistres_declares_non_regles"
 P2 <- "capitaux_non_reclames"
+# colonnes lues par P1 dans une table (argument `lues` de .lectures_dossiers(), #112)
+lues_p1 <- function(t) ns$colonnes_lues(cat_g, "deces", P1, t, ns$parties_ligne())
 eng <- function(base, plan, poste = P1, arrete = A, declarations = NULL) {
   ns$calculer_engagement(b2_vue(base, arrete, declarations), plan, tb, cat_g, "deces", poste)
 }
@@ -1205,7 +1207,7 @@ verifier_egal("#158 (1) lecture_unites() : clés \"ASI1\", \"\" et NA : seule AS
 lect158 <- function(mut = NULL, cle = NULL, d = "DO1", s = "SI1") {
   v <- vue158(mut, cle)
   e <- data.frame(id_dossier = d, id_sinistre = s, instruit = TRUE, stringsAsFactors = FALSE)
-  l <- ns$.lectures_dossiers(v, e, TRUE)
+  l <- ns$.lectures_dossiers(v, e, TRUE, lues_p1)
   list(dossiers = l[[1L]]$cles, sinistres = l[[2L]]$cles, contrats = l[[7L]]$cles, affiliations = l[[8L]]$cles)
 }
 verifier_egal("#158 (2) témoin renseigné : DO1, SI1, CT1 et la clé d'affiliation AS1 / CT1",
@@ -1476,7 +1478,7 @@ b_174$sinistres <- rbind(transform(b_174$sinistres, id_sinistre = "SI0", id_assu
 b_174$dossiers <- rbind(transform(b_174$dossiers, id_dossier = "DO0", id_sinistre = "SI0"), b_174$dossiers)
 v_174 <- local({ cp <- ns$canoniser_plan(plan_87(list(evenements = 0))); ns$vue_a_date(b_174, cp$arrete, cp$donnees, cp$conventions) })
 e_174 <- ns$etats_a_date(v_174, "deces", "engagement")
-l_174 <- ns$.lectures_dossiers(v_174, e_174, FALSE)
+l_174 <- ns$.lectures_dossiers(v_174, e_174, FALSE, lues_p1)
 l_174_sans_s2 <- lapply(l_174, function(l) { l$s2 <- FALSE; l })
 verifier_egal("#174 (1/2) même ligne, même unité : dossiers DO0, DO1 ; EV1 sous D03g : S2 à DO1 seul (\"\", \"D03g\") ; EV1 refusée : arrêt par DO1 seul ; éléments de champ s2 FALSE : aucun code S2, arrêt inchangé",
               list(e_174$id_dossier, v_174$retenu$evenements,
@@ -1548,8 +1550,8 @@ section("engagement : lignes lues par unité complétées, repli de #72 retiré,
 v_174b <- b2_vue(b2_base_capital(capital = NA), A)
 pp_174b <- p
 pop_174b <- ns$.population_p3(v_174b, ns$.gs_deces_p3(v_174b), pp_174b)
-tables_174b <- list(P1 = unique(vapply(ns$.lectures_dossiers(v_174b, ns$etats_a_date(v_174b, "deces", "engagement"), TRUE), `[[`, "", "table")),
-                    P3 = unique(vapply(ns$.lectures_contrats(v_174b, pop_174b, as.numeric(A), "prospective_prime_declaree"), `[[`, "", "table")))
+tables_174b <- list(P1 = unique(vapply(ns$.lectures_dossiers(v_174b, ns$etats_a_date(v_174b, "deces", "engagement"), TRUE, lues_p1), `[[`, "", "table")),
+                    P3 = unique(vapply(ns$.lectures_contrats(v_174b, pop_174b, as.numeric(A), "prospective_prime_declaree", ns$.lues_p3(cat_g)), `[[`, "", "table")))
 lect_174b <- cat_g$lectures[cat_g$lectures$code_garantie == "deces" & cat_g$lectures$table != "extraction", , drop = FALSE]
 b_174e <- within(b2_base_capital(paiements = data.frame(date = D("2024-10-01"), montant = 10000)), prestations$montant[1L] <- -10000)
 v_174e <- b2_vue(b_174e, A)
@@ -1574,8 +1576,8 @@ def_174 <- ns$dictionnaire()$defauts
 tables_motif_174 <- lapply(stats::setNames(ns$.MOTIFS_HYPOTHESE_VUE, ns$.MOTIFS_HYPOTHESE_VUE),
                            function(m) strsplit(def_174$tables[def_174$code == m], ";", fixed = TRUE)[[1L]])
 verifier_egal("#174 (2/2) C174-14 : éléments de champ s2 FALSE : garanties_souscrites et parametres seuls (P1, P2 et P3) ; motifs de S2 admettant garanties_souscrites : D02a seul ; admettant parametres : aucun ; admettant cotisations : D02a seul (dates inconnues, jamais une ligne cachée : la case « cotisation cachée » de .population_p3() n'est pas codée)",
-              list(s2_faux_174(ns$.lectures_dossiers(v_174b, ns$etats_a_date(v_174b, "deces", "engagement"), TRUE)),
-                   s2_faux_174(ns$.lectures_contrats(v_174b, pop_174b, as.numeric(A), "prospective_prime_declaree")),
+              list(s2_faux_174(ns$.lectures_dossiers(v_174b, ns$etats_a_date(v_174b, "deces", "engagement"), TRUE, lues_p1)),
+                   s2_faux_174(ns$.lectures_contrats(v_174b, pop_174b, as.numeric(A), "prospective_prime_declaree", ns$.lues_p3(cat_g))),
                    names(Filter(function(t) "garanties_souscrites" %in% t, tables_motif_174)),
                    names(Filter(function(t) "parametres" %in% t, tables_motif_174)),
                    names(Filter(function(t) "cotisations" %in% t, tables_motif_174))),
@@ -1606,7 +1608,7 @@ lp_par_174 <- function(b, exclure_ev = FALSE) {
   v <- b2_vue(b, A)
   e <- ns$etats_a_date(v, "deces", "engagement")
   if (exclure_ev) v$exclu$engagement$evenements[1L] <- TRUE
-  l <- ns$.lectures_dossiers(v, e, FALSE)
+  l <- ns$.lectures_dossiers(v, e, FALSE, lues_p1)
   vapply(seq_len(nrow(b$parametres)), function(k) ns$refus_ligne_unites(v, "engagement", nrow(e), l, "parametres",
                                                                          seq_len(nrow(b$parametres)) == k), NA)
 }

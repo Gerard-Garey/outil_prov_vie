@@ -841,7 +841,7 @@ lp_174 <- function(table, colonnes) {
   v$hypotheses <- list(list(motif = "D02a", referentiel = "comptes_sociaux", poste = "tous", valeur = "regle", table = table,
                             lignes = 1L, colonnes = colonnes))
   pop <- ns$.population_p3(v, ns$.gs_deces_p3(v), plan_p3())
-  l <- ns$.lectures_contrats(v, pop, as.numeric(A1), "prospective_prime_pure")
+  l <- ns$.lectures_contrats(v, pop, as.numeric(A1), "prospective_prime_pure", ns$.lues_p3(cat_g))
   list(ns$hypotheses_vue_unites(v, "comptes_sociaux", P3, "risque_en_cours", 2L, l),
        ns$refus_ligne_unites(v, "risque_en_cours", 2L, l, table, seq_len(nrow(b3_174[[table]])) == 1L))
 }
@@ -951,7 +951,7 @@ temoin_174 <- function(id) {
   b$contrats$date_fin[k] <- D("2025-06-30"); b$contrats$motif_fin[k] <- "resiliation_adherent"; b$contrats$date_saisie_fin[k] <- as.Date(NA)
   v <- vue_174(b, p_d03g_174)
   pop <- ns$.population_p3(v, ns$.gs_deces_p3(v), p_d03g_174)
-  l <- ns$.lectures_contrats(v, pop, as.numeric(p_d03g_174$arrete), "prospective_prime_pure")
+  l <- ns$.lectures_contrats(v, pop, as.numeric(p_d03g_174$arrete), "prospective_prime_pure", ns$.lues_p3(cat_g))
   list(pop$id_contrat, ns$hypotheses_vue_unites(v, "comptes_sociaux", P3, "risque_en_cours", length(pop$id_contrat), l),
        ns$refus_ligne_unites(v, "risque_en_cours", length(pop$id_contrat), l, "contrats", k))
 }

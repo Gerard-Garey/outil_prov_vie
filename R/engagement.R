@@ -515,6 +515,12 @@ garanties_code_refuse <- function(vue, famille) {
 # dossier est une ligne de etats_a_date(), ou une ligne de même forme) ; éléments de
 # lecture_unites(), dans cet ordre. Rend la liste `lectures` de hypotheses_vue_unites() et de
 # arret_refus_ligne().
+# `lues` : fonction d'une table qui rend les colonnes que le poste y lit (colonnes_lues() de
+# `garanties`, seule dérivation ; spécification de B2, § 5.8, erratum v1.0.24, « Colonnes lues »,
+# #112 point 2) : champ `lues` des lignes de contrats (une hypothèse de la vue n'y compte dans S2
+# que si son emprise contient une colonne lue : id_contrat et nature_contrat en v1, ni partie de
+# fin ni dates) ; sans effet sur l'arrêt, refus_ligne_unites() ne lisant pas `lues`. Les autres
+# tables gardent la ligne entière (garde étendue par #171).
 # `exposition` (#175 ; spécification `donnees` v1.9, § 9.2, erratum 1.9.4, (iii)) : NULL, ou
 # list(etats, possible) : unités possibles du poste, sans tenir compte de ses autres causes d'arrêt
 # (lignes de même forme que `etats`, dossiers des garanties invisibles compris, cas (c)), et
@@ -527,7 +533,7 @@ garanties_code_refuse <- function(vue, famille) {
 # contrats et les lignes d'affiliations de l'assuré de son sinistre (toutes si cet assuré n'est
 # pas connu), rattachées à la première telle unité (seule l'existence d'une lecture compte :
 # aucun identifiant n'en est publié).
-.lectures_dossiers <- function(vue, etats, reconstitue, exposition = NULL) {
+.lectures_dossiers <- function(vue, etats, reconstitue, lues, exposition = NULL) {
   vv <- function(t, c1) as.character(valeurs_vue(vue, t, c1))
   # état non déterminé (spécification `donnees` v1.9, § 9.2, erratum 1.9.6, (i) ; #175) : événement
   # retenu, non exclu pour engagement (un événement exclu sort de la famille et n'est pas lu par
@@ -572,7 +578,7 @@ garanties_code_refuse <- function(vue, famille) {
                 lecture_unites("evenements", "id_dossier", d),
                 lecture_unites("prestations", "id_dossier", d),
                 lecture_unites("beneficiaires", "id_dossier", d),
-                lecture_unites("contrats", "id_contrat", contrat),
+                lecture_unites("contrats", "id_contrat", contrat, lues = lues("contrats")),
                 lecture_unites("affiliations", c("id_assure", "id_contrat"), cle_af, garde = lit_af),
                 lecture_unites("famille", "id_sinistre", s, garde = lit_fam),
                 lecture_unites("garanties_souscrites", "id_garantie_souscrite", gs, s2 = FALSE),
@@ -595,7 +601,7 @@ garanties_code_refuse <- function(vue, famille) {
         (any(!cle_renseignee(ass_u)) | !is.na(apparier_cles(af_as, ass_u)))
       ca <- paste(af_as[af_ok], af_ct[af_ok], sep = "\r")
       res <- c(res, list(
-        lecture_unites("contrats", "id_contrat", ct, unite = rep(u[1L], length(ct))),
+        lecture_unites("contrats", "id_contrat", ct, unite = rep(u[1L], length(ct)), lues = lues("contrats")),
         lecture_unites("affiliations", c("id_assure", "id_contrat"), ca, unite = rep(u[1L], length(ca)),
                        garde = any(lit_af[u]))))
     }
@@ -1226,7 +1232,10 @@ calculer_engagement <- function(vue, plan, tables, catalogue, garantie, poste) {
   vc <- .voie_capital(vue, dos_gs[apparier_cles(possibles$id_dossier, dos_id)])
   voie <- rep(NA_character_, nrow(unites))
   voie[ouvert] <- vc$voie[seq_len(nrow(unites))][ouvert]
-  lectures <- .lectures_dossiers(vue, unites, ouvert & voie %in% "reconstitution",
+  # colonnes lues par le poste dans une table (colonnes_lues(), seule dérivation, partagée avec la
+  # condition (1) de l'arrêt : même grain, #112) : champ `lues` des lignes lues de S2
+  lues <- function(t) colonnes_lues(catalogue, garantie, poste, t, parties_ligne())
+  lectures <- .lectures_dossiers(vue, unites, ouvert & voie %in% "reconstitution", lues,
                                  list(etats = possibles, possible = vc$reconstitution_possible))
   listees <- unique(vapply(lectures, `[[`, "", "table"))
   differees <- c("affiliations", "famille")
