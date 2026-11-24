@@ -236,19 +236,28 @@ valeur_actuelle_probable <- function(echeancier, actualisation, conventions) {
 # $parametres ; spécification de B2, § 5.3, erratum v1.0.7 ; § 5.5, erratum v1.0.9). Une
 # colonne `valeur` qui n'est pas numérique (refus type_incompatible, portée colonne : la vue la
 # garde brute, sans la convertir) n'est pas lue : valeurs inconnues (NA) ; les postes qui la
-# lisent sont arrêtés par le bilan. Sans point : seule lecture des paramètres d'une garantie
-# souscrite, lue aussi par `risque_en_cours` (famille « risque_en_cours ») ; non exportée.
+# lisent sont arrêtés par le bilan. `refuse` (toujours rendu) : une ligne retenue du paramètre
+# pour la garantie souscrite porte un refus de portée ligne sur `valeur`
+# (lignes_refus_ligne_vue() de `donnees`), ou la colonne `valeur` n'est pas numérique ; la
+# valeur n'est pas masquée (une valeur refusée reste lue brute dans `valeur`, jamais tenue pour
+# absente) : le lecteur qui en décide d'une population la lit comme inconnue (.population_p3()
+# de `risque_en_cours` ; spécification `donnees` v1.9, § 9.2, erratum 1.9.4, (iii) ; #174).
+# Sans point : seule lecture des paramètres d'une garantie souscrite, lue aussi par
+# `risque_en_cours` (famille « risque_en_cours ») ; non exportée.
 parametre_vue <- function(vue, nom, gs, famille = NULL) {
   id <- valeurs_vue(vue, "parametres", "id_garantie_souscrite")
   v <- valeurs_vue(vue, "parametres", "valeur")
-  if (!is.numeric(v)) v <- rep(NA_real_, length(v))
+  numerique <- is.numeric(v)
+  if (!numerique) v <- rep(NA_real_, length(v))
   # une clé manquante ou vide ne s'apparie à rien, d'un côté comme de l'autre (apparier_cles(), #158)
   k <- which(valeurs_vue(vue, "parametres", "parametre") %in% nom & cle_renseignee(id))
   z <- lapply(split(v[k], as.character(id[k])), unique)
   i <- apparier_cles(gs, names(z))
   n <- lengths(z, use.names = FALSE)[i]
   valeur <- vapply(z, function(x) if (length(x) == 1L) as.numeric(x) else NA_real_, 0, USE.NAMES = FALSE)[i]
-  res <- list(valeur = valeur, ambigu = !is.na(i) & n > 1L)
+  refusee <- lignes_refus_ligne_vue(vue, "parametres", "valeur")
+  res <- list(valeur = valeur, ambigu = !is.na(i) & n > 1L,
+              refuse = !is.na(i) & (!numerique | !is.na(apparier_cles(gs, id[k][refusee[k]]))))
   if (!is.null(famille)) {
     res$exclu <- !is.na(apparier_cles(gs, id[k][vue$exclu[[famille]]$parametres[k]]))
   }
@@ -358,14 +367,16 @@ refus_ligne_unites <- function(vue, famille, n, lectures, table, refusees) {
 # par unité, lecture_unites()) ; `listees` : tables pour lesquelles la famille établit les lignes
 # lues par unité ; `evaluees` : celles qu'établissent les `lectures` de cet appel (les autres
 # tables listées sont évaluées par un autre appel). Une ligne candidate arrête le poste si une de
-# ses lignes refusées est lue pour une unité (refus_ligne_unites()) ; sur une table hors de
-# `listees`, le rattachement à une unité n'est pas établi : elle l'arrête (`repli`), sans
-# identifiant. Rend list(lignes : indices dans refus_tables des lignes qui arrêtent le poste,
-# dans l'ordre du bilan ; motif : motif de la première, NA sans arrêt ; identifiant : plus petit
-# identifiant des unités en cause pour cette ligne (tri radix : indépendant de l'ordre des lignes
-# de la base), NA sans arrêt ou sans rattachement établi). Sans point : seule
-# implémentation de l'arrêt par unité, lue aussi par `risque_en_cours` (P3) ; non exportée.
-arret_refus_ligne <- function(vue, pa, cle, famille, n, lectures, ids, listees, evaluees = listees, repli = TRUE) {
+# ses lignes refusées est lue pour une unité (refus_ligne_unites()). Une ligne candidate sur une
+# table hors de `listees` est une erreur interne : toute table que lit un poste implémenté a une
+# liste (`lectures.csv`, hors `extraction`, dont toute anomalie est un refus d'appel) ; le repli
+# de #72 (arrêt sans identifiant) est retiré (spécification `donnees` v1.9, § 9.2, erratum 1.9.4,
+# (i) et (ii) ; spécification de B2, § 6.2, erratum v1.0.23 ; #174). Rend list(lignes : indices
+# dans refus_tables des lignes qui arrêtent le poste, dans l'ordre du bilan ; motif : motif de la
+# première, NA sans arrêt ; identifiant : plus petit identifiant des unités en cause pour cette
+# ligne (tri radix : indépendant de l'ordre des lignes de la base), NA sans arrêt). Sans point :
+# seule implémentation de l'arrêt par unité, lue aussi par `risque_en_cours` (P3) ; non exportée.
+arret_refus_ligne <- function(vue, pa, cle, famille, n, lectures, ids, listees, evaluees = listees) {
   rt <- pa$refus_tables
   lignes <- integer(0)
   identifiant <- character(0)
@@ -373,11 +384,8 @@ arret_refus_ligne <- function(vue, pa, cle, famille, n, lectures, ids, listees, 
     if (!(cle %in% pa$candidats[[i]])) next
     t <- rt$table[i]
     if (!(t %in% listees)) {
-      if (repli) {
-        lignes <- c(lignes, i)
-        identifiant <- c(identifiant, NA_character_)
-      }
-      next
+      stop("erreur interne de provie : arret_refus_ligne() : ligne de port\u00e9e ligne de la table ", t, " lue par ", cle,
+           ", table sans liste de lignes lues par unit\u00e9", call. = FALSE)
     }
     if (!(t %in% evaluees)) next
     u <- refus_ligne_unites(vue, famille, n, lectures, t, lignes_refus_ligne_vue(vue, t, rt$colonne[i], rt$motif[i]))
@@ -428,18 +436,56 @@ lecture_unites <- function(table, colonnes, cles, unite = seq_along(cles), garde
        s2 = s2)
 }
 
+# Paramètres de la voie du capital (.voie_capital()) lus par unité pour un dossier d'état
+# `ouvert` ou non déterminé (spécification de B2, § 5.8, erratum v1.0.23, #174).
+.PARAMETRES_CAPITAL <- c("capital_forfaitaire", "taux_capital", "majoration_conjoint", "majoration_enfant")
+
+# Colonnes d'evenements lues par l'automate du dossier (etats_a_date() de `donnees` : événements
+# de niveau dossier rattachés par id_dossier) : celles que lisent P1 et P2 dans lectures.csv, hors
+# id_sinistre (test statique). Une valeur refusée, inconnue ou exclue de l'une d'elles rend l'état
+# du dossier non déterminé (.lectures_dossiers() ; #174, avis d'actuary sur 2/2, correction 1).
+.COLONNES_AUTOMATE_EVENEMENTS <- c("id_evenement", "id_dossier", "type_evenement", "date_effet", "date_saisie", "montant",
+                                   "motif")
+
+# Garanties souscrites de code de garantie refusé (spécification de B2, § 5.8, erratum v1.0.23,
+# « Code de garantie refusé », #174 ; lecture de Kleene : le code refusé peut être `deces`) :
+# indices des lignes de garanties_souscrites retenues à l'arrêté, d'identifiant renseigné
+# (cle_renseignee()), dont la valeur de code_garantie porte un refus de portée ligne
+# (lignes_refus_ligne_vue() de `donnees`), hors couverture exclue pour la famille `famille`
+# (garanties_couverture_exclue()). Le contrat d'etats_a_date() ne change pas : la famille ajoute
+# elle-même les unités possibles qu'elles ouvrent. Sans point : seule sélection, lue par
+# calculer_engagement() (dossiers de ces garanties, unités possibles de P1 et de P2) et par
+# `risque_en_cours` (sélection de la population de P3, .population_p3()) ; non exportée.
+garanties_code_refuse <- function(vue, famille) {
+  id <- valeurs_vue(vue, "garanties_souscrites", "id_garantie_souscrite")
+  k <- which(vue$retenu$garanties_souscrites & lignes_refus_ligne_vue(vue, "garanties_souscrites", "code_garantie") &
+               cle_renseignee(id))
+  k[is.na(apparier_cles(id[k], garanties_couverture_exclue(vue, famille)))]
+}
+
 # Constructeur des lignes lues par unité de P1 et P2 (liste des lignes lues du § 5.8 de la
-# spécification de B2, déclarée pour les deux postes de la famille ; seule construction de la
-# famille, lue par la détection S2, hypotheses_vue_unites(), et par l'arrêt par unité,
-# arret_refus_ligne(), #72, #174) : pour chaque dossier de `etats`, visibles ou non à A, la ligne
-# de dossiers du dossier, celle de sinistres de son sinistre, les lignes d'evenements du
-# sinistre ou du dossier, de prestations et de beneficiaires du dossier, la ligne de contrats du
-# contrat de sa garantie souscrite ; si le capital est reconstitué (`reconstitue`, logique
-# recyclé sur les dossiers : voie "reconstitution" de .voie_capital() pour un dossier ouvert),
-# les lignes d'affiliations de clé (assuré du sinistre, contrat) et, si le dossier est instruit,
-# les lignes de famille du sinistre. Clés des unités lues dans la vue (le dossier est une ligne de
-# etats_a_date()) ; éléments de lecture_unites(), dans cet ordre. Rend la liste `lectures` de
-# hypotheses_vue_unites() et de arret_refus_ligne().
+# spécification de B2, complétée par l'erratum v1.0.23, déclarée pour les deux postes de la
+# famille ; seule construction de la famille, lue par la détection S2, hypotheses_vue_unites(),
+# et par l'arrêt par unité, arret_refus_ligne(), #72, #174) : pour chaque dossier de `etats`,
+# visibles ou non à A, la ligne de dossiers du dossier, celle de sinistres de son sinistre, les
+# lignes d'evenements du sinistre ou du dossier, de prestations et de beneficiaires du dossier,
+# la ligne de contrats du contrat de sa garantie souscrite ; si le capital est reconstitué
+# (`reconstitue`, logique recyclé sur les dossiers : voie "reconstitution" de .voie_capital()
+# pour un dossier ouvert), les lignes d'affiliations de clé (assuré du sinistre, contrat) et, si
+# le dossier est instruit, les lignes de famille du sinistre ; la ligne de garanties_souscrites
+# de sa garantie souscrite et, pour un dossier d'état `ouvert` ou non déterminé, les lignes de
+# parametres de cette garantie nommées dans .PARAMETRES_CAPITAL (un nom refusé de portée ligne
+# est inconnu, donc admis), ces deux dernières de champ `s2` FALSE (lues par l'arrêt seulement,
+# V3 (c)). État non déterminé : `etat_dossier` NA (unité possible ouverte par un code de
+# garantie refusé, garanties_code_refuse()), ou un événement retenu que l'automate peut lire pour
+# le dossier est exclu pour engagement, ou porte sur une colonne de
+# .COLONNES_AUTOMATE_EVENEMENTS une valeur refusée de portée ligne (lignes_refus_ligne_vue()) ou
+# tenue pour inconnue (dates_inconnues_vue()) ; rattachement par id_dossier, comme l'automate (un
+# événement de niveau sinistre n'en décide pas), ou par id_sinistre pour un événement dont
+# id_dossier est refusé de portée ligne (clé inconnue). Clés des unités lues dans la vue (le
+# dossier est une ligne de etats_a_date(), ou une ligne de même forme) ; éléments de
+# lecture_unites(), dans cet ordre. Rend la liste `lectures` de hypotheses_vue_unites() et de
+# arret_refus_ligne().
 .lectures_dossiers <- function(vue, etats, reconstitue) {
   vv <- function(t, c1) as.character(valeurs_vue(vue, t, c1))
   d <- etats$id_dossier
@@ -452,6 +498,18 @@ lecture_unites <- function(table, colonnes, cles, unite = seq_along(cles), garde
   cle_af <- rep(NA_character_, length(d))
   ok_af <- cle_renseignee(assure) & cle_renseignee(contrat)
   cle_af[ok_af] <- paste(assure[ok_af], contrat[ok_af], sep = "\r")
+  # état non déterminé : événement retenu que lit l'automate, exclu, refusé ou de date inconnue sur
+  # une colonne de .COLONNES_AUTOMATE_EVENEMENTS ; rattaché par id_dossier, ou par id_sinistre si
+  # id_dossier est refusé
+  ev_inconnu <- Reduce(`|`, lapply(.COLONNES_AUTOMATE_EVENEMENTS, function(c1) {
+    lignes_refus_ligne_vue(vue, "evenements", c1) | dates_inconnues_vue(vue, "evenements", c1)
+  }))
+  ev_nd <- vue$retenu$evenements & (vue$exclu$engagement$evenements | ev_inconnu)
+  cle_refusee <- lignes_refus_ligne_vue(vue, "evenements", "id_dossier")
+  nd <- is.na(etats$etat_dossier) | !is.na(apparier_cles(d, vv("evenements", "id_dossier")[ev_nd & !cle_refusee])) |
+    !is.na(apparier_cles(s, vv("evenements", "id_sinistre")[ev_nd & cle_refusee]))
+  adm_par <- valeurs_vue(vue, "parametres", "parametre") %in% .PARAMETRES_CAPITAL |
+    lignes_refus_ligne_vue(vue, "parametres", "parametre")
   list(lecture_unites("dossiers", "id_dossier", d),
        lecture_unites("sinistres", "id_sinistre", s),
        lecture_unites("evenements", "id_sinistre", s),
@@ -460,7 +518,10 @@ lecture_unites <- function(table, colonnes, cles, unite = seq_along(cles), garde
        lecture_unites("beneficiaires", "id_dossier", d),
        lecture_unites("contrats", "id_contrat", contrat),
        lecture_unites("affiliations", c("id_assure", "id_contrat"), cle_af, garde = reconstitue),
-       lecture_unites("famille", "id_sinistre", s, garde = reconstitue & etats$instruit %in% TRUE))
+       lecture_unites("famille", "id_sinistre", s, garde = reconstitue & etats$instruit %in% TRUE),
+       lecture_unites("garanties_souscrites", "id_garantie_souscrite", gs, s2 = FALSE),
+       lecture_unites("parametres", "id_garantie_souscrite", gs, garde = etats$etat_dossier %in% "ouvert" | nd,
+                      admises = adm_par, s2 = FALSE))
 }
 
 # Salaire de référence par défaut sous l'hypothèse D03c (spécification de B2, § 5.9 ; décision
@@ -982,15 +1043,35 @@ calculer_engagement <- function(vue, plan, tables, catalogue, garantie, poste) {
   etats <- etats[!is.na(i_dos), , drop = FALSE]
   i_dos <- i_dos[!is.na(i_dos)]
   exclu <- vue$exclu$engagement
+  # code de garantie refusé (spécification de B2, § 5.8, erratum v1.0.23, A3, #174 ; lecture de
+  # Kleene) : dossier retenu, de garantie souscrite d'une ligne rendue par garanties_code_refuse()
+  # (seule sélection, partagée avec P3), qui n'est pas une ligne de etats_a_date() (contrat
+  # inchangé) : unité possible de P1 ou de P2, d'état non déterminé (ligne de même forme, valeurs
+  # NA hors des clés), soumise aux mêmes filtres d'exclusion, de couverture et de partition que
+  # les autres ; elle lit la ligne refusée de sa garantie souscrite et arrête le poste plus bas
+  # (arret_refus_ligne()). Un identifiant de dossier manquant ou vide suit la règle ci-dessus
+  dos_id <- valeurs_vue(vue, "dossiers", "id_dossier")
+  dos_gs <- valeurs_vue(vue, "dossiers", "id_garantie_souscrite")
+  k_cr <- which(vue$retenu$dossiers & !is.na(apparier_cles(dos_gs, valeurs_vue(vue, "garanties_souscrites",
+                                                                                "id_garantie_souscrite")[garanties_code_refuse(vue, "engagement")])))
+  k_cr <- k_cr[is.na(apparier_cles(dos_id[k_cr], etats$id_dossier))]
+  non_apparie <- non_apparie || !all(cle_renseignee(dos_id[k_cr]))
+  k_cr <- k_cr[cle_renseignee(dos_id[k_cr])]
+  code_refuse <- etats[rep(NA_integer_, length(k_cr)), , drop = FALSE]
+  code_refuse$id_dossier <- dos_id[k_cr]
+  code_refuse$id_sinistre <- valeurs_vue(vue, "dossiers", "id_sinistre")[k_cr]
+  etats <- rbind(etats, code_refuse)
+  rownames(etats) <- NULL
+  i_dos <- c(i_dos, k_cr)
   # couverture exclue (erratum v1.0.13) : dossier d'une garantie souscrite, ou d'un contrat, exclu
   # pour engagement hors de la population (garanties_couverture_exclue(), seule implémentation ;
   # identifiants rendus jamais NA ni "", appariement par apparier_cles(), #154)
-  couverture_exclue <- !is.na(apparier_cles(valeurs_vue(vue, "dossiers", "id_garantie_souscrite")[i_dos],
-                                            garanties_couverture_exclue(vue, "engagement")))
+  couverture_exclue <- !is.na(apparier_cles(dos_gs[i_dos], garanties_couverture_exclue(vue, "engagement")))
   # population avant le filtre des dossiers clos (§ 5.8, erratum v1.0.17 : un dossier clos sous
   # une hypothèse de la vue est une unité restituée à 0, au poste de la partition du § 5.4)
   garde <- !exclu$dossiers[i_dos] & !couverture_exclue
   etats <- etats[garde, , drop = FALSE]
+  ids_code_refuse <- dos_id[k_cr]
   # partition P1 / P2 selon le critère de P2 (réunion des critères déclarés) ; une valeur
   # refusée de portée ligne (lignes_refus_ligne_vue(), #72) y est inconnue (Kleene)
   refusee <- function(t, c1) lignes_refus_ligne_vue(vue, t, c1)
@@ -1060,6 +1141,12 @@ calculer_engagement <- function(vue, plan, tables, catalogue, garantie, poste) {
   ar <- arret_refus_ligne(vue, pa_tout, cle_poste, "engagement", nrow(unites), lectures, unites$id_dossier, listees,
                           setdiff(listees, differees))
   if (length(ar$lignes)) return(arreter(ar$motif, ar$identifiant, ar$lignes))
+  # une unité ouverte par un code de garantie refusé lit la ligne refusée de sa garantie souscrite
+  # (condition (1) : P1 et P2 lisent code_garantie) : elle a arrêté le poste ci-dessus
+  if (!all(is.na(apparier_cles(unites$id_dossier, ids_code_refuse)))) {
+    stop("erreur interne de provie : calculer_engagement() : dossier de code de garantie refus\u00e9 non arr\u00eat\u00e9",
+         call. = FALSE)
+  }
   # partition non déterminée (Kleene : un critère connu vrai décide) : P1 et P2 arrêtés
   if (anyNA(non_reclame)) {
     return(arreter("parametre_non_determine", sort(as.character(etats$id_dossier[is.na(non_reclame)]), method = "radix")[1L]))
@@ -1101,7 +1188,7 @@ calculer_engagement <- function(vue, plan, tables, catalogue, garantie, poste) {
   # les dossiers du poste ; un dossier clos n'est pas ouvert, il ne lit ni affiliations ni famille
   ar <- arret_refus_ligne(vue, pa_tout, cle_poste, "engagement", nrow(unites),
                           Filter(function(l) l$table %in% differees, lectures),
-                          unites$id_dossier, listees, differees, repli = FALSE)
+                          unites$id_dossier, listees, differees)
   if (length(ar$lignes)) return(arreter(ar$motif, ar$identifiant, ar$lignes))
   # plus petit dossier arrêté (tri radix), avec son propre motif : l'identifiant et le motif publiés
   # ne dépendent pas de l'ordre des lignes (§ 6.2, « Identifiant publié », #176, m37)

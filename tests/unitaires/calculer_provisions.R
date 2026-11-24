@@ -1523,3 +1523,94 @@ verifier("(4.2) .__NAMESPACE__. et .__S3MethodsTable__. hors de la liste sérial
 verifier("(4.3) octets 7 à 10 de serialize(version = 2L) : 00, majeur, mineur, correctif de la version de R",
          identical(serialize(list(), NULL, version = 2L)[7:10],
                    as.raw(c(0L, as.integer(R.version$major), as.integer(strsplit(R.version$minor, ".", fixed = TRUE)[[1L]])))))
+
+section("calculer_provisions : lignes lues par unité, code de garantie refusé, population de P3 (#174, commit 2/2 ; erratum B2 v1.0.23 et v1.0.24, donnees 1.9.4 ; M780)")
+# Critères C174 de l'avis d'actuary (0b-1 et brief de 2/2) ; bases de errata_criteres_0b1 : « b0 »
+# capital fixé de DO1 et paiement de 10 000 ; « bR » dossier ouvert, capital reconstitué ; plan
+# recommandees au 2025-12-31 (pA : alternatives). Par poste (P1, P2, P3) : montant, motif,
+# identifiant d'arrêt ; postes_arretes de la ligne de refus_tables. Avant (9847b90) : mesures du
+# brief (repli de #72 : arrêts sans identifiant ; sur-ensemble de P3).
+P1_174 <- "sinistres_declares_non_regles"; P2_174 <- "capitaux_non_reclames"; P3_174 <- "provision_mathematique_temporaire_deces"
+pA_174 <- b2_plan_reference("alternatives", A1, tb)
+c174 <- function(b, p = p_c1) {
+  r <- calculer_provisions(b, p, tid)
+  pr <- r$provisions[r$provisions$segmentation == "ensemble", , drop = FALSE]
+  pp <- r$fiche$parametres_retenus$postes
+  un <- function(po) {
+    x <- pp$parametres[pp$poste == po]
+    id <- if (length(x)) ns$lire_liste(charToRaw(x))$identifiant_arret else NULL
+    list(pr$montant[pr$poste == po], pr$motif_arret[pr$poste == po], if (is.null(id)) NA_character_ else id)
+  }
+  list(P1 = un(P1_174), P2 = un(P2_174), P3 = un(P3_174), postes_arretes = r$donnees$refus_tables$postes_arretes)
+}
+calc_174 <- function(m) list(m, NA_character_, NA_character_)
+b0_174 <- b2_base_capital(paiements = data.frame(date = D("2024-10-01"), montant = 10000))
+bR_174 <- b2_base_capital(capital = NA)
+inc_174 <- within(b0_174, {
+  garanties_souscrites <- rbind(garanties_souscrites, b2_tab("garanties_souscrites", id_garantie_souscrite = "GS2", id_contrat = "CT1",
+    code_garantie = "incapacite", college = "ensemble", date_effet = D("2020-01-01"), type_assiette = "autre",
+    type_franchise = "continue", regle_complement = "forfaitaire", periodicite_prestation = "mensuelle", terme_prestation = "echu",
+    periodicite_cotisation = "annuelle"))
+  parametres <- rbind(parametres, b2_tab("parametres", id_garantie_souscrite = "GS2", parametre = "franchise_jours", valeur = 30))
+})
+verifier_egal("C174-1 : b0, garantie incapacite GS2 de CT1 de type_assiette refusé : ligne lue par aucune unité ; P1 94 555,8158688524, P2 = P3 = 0, postes_arretes NA (avant : P1 et P2 arrêtés hors_domaine sans identifiant)",
+              c174(inc_174), list(P1 = calc_174(94555.8158688524), P2 = calc_174(0), P3 = calc_174(0), postes_arretes = NA_character_),
+              tolerance = EPS)
+verifier_egal("C174-4 et C174-5 : majoration_enfant de GS1 négative (D09) : bR (DO1 ouvert, lit les paramètres de sa garantie) : P1 arrêté (D09, DO1), P2 = P3 = 0, postes_arretes P1 ; b0 (capital fixé, ne les lit pas) : P1 94 555,8158688524 (avant : trois postes arrêtés D09 sans identifiant)",
+              list(c174(within(bR_174, parametres$valeur[4L] <- -0.25)), c174(within(b0_174, parametres$valeur[4L] <- -0.25))[c("P1", "postes_arretes")]),
+              list(list(P1 = list(NA_real_, "D09", "DO1"), P2 = calc_174(0), P3 = calc_174(0), postes_arretes = "deces/sinistres_declares_non_regles"),
+                   list(P1 = calc_174(94555.8158688524), postes_arretes = NA_character_)), tolerance = EPS)
+verifier_egal("C174-6 : bR, age_fin_garantie de GS1 négatif (nom non lu par P1 et P2 ; CT1 collectif sans cotisation, hors de la population de P3) : P1 86 604,672, P3 = 0, postes_arretes NA",
+              c174(within(bR_174, parametres$valeur[2L] <- -67))[c("P1", "P3", "postes_arretes")],
+              list(P1 = calc_174(86604.672), P3 = calc_174(0), postes_arretes = NA_character_), tolerance = EPS)
+bp3_174 <- b2_base_p3(periodicite = "annuelle", prime = 500)
+pp_174 <- within(bp3_174, parametres$valeur[parametres$parametre == "prime_periodique"] <- -500)
+verifier_egal("C174-7 : prime_periodique de GS2 négative (D09) : recommandees (prime pure, non lue) P3 664,23886243874 ; alternatives (prime déclarée, lue) P3 arrêté (D09, CT2)",
+              list(c174(pp_174)$P3, c174(pp_174, pA_174)[c("P1", "P3")]),
+              list(calc_174(664.23886243874), list(P1 = calc_174(0), P3 = list(NA_real_, "D09", "CT2"))), tolerance = EPS)
+verifier_egal("C174-8 et C174-9 (inchangés) : parametres.parametre hors domaine : portée table, trois postes arrêtés hors_domaine ; extraction.type_organisme hors domaine : refus extraction_invalide",
+              list(vapply(c174(within(bR_174, parametres$parametre[2L] <- "zzz"))[1:3], `[[`, "", 2L),
+                   motif_de(calculer_provisions(within(b0_174, extraction$type_organisme <- "zzz"), p_c1, tid))),
+              list(c(P1 = "hors_domaine", P2 = "hors_domaine", P3 = "hors_domaine"), "extraction_invalide"))
+p4_174 <- p_c1
+p4_174$donnees$seuils$d07b_mois <- 24L
+p4_174$conventions$limite_age <- list(regle = "atteinte", age = "revolu")
+b3c_174 <- b2_base_p3(cotisation = data.frame(debut = D("2025-07-01"), fin = D("2026-06-30"), montant = 1200))
+verifier_egal("C174-10 et C174-10 bis : code_garantie refusé (Deces) : de GS1 (DO1, CT1 collectif sans cotisation) : P1 arrêté (hors_domaine, DO1), P2 = P3 = 0 ; de GS3 (CT3, cotisation admise) : P3 arrêté (hors_domaine, CT3), P1 = P2 = 0 ; contre-mesures interdites : P1 0 ; P3 3 046,43211955517 (témoin 3 611,74718804832)",
+              list(c174(within(b0_174, garanties_souscrites$code_garantie[1L] <- "Deces"), p4_174)[1:3],
+                   c174(within(b3c_174, garanties_souscrites$code_garantie[2L] <- "Deces"), p4_174)[1:3], c174(b3c_174, p4_174)$P3[[1L]]),
+              list(list(P1 = list(NA_real_, "hors_domaine", "DO1"), P2 = calc_174(0), P3 = calc_174(0)),
+                   list(P1 = calc_174(0), P2 = calc_174(0), P3 = list(NA_real_, "hors_domaine", "CT3")), 3611.74718804832), tolerance = EPS)
+fin_174 <- function(b) within(b, { contrats$date_fin[contrats$id_contrat == "CT2"] <- D("2025-06-30")
+  contrats$motif_fin[contrats$id_contrat == "CT2"] <- "resiliation_adherent"; contrats$date_saisie_fin[contrats$id_contrat == "CT2"] <- D("2025-07-01") })
+verifier_egal("C174-11 et C174-11 bis : date de naissance de AS2 hors bornes (D02c) : CT2 résilié le 2025-06-30 (voie observée, hors de la population) : P3 calculé, 0 sans cotisation, 565,315068493151 avec CO1 (avant : arrêté D02c, CT2) ; CT2 en cours : arrêté (D02c, CT2), inchangé",
+              list(c174(within(fin_174(bp3_174), assures$date_naissance[1L] <- D("1890-01-01")))$P3,
+                   c174(within(fin_174(b3c_174), assures$date_naissance[1L] <- D("1890-01-01")))$P3,
+                   c174(within(bp3_174, assures$date_naissance[1L] <- D("1890-01-01")))$P3),
+              list(calc_174(0), calc_174(565.315068493151), list(NA_real_, "D02c", "CT2")), tolerance = EPS)
+pH_174 <- p_c1
+pH_174$donnees$hypotheses <- lapply(ns$REFERENTIELS, function(r) list(motif = "D02a", referentiel = r, poste = "tous", valeur = "regle"))
+pH_174$donnees$exclusions <- data.frame(motif = "D10b", famille = ns$FAMILLES_CALCUL, action = "conserver", stringsAsFactors = FALSE)
+verifier_egal("C174-12 (S8, V3 (c)) : date_fin de GS1 antérieure à sa date d'effet (D02a sous H) : la ligne de garanties_souscrites (s2 FALSE) n'entre pas dans S2 : DO1 exact, P1 94 555,8158688524 exact (inchangé)",
+              { r <- calculer_provisions(within(b0_174, garanties_souscrites$date_fin[1L] <- D("2019-06-01")), pH_174, tid)
+                q <- r$provisions[r$provisions$poste == P1_174 & r$provisions$segmentation == "ensemble", ]
+                list(q$montant, q$statut_resultat, r$dossiers$statut_resultat[r$dossiers$poste == P1_174]) },
+              list(94555.8158688524, "exact", "exact"), tolerance = EPS)
+verifier_egal("C174-16 et C174-17 : date_terme de CT2 hors bornes (D02c) : P3 arrêté (D02c, CT2), inchangé ; age_fin_garantie de GS2 négatif (D09) : âge de fin inconnu, CT2 unité possible : P3 arrêté (D09, CT2), P1 = P2 = 0 (avant : trois postes arrêtés D09 sans identifiant ; contre-mesure interdite : P3 calculé sans CT2)",
+              list(c174(within(b3c_174, contrats$date_terme[1L] <- D("1890-01-01")))$P3,
+                   c174(within(b3c_174, parametres$valeur[parametres$id_garantie_souscrite == "GS2" & parametres$parametre == "age_fin_garantie"] <- -67))[1:3]),
+              list(list(NA_real_, "D02c", "CT2"), list(P1 = calc_174(0), P2 = calc_174(0), P3 = list(NA_real_, "D09", "CT2"))), tolerance = EPS)
+# C174-21 et C174-21 bis (avis d'actuary sur 2/2, correction 1) : b0, majoration_enfant de GS1
+# négative (D09), plus EV2 mise_a_jour de SI1 dont source_information manque
+# (manquant_obligatoire, portée ligne), colonne que l'automate du dossier ne lit pas : l'état de
+# DO1 reste connu (capital_du), DO1 ne lit pas les paramètres de sa garantie ; EV2 de niveau
+# sinistre (id_dossier NA) ou de niveau dossier (DO1). Contre-mesure interdite (diff de 2/2 avant
+# la reprise, mesuré) : P1 arrêté (D09, DO1). Avant (9847b90) : trois postes arrêtés D09, id NA.
+ev2_174 <- function(dossier) within(within(b0_174, parametres$valeur[4L] <- -0.25), evenements <- rbind(evenements,
+  b2_tab("evenements", id_evenement = "EV2", id_sinistre = "SI1", id_dossier = dossier, type_evenement = "mise_a_jour",
+         date_effet = D("2024-09-20"), date_saisie = D("2024-09-20"), source_information = NA_character_)))
+verifier_egal("C174-21 et C174-21 bis : source_information d'une mise_a_jour refusée (colonne non lue par l'automate), majoration_enfant refusée : DO1 capital_du, paramètres non lus : P1 94 555,8158688524, P2 = P3 = 0, postes_arretes NA (lignes de parametres et d'evenements) ; EV2 de niveau sinistre puis de niveau dossier",
+              lapply(c(NA_character_, "DO1"), function(d) c174(ev2_174(d))),
+              rep(list(list(P1 = calc_174(94555.8158688524), P2 = calc_174(0), P3 = calc_174(0),
+                            postes_arretes = c(NA_character_, NA_character_))), 2L),
+              tolerance = EPS)
