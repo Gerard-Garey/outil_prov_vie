@@ -1008,7 +1008,7 @@ documentera avec eux.
 \textcolor{financeblue}{\textbf{Motif}} & \textcolor{financeblue}{\textbf{Levé, dans l'état du code, par}} \\
 \endhead
 \code{plan\_incomplet} & \code{controler\_base()}~: date d'arrêté absente\fsp; \code{facteur\_revalorisation()} et \code{calculer\_engagement()}~: année sans taux de revalorisation (section~\ref{sec:engagement-capital})\fsp; \code{calculer\_engagement()}~: collège d'une affiliation absent de la valeur de l'hypothèse D03c lue, levé après tous les arrêts du poste, le message nommant le plus petit collège absent puis, pour ce collège, la plus petite affiliation en cause, seul identifiant publié (table \code{affiliations}, colonne \code{salaire\_reference}\fsp; section~\ref{sec:engagement-capital})\fsp; \code{valider\_plan()}, et par elle \code{canoniser\_plan()}, \code{ecrire\_plan()} et \code{construire\_fiche()}~: entrée du plan exigée et absente, le message nommant son chemin (section~\ref{sec:plan-schema}). \\
-\code{plan\_invalide} & \code{controler\_base()}~: date d'arrêté mal formée, déclaration ou convention mal formée ou hors de sa liste fermée\fsp; \code{calculer\_age()} et \code{date\_atteinte\_age()}~: convention hors de \code{CONVENTIONS\_AGE}\fsp; \code{valider\_plan()}, et par elle les mêmes fonctions que pour \code{plan\_incomplet}~: entrée du plan mal formée, hors de son domaine ou inconnue du schéma (section~\ref{sec:plan-schema})\fsp; \code{resoudre\_tables()}~: statut ou nature d'une table autres que ceux que déclarent le plan et l'usage\fsp; \code{lire\_declarations()}, et par elle \code{controler\_base()}, \code{vue\_a\_date()} et \code{valider\_plan()}~: valeur d'une hypothèse par défaut, lue ou non, de tout référentiel et de tout poste, hors de la forme de son motif (section~\ref{sec:donnees-bilan}, paragraphe «~Forme de la valeur des hypothèses par défaut~»)\fsp; \code{calculer\_engagement()}~: capital reconstitué, solde revalorisé ou montant, avant ou après frais, infini ou indéterminé (\code{NaN}) d'un dossier dont l'assiette est lue sous l'hypothèse D03c, levé après tous les arrêts du poste (section~\ref{sec:engagement-capital}). \\
+\code{plan\_invalide} & \code{controler\_base()}~: date d'arrêté mal formée, déclaration ou convention mal formée ou hors de sa liste fermée\fsp; \code{calculer\_age()} et \code{date\_atteinte\_age()}~: convention hors de \code{CONVENTIONS\_AGE}\fsp; \code{valider\_plan()}, et par elle les mêmes fonctions que pour \code{plan\_incomplet}~: entrée du plan mal formée, hors de son domaine ou inconnue du schéma (section~\ref{sec:plan-schema})\fsp; \code{resoudre\_tables()}~: statut ou nature d'une table autres que ceux que déclarent le plan et l'usage\fsp; \code{lire\_declarations()}, et par elle \code{controler\_base()}, \code{vue\_a\_date()} et \code{valider\_plan()}~: valeur d'une hypothèse par défaut, lue ou non, de tout référentiel et de tout poste, hors de la forme de son motif (section~\ref{sec:donnees-bilan}, paragraphe «~Forme de la valeur des hypothèses par défaut~»)\fsp; \code{valider\_plan()} seule (non \code{controler\_base()} ni \code{vue\_a\_date()})~: poste d'une hypothèse par défaut qui n'est ni \code{tous} ni un poste du catalogue lisant une table de son motif, levé après les refus de \code{lire\_declarations()} et des seuils (section~\ref{sec:plan-schema}, paragraphe «~Poste d'une hypothèse~»)\fsp; \code{calculer\_engagement()}~: capital reconstitué, solde revalorisé ou montant, avant ou après frais, infini ou indéterminé (\code{NaN}) d'un dossier dont l'assiette est lue sous l'hypothèse D03c, levé après tous les arrêts du poste (section~\ref{sec:engagement-capital}). \\
 \code{liste\_invalide} & \code{ecrire\_valeurs()}, \code{ecrire\_liste()} et \code{lire\_liste()}~: valeur, liste ou texte que l'écriture canonique ou le format de liste n'admet pas (sections~\ref{sec:ecriture} et~\ref{sec:format-liste})\fsp; \code{controler\_types()}, \code{constater\_forme()} et \code{controler\_base()}~: base qui n'est pas une liste nommée de \code{data.frame} aux tables connues\fsp; \code{ecrire\_base()}~: valeur que le CSV ne relirait pas à l'identique\fsp; \code{construire\_fiche()}, \code{ecrire\_fiche()}, \code{lire\_fiche()} et les contrôles du rejeu~: objet ou liste qui n'a pas la forme d'une fiche de calcul. \\
 \code{fichier\_invalide} & \code{lire\_base()}, \code{ecrire\_base()}, \code{ecrire\_jeu()} et \code{lire\_jeu()}~: chemin qui n'est pas une chaîne unique, dossier introuvable, non vide ou impossible à créer, fichier inconnu du dictionnaire, fichier dont la lecture ne rendrait pas le texte exact (section~\ref{sec:lecture-base})\fsp; pour \code{lire\_jeu()}, disposition d'un jeu, liste d'empreintes, volumétrie ou tables de vérité non conformes (section~\ref{sec:lecture-jeu}). \\
 \code{table\_base\_absente} & \code{controler\_base()}~: table obligatoire absente. \\
@@ -4395,7 +4395,7 @@ ne peut appeler que \code{dictionnaire} et \code{outils}. Sa fonction
 \rowcolor{tableheader}
 \textcolor{financeblue}{\textbf{Fonction}} & \textcolor{financeblue}{\textbf{Arguments}} & \textcolor{financeblue}{\textbf{Rôle}} \\
 \code{catalogue\_garanties()} & Aucun & Lit et valide, à chaque appel, le catalogue des garanties du package installé (\code{inst/extdata/garanties/})\fsp; rend une liste nommée d'un \code{data.frame} par fichier (\code{garanties}, \code{etats}, \code{transitions}, \code{flux}, \code{usages\_tables}, \code{postes}, \code{liens}, \code{lectures})\fsp; refus \code{catalogue\_invalide} si la forme lue n'est pas celle attendue. \\
-\code{colonnes\_lues()} & \code{catalogue}, \code{garantie}, \code{poste}, \code{table}, \code{parties} & Rend les colonnes que le poste lit dans la table (\code{lectures.csv}), complétées des colonnes de toute partie de ligne dont il lit une colonne\fsp; vide si le poste ne lit pas la table. Seule dérivation des colonnes lues par un poste (issue~112), lue par la condition~(1) de l'arrêt (\code{postes\_a\_arreter()}), par la détection S2 des familles (grain de S2, spécification de B2, §~5.8, erratum~v1.0.24) par l'enjeu par poste (à la colonne près, sans les parties de ligne) et par \code{plan} (poste d'une hypothèse, issue~192). Non exportée. \\
+\code{colonnes\_lues()} & \code{catalogue}, \code{garantie}, \code{poste}, \code{table}, \code{parties} & Rend les colonnes que le poste lit dans la table (\code{lectures.csv}), complétées des colonnes de toute partie de ligne dont il lit une colonne\fsp; vide si le poste ne lit pas la table. Seule dérivation des colonnes lues par un poste (issue~112), lue par la condition~(1) de l'arrêt (\code{postes\_a\_arreter()}), par la détection S2 des familles (grain de S2, spécification de B2, §~5.8, erratum~v1.0.24), par l'enjeu par poste (à la colonne près, sans les parties de ligne) et par \code{plan} (poste d'une hypothèse, issue~192). Non exportée. \\
 \code{methodes\_poste()} & \code{x}, \code{poste}, \code{colonne} & Lit le champ \code{methodes} ou \code{temoins} d'un poste de \code{postes.csv} et rend un \code{data.frame} (\code{champ}, \code{methode})\fsp; refus \code{catalogue\_invalide} pour un champ ou une méthode inconnus, ou une méthode en double. Non exportée, appelée aussi par \code{plan}. \\
 \code{postes\_a\_arreter()} & \code{catalogue}, \code{bilan}, \code{postes}, \code{parties} & Détermine les postes du plan arrêtés par le bilan (refus de tables, visibilité non déterminée et constats D03i), d'après les colonnes que lit chaque poste (\code{colonnes\_lues()})\fsp; rend chaque poste avec le motif de la première ligne qui l'arrête, les refus de tables complétés des postes arrêtés, et, pour chaque ligne de portée \code{ligne}, les postes candidats de l'arrêt par unité (issue~72). Non exportée. \\
 \end{tabular}
@@ -4639,7 +4639,13 @@ lit la colonne de~$\ell$ et s'il est arrêté par la règle~(iii) appliquée
 aux seules lignes de visibilité non déterminée, descendance comprise
 (\code{lignes\_visibilite\_nd\_vue()}, module \code{donnees}\fsp;
 erratum~1.9.6, (iii), jugement d'expert). Le cas~(b) reste fixé par la
-table d'origine de l'arrêt. Alternative écartée~: compter dans~(b) les
+table d'origine de l'arrêt. Cette reconnaissance n'est codée que pour les
+deux postes du capital décès (\code{calculer\_engagement()})~: pour la
+provision mathématique, toute table qu'elle lit décide de sa population,
+et les ascendantes de ses tables au sens de la règle~1 sont des tables
+qu'elle lit~; un arrêt par la règle~(iii) qui la touche relève donc du
+cas~(b), qui l'expose à toute ligne candidate (erratum~1.9.6, (iv)).
+Alternative écartée~: compter dans~(b) les
 descendantes de la table d'origine, ce qui exposerait les deux postes du
 capital décès à toute ligne candidate dès qu'un contrat a une date d'effet
 non déterminée.
@@ -5537,9 +5543,11 @@ lues ou non par un poste (\code{hypotheses\_defaut} du bilan).
   la validation de l'issue~171). Le filtre du dossier clos lit les lignes
   d'\code{evenements} du dossier sous la garde par colonnes, mais aucun
   test ne la distingue de la ligne entière~: toute emprise qu'une
-  hypothèse de la vue peut avoir sur une ligne d'\code{evenements}
-  contient une colonne lue par ces postes (date d'effet pour D02a, ligne
-  entière pour D02b et D03g, constatés sur la date de saisie). Le filtre du
+  hypothèse de la vue peut avoir en v1 sur une ligne d'\code{evenements}
+  contient une colonne lue par ces postes (dictionnaire,
+  \code{colonnes.csv}~: D02a ne porte que sur \code{date\_effet}, D02b et
+  D03g sur \code{date\_saisie}, qui décide de la visibilité\fsp;
+  \code{evenements} n'a pas de partie de ligne). Le filtre du
   dossier de solde au plus nul est vérifié au niveau de la fonction~: une
   D02a injectée sur \code{prestations.debut\_periode} et
   \code{fin\_periode}, que ces postes ne lisent pas, ne fait plus naître de
@@ -5704,7 +5712,10 @@ déterminé qui atteindrait le calcul est une erreur interne, sa nature
 refusée ayant arrêté le poste auparavant. Motif~: sans cette lecture, un
 code ou une valeur refusés feraient sortir un contrat en silence, ou
 feraient arrêter le poste par un contrat sorti par une valeur connue.
-Elle remplace le sur-ensemble de l'issue~72 (contrats pris avant les
+Effet de l'alternative (sur-ensemble de l'issue~72) sur une base des
+tests~: la provision mathématique arrêtée (D02c, contrat CT2) par un
+contrat résilié, au lieu de 0, ou de 565,315068493151 avec une
+cotisation (cas C174-11 de la batterie unitaire). Elle remplace le sur-ensemble de l'issue~72 (contrats pris avant les
 filtres de population). Statut~: jugement d'expert (lecture de Kleene).
 
 \textbf{Champ individuel~: clé manquante} (spécification du module
