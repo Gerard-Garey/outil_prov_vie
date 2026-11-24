@@ -4625,7 +4625,7 @@ sont distingués~:
   (\code{capital\_forfaitaire} unique, connu, non exclu et non refusé, ou
   ni \code{capital\_forfaitaire} ni \code{taux\_capital} dans une table
   \code{parametres} lue). Une table \code{parametres} refusée en portée
-  table, quelle qu'en soit la cause (clé, domaine, D04b, refus induit),
+  table, quelle qu'en soit la cause (par exemple clé, domaine, D04b, refus induit),
   laisse ces valeurs non déterminées et la reconstitution possible, à tout
   arrêté, vue totale comprise (\code{table\_refusee\_vue()}, module
   \code{donnees}\fsp; issue~175)\fsp; une table vide, non refusée, est une
@@ -4883,8 +4883,10 @@ plusieurs valeurs ou a une ligne retenue exclue pour la famille, ou si la
 table \code{parametres} est refusée en portée table, quelle qu'en soit la
 cause (issue~175)~: ses lignes sont alors illisibles, et l'absence d'un
 paramètre n'est pas connue. Le poste, qui lit cette table, est alors déjà
-arrêté par le bilan (règle~(i))~; la voie non déterminée n'agit que sur
-l'exposition (section~\ref{sec:garanties-arrets}, cas~(e)).
+arrêté par le bilan (règle~(i))~; la voie non déterminée est sans effet
+sur le calcul et sur les lignes lues\fsp; seule la reconstitution possible,
+rendue par la même fonction, agit, sur l'exposition
+(section~\ref{sec:garanties-arrets}, cas~(e)).
 L'arrêt est évalué avant toute lecture des valeurs des unités, sauf pour
 les affiliations et la famille, évaluées après le calcul du capital et
 avant ses propres arrêts.
