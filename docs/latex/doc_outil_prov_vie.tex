@@ -1690,10 +1690,10 @@ calcul. Il ne peut appeler que \code{dictionnaire} et
 \rowcolor{tableheader}
 \textcolor{financeblue}{\textbf{Fonction}} & \textcolor{financeblue}{\textbf{Arguments}} & \textcolor{financeblue}{\textbf{Rôle}} \\
 \endhead
-\code{controler\_base()} & \code{donnees}, \code{arrete}, \code{declarations = NULL}, \code{conventions = NULL} & Contrôle la base entière et la vue à la date d'arrêté, sans rien modifier, sous les déclarations du sous-schéma \code{donnees} du plan et la section \code{conventions} du plan, et rend le bilan en onze éléments (section~\ref{sec:donnees-bilan})\fsp; chaque contrôle prévu et reporté figure dans les contrôles non exécutés avec la cause \code{non\_implemente}\fsp; refuse l'appel pour un arrêté absent ou mal formé, une liste mal formée, une table inconnue ou obligatoire absente, une anomalie de la table \code{extraction}, un arrêté postérieur à l'extraction, une déclaration ou une convention mal formée ou hors de sa liste fermée. \\
+\code{controler\_base()} & \code{donnees}, \code{arrete}, \code{declarations = NULL}, \code{conventions = NULL} & Contrôle la base entière et la vue à la date d'arrêté, sans rien modifier, sous les déclarations du sous-schéma \code{donnees} du plan et la section \code{conventions} du plan, et rend le bilan en onze éléments (section~\ref{sec:donnees-bilan})\fsp; chaque contrôle prévu et reporté figure dans les contrôles non exécutés avec la cause \code{non\_implemente}\fsp; refuse l'appel pour un arrêté absent ou mal formé, une liste mal formée, une table inconnue ou obligatoire absente, une anomalie de la table \code{extraction}, un arrêté postérieur à l'extraction, une déclaration ou une convention mal formée ou hors de sa liste fermée\fsp; ne contrôle pas le poste d'une hypothèse au catalogue (\code{valider\_plan()} seul, issue~192). \\
 \code{eclater\_champ()} & \code{x} & Éclate un champ «~a;b~» d'un CSV du dictionnaire en vecteur de chaînes (vide pour une chaîne vide ou \code{NA}). Non exportée, appelée aussi par \code{plan}. \\
-\code{lire\_declarations()} & \code{declarations}, \code{dico} & Contrôle le sous-schéma \code{donnees} du plan (rubriques, motifs, familles, référentiels, seuils, \code{evaluations\_gestion}) et le rend, \code{exclusions} et \code{hypotheses} mises en \code{data.frame}\fsp; refus \code{plan\_invalide}, dont celui d'une hypothèse de D02a, D02b ou D03g déclarée pour un autre poste que \code{tous}, de valeurs différentes entre ses lignes (référentiels) ou en signalement (M717 pour D02a), et celui d'une valeur d'hypothèse, lue ou non, hors de la forme de son motif (seul lieu de ce contrôle, issue~99). Non exportée, appelée par \code{vue\_a\_date()} et aussi par \code{valider\_plan()}. \\
-\code{vue\_a\_date()} & \code{donnees}, \code{arrete}, \code{declarations}, \code{conventions} & Construit une fois la vue à l'arrêté (classe \code{vue\_provie}), seule lecture de la base par les familles de calcul~: bilan de \code{controler\_base()}, lignes retenues, parties de ligne connues, lignes exclues par famille de calcul, hypothèses par défaut appliquées\fsp; mêmes refus d'appel que \code{controler\_base()}. Non exportée. \\
+\code{lire\_declarations()} & \code{declarations}, \code{dico} & Contrôle le sous-schéma \code{donnees} du plan (rubriques, motifs, familles, référentiels, seuils, \code{evaluations\_gestion}) et le rend, \code{exclusions} et \code{hypotheses} mises en \code{data.frame}\fsp; refus \code{plan\_invalide}, dont celui d'une hypothèse de D02a, D02b ou D03g déclarée pour un autre poste que \code{tous}, de valeurs différentes entre ses lignes (référentiels) ou en signalement (M717 pour D02a), et celui d'une valeur d'hypothèse, lue ou non, hors de la forme de son motif (seul lieu de ce contrôle, issue~99)\fsp; ne contrôle pas le poste d'une hypothèse au catalogue, contrôlé par \code{valider\_plan()} seul (issue~192). Non exportée, appelée par \code{vue\_a\_date()} et aussi par \code{valider\_plan()}. \\
+\code{vue\_a\_date()} & \code{donnees}, \code{arrete}, \code{declarations}, \code{conventions} & Construit une fois la vue à l'arrêté (classe \code{vue\_provie}), seule lecture de la base par les familles de calcul~: bilan de \code{controler\_base()}, lignes retenues, parties de ligne connues, lignes exclues par famille de calcul, hypothèses par défaut appliquées\fsp; mêmes refus d'appel que \code{controler\_base()}, poste d'une hypothèse non contrôlé. Non exportée. \\
 \code{valeurs\_vue()} & \code{vue}, \code{table}, \code{colonne} & Rend les valeurs d'une colonne dans la vue\fsp; \code{NA} signifie «~hors de la vue~» ou, sous l'hypothèse de D02a, «~tenue pour inconnue~», jamais «~absente~»\fsp; une date d'effet de \code{mise\_a\_jour} rejetée y est remplacée par la règle écrite de R13. Non exportée. \\
 \code{cles\_lignes\_hypothese()} & \code{vue}, \code{table}, \code{lignes}, \code{colonne} & Rend la valeur de la base d'une colonne d'identifiant (\code{id\_*}, clé primaire ou clé étrangère) pour des lignes placées sous une hypothèse de la vue, visibles ou non à l'arrêté, désignées par \code{lignes}, vecteur numérique d'indices entiers, finis et positifs\fsp; tout autre appel (dont un \code{lignes} logique, \code{TRUE} par exemple) est une erreur interne\fsp; seul rattachement d'une ligne cachée à son unité, pour un statut, jamais lu pour un montant. Non exportée, appelée par \code{engagement}. \\
 \code{etats\_a\_date()} & \code{vue}, \code{garanties}, \code{famille} & Rend l'état à l'arrêté de chaque dossier des garanties demandées (B2~: \code{deces}), pour une famille de calcul exigée~: état, montant en vigueur, état du dossier (\code{ouvert}, \code{capital\_du}, \code{clos}) par l'automate du dossier, instruction (inconnue si la partie de ligne l'est ou si D02a sous \code{H} la tient pour inconnue)\fsp; les dossiers exclus pour la famille sont rendus, et l'appelant les filtre\fsp; la garantie souscrite et le sinistre du dossier s'apparient par \code{apparier\_cles()} (une clé manquante ou vide ne s'apparie à rien)\fsp; l'automate ne lit que les événements d'un type de \code{TYPES\_AUTOMATE}. Non exportée. \\
@@ -4395,7 +4395,7 @@ ne peut appeler que \code{dictionnaire} et \code{outils}. Sa fonction
 \rowcolor{tableheader}
 \textcolor{financeblue}{\textbf{Fonction}} & \textcolor{financeblue}{\textbf{Arguments}} & \textcolor{financeblue}{\textbf{Rôle}} \\
 \code{catalogue\_garanties()} & Aucun & Lit et valide, à chaque appel, le catalogue des garanties du package installé (\code{inst/extdata/garanties/})\fsp; rend une liste nommée d'un \code{data.frame} par fichier (\code{garanties}, \code{etats}, \code{transitions}, \code{flux}, \code{usages\_tables}, \code{postes}, \code{liens}, \code{lectures})\fsp; refus \code{catalogue\_invalide} si la forme lue n'est pas celle attendue. \\
-\code{colonnes\_lues()} & \code{catalogue}, \code{garantie}, \code{poste}, \code{table}, \code{parties} & Rend les colonnes que le poste lit dans la table (\code{lectures.csv}), complétées des colonnes de toute partie de ligne dont il lit une colonne\fsp; vide si le poste ne lit pas la table. Seule dérivation des colonnes lues par un poste (issue~112), lue par la condition~(1) de l'arrêt (\code{postes\_a\_arreter()}), par la détection S2 des familles (grain de S2, spécification de B2, §~5.8, erratum~v1.0.24) et par l'enjeu par poste (à la colonne près, sans les parties de ligne). Non exportée. \\
+\code{colonnes\_lues()} & \code{catalogue}, \code{garantie}, \code{poste}, \code{table}, \code{parties} & Rend les colonnes que le poste lit dans la table (\code{lectures.csv}), complétées des colonnes de toute partie de ligne dont il lit une colonne\fsp; vide si le poste ne lit pas la table. Seule dérivation des colonnes lues par un poste (issue~112), lue par la condition~(1) de l'arrêt (\code{postes\_a\_arreter()}), par la détection S2 des familles (grain de S2, spécification de B2, §~5.8, erratum~v1.0.24) par l'enjeu par poste (à la colonne près, sans les parties de ligne) et par \code{plan} (poste d'une hypothèse, issue~192). Non exportée. \\
 \code{methodes\_poste()} & \code{x}, \code{poste}, \code{colonne} & Lit le champ \code{methodes} ou \code{temoins} d'un poste de \code{postes.csv} et rend un \code{data.frame} (\code{champ}, \code{methode})\fsp; refus \code{catalogue\_invalide} pour un champ ou une méthode inconnus, ou une méthode en double. Non exportée, appelée aussi par \code{plan}. \\
 \code{postes\_a\_arreter()} & \code{catalogue}, \code{bilan}, \code{postes}, \code{parties} & Détermine les postes du plan arrêtés par le bilan (refus de tables, visibilité non déterminée et constats D03i), d'après les colonnes que lit chaque poste (\code{colonnes\_lues()})\fsp; rend chaque poste avec le motif de la première ligne qui l'arrête, les refus de tables complétés des postes arrêtés, et, pour chaque ligne de portée \code{ligne}, les postes candidats de l'arrêt par unité (issue~72). Non exportée. \\
 \end{tabular}
@@ -5098,7 +5098,9 @@ dépôt).
 dossier~: le refus \code{declaration\_manquante} d'une hypothèse D03c
 déclarée pour un autre poste seulement (R2), le refus \code{plan\_incomplet}
 d'un collège absent de la valeur lue (R1) et le refus \code{plan\_invalide}
-du débordement (R3). \code{capital\_deces\_dossier()} les marque sans les
+du débordement (R3)~; «~un autre poste~» s'entend, depuis l'issue~192, d'un
+poste admis par \code{valider\_plan()} (section~\ref{sec:plan-schema},
+«~Poste d'une hypothèse~»). \code{capital\_deces\_dossier()} les marque sans les
 lever, et \code{calculer\_engagement()} ne les lève qu'une fois écartés
 tous les arrêts du poste, évalués pour tous ses dossiers~: règles d'arrêt
 (section~\ref{sec:garanties-arrets}), arrêts par une ligne refusée lue,
@@ -6111,7 +6113,7 @@ peut appeler que \code{tables}, \code{garanties}, \code{dictionnaire},
 \begin{tabular}{@{}p{3.9cm}>{\raggedright\arraybackslash}p{3.0cm}p{8.2cm}@{}}
 \rowcolor{tableheader}
 \textcolor{financeblue}{\textbf{Fonction}} & \textcolor{financeblue}{\textbf{Arguments}} & \textcolor{financeblue}{\textbf{Rôle}} \\
-\code{valider\_plan()} & \code{plan} & Valide le plan de calcul, sans valeur par défaut, et le rend inchangé avec la classe \code{plan\_calcul}\fsp; refus \code{plan\_incomplet} (le message nomme le chemin manquant) ou \code{plan\_invalide}. \\
+\code{valider\_plan()} & \code{plan} & Valide le plan de calcul, sans valeur par défaut, et le rend inchangé avec la classe \code{plan\_calcul}\fsp; refus \code{plan\_incomplet} (le message nomme le chemin manquant) ou \code{plan\_invalide}. Le sous-schéma \code{donnees} est validé dans cet ordre, le premier refus étant levé~: \code{lire\_declarations()} (module \code{donnees}), puis les seuils (seuil inconnu, seuil au-delà des entiers de R), puis le poste de chaque hypothèse, lu par \code{colonnes\_lues()} (module \code{garanties}\fsp; issue~192, section~\ref{sec:plan-schema}). \\
 \code{canoniser\_plan()} & \code{plan} & Rend le plan validé sous forme canonique (ordre des sections et des clés, ensembles triés, types canoniques), de classe \code{plan\_calcul}~: deux plans de même sens donnent le même objet. \\
 \code{ecrire\_plan()} & \code{plan} & Rend les octets du plan canonique\fsp; le fichier est écrit par l'appelant. \\
 \code{lire\_plan()} & \code{octets} & Relit des octets écrits par \code{ecrire\_plan()}, sans évaluation et sans validation, et rend un objet de classe \code{plan\_calcul}. \\
@@ -6156,7 +6158,7 @@ canonisation\fsp; toute autre conversion est refusée (\code{plan\_invalide}).
 \code{revalorisation} & Revalorisation légale du capital décès~: taux retenu par année civile, prorata (\code{simple} ou \code{compose}), et, selon les méthodes déclarées, taux futur et durée sans dépôt. \\
 \code{conventions} & Conventions d'âge, d'instant de date, de répartition dans l'année, de fractionnement, de décompte des jours et, admise sans être lue dans l'état du code, de limite d'âge. \\
 \code{postes} & Pour chaque poste de chaque garantie du périmètre, la méthode et ses paramètres\fsp; pour un poste à champs, une déclaration par champ (\code{individuel}, \code{collectif}). \\
-\code{donnees} & Sous-schéma du module \code{donnees} (exclusions, hypothèses, seuils, évaluations de gestion), validé par la fonction de ce module qui le lit (\code{lire\_declarations()}). \\
+\code{donnees} & Sous-schéma du module \code{donnees} (exclusions, hypothèses, seuils, évaluations de gestion), validé par la fonction de ce module qui le lit (\code{lire\_declarations()}), puis, au plan seul, pour le poste de chaque hypothèse (ci-dessous, «~Poste d'une hypothèse~»). \\
 \code{restitution} & Échéanciers restitués (\code{tous}, \code{aucun} ou liste d'identifiants) et triangles (\code{aucun}, seule valeur admise). \\
 \code{liens} & Liens déclarés entre garanties du périmètre (\code{list()} tant que le catalogue ne porte que \code{deces}). \\
 \code{graine} & Entier fini, consigné dans la fiche de calcul. \\
@@ -6184,6 +6186,45 @@ le taux de revalorisation, qui dépend des données, est contrôlée à
 l'exécution. Un témoin n'est jamais une option~: un plan qui déclare une
 méthode témoin est refusé (\code{plan\_invalide}, «~méthode témoin, non
 option~»).
+
+\textbf{Poste d'une hypothèse} (spécification de la branche B2, §~2.3,
+erratum de la version~1.0.24, «~Poste d'une hypothèse~»\fsp; décision du
+mainteneur M780, V9~(c1)\fsp; ADR~0007, annotation du 24~novembre~2026\fsp;
+issue~192). Le \code{poste} d'une ligne de \code{donnees\$hypotheses} est
+\code{tous}, ou un poste du catalogue (\code{postes.csv}, toute garantie,
+dans le périmètre du plan ou non) qui lit au moins une table du motif
+(\code{defauts.csv}, colonne \code{tables}). Sinon, le plan est refusé
+(\code{plan\_invalide}), et le message nomme le motif, le référentiel, le
+poste et les postes admis~; la règle vaut aussi pour une hypothèse en
+signalement. «~Le poste lit une table du motif~» se lit par la seule
+\code{colonnes\_lues()} (module \code{garanties}, section~\ref{sec:statut-unite}),
+non par une lecture directe de \code{lectures.csv}~; les postes admis sont
+les mêmes, \code{.valider\_catalogue()} imposant que tout couple de
+\code{lectures.csv} soit un poste de \code{postes.csv}. Le contrôle vient
+après \code{lire\_declarations()} et après les refus des seuils, qui
+gardent leur premier refus. Il est fait au plan seul~:
+\code{lire\_declarations()}, \code{controler\_base()} et
+\code{vue\_a\_date()} ne le font pas, car le module \code{donnees} n'appelle
+pas le catalogue des garanties (ADR~0010, point~1), et sans plan le poste
+d'une hypothèse n'est lu par aucun calcul (seule la restitution
+\code{hypotheses\_defaut} le porte). Un \code{controler\_base()} qui
+accepte une déclaration que \code{valider\_plan()} refuse est donc voulu
+pour cette règle, à la différence de la forme de la valeur, contrôlée par
+\code{lire\_declarations()} seule aux trois points d'entrée. Statut~: la
+règle ne refuse jamais une hypothèse qu'un poste peut lire (résultat
+exact, sous l'exactitude de \code{lectures.csv} au grain de la table)\fsp;
+elle n'est pas complète~: D03h ou D03f déclarée pour les sinistres
+déclarés non réglés, qui lisent les tables de ces motifs sans en lire les
+colonnes, est admise, et le refus de lecture \code{declaration\_manquante}
+la traite. Ce refus (R2, hypothèse D03c, D03f ou D03h déclarée pour un
+autre poste seulement) ne vise plus qu'un poste admis autre que celui qui
+lit l'hypothèse, et reste atteignable pour ces trois motifs (M756
+inchangée\fsp; spécification de la branche B2, §~6.2, erratum de la
+version~1.0.24). Limite~: \code{hypotheses} ne porte pas de garantie, et
+les codes de poste doivent rester distincts entre garanties. Conséquence~:
+un plan accepté avant l'issue~192 avec un poste hors du catalogue, ou qui
+ne lit aucune table du motif, est refusé au plan, et une fiche de calcul
+produite avec un tel plan ne se rejoue plus.
 
 \textbf{Segmentations admises.} Des huit règles de segmentation du schéma
 de la première version (\code{REGLES\_\allowbreak SEGMENTATION}), quatre sont admises
