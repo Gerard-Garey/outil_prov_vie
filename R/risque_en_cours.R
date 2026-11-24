@@ -63,6 +63,12 @@
 # par provisions_individuelles() (sortie restituée) et par .population_p3() (sortie observée).
 .LUES_SINISTRE_P3 <- c("id_assure", "nature_sinistre", "date_survenance", "date_saisie")
 
+# Tables qui décident de la population de P3 (.population_p3(), V2 (ii) : toutes les tables que P3
+# lit dans lectures.csv, hors extraction, test statique) : un arrêt du bilan sur l'une d'elles
+# laisse la population non déterminée (spécification `donnees` v1.9, § 9.2, erratum 1.9.4, (iii)
+# (b) ; #175).
+.TABLES_POPULATION_P3 <- c("contrats", "assures", "sinistres", "cotisations", "garanties_souscrites", "parametres")
+
 # Population de P3 (spécification de B2, § 5.5 et § 5.8, erratum v1.0.23, V2 (ii), « Population
 # de P3 » et « Code de garantie refusé » ; #72, #174) : contrats retenus qui portent une garantie
 # souscrite de la sélection, dans l'ordre de la table contrats. Sélection : `gs` (indices dans la
@@ -844,12 +850,15 @@ provisions_collectives <- function(vue, plan) {
 # nombre_dossiers 0. Poste arrêté (bilan, ou hors_axes,
 # parametre_non_determine, dont la période couverte non déterminée d'une cotisation du champ
 # (b) ; ligne de portée ligne de refus_tables dont une ligne refusée est lue pour un contrat,
-# arret_refus_ligne(), #72, lignes en cause dans l'attribut `refus_ligne`) : cellule `arrete`,
+# arret_refus_ligne(), #72) : cellule `arrete`,
 # contrat en cause dans l'attribut `identifiant_arret` (le plus petit, tri radix, indépendant de
 # l'ordre des lignes, § 6.2, « Identifiant publié », #176). Refus
 # de lecture R2 (declaration_manquante : D03h du champ (a), D03f du champ (b) ; § 6.2, erratum
 # v1.0.21, #108) : levés seulement si aucun arrêt n'est né, les deux champs compris, le champ
-# (a) avant le champ (b). Un montant NA dans le total est une erreur interne.
+# (a) avant le champ (b). Un montant NA dans le total est une erreur interne. Toute cellule
+# rendue, arrêtée ou non, porte l'attribut `refus_ligne` (s'il n'est pas vide) : lignes de portée
+# ligne de refus_tables auxquelles P3 est exposé (condition (2) de postes_arretes ; spécification
+# `donnees` v1.9, § 9.2, erratum 1.9.4, (iii), #175).
 calculer_risque_en_cours <- function(vue, plan, tables, catalogue, garantie, poste) {
   if (!identical(garantie, "deces") || !identical(poste, .POSTE_P3)) {
     stop("erreur interne de provie : calculer_risque_en_cours() ne calcule que P3 de la garantie deces", call. = FALSE)
@@ -885,9 +894,13 @@ calculer_risque_en_cours <- function(vue, plan, tables, catalogue, garantie, pos
   }
   contrats_vides <- data.frame(id_contrat = character(0), champ = character(0), montant = numeric(0),
                                statut_resultat = character(0), stringsAsFactors = FALSE)
+  # `refus_ligne` (attribut de toute cellule rendue, arrêtée ou non, s'il n'est pas vide) : lignes
+  # de portée ligne de refus_tables auxquelles P3 est exposé (`expose`, évalué avant tout retour,
+  # plus bas), lu par calculer_provisions() pour postes_arretes (#72, #175)
   arreter <- function(motif, identifiant) {
     cel <- cellule(NA_real_, NA_character_, motif)
     attr(cel, "identifiant_arret") <- identifiant
+    if (length(expose)) attr(cel, "refus_ligne") <- expose
     list(cellules = cel, dossiers = dossiers, echeanciers = echeancier_vide, indicateurs = vide_ind,
          contrats = contrats_vides)
   }
@@ -898,21 +911,31 @@ calculer_risque_en_cours <- function(vue, plan, tables, catalogue, garantie, pos
   # détection S2 des deux champs)
   pop <- .population_p3(vue, .gs_deces_p3(vue), plan)
   lect3 <- .lectures_contrats(vue, pop, as.numeric(vue$bilan$vue$date_arrete), m_ind)
-  motif_bilan <- pa$motif_arret[pa$garantie == garantie & pa$poste == poste]
-  if (length(motif_bilan) == 1L && !is.na(motif_bilan)) return(arreter(motif_bilan, NA_character_))
   # arrêt par les lignes de portée ligne de refus_tables (#72 ; arret_refus_ligne(), condition
   # (2)), avant toute lecture des valeurs des contrats. Unités : les contrats de la population
   # (.population_p3() : contrats retenus d'une garantie souscrite de la sélection, deces ou de code
   # refusé ; seuls ceux d'appartenance TRUE ou NA lisent des lignes ; lecture de Kleene : une
   # valeur refusée est inconnue et ne fait sortir aucun contrat) ; lignes lues du § 5.8, erratum
-  # v1.0.23 : .lectures_contrats()
-  ar <- arret_refus_ligne(vue, pa_tout, paste(garantie, poste, sep = "/"), "risque_en_cours", length(pop$id_contrat), lect3,
-                          pop$id_contrat, unique(vapply(lect3, `[[`, "", "table")))
-  if (length(ar$lignes)) {
-    res <- arreter(ar$motif, ar$identifiant)
-    attr(res$cellules, "refus_ligne") <- ar$lignes
-    return(res)
+  # v1.0.23 : .lectures_contrats(). Exposition de P3 (condition (2) de postes_arretes, #175 ;
+  # spécification `donnees` v1.9, § 9.2, erratum 1.9.4, (iii)), évaluée avant tout retour, sans
+  # tenir compte des autres causes d'arrêt : cas (b), P3 arrêté par le bilan (règles (i) à (iii)
+  # de postes_a_arreter() sur le bilan restreint aux tables de .TABLES_POPULATION_P3, sans la
+  # règle (iv) : arret_bilan_population() d'`engagement`, seule implémentation, lue aussi pour P1 et P2) :
+  # toute ligne candidate ; sinon, lignes rendues par arret_refus_ligne() sur la population de
+  # Kleene (cas (a))
+  cle_p3 <- paste(garantie, poste, sep = "/")
+  if (arret_bilan_population(catalogue, vue$bilan, plan$postes, garantie, poste, .TABLES_POPULATION_P3)) {
+    ar <- list(lignes = integer(0))
+    expose <- which(vapply(pa_tout$candidats, function(x) cle_p3 %in% x, NA))
+  } else {
+    ar <- arret_refus_ligne(vue, pa_tout, cle_p3, "risque_en_cours", length(pop$id_contrat), lect3, pop$id_contrat,
+                            unique(vapply(lect3, `[[`, "", "table")))
+    expose <- ar$lignes
   }
+  motif_bilan <- pa$motif_arret[pa$garantie == garantie & pa$poste == poste]
+  if (length(motif_bilan) == 1L && !is.na(motif_bilan)) return(arreter(motif_bilan, NA_character_))
+  # cas (b) exclu ici : P3 n'est pas arrêté par le bilan, `ar` est évalué
+  if (length(ar$lignes)) return(arreter(ar$motif, ar$identifiant))
   ind <- provisions_individuelles(vue, plan, tables, FALSE)
   if (!is.na(ind$arret)) return(arreter(ind$arret, ind$identifiant))
   col <- provisions_collectives(vue, plan)
@@ -1008,6 +1031,7 @@ calculer_risque_en_cours <- function(vue, plan, tables, catalogue, garantie, pos
                                               stringsAsFactors = FALSE))
   contrats <- contrats[order(contrats$id_contrat, contrats$champ, method = "radix"), , drop = FALSE]
   rownames(contrats) <- NULL
-  list(cellules = cellule(total, statut_le_plus_faible(statuts), NA_character_), dossiers = dossiers, echeanciers = echeanciers,
-       indicateurs = indicateurs, contrats = contrats)
+  cel <- cellule(total, statut_le_plus_faible(statuts), NA_character_)
+  if (length(expose)) attr(cel, "refus_ligne") <- expose
+  list(cellules = cel, dossiers = dossiers, echeanciers = echeanciers, indicateurs = indicateurs, contrats = contrats)
 }

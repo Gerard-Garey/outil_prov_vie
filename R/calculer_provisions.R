@@ -101,8 +101,9 @@ calculer_provisions <- function(donnees, plan, tables = list(), provenance = NUL
   segments <- segments_vue(vue, cp$perimetre$segmentations, garanties)
   # agregats
   provisions <- .agreger(postes_plan, sorties, segments, names(cp$perimetre$segmentations), cp, catalogue)
-  # postes arrêtés par leur famille sur une ligne de portée ligne de refus_tables (attribut
-  # `refus_ligne` de la cellule, #72 ; arret_refus_ligne()) : ajoutés à postes_arretes
+  # postes exposés par leur famille à une ligne de portée ligne de refus_tables (attribut
+  # `refus_ligne` de la cellule, arrêtée ou non, #72, #175 ; arret_refus_ligne()) : ajoutés à
+  # postes_arretes
   arrets$refus_tables <- .postes_arretes_ligne(arrets$refus_tables, postes_plan, sorties)
   # enjeu
   bilan <- vue$bilan
@@ -407,10 +408,12 @@ print.resultat_provie <- function(x, ...) {
 }
 
 # postes_arretes des lignes de portée ligne de refus_tables (spécification `donnees` v1.9,
-# § 9.2 ; erratum du projet de dictionnaire 1.6, § 11.5, #72) : postes arrêtés par la règle
-# (iii) (postes_a_arreter()) et postes dont la famille a été arrêtée par la ligne (attribut
-# `refus_ligne` de la cellule, indices dans refus_tables), « garantie/poste » joints par « ; »,
-# triés ; NA si aucun. Les autres lignes sont rendues inchangées.
+# § 9.2, erratum 1.9.4, (iii) ; erratum du projet de dictionnaire 1.6, § 11.5, #72, #175) :
+# postes arrêtés par la règle (iii) (postes_a_arreter()) et postes exposés à la ligne (attribut
+# `refus_ligne` de la cellule rendue par la famille, arrêtée ou non, indices dans refus_tables :
+# condition (2) évaluée sans tenir compte des autres causes d'arrêt, indépendante de leur
+# préséance), « garantie/poste » joints par « ; », triés ; NA si aucun. Les autres lignes sont
+# rendues inchangées.
 .postes_arretes_ligne <- function(refus_tables, postes_plan, sorties) {
   ajout <- vector("list", nrow(refus_tables))
   for (i in seq_len(nrow(postes_plan))) {

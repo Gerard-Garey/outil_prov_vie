@@ -1614,3 +1614,223 @@ verifier_egal("C174-21 et C174-21 bis : source_information d'une mise_a_jour ref
               rep(list(list(P1 = calc_174(94555.8158688524), P2 = calc_174(0), P3 = calc_174(0),
                             postes_arretes = c(NA_character_, NA_character_))), 2L),
               tolerance = EPS)
+
+section("#175 : postes_arretes d'une ligne de portée ligne indépendant de la préséance des arrêts (spécification donnees v1.9, § 9.2, erratum 1.9.4, (iii) et (iv) ; spécification de B2, § 6.4, point 7, erratum v1.0.23)")
+# postes_arretes d'une ligne de portée ligne : postes qui lisent sa colonne et dont une unité
+# possible lit une de ses lignes refusées, sans tenir compte des autres causes d'arrêt ; motifs
+# et identifiants d'arrêt inchangés ; copies `refus` de l'enjeu : l'exposition, non la cause.
+# Plan de référence recommandées à 2025-12-31 (p_c1). Avant (a3219d4) : NA pour une ligne dont le
+# poste était arrêté plus tôt par une autre cause (bilan, garde des garanties invisibles, arrêt de
+# phase 1 avant les tables différées).
+rt_175 <- function(r) with(r$donnees$refus_tables, paste(table, colonne, motif, postes_arretes))
+arr_175 <- function(r) with(r$provisions[r$provisions$segmentation == "ensemble", ], paste(poste, statut_calcul, motif_arret))
+cop_175 <- function(r) with(r$donnees$enjeu[r$donnees$enjeu$poste != "ensemble" & r$donnees$enjeu$action %in% "refus", ],
+                            paste(poste, table, colonne, motif, composante))
+b0_175 <- b2_base_capital(paiements = data.frame(date = D("2024-10-01"), montant = 10000))
+bR_175 <- b2_base_capital(capital = NA, paiements = data.frame(date = D("2024-10-01"), montant = 10000))
+# C175-1 (mesure m175-1 d'actuary) : salaire_reference de type character (type_incompatible) et PR1
+# négatif (D09) : la ligne D09 liste P1 (NA avant) ; copies de l'enjeu 4 -> 5 (P1, prestations,
+# montant, D09, prestations_ecartees) ; arrêts inchangés
+r_175_1 <- calculer_provisions(within(b0_175, { affiliations$salaire_reference <- as.character(affiliations$salaire_reference)
+                                                prestations$montant[1L] <- -10000 }), p_c1, tid)
+verifier_egal("#175 C175-1 : ligne D09 de PR1 : postes_arretes deces/sinistres_declares_non_regles ; cinq copies refus ; P1 et P2 arrêtés type_incompatible, P3 calculé",
+              list(rt_175(r_175_1), cop_175(r_175_1), arr_175(r_175_1)),
+              list(c("affiliations salaire_reference type_incompatible deces/capitaux_non_reclames;deces/sinistres_declares_non_regles",
+                     "prestations montant D09 deces/sinistres_declares_non_regles"),
+                   c("sinistres_declares_non_regles affiliations salaire_reference type_incompatible paiements_cumules",
+                     "capitaux_non_reclames affiliations salaire_reference type_incompatible paiements_cumules",
+                     "sinistres_declares_non_regles affiliations salaire_reference type_incompatible capital_fixe",
+                     "capitaux_non_reclames affiliations salaire_reference type_incompatible capital_fixe",
+                     "sinistres_declares_non_regles prestations montant D09 prestations_ecartees"),
+                   c("capitaux_non_reclames arrete type_incompatible", "provision_mathematique_temporaire_deces calcule NA",
+                     "sinistres_declares_non_regles arrete type_incompatible",
+                     "total arrete poste_arrete:capitaux_non_reclames;sinistres_declares_non_regles")))
+# C175-2 (constat M1 de l'audit de #72) : capital reconstitué, salaire de AF1 négatif et PR1
+# négatif (D09 tous deux) : la ligne d'affiliations liste P1 (NA avant) ; copies 1 -> 3 ; P1
+# arrêté D09 (PR1, phase 1), P2 et P3 calculés
+r_175_2 <- calculer_provisions(within(bR_175, { affiliations$salaire_reference[1L] <- -30000; prestations$montant[1L] <- -10000 }),
+                               p_c1, tid)
+verifier_egal("#175 C175-2 : ligne D09 d'AF1 : postes_arretes deces/sinistres_declares_non_regles ; trois copies refus ; P1 arrêté D09",
+              list(rt_175(r_175_2), cop_175(r_175_2), arr_175(r_175_2)),
+              list(c("affiliations salaire_reference D09 deces/sinistres_declares_non_regles",
+                     "prestations montant D09 deces/sinistres_declares_non_regles"),
+                   c("sinistres_declares_non_regles affiliations salaire_reference D09 paiements_cumules",
+                     "sinistres_declares_non_regles affiliations salaire_reference D09 capital_fixe",
+                     "sinistres_declares_non_regles prestations montant D09 prestations_ecartees"),
+                   c("capitaux_non_reclames calcule NA", "provision_mathematique_temporaire_deces calcule NA",
+                     "sinistres_declares_non_regles arrete D09", "total arrete poste_arrete:sinistres_declares_non_regles")))
+# C175-3 (invariance) : trois causes, nature_contrat de type integer (type_incompatible, arrêt du
+# bilan sur contrats, qui ne décide pas de la population de P1), PR1 négatif (D09, prestations,
+# phase 1), salaire de AF1 négatif (D09, affiliations, table différée) ; base à deux paiements
+# (PR1, PR2) et deux affiliations (AF1, AF9 d'un assuré AS9 sans sinistre). Les lignes D09
+# listent P1 avec les trois causes, sans chacune des autres, seules, et lignes de prestations,
+# d'affiliations et d'assures en ordre inverse ; motif publié avec les trois causes :
+# type_incompatible (inchangé). Avant (a3219d4) : NA avec les trois causes (arrêt du bilan).
+b3_175 <- b2_base_capital(capital = NA, paiements = data.frame(date = D(c("2024-10-01", "2024-11-01")), montant = c(10000, 5000)))
+b3_175$affiliations <- rbind(b3_175$affiliations, transform(b3_175$affiliations, id_affiliation = "AF9", id_assure = "AS9"))
+b3_175$assures <- rbind(b3_175$assures, transform(b3_175$assures, id_assure = "AS9"))
+causes_175 <- list(bilan = function(b) { b$contrats$nature_contrat <- 1L; b },
+                   pr1 = function(b) { b$prestations$montant[1L] <- -10000; b },
+                   af1 = function(b) { b$affiliations$salaire_reference[1L] <- -30000; b })
+avec_175 <- function(noms) Reduce(function(x, f) f(x), causes_175[noms], b3_175)
+d09_175 <- function(b) { r <- calculer_provisions(b, p_c1, tid); x <- r$donnees$refus_tables
+  list(paste(x$table, x$postes_arretes)[x$motif == "D09"], arr_175(r)[3L]) }
+inverse_175 <- local({ b <- avec_175(names(causes_175))
+  for (t in c("prestations", "affiliations", "assures")) b[[t]] <- b[[t]][rev(seq_len(nrow(b[[t]]))), ]
+  b })
+p1_175 <- "deces/sinistres_declares_non_regles"
+verifier_egal("#175 C175-3 : postes_arretes des lignes D09 identiques avec les trois causes, sans le bilan, sans PR1, sans AF1, chaque ligne seule, et en ordre inverse des lignes ; P1 arrêté type_incompatible avec le bilan, D09 sans",
+              list(d09_175(avec_175(names(causes_175))), d09_175(avec_175(c("pr1", "af1"))), d09_175(avec_175(c("bilan", "af1"))),
+                   d09_175(avec_175(c("bilan", "pr1"))), d09_175(avec_175("pr1")), d09_175(avec_175("af1")), d09_175(inverse_175)),
+              list(list(paste(c("affiliations", "prestations"), p1_175), "sinistres_declares_non_regles arrete type_incompatible"),
+                   list(paste(c("affiliations", "prestations"), p1_175), "sinistres_declares_non_regles arrete D09"),
+                   list(paste("affiliations", p1_175), "sinistres_declares_non_regles arrete type_incompatible"),
+                   list(paste("prestations", p1_175), "sinistres_declares_non_regles arrete type_incompatible"),
+                   list(paste("prestations", p1_175), "sinistres_declares_non_regles arrete D09"),
+                   list(paste("affiliations", p1_175), "sinistres_declares_non_regles arrete D09"),
+                   list(paste(c("affiliations", "prestations"), p1_175), "sinistres_declares_non_regles arrete type_incompatible")))
+# C175-4 (cas (b)) : id_beneficiaire de BE1 manquant (portée table : beneficiaires décide de la
+# partition, P1 et P2 arrêtés par le bilan) et PR1 négatif : la ligne D09 liste P1 et P2 (NA
+# avant) ; deux copies refus de plus (prestations_ecartees, P1 et P2)
+r_175_4 <- calculer_provisions(within(b0_175, { beneficiaires$id_beneficiaire[1L] <- NA; prestations$montant[1L] <- -10000 }),
+                               p_c1, tid)
+verifier_egal("#175 C175-4 : ligne D09 de PR1 : postes_arretes P2 et P1 ; copies refus de la ligne D09 pour P1 et P2 ; P1 et P2 arrêtés manquant_obligatoire",
+              list(rt_175(r_175_4)[2L], grep(" prestations ", cop_175(r_175_4), value = TRUE), arr_175(r_175_4)[c(1L, 3L)]),
+              list("prestations montant D09 deces/capitaux_non_reclames;deces/sinistres_declares_non_regles",
+                   c("sinistres_declares_non_regles prestations montant D09 prestations_ecartees",
+                     "capitaux_non_reclames prestations montant D09 prestations_ecartees"),
+                   c("capitaux_non_reclames arrete manquant_obligatoire", "sinistres_declares_non_regles arrete manquant_obligatoire")))
+# C175-5 (cas (c), garde des garanties invisibles) : base construite, contrat CTC1 d'effet au
+# 2026-03-01 (D11a conserver) ou garantie GSC1 d'effet au 2026-03-01 (D10b conserver), paiement
+# PRR3 du dossier DOR3 négatif (D09) : DOR3, dossier de l'exception, unité possible de P1 et de
+# P2, lit PRR3 par sa clé : postes_arretes P2 et P1 (NA avant) ; P1 et P2 arrêtés
+# parametre_non_determine (garde, inchangé), P3 calculé (3 710,67098199391, inchangé). GSC1
+# invisible, salaire de AFR1 (contrat CTC1, retenu) négatif : affiliations rattachées par la
+# garantie souscrite, rattachement non déterminé : P2 et P1 (NA avant)
+prr3_175 <- function(b) within(b, prestations$montant[prestations$id_prestation == "PRR3"] <- -40000)
+b_ge_175 <- base
+b_ge_175$garanties_souscrites$date_effet[1L] <- D("2026-03-01")
+r_175_5 <- list(calculer_provisions(prr3_175(b_ct), plan_d10b(d11a("conserver", "conserver", "conserver", "conserver")), tid),
+                calculer_provisions(prr3_175(b_ge_175), plan_d10b(d10b("conserver", "conserver", "conserver", "conserver")), tid),
+                calculer_provisions(within(b_ge_175, affiliations$salaire_reference[affiliations$id_affiliation == "AFR1"] <- -30000),
+                                    plan_d10b(d10b("conserver", "conserver", "conserver", "conserver")), tid))
+verifier_egal("#175 C175-5 : dossiers des garanties invisibles, unités possibles de P1 et de P2 : PRR3 de DOR3 refusée (CTC1 ou GSC1 d'effet postérieur) et AFR1 refusée (rattachement non déterminé) : postes_arretes P2 et P1 ; P1 et P2 arrêtés parametre_non_determine, P3 calculé",
+              lapply(r_175_5, function(r) list(rt_175(r), arr_175(r)[1:3],
+                                               r$provisions$montant[r$provisions$poste == P3 & r$provisions$segmentation == "ensemble"])),
+              c(rep(list(list("prestations montant D09 deces/capitaux_non_reclames;deces/sinistres_declares_non_regles",
+                              c("capitaux_non_reclames arrete parametre_non_determine", "provision_mathematique_temporaire_deces calcule NA",
+                                "sinistres_declares_non_regles arrete parametre_non_determine"), 3710.67098199391)), 2L),
+                list(list("affiliations salaire_reference D09 deces/capitaux_non_reclames;deces/sinistres_declares_non_regles",
+                          c("capitaux_non_reclames arrete parametre_non_determine", "provision_mathematique_temporaire_deces calcule NA",
+                            "sinistres_declares_non_regles arrete parametre_non_determine"), 3710.67098199391))),
+              tolerance = EPS)
+# Erratum donnees 1.9.6 (#175, reprise ; visa du mainteneur) : (i) état non déterminé : un
+# événement exclu pour engagement ne le rend plus non déterminé ; seule une valeur refusée d'une
+# colonne lue par l'automate, ou une date d'effet tenue pour inconnue d'un événement d'un type de
+# TYPES_AUTOMATE, le rend. T1 : base construite, EVR1B copie de EVR1 saisie un jour plus tard
+# (D01b, exclure pour les quatre familles), salaire de AFR1 négatif (D09) : DOR1 capital_du,
+# affiliations non lues : postes_arretes NA ; T2 : de plus, montant de EVR1B négatif (D09, ligne
+# exclue) : NA pour les deux lignes. Provisions inchangées, toutes calculées. Avant la reprise :
+# P1 listé (Q1, invariant violé) ; a3219d4 : NA (sans exposition), même résultat.
+evr1b_175 <- function(b) { e <- b$evenements[b$evenements$id_evenement == "EVR1", ]; e$id_evenement <- "EVR1B"
+  e$date_saisie <- e$date_saisie + 1; b$evenements <- rbind(b$evenements, e); b }
+af_175 <- function(b, id) { b$affiliations$salaire_reference[b$affiliations$id_affiliation == id] <- -30000; b }
+excl_175 <- function(m, action) { p <- p_c1; p$donnees$exclusions <- c(p$donnees$exclusions, lapply(ns$FAMILLES_CALCUL, function(f)
+  list(motif = m, famille = f, action = action))); p }
+b_t1_175 <- af_175(evr1b_175(base), "AFR1")
+b_t2_175 <- within(b_t1_175, evenements$montant[evenements$id_evenement == "EVR1B"] <- -1e5)
+r_175_t <- list(calculer_provisions(b_t1_175, excl_175("D01b", "exclure"), tid), calculer_provisions(b_t2_175, excl_175("D01b", "exclure"), tid))
+verifier_egal("#175 1.9.6 (i) T1 et T2 : événement exclu (D01b) : état déterminé, affiliations non lues : postes_arretes NA (affiliations ; evenements) ; P1 337 225,95910136978, P2 103 936, P3 4 275,98605048706, total 445 437,94515185681, calculés",
+              lapply(r_175_t, function(r) { x <- r$provisions[r$provisions$segmentation == "ensemble", ]
+                list(r$donnees$refus_tables$postes_arretes, x$statut_calcul, x$montant) }),
+              list(list(NA_character_, rep("calcule", 4L), c(103936, 4275.98605048706, 337225.95910136978, 445437.94515185681)),
+                   list(c(NA_character_, NA_character_), rep("calcule", 4L),
+                        c(103936, 4275.98605048706, 337225.95910136978, 445437.94515185681))), tolerance = EPS)
+# (ii) cas (c), garantie GSC1 d'effet au 2026-03-01 (D10b conserver) : une unité dont la
+# garantie est hors de la vue ne lit ni garanties_souscrites ni parametres, et seulement les
+# affiliations de l'assuré de son sinistre. (a) capital_forfaitaire de GSI1 (contrat individuel)
+# négatif : P3 seul ; (b) AFX d'un assuré ASX sans sinistre (contrat CTC1), salaire négatif : NA,
+# P1 et P2 arrêtés parametre_non_determine, P3 3 710,67098199391 ; (c) AFR1 (assuré ASR1 de
+# DOR1) : P2 et P1 (C175-5, inchangé). Avant la reprise : (a) P2, P3 et P1 ; (b) P2 et P1.
+b_ge2_175 <- base
+b_ge2_175$garanties_souscrites$date_effet[1L] <- D("2026-03-01")
+p_ge_175 <- excl_175("D10b", "conserver")
+b_qa_175 <- within(b_ge2_175, parametres$valeur[parametres$id_garantie_souscrite == "GSI1" & parametres$parametre == "capital_forfaitaire"] <- -100000)
+b_qb_175 <- b_ge2_175
+b_qb_175$assures <- rbind(b_qb_175$assures, transform(b_qb_175$assures[b_qb_175$assures$id_assure == "ASR1", ], id_assure = "ASX"))
+b_qb_175$affiliations <- rbind(b_qb_175$affiliations, transform(b_qb_175$affiliations[1L, ], id_affiliation = "AFX", id_assure = "ASX",
+                                                                salaire_reference = -30000))
+r_175_q <- list(calculer_provisions(b_qa_175, p_ge_175, tid), calculer_provisions(b_qb_175, p_ge_175, tid))
+verifier_egal("#175 1.9.6 (ii) cas (c) : (a) paramètre refusé de GSI1 : postes_arretes P3 seul ; (b) affiliation d'un assuré sans sinistre : NA, P1 et P2 arrêtés parametre_non_determine, P3 3 710,67098199391",
+              list(r_175_q[[1L]]$donnees$refus_tables$postes_arretes, r_175_q[[2L]]$donnees$refus_tables$postes_arretes, arr_175(r_175_q[[2L]])[1:3],
+                   r_175_q[[2L]]$provisions$montant[r_175_q[[2L]]$provisions$poste == P3 & r_175_q[[2L]]$provisions$segmentation == "ensemble"]),
+              list("deces/provision_mathematique_temporaire_deces", NA_character_,
+                   c("capitaux_non_reclames arrete parametre_non_determine", "provision_mathematique_temporaire_deces calcule NA",
+                     "sinistres_declares_non_regles arrete parametre_non_determine"), 3710.67098199391), tolerance = EPS)
+# (iii) ligne refusée de visibilité non déterminée (P1 et P2) : date d'effet de CTC1 manquante
+# (D03i) ; sous conserver, P1, P2 et P3 arrêtés D03i ; W1 et W2 : salaire de AFR5A, de AFR3
+# négatif (lignes masquées par leur contrat, identifiants dans la ligne affiliations de
+# visibilite_non_determinee) : P2 et P1 (NA avant) ; W3 : PRR3 négatif (DOR3 retenu) : P2 et P1
+# (inchangé depuis la première version de #175 ; NA sur a3219d4) ; W4 : D03i sous exclure, AFR5A :
+# NA, P1 = P2 = 0, P3 3 710,67098199391.
+b_w_175 <- base
+b_w_175$contrats$date_effet[b_w_175$contrats$id_contrat == "CTC1"] <- NA
+r_175_w <- list(calculer_provisions(af_175(b_w_175, "AFR5A"), excl_175("D03i", "conserver"), tid),
+                calculer_provisions(af_175(b_w_175, "AFR3"), excl_175("D03i", "conserver"), tid),
+                calculer_provisions(within(b_w_175, prestations$montant[prestations$id_prestation == "PRR3"] <- -40000),
+                                    excl_175("D03i", "conserver"), tid),
+                calculer_provisions(af_175(b_w_175, "AFR5A"), excl_175("D03i", "exclure"), tid))
+p12_175 <- "deces/capitaux_non_reclames;deces/sinistres_declares_non_regles"
+d03i_175 <- c("capitaux_non_reclames arrete D03i", "provision_mathematique_temporaire_deces arrete D03i",
+              "sinistres_declares_non_regles arrete D03i")
+verifier_egal("#175 1.9.6 (iii) W1 à W4 : AFR5A, AFR3, PRR3 refusées sous D03i conserver : P2 et P1, trois postes arrêtés D03i ; AFR5A sous exclure : NA, P1 = P2 = 0, P3 3 710,67098199391",
+              lapply(r_175_w, function(r) { x <- r$provisions[r$provisions$segmentation == "ensemble" & r$provisions$poste != "total", ]
+                list(r$donnees$refus_tables$postes_arretes, paste(x$poste, x$statut_calcul, x$motif_arret), x$montant) }),
+              c(rep(list(list(p12_175, d03i_175, rep(NA_real_, 3L))), 3L),
+                list(list(NA_character_, c("capitaux_non_reclames calcule NA", "provision_mathematique_temporaire_deces calcule NA",
+                                           "sinistres_declares_non_regles calcule NA"), c(0, 3710.67098199391, 0)))), tolerance = EPS)
+# D1 (audit, constat A ; actuary) : la ligne refusée masquée est reconnue par son statut de
+# visibilité (lignes_visibilite_nd_vue()), non par les identifiants publiés (dix au plus) : onze
+# affiliations de plus sous CTC1 (AFA01 à AFA11, seize lignes masquées), D03i conserver : AFR5A
+# refusée, P2 et P1 (avant la correction : NA) ; sans ajout, même valeur (W1) ; AFA01 refusée
+# (hors des dix identifiants publiés) : P2 et P1 (avant : NA). a3219d4 : NA dans les trois cas.
+x_175 <- b_w_175$affiliations[b_w_175$affiliations$id_affiliation == "AFR5A", ]
+b_d1_175 <- b_w_175
+b_d1_175$affiliations <- rbind(b_d1_175$affiliations, do.call(rbind, lapply(sprintf("AFA%02d", 1:11), function(i) transform(x_175, id_affiliation = i))))
+r_175_d1 <- list(calculer_provisions(af_175(b_d1_175, "AFR5A"), excl_175("D03i", "conserver"), tid),
+                 calculer_provisions(af_175(b_d1_175, "AFA01"), excl_175("D03i", "conserver"), tid))
+verifier_egal("#175 D1 : seize affiliations masquées : AFR5A refusée, puis AFA01 refusée : postes_arretes P2 et P1 ; P1, P2, P3 arrêtés D03i",
+              lapply(r_175_d1, function(r) list(r$donnees$refus_tables$postes_arretes, arr_175(r)[1:3])),
+              rep(list(list(p12_175, d03i_175)), 2L))
+# T4 : l'invariant ci-dessous parcourt aussi les dix couples de référence
+couples_175 <- lapply(seq_len(nrow(COUPLES_REFERENCE)), function(i) calculer_couple(entrees_couple(i)))
+# C175-6 (invariant) : sur tous les résultats de calculer_provisions() gardés par ce fichier (objets
+# resultat_provie, à toute profondeur des listes de l'environnement du fichier), chaque poste de
+# postes_arretes d'une ligne de refus_tables est arrêté (statut_calcul `arrete`, segmentation
+# ensemble) ; au moins une ligne de portée ligne liste un poste arrêté par une autre cause que la
+# sienne (exposition : NA avant, a3219d4).
+env_175 <- environment()
+resultats_175 <- list()
+parcourir_175 <- function(x, prof) {
+  if (inherits(x, "resultat_provie")) resultats_175[[length(resultats_175) + 1L]] <<- x
+  else if (is.list(x) && is.null(oldClass(x)) && prof < 3L) for (y in x) parcourir_175(y, prof + 1L)
+}
+for (n in ls(env_175)) parcourir_175(get(n, envir = env_175), 0L)
+inv_175 <- vapply(resultats_175, function(r) {
+  rt <- r$donnees$refus_tables
+  pv <- r$provisions[r$provisions$segmentation == "ensemble", ]
+  arretes <- paste(pv$garantie, pv$poste, sep = "/")[pv$statut_calcul == "arrete"]
+  all(unlist(strsplit(rt$postes_arretes[!is.na(rt$postes_arretes)], ";", fixed = TRUE)) %in% arretes)
+}, NA)
+autre_175 <- vapply(resultats_175, function(r) {
+  rt <- r$donnees$refus_tables
+  pv <- r$provisions[r$provisions$segmentation == "ensemble", ]
+  m <- stats::setNames(pv$motif_arret, paste(pv$garantie, pv$poste, sep = "/"))
+  any(vapply(which(rt$portee == "ligne" & !is.na(rt$postes_arretes)), function(i) {
+    any(m[strsplit(rt$postes_arretes[i], ";", fixed = TRUE)[[1L]]] != rt$motif[i])
+  }, NA))
+}, NA)
+verifier("#175 C175-6 : postes_arretes inclus dans les postes arrêtés, sur tous les résultats gardés par ce fichier ; au moins une ligne de portée ligne liste un poste arrêté par une autre cause",
+         length(resultats_175) > 20L && all(inv_175) && any(autre_175))
+informer(paste0("#175 C175-6 : ", length(resultats_175), " résultats de calculer_provisions() parcourus, ", sum(autre_175),
+                " avec une ligne de portée ligne exposée à un poste arrêté par une autre cause"))

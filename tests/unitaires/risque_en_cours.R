@@ -958,3 +958,28 @@ temoin_174 <- function(id) {
 verifier_egal("#174 (2/2) C174-19 : même ligne, même unité, témoins de vue_a_date() : date_saisie_fin manquante sous D03g (délai 0) de CT2 : S2 et arrêt à CT2 seul ; de CT3 : S2 et arrêt à CT3 seul",
               list(temoin_174("CT2"), temoin_174("CT3")),
               list(list(c("CT2", "CT3"), c("D03g", ""), c(TRUE, FALSE)), list(c("CT2", "CT3"), c("", "D03g"), c(FALSE, TRUE))))
+
+section("risque_en_cours : exposition de P3 aux lignes de portée ligne (#175 ; spécification donnees v1.9, § 9.2, erratum 1.9.4, (iii) (b))")
+# Cas (b) : fin_periode de cotisations de type character (type_incompatible, portée colonne : P3
+# arrêté par le bilan sur une table de sa population, ligne 2 de refus_tables) et naissance de
+# AS2, assuré de CT2, hors bornes (D02c, portée ligne, ligne 1) : la population n'est pas
+# déterminée, P3 est exposé à la ligne 1 ; motif (type_incompatible) et identifiant (NA)
+# inchangés. Témoin : sans le refus de type, P3 arrêté par la ligne (D02c, CT2), exposé à la
+# ligne 1 (inchangé). Avant (a3219d4) : attribut NULL sous l'arrêt du bilan.
+b3_175 <- b2_base_p3(periodicite = "annuelle", prime = 500,
+                     cotisation = data.frame(debut = D("2025-07-01"), fin = D("2026-06-30"), montant = 1200))
+verifier_egal("#175 P3, cas (b) : arrêté par le bilan (type_incompatible, NA), exposé à la ligne D02c de AS2 ; témoin : arrêté (D02c, CT2), ligne 1",
+              list(c72(risque(within(b3_175, { cotisations$fin_periode <- as.character(cotisations$fin_periode)
+                                               assures$date_naissance[1L] <- D("1800-01-01") }), p3_72)),
+                   c72(risque(within(b3_175, assures$date_naissance[1L] <- D("1800-01-01")), p3_72))),
+              list(list(NA_real_, "type_incompatible", NA_character_, 1L), list(NA_real_, "D02c", "CT2", 1L)))
+# .TABLES_POPULATION_P3 (statique) : les tables que P3 lit dans lectures.csv, hors extraction (refus
+# d'appel) ; .TABLES_POPULATION_ENGAGEMENT (`engagement`) : tables lues par P1 et par P2. Avant
+# (a3219d4) : constantes absentes.
+lec_175 <- cat_g$lectures[cat_g$lectures$code_garantie == "deces", , drop = FALSE]
+verifier_egal("#175 tables de population : .TABLES_POPULATION_P3 = tables de P3 dans lectures.csv hors extraction ; .TABLES_POPULATION_ENGAGEMENT incluse dans les tables de P1 et dans celles de P2",
+              list(sort(ns$.TABLES_POPULATION_P3, method = "radix"),
+                   vapply(c("sinistres_declares_non_regles", "capitaux_non_reclames"),
+                          function(q) all(ns$.TABLES_POPULATION_ENGAGEMENT %in% lec_175$table[lec_175$poste == q]), NA)),
+              list(sort(setdiff(unique(lec_175$table[lec_175$poste == P3]), "extraction"), method = "radix"),
+                   c(sinistres_declares_non_regles = TRUE, capitaux_non_reclames = TRUE)))

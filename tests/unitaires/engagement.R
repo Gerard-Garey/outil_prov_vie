@@ -1596,9 +1596,12 @@ verifier_egal("#174 (2/2) parametre_vue() : élément refuse (ligne refusée de 
 # parametres de GS1 (taux_capital, age_fin_garantie, majoration_conjoint, majoration_enfant) est
 # tenue pour refusée seule, les autres non : est-elle lue par DO1 (refus_ligne_unites()) ? bR
 # (ouvert) : lignes 1, 3 et 4 (noms de .PARAMETRES_CAPITAL), jamais age_fin_garantie (ligne 2,
-# non refusée quand une ligne de capital l'est) ; b0 (capital_du) : aucune ; b0 dont l'événement
-# EV1 (lu par l'automate) est exclu pour engagement (état non déterminé ; vue altérée après
-# etats_a_date(), comme pv158()) : lignes 1, 3 et 4.
+# non refusée quand une ligne de capital l'est) ; b0 (capital_du) : aucune ; b0 dont le montant
+# de EV1 (colonne lue par l'automate) est refusé (D09, portée ligne : état non déterminé) :
+# lignes 1, 3 et 4 ; b0 dont EV1 est exclu pour engagement (vue altérée après etats_a_date(),
+# comme pv158()) : aucune. Ajusté à la reprise de #175 (erratum donnees 1.9.6, (i), visé) : un
+# événement exclu sort de la famille et ne rend plus l'état non déterminé (avant : lignes 1, 3
+# et 4) ; le cas du montant refusé est ajouté pour garder la couverture de l'état non déterminé.
 lp_par_174 <- function(b, exclure_ev = FALSE) {
   v <- b2_vue(b, A)
   e <- ns$etats_a_date(v, "deces", "engagement")
@@ -1608,9 +1611,10 @@ lp_par_174 <- function(b, exclure_ev = FALSE) {
                                                                          seq_len(nrow(b$parametres)) == k), NA)
 }
 b0_174p <- b2_base_capital()
-verifier_egal("#174 (2/2) parametres lus, ligne par ligne : bR (ouvert) lignes 1, 3, 4 (age_fin_garantie non lue) ; b0 (capital_du) aucune ; b0, EV1 exclu pour engagement : lignes 1, 3, 4",
-              list(lp_par_174(bR_174), lp_par_174(b0_174p), lp_par_174(b0_174p, TRUE)),
-              list(c(TRUE, FALSE, TRUE, TRUE), rep(FALSE, 4L), c(TRUE, FALSE, TRUE, TRUE)))
+verifier_egal("#174 (2/2) parametres lus, ligne par ligne : bR (ouvert) lignes 1, 3, 4 (age_fin_garantie non lue) ; b0 (capital_du) aucune ; b0, montant de EV1 refusé : lignes 1, 3, 4 ; b0, EV1 exclu pour engagement : aucune (1.9.6 (i))",
+              list(lp_par_174(bR_174), lp_par_174(b0_174p), lp_par_174(within(b0_174p, evenements$montant[1L] <- -1e5)),
+                   lp_par_174(b0_174p, TRUE)),
+              list(c(TRUE, FALSE, TRUE, TRUE), rep(FALSE, 4L), c(TRUE, FALSE, TRUE, TRUE), rep(FALSE, 4L)))
 # (5) colonnes lues par l'automate (.COLONNES_AUTOMATE_EVENEMENTS, état non déterminé) : celles
 # d'evenements que lisent P1 et P2 dans lectures.csv, hors id_sinistre (test statique ; avis
 # d'actuary sur 2/2, correction 1)
@@ -1619,3 +1623,77 @@ verifier_egal("#174 (2/2) .COLONNES_AUTOMATE_EVENEMENTS = colonnes d'evenements 
                                                                          cat_g$lectures$poste == q & cat_g$lectures$table == "evenements"],
                                                     "id_sinistre")),
               rep(list(ns$.COLONNES_AUTOMATE_EVENEMENTS), 2L))
+
+section("engagement : exposition aux lignes de portée ligne, postes_arretes indépendant de la préséance (#175 ; spécification donnees v1.9, § 9.2, erratum 1.9.4, (iii))")
+# Condition (2) de postes_arretes évaluée par la famille avant tout retour, sans tenir compte des
+# autres causes d'arrêt du poste ; son résultat (lignes de refus_tables) est l'attribut
+# `refus_ligne` de toute cellule rendue ; motif et identifiant d'arrêt inchangés (première cause).
+# Avant (a3219d4) : l'attribut ne portait que les lignes qui arrêtaient le poste par leur propre
+# retour (NULL sous un arrêt antérieur ; sans les lignes différées sous un arrêt de phase 1).
+c175 <- function(r) list(r$cellules$montant, r$cellules$motif_arret, attr(r$cellules, "identifiant_arret"),
+                         attr(r$cellules, "refus_ligne"))
+b0_175 <- b2_base_capital(paiements = data.frame(date = D("2024-10-01"), montant = 10000))
+bR_175 <- b2_base_capital(capital = NA, paiements = data.frame(date = D("2024-10-01"), montant = 10000))
+# (1) .voie_capital(), élément reconstitution_possible (cas (e)) : GS1 et GSX (garantie hors de la
+# vue) ; taux_capital seul : reconstitution possible ; capital_forfaitaire de 50 000 ajouté : FALSE
+# (valeur connue) ; ce capital refusé (D09, -50 000) : possible (inconnu) ; ni taux_capital ni
+# capital_forfaitaire : FALSE (absence connue) ; paramètres de GS1 exclus pour engagement (vue
+# altérée) : possible ; GSX : toujours possible. Avant (a3219d4) : élément absent.
+rp_175 <- function(b, exclus = FALSE) {
+  v <- b2_vue(b, A)
+  if (exclus) v$exclu$engagement$parametres[] <- TRUE
+  ns$.voie_capital(v, c("GS1", "GSX"))$reconstitution_possible
+}
+bF_175 <- within(b2_base_capital(capital = NA), parametres <- rbind(parametres, b2_tab("parametres", id_garantie_souscrite = "GS1",
+                                                                                     parametre = "capital_forfaitaire", valeur = 50000)))
+verifier_egal("#175 .voie_capital() reconstitution_possible : taux seul TRUE ; capital forfaitaire connu FALSE, refusé TRUE ; ni l'un ni l'autre FALSE ; paramètres exclus TRUE ; garantie hors de la vue TRUE",
+              list(rp_175(b2_base_capital(capital = NA)), rp_175(bF_175), rp_175(within(bF_175, parametres$valeur[5L] <- -50000)),
+                   rp_175(within(b2_base_capital(capital = NA), parametres <- parametres[parametres$parametre != "taux_capital", ])),
+                   rp_175(bF_175, exclus = TRUE)),
+              list(c(TRUE, TRUE), c(FALSE, TRUE), c(TRUE, TRUE), c(FALSE, TRUE), c(TRUE, TRUE)))
+# (2) cas (a) : salaire_reference de type character (type_incompatible, portée colonne : P1 et P2
+# arrêtés par le bilan, table affiliations, qui ne décide pas de la population) et PR1 de DO1
+# négatif (D09, ligne 2 de refus_tables) : P1, dont DO1 est l'unité, est exposé à la ligne 2 ;
+# P2 ne l'est pas. Cas (b) : id_beneficiaire de BE1 manquant (portée table, beneficiaires décide
+# de la partition) et PR1 négatif : P1 et P2 exposés à la ligne 2. Avant (a3219d4) : NULL partout.
+verifier_egal("#175 cas (a) et (b) : P1 et P2 arrêtés par le bilan, motif inchangé ; (a) P1 exposé à PR1 (ligne 2), P2 non ; (b) P1 et P2 exposés",
+              list(c175(eng(within(b0_175, { affiliations$salaire_reference <- as.character(affiliations$salaire_reference)
+                                             prestations$montant[1L] <- -10000 }), p)),
+                   c175(eng(within(b0_175, { affiliations$salaire_reference <- as.character(affiliations$salaire_reference)
+                                             prestations$montant[1L] <- -10000 }), p, P2)),
+                   c175(eng(within(b0_175, { beneficiaires$id_beneficiaire[1L] <- NA; prestations$montant[1L] <- -10000 }), p)),
+                   c175(eng(within(b0_175, { beneficiaires$id_beneficiaire[1L] <- NA; prestations$montant[1L] <- -10000 }), p, P2))),
+              list(list(NA_real_, "type_incompatible", NA_character_, 2L), list(NA_real_, "type_incompatible", NA_character_, NULL),
+                   list(NA_real_, "manquant_obligatoire", NA_character_, 2L), list(NA_real_, "manquant_obligatoire", NA_character_, 2L)))
+# (3) cas (e) et (f) : capital reconstitué (DO1 ouvert, taux_capital), salaire de AF1 négatif
+# (D09, ligne 1, affiliations, table différée) et PR1 négatif (D09, ligne 2) : P1 arrêté par PR1
+# (phase 1 : D09, DO1, motif et identifiant inchangés), exposé aux deux lignes ; P2 calculé (0),
+# sans exposition. Cas (d) : qualité de BE1 refusée (hors_domaine, ligne 2 ; partition non
+# déterminée, DO1 unité possible des deux postes) et salaire de AF1 négatif (ligne 1) : P1 et P2
+# arrêtés (hors_domaine, DO1), exposés aux deux lignes ; capital fixé (DO1 capital_du, état
+# déterminé) : affiliations non lues, exposés à la ligne 2 seule. Avant (a3219d4) : 2L partout.
+verifier_egal("#175 cas (d), (e) et (f) : arrêt de phase 1 ou de partition, motif et identifiant inchangés ; ligne différée d'affiliations comprise dans l'exposition d'une unité ouverte de capital reconstitué ; non lue d'un dossier capital_du",
+              list(c175(eng(within(bR_175, { affiliations$salaire_reference[1L] <- -30000; prestations$montant[1L] <- -10000 }), p)),
+                   c175(eng(within(bR_175, { affiliations$salaire_reference[1L] <- -30000; prestations$montant[1L] <- -10000 }), p, P2)),
+                   c175(eng(within(bR_175, { affiliations$salaire_reference[1L] <- -30000; beneficiaires$qualite[1L] <- "ami" }), p)),
+                   c175(eng(within(bR_175, { affiliations$salaire_reference[1L] <- -30000; beneficiaires$qualite[1L] <- "ami" }), p, P2)),
+                   c175(eng(within(b0_175, { affiliations$salaire_reference[1L] <- -30000; beneficiaires$qualite[1L] <- "ami" }), p, P2))),
+              list(list(NA_real_, "D09", "DO1", 1:2), list(0, NA_character_, NULL, NULL),
+                   list(NA_real_, "hors_domaine", "DO1", 1:2), list(NA_real_, "hors_domaine", "DO1", 1:2),
+                   list(NA_real_, "hors_domaine", "DO1", 2L)))
+# (4) erratum donnees 1.9.6, (i) (reprise ; visé) : capital fixé (b2_base_capital(), taux_capital
+# présent), salaire de AF1 négatif (D09). T3 (garde) : EV1, seule fixation, exclu pour engagement
+# (vue altérée) : l'automate ne le lit pas, DO1 ouvert, capital reconstitué : P1 arrêté (D09, DO1),
+# ligne 1 (inchangé). Cas de Q1 : seconde fixation EV2, EV1 exclu : DO1 capital_du, état
+# déterminé, affiliations non lues : P1 calculé (103 936), sans exposition. Avant la reprise :
+# exposé à la ligne 1 (postes_arretes listait un poste calculé) ; a3219d4 : sans exposition.
+q1_175 <- function(deux) {
+  b <- within(b2_base_capital(), affiliations$salaire_reference[1L] <- -30000)
+  if (deux) b$evenements <- rbind(b$evenements, transform(b$evenements, id_evenement = "EV2"))
+  v <- b2_vue(b, A)
+  v$exclu$engagement$evenements[1L] <- TRUE
+  c175(ns$calculer_engagement(v, p, tb, cat_g, "deces", P1))
+}
+verifier_egal("#175 1.9.6 (i) : EV1 exclu pour engagement : seule fixation, P1 arrêté (D09, DO1), ligne 1 ; deux fixations, P1 calculé 103 936, sans exposition",
+              list(q1_175(FALSE), q1_175(TRUE)),
+              list(list(NA_real_, "D09", "DO1", 1L), list(103936, NA_character_, NULL, NULL)), tolerance = TOL)
