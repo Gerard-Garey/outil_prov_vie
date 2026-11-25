@@ -80,6 +80,30 @@ md5_lignes_hors_manifeste <- function(texte) {
   lignes <- regmatches(texte, gregexpr("[^\n]*\n|[^\n]+$", texte, useBytes = TRUE))[[1L]]
   lignes[substring(sub("[\r\n]+$", "", lignes), 35L) != "manifeste.txt"]
 }
+# `md5sum -c empreintes.md5` depuis le dossier du jeu. Sans md5sum (`disponible` faux), la vérification
+# n'est pas faite : une ligne [INFO] SAUTE la nomme au journal, jamais un saut sans trace (#197 ; M792,
+# comme M745 (i) pour la voie git). Rend `disponible`, pour que l'appelant compte les sauts.
+md5sum_c <- function(nom, dossier, disponible = nzchar(Sys.which("md5sum"))) {
+  if (!disponible) {
+    informer(paste0("SAUTE : ", nom, " : md5sum -c empreintes.md5"), "md5sum absent du PATH")
+    return(FALSE)
+  }
+  verifier(paste0(nom, " : md5sum -c empreintes.md5 (depuis le dossier du jeu)"), local({
+    ancien <- setwd(dossier)
+    on.exit(setwd(ancien))
+    is.null(attr(suppressWarnings(system2("md5sum", c("-c", "--quiet", "empreintes.md5"), stdout = TRUE,
+                                          stderr = TRUE)), "status"))
+  }))
+  TRUE
+}
+# Bilan des sauts : une ligne [INFO] SAUTE comptée, hors décompte des OK (harnais : informer()).
+bilan_md5_sautes <- function(sautes) {
+  if (length(sautes)) {
+    informer(paste0("SAUTE : ", length(sautes), " vérification(s) md5sum -c empreintes.md5"),
+             "md5sum absent du PATH ; les empreintes restent contrôlées par tools::md5sum() (lire_jeu, empreintes.md5)")
+  }
+}
+md5_sautes <- character(0)
 for (nom in names(JEUX_V1)) {
   versionne <- file.path(racine, "inst", "extdata", "jeux", nom)
   if (!verifier(paste0(nom, " : jeu versionné présent sous inst/extdata/jeux/"), dir.exists(versionne))) next
@@ -110,14 +134,7 @@ for (nom in names(JEUX_V1)) {
   verifier_egal(paste0(nom, " : mêmes octets de manifeste.txt que le fichier versionné, hors la valeur de la ligne version_provie"),
                 manifeste_hors_version(file.path(dossier, "manifeste.txt")),
                 manifeste_hors_version(file.path(versionne, "manifeste.txt")))
-  if (nzchar(Sys.which("md5sum"))) {
-    verifier(paste0(nom, " : md5sum -c empreintes.md5 (depuis le dossier du jeu)"), local({
-      ancien <- setwd(versionne)
-      on.exit(setwd(ancien))
-      is.null(attr(suppressWarnings(system2("md5sum", c("-c", "--quiet", "empreintes.md5"), stdout = TRUE,
-                                            stderr = TRUE)), "status"))
-    }))
-  }
+  if (!md5sum_c(nom, versionne)) md5_sautes <- c(md5_sautes, nom)
   # date de visa renseignée (onzième série, (d) ; M188) : le contrôle bascule de lui-même quand la
   # session renseigne la date de visa des jeux (DATE_VISA_V1_6, M677) et réécrit les jeux
   if (is.na(date_visa_v1(nom))) {
@@ -127,6 +144,22 @@ for (nom in names(JEUX_V1)) {
     verifier(paste0(nom, " : date_visa renseignée"), !is.na(m$date_visa))
   }
 }
+bilan_md5_sautes(md5_sautes)
+
+# Témoin du saut de `md5sum -c` (#197) : sans md5sum, aucune vérification n'est inscrite (ni OK ni ECHEC),
+# chaque jeu sauté est nommé par une ligne [INFO] SAUTE, puis un compteur égal au nombre de jeux sautés.
+compteurs_avant <- .harnais$compteurs
+journal_saut <- capture.output(local({
+  sautes <- character(0)
+  for (nom in names(JEUX_V1)) if (!md5sum_c(nom, tempdir(), disponible = FALSE)) sautes <- c(sautes, nom)
+  bilan_md5_sautes(sautes)
+}))
+verifier("témoin md5sum -c : sans md5sum, chaque jeu est nommé par une ligne [INFO] SAUTE, puis un compteur égal au nombre de jeux, hors décompte",
+         identical(.harnais$compteurs, compteurs_avant) &&
+           identical(journal_saut[seq_along(JEUX_V1)],
+                     paste0("[INFO] SAUTE : ", names(JEUX_V1), " : md5sum -c empreintes.md5 -- md5sum absent du PATH")) &&
+           length(journal_saut) == length(JEUX_V1) + 1L &&
+           startsWith(journal_saut[length(journal_saut)], paste0("[INFO] SAUTE : ", length(JEUX_V1), " vérification(s) md5sum -c")))
 
 # Témoin de la comparaison des octets de manifeste.txt (#181) : une valeur altérée hors de la
 # ligne de version fait échouer l'égalité à version différente ; la seule version n'est pas
