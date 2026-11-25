@@ -411,19 +411,29 @@ LISTE_BLANCHE <- c(
     "metadonnee",
   "R/donnees.R | .ecarter_maintien_d11 | cause %in% z" =
     "code",
-  "R/donnees.R | .echec_d12 | match ( types [ k ] , te $ type_evenement )" =
+  "R/donnees.R | .pas_d12 | match ( type , te $ type_evenement )" =
     "code",
-  "R/donnees.R | .echec_d12 | etat %in% eclater_champ ( te $ etat_depuis [ i ] )" =
+  "R/donnees.R | .pas_d12 | etat %in% eclater_champ ( te $ etat_depuis [ i ] )" =
     "code",
-  "R/donnees.R | .echec_d12 | motifs [ k ] %in% strsplit ( sub ( \"^[^:]*:\" , \"\" , bloc ) , \",\" , fixed = TRUE ) [[ 1L ] ]" =
+  "R/donnees.R | .pas_d12 | motif %in% strsplit ( sub ( \"^[^:]*:\" , \"\" , bloc ) , \",\" , fixed = TRUE ) [[ 1L ] ]" =
     "code",
-  "R/donnees.R | .verdict_d12 | type %in% te $ type_evenement [ ! is.na ( te $ etat_depuis ) & nzchar ( te $ etat_depuis ) ]" =
+  "R/donnees.R | .verdict_d12 | type %in% auto" =
+    "code",
+  "R/donnees.R | .verdict_d12 | match ( t , te $ type_evenement )" =
+    "code",
+  "R/donnees.R | .verdict_d12 | match ( auto , te $ type_evenement )" =
+    "code",
+  "R/donnees.R | .verdict_d12 | type [ g ] %in% t" =
+    "code",
+  "R/donnees.R | .verdict_d12 | match ( x , u )" =
+    "indice",
+  "R/donnees.R | .verdict_d12 | type %in% te $ type_evenement [ nzchar ( te $ motifs ) & ! is.na ( te $ motifs ) ]" =
     "code",
   "R/donnees.R | .verdict_d12 | match ( type , te $ type_evenement )" =
     "code",
-  "R/donnees.R | .verdict_d12 | match ( tous , tous [ order ( effet [ tous ] , rang_type [ tous ] , id [ tous ] , method = \"radix\" ) ] )" =
+  "R/donnees.R | .verdict_d12 | match ( tous , ordonner ( tous ) )" =
     "indice",
-  "R/donnees.R | .verdict_d12 | lr %in% e" =
+  "R/donnees.R | .verdict_d12 | lr %in% o $ echecs" =
     "indice",
   "R/donnees.R | .verdict_d14 | lien [ k ] %in% vise [[ k ] ]" =
     "code",

@@ -6549,14 +6549,13 @@ table_refusee_vue <- function(vue, table) {
 # chaque sinistre arret_travail, événements de niveau sinistre de l'automate (types de
 # types_evenements.csv qui ont un état de départ) retenus dans la vue, toutes dates d'effet, dans
 # l'ordre de la date d'effet, de l'ordre du type (§ 4), puis de l'identifiant ; identifiant : le
-# premier événement à partir duquel l'automate échoue (.echec_d12()), un par sinistre. Traitement
+# premier événement à partir duquel l'automate échoue (.pas_d12()), un par sinistre. Traitement
 # X par sinistre pour engagement (l'exclusion porte sur le sinistre, .placer()) et S pour triangle,
 # risque_en_cours et regle_comptable (.exceptions_famille()) : deux constats de même clé (comme
-# D03a). Verdict à trois valeurs : événements de l'automate non déterminés du sinistre placés,
-# dans l'ordre, avant son dernier événement retenu (les suivants sont sans effet : élagage exact),
-# au plus .MAX_EVENEMENTS_ND_D12, chaque sous-ensemble essayé (verdict commun, inconnu s'il
-# varie) ; au-delà, chaque événement retenu du sinistre est inconnu (limite de calcul, #129).
-.MAX_EVENEMENTS_ND_D12 <- 10L
+# D03a). Verdict à trois valeurs sans plafond (#129 ; erratum `1.9.7`, E-5 ; M813) : propagation,
+# en un passage dans l'ordre, de l'ensemble des configurations de l'automate (.propager_d12()),
+# exact hors date d'effet inconnue ; approximation sûre sous une date refusée (M813) ; voir
+# .verdict_d12().
 .regle_v_suites <- function(ctx) {
   lit <- c(paste0("evenements.", c("id_evenement", "id_sinistre", "type_evenement", "date_effet", "motif")),
            "sinistres.id_sinistre", "sinistres.nature_sinistre")
@@ -6570,40 +6569,184 @@ table_refusee_vue <- function(vue, table) {
   invisible(NULL)
 }
 
-# Premier échec de l'automate du § 4 du dictionnaire (types_evenements.csv, colonnes etat_depuis et
-# etat_vers, lues à la lettre) sur la suite d'événements de types `types` et de motifs `motifs`,
-# dans l'ordre : rang du premier événement dont l'état de départ n'admet pas le type, NA si la
-# suite est possible. États : depart, incapacite, invalidite, et « état:motif » après une sortie
-# (clos:reprise_travail, clos:fin_droits…, eteint:deces, retraite:retraite) ; une sortie de motif
-# absent ou hors de la liste mène à un état qu'aucun type n'admet (K1 : une sortie sans motif connu
-# n'est pas une sortie reprise_travail) ; rechute (etat_vers « anterieur ») rend l'état antérieur à
-# la dernière sortie. Le délai de rechute n'est pas lu (le texte de l'automate ne le cite pas).
-.echec_d12 <- function(te, types, motifs) {
-  etat <- "depart"
-  ante <- NA_character_
-  for (k in seq_along(types)) {
-    i <- match(types[k], te$type_evenement)
-    if (!(etat %in% eclater_champ(te$etat_depuis[i]))) return(k)
-    vers <- te$etat_vers[i]
-    if (vers == "anterieur") {
-      etat <- ante
-    } else if (grepl(":", vers, fixed = TRUE)) {
-      ante <- etat
-      etat <- "inconnu"
-      for (bloc in eclater_champ(vers)) {
-        cible <- sub(":.*$", "", bloc)
-        if (!is.na(motifs[k]) && motifs[k] %in% strsplit(sub("^[^:]*:", "", bloc), ",", fixed = TRUE)[[1L]]) {
-          etat <- paste0(cible, ":", motifs[k])
-        }
-      }
-    } else {
-      etat <- vers
+# Pas de l'automate du § 4 du dictionnaire (types_evenements.csv, colonnes etat_depuis et
+# etat_vers, lues à la lettre) : depuis l'état `etat` (état antérieur à la dernière sortie :
+# `ante`), événement de type `type` et de motif `motif` ; NULL si l'état n'admet pas le type
+# (échec), sinon c(état, état antérieur) après l'événement. États : depart, incapacite,
+# invalidite, et « état:motif » après une sortie (clos:reprise_travail, clos:fin_droits…,
+# eteint:deces, retraite:retraite) ; une sortie de motif absent ou hors de la liste mène à un
+# état qu'aucun type n'admet (K1 : une sortie sans motif connu n'est pas une sortie
+# reprise_travail) ; rechute (etat_vers « anterieur ») rend l'état antérieur à la dernière
+# sortie. Le délai de rechute n'est pas lu (le texte de l'automate ne le cite pas).
+.pas_d12 <- function(te, etat, ante, type, motif) {
+  i <- match(type, te$type_evenement)
+  if (!(etat %in% eclater_champ(te$etat_depuis[i]))) return(NULL)
+  vers <- te$etat_vers[i]
+  if (vers == "anterieur") return(c(ante, ante))
+  if (!grepl(":", vers, fixed = TRUE)) return(c(vers, ante))
+  suivant <- "inconnu"
+  for (bloc in eclater_champ(vers)) {
+    cible <- sub(":.*$", "", bloc)
+    if (!is.na(motif) && motif %in% strsplit(sub("^[^:]*:", "", bloc), ",", fixed = TRUE)[[1L]]) {
+      suivant <- paste0(cible, ":", motif)
     }
   }
-  NA_integer_
+  c(suivant, etat)
 }
 
-# Verdict de D12 sur les lignes de evenements (.regle_v_suites()).
+# Propagation de l'automate (#129 ; critère C129-5, M813) : `pas`, une position par élément,
+# liste des transitions possibles à cette position (`type`, `motif`, `ligne` : ligne de
+# evenements ; `type` NA : « sauter ») et nombre de passages (`repete`, arrêt au point fixe) ; ou
+# groupe (`etapes`, .propager_groupe_d12()) : événements de même date d'effet dont l'ordre dépend
+# d'un type inconnu. L'ensemble des configurations (état, état antérieur) sans échec, parti de
+# (`etat`, `ante`), est propagé en un passage dans l'ordre ; une transition qui échoue ajoute sa
+# ligne aux premiers échecs possibles. Rend `echecs` (lignes de premier échec possibles), `fin`
+# (TRUE si une suite possible va au bout sans échec), et les configurations d'arrivée (`etat`,
+# `ante`). Le nombre de configurations est borné par le carré du nombre d'états : coût linéaire
+# en le nombre de positions, au plus m² par intervalle sous m événements de date inconnue (m + 1
+# transitions et plus par type et motif inconnus, au plus m passages) ; groupe : voir
+# .propager_groupe_d12().
+.propager_d12 <- function(te, pas, etat = "depart", ante = NA_character_) {
+  echecs <- integer(0)
+  for (p in pas) {
+    if (!is.null(p$etapes)) {
+      o <- .propager_groupe_d12(te, p, etat, ante)
+      echecs <- union(echecs, o$echecs)
+      etat <- o$etat
+      ante <- o$ante
+    } else {
+      for (passage in seq_len(p$repete)) {
+        e2 <- character(0)
+        a2 <- character(0)
+        avant <- length(echecs)
+        for (c1 in seq_along(etat)) {
+          for (t in seq_along(p$type)) {
+            if (is.na(p$type[t])) {
+              e2 <- c(e2, etat[c1])
+              a2 <- c(a2, ante[c1])
+              next
+            }
+            s <- .pas_d12(te, etat[c1], ante[c1], p$type[t], p$motif[t])
+            if (is.null(s)) {
+              echecs <- union(echecs, p$ligne[t])
+            } else {
+              e2 <- c(e2, s[1L])
+              a2 <- c(a2, s[2L])
+            }
+          }
+        }
+        garde <- !duplicated(paste(e2, a2, sep = "\r"))
+        stable <- sum(garde) == length(etat) && length(echecs) == avant
+        etat <- e2[garde]
+        ante <- a2[garde]
+        if (stable || length(etat) == 0L) break
+      }
+    }
+    if (length(etat) == 0L) break
+  }
+  list(echecs = echecs, fin = length(etat) > 0L, etat = etat, ante = ante)
+}
+
+# Groupe d'événements de même date d'effet dont l'un au moins a un type inconnu (#129, décision du
+# mainteneur du 25/11/2026, option (a)) : `etapes`, parcourues type par type dans l'ordre des
+# types de l'automate (§ 4), et dans chaque type par identifiant croissant : les événements de ce
+# type connu (`bit` 0 ; facultatif s'il est non déterminé) et les `j` événements de type inconnu
+# (`bit` : leur rang), chacun facultatif à ce type s'il n'est pas déjà placé. La configuration
+# porte l'ensemble des événements de type inconnu déjà placés (`masque`, chaîne de j « 0 » ou
+# « 1 ») ; ceux qui ne sont pas placés à la fin du groupe sont hors automate. Chaque choix de type
+# (« hors automate » compris) est un seul chemin, dans l'ordre (type, identifiant) : exact.
+# `intervalle` (date d'effet inconnue, .verdict_d12()) : appliqué au début du groupe, après chaque
+# position d'un événement de type connu et après chaque événement de type inconnu placé (mêmes
+# intervalles que ceux d'une suite de positions). Coût : (nombre d'étapes, au plus 6 x taille du
+# groupe) x (configurations x 2^j) en opérations vectorielles, transitions de .pas_d12() et
+# intervalles mis en cache par (état, état antérieur).
+.propager_groupe_d12 <- function(te, p, etat, ante) {
+  echecs <- integer(0)
+  masque <- rep(strrep("0", p$j), length(etat))
+  cache_pas <- list()
+  cache_int <- list()
+  unique3 <- function(e, a, m) {
+    garde <- !duplicated(paste(e, a, m, sep = "\r"))
+    list(etat = e[garde], ante = a[garde], masque = m[garde])
+  }
+  intervalle <- function(e, a, m) {
+    if (is.null(p$intervalle) || length(e) == 0L) return(unique3(e, a, m))
+    cle <- paste(e, a, sep = "\r")
+    e2 <- character(0)
+    a2 <- character(0)
+    m2 <- character(0)
+    for (q in which(!duplicated(cle))) {
+      if (is.null(cache_int[[cle[q]]])) cache_int[[cle[q]]] <<- .propager_d12(te, list(p$intervalle), e[q], a[q])
+      o <- cache_int[[cle[q]]]
+      echecs <<- union(echecs, o$echecs)
+      sel <- m[cle == cle[q]]
+      e2 <- c(e2, rep(o$etat, times = length(sel)))
+      a2 <- c(a2, rep(o$ante, times = length(sel)))
+      m2 <- c(m2, rep(sel, each = length(o$etat)))
+    }
+    unique3(e2, a2, m2)
+  }
+  x <- intervalle(etat, ante, masque)
+  for (s in p$etapes) {
+    if (length(x$etat) == 0L) break
+    libre <- if (s$bit > 0L) substr(x$masque, s$bit, s$bit) == "0" else rep(TRUE, length(x$etat))
+    saute <- if (s$facultatif) rep(TRUE, length(x$etat)) else !libre
+    z <- which(libre)
+    mz <- x$masque[z]
+    if (s$bit > 0L) substr(mz, s$bit, s$bit) <- "1"
+    cle <- paste(x$etat[z], x$ante[z], sep = "\r")
+    e2 <- character(0)
+    a2 <- character(0)
+    m2 <- character(0)
+    for (t in seq_along(s$type)) {
+      for (q in which(!duplicated(cle))) {
+        k <- paste(cle[q], s$type[t], s$motif[t], sep = "\r")
+        if (is.null(cache_pas[[k]])) cache_pas[[k]] <- list(.pas_d12(te, x$etat[z[q]], x$ante[z[q]], s$type[t], s$motif[t]))
+        s1 <- cache_pas[[k]][[1L]]
+        if (is.null(s1)) {
+          echecs <- union(echecs, s$ligne[t])
+          next
+        }
+        sel <- cle == cle[q]
+        e2 <- c(e2, rep(s1[1L], sum(sel)))
+        a2 <- c(a2, rep(s1[2L], sum(sel)))
+        m2 <- c(m2, mz[sel])
+      }
+    }
+    if (s$bit > 0L) {
+      pris <- intervalle(e2, a2, m2)
+      x <- unique3(c(x$etat[saute], pris$etat), c(x$ante[saute], pris$ante), c(x$masque[saute], pris$masque))
+    } else {
+      x <- intervalle(c(x$etat[saute], e2), c(x$ante[saute], a2), c(x$masque[saute], m2))
+    }
+  }
+  garde <- !duplicated(paste(x$etat, x$ante, sep = "\r"))
+  list(echecs = echecs, etat = x$etat[garde], ante = x$ante[garde])
+}
+
+# Verdict de D12 sur les lignes de evenements (.regle_v_suites()) : pour chaque sinistre, la suite
+# de ses événements de l'automate retenus et non déterminés est propagée (.propager_d12()) ; un
+# événement retenu est vrai s'il est le premier échec de toute suite possible, faux s'il ne l'est
+# d'aucune, inconnu sinon (index : événements non déterminés du sinistre, sous « evenements » ;
+# événements retenus de date d'effet, de type ou de motif inconnus, sous « evenements.date_effet »,
+# « evenements.type_evenement » et « evenements.motif », dont .cause_nd() retient le motif du
+# refus ; chaque clé n'existe que si elle a une ligne). Valeur inconnue : refus de valeur
+# (.inconnu()), jamais la valeur brute. Transitions par position (C129-5) : un événement retenu,
+# la sienne ; un événement non déterminé, facultatif (« sauter » en plus) ; motif inconnu : une
+# transition par motif du domaine de son type (types_evenements.csv, colonne motifs) ; type
+# inconnu : une transition par type de l'automate, et « sauter » (hors automate) : l'événement
+# appartient à la population s'il peut être de l'automate (lecture existentielle). Exact (identique
+# à l'énumération des sous-ensembles et des valeurs du domaine) hors date d'effet inconnue : des
+# événements de même date d'effet dont l'un a un type inconnu forment un groupe, parcouru type par
+# type puis par identifiant, avec l'ensemble des événements de type inconnu déjà placés
+# (.propager_groupe_d12() ; « hors automate » : non placé). Élagage exact : les
+# événements non déterminés placés, dans l'ordre, après le dernier retenu sont sans effet (sans
+# date d'effet ni type inconnus dans le sinistre). Date d'effet inconnue (refus de valeur,
+# .inconnu() ; jamais clé de tri ; une date absente non refusée reste une clé, triée en dernier
+# par order()) : l'événement est facultatif à chaque intervalle de la suite des dates connues,
+# entre les événements d'un groupe compris (une position par intervalle, transitions « sauter » ou
+# l'un de ces événements, autant de passages qu'il y en a) : approximation sûre, inconnu au lieu
+# de déterminé, jamais l'inverse (M813).
 .verdict_d12 <- function(ctx) {
   v <- function(t, c1) .valeurs(ctx, t, c1)
   te <- ctx$dico$types_evenements
@@ -6612,51 +6755,110 @@ table_refusee_vue <- function(vue, table) {
   sin <- .cle_manquante(as.character(v("evenements", "id_sinistre")))
   k <- apparier_cles(sin, v("sinistres", "id_sinistre"))
   arret <- !is.na(k) & v("sinistres", "nature_sinistre")[ifelse(is.na(k), 1L, k)] %in% "arret_travail"
-  etat <- arret & type %in% te$type_evenement[!is.na(te$etat_depuis) & nzchar(te$etat_depuis)]
+  auto <- te$type_evenement[!is.na(te$etat_depuis) & nzchar(te$etat_depuis)]
+  type_inc <- .inconnu(ctx, "evenements", "type_evenement")
+  motif_inc <- .inconnu(ctx, "evenements", "motif")
+  etat <- arret & (type %in% auto | type_inc)
   ret <- which(ctx$retenu$evenements & etat)
-  nd <- which(.nd_vue(ctx, "evenements") & etat)
-  effet <- as.numeric(v("evenements", "date_effet"))
+  est_nd <- .nd_vue(ctx, "evenements") & etat
+  nd <- which(est_nd)
+  effet <- .date_connue(ctx, "evenements", "date_effet")
+  inconnue <- .inconnu(ctx, "evenements", "date_effet")
   rang_type <- te$ordre[match(type, te$type_evenement)]
   id <- as.character(v("evenements", "id_evenement"))
   motif <- v("evenements", "motif")
-  # ligne du premier échec parmi les lignes `l`, NA si la suite est possible
-  echec <- function(l) {
-    l <- l[order(effet[l], rang_type[l], id[l], method = "radix")]
-    l[.echec_d12(te, type[l], motif[l])]
+  ordonner <- function(l) l[order(effet[l], rang_type[l], id[l], method = "radix")]
+  # motifs possibles de la ligne `l` sous le type `t`
+  motifs_de <- function(l, t) {
+    if (!motif_inc[l]) return(motif[l])
+    m <- eclater_champ(te$motifs[match(t, te$type_evenement)])
+    if (length(m) == 0L) NA_character_ else m
+  }
+  # transitions des lignes `l` (types possibles : `types`, liste par ligne ; NA : « sauter »)
+  position <- function(l, saute, repete = 1L, types = lapply(l, function(x) if (type_inc[x]) c(auto, NA) else type[x])) {
+    ty <- if (saute) NA_character_ else character(0)
+    mo <- ty
+    li <- if (saute) NA_integer_ else integer(0)
+    for (z in seq_along(l)) {
+      for (t in types[[z]]) {
+        m <- if (is.na(t)) NA_character_ else motifs_de(l[z], t)
+        ty <- c(ty, rep(t, length(m)))
+        mo <- c(mo, m)
+        li <- c(li, rep(l[z], length(m)))
+      }
+    }
+    list(type = ty, motif = mo, ligne = li, repete = repete)
+  }
+  # groupe d'une date d'effet à type inconnu (.propager_groupe_d12()) : type par type dans l'ordre
+  # de l'automate, puis par identifiant ; un événement de type inconnu est une étape de chaque type
+  types_ordre <- auto[order(te$ordre[match(auto, te$type_evenement)], method = "radix")]
+  groupe_inconnu <- function(g) {
+    u <- g[type_inc[g]]
+    etapes <- list()
+    for (t in types_ordre) {
+      l <- g[type_inc[g] | type[g] %in% t]
+      for (x in l[order(id[l], method = "radix")]) {
+        e <- position(x, FALSE, types = list(t))
+        e$bit <- if (type_inc[x]) match(x, u) else 0L
+        e$facultatif <- type_inc[x] || est_nd[x]
+        etapes[[length(etapes) + 1L]] <- e
+      }
+    }
+    list(etapes = etapes, j = length(u), intervalle = NULL)
   }
   r <- rep(FALSE, n)
-  index <- vector("list", n)
+  index <- list(evenements = vector("list", n), evenements.date_effet = vector("list", n),
+                evenements.type_evenement = vector("list", n), evenements.motif = vector("list", n))
+  # motif lu : type inconnu, ou type dont le domaine des motifs n'est pas vide
+  sortie_possible <- type_inc | type %in% te$type_evenement[nzchar(te$motifs) & !is.na(te$motifs)]
   groupes_n <- split(nd, sin[nd])
   for (lr in split(ret, sin[ret])) {
     ln <- groupes_n[[sin[lr[1L]]]]
-    if (length(ln) > 0L) {
-      # élagage exact : un événement non déterminé placé, dans l'ordre, après le dernier retenu
-      # ne change ni l'état qui précède un retenu, ni le rang du premier échec parmi les retenus
-      tous <- c(lr, ln)
-      rang <- match(tous, tous[order(effet[tous], rang_type[tous], id[tous], method = "radix")])
-      ln <- ln[rang[-seq_along(lr)] < max(rang[seq_along(lr)])]
+    ld <- lr[inconnue[lr]]
+    lc <- lr[!inconnue[lr]]
+    if (length(ln) > 0L && length(ld) == 0L && !any(type_inc[c(lr, ln)])) {
+      # élagage exact : un événement non déterminé de date connue placé, dans l'ordre, après le
+      # dernier retenu ne change ni l'état qui précède un retenu, ni le rang du premier échec
+      # parmi les retenus
+      lnc <- ln[!inconnue[ln]]
+      tous <- c(lc, lnc)
+      rang <- match(tous, ordonner(tous))
+      garde <- rep(TRUE, length(ln))
+      garde[!inconnue[ln]] <- rang[-seq_along(lc)] < max(rang[seq_along(lc)])
+      ln <- ln[garde]
     }
-    if (length(ln) == 0L) {
-      e <- echec(lr)
-      if (!is.na(e)) r[e] <- TRUE
-      next
+    connus <- ordonner(c(lc, ln[!inconnue[ln]]))
+    # groupes de même date d'effet (date absente non refusée : un groupe), dans l'ordre
+    e_c <- effet[connus]
+    meme <- vapply(seq_len(max(length(connus) - 1L, 0L)), function(z) identical(e_c[z + 1L], e_c[z]), NA)
+    groupe <- cumsum(c(TRUE, !meme))[seq_along(connus)]
+    pas <- unlist(unname(lapply(split(connus, groupe), function(g) {
+      if (length(g) > 1L && any(type_inc[g])) list(groupe_inconnu(g)) else lapply(g, function(l) position(l, est_nd[l]))
+    })), recursive = FALSE)
+    u <- c(ld, ln[inconnue[ln]])
+    if (length(u) > 0L) {
+      intervalle <- position(u, TRUE, length(u))
+      entre <- function(a) c(list(intervalle), unlist(lapply(a, function(p) list(p, intervalle)), recursive = FALSE))
+      # intervalles aussi entre les événements d'un groupe (même date d'effet)
+      pas <- lapply(pas, function(p) {
+        if (!is.null(p$etapes)) p$intervalle <- intervalle
+        p
+      })
+      pas <- entre(pas)
     }
-    if (length(ln) > .MAX_EVENEMENTS_ND_D12) {
-      r[lr] <- NA
-      index[lr] <- list(ln)
-      next
-    }
-    vrai <- integer(length(lr))
-    nb <- 2L^length(ln)
-    for (m in seq_len(nb) - 1L) {
-      sous <- ln[bitwAnd(m, 2L^(seq_along(ln) - 1L)) > 0L]
-      e <- echec(c(lr, sous))
-      vrai <- vrai + (lr %in% e)
-    }
-    r[lr] <- ifelse(vrai == nb, TRUE, ifelse(vrai == 0L, FALSE, NA))
-    index[lr[is.na(r[lr])]] <- list(ln)
+    o <- .propager_d12(te, pas)
+    certain <- !o$fin && length(o$echecs) == 1L
+    r[lr] <- ifelse(!(lr %in% o$echecs), FALSE, if (certain) TRUE else NA)
+    inc <- lr[is.na(r[lr])]
+    if (length(inc) == 0L) next
+    elements <- list(evenements = ln, evenements.date_effet = ld, evenements.type_evenement = lr[type_inc[lr]],
+                     evenements.motif = lr[motif_inc[lr] & sortie_possible[lr]])
+    for (tc in names(elements)) if (length(elements[[tc]]) > 0L) index[[tc]][inc] <- list(elements[[tc]])
   }
-  if (anyNA(r)) attr(r, "index") <- list(evenements = index)
+  if (anyNA(r)) {
+    garde <- names(index) == "evenements" | !vapply(index, function(x) all(vapply(x, is.null, NA)), NA)
+    attr(r, "index") <- index[garde]
+  }
   r
 }
 
