@@ -67,7 +67,7 @@ Tenue par `architect`, après chaque série de PR fusionnées. Chaque mise à jo
 - [x] **Libellés de M807** (Q-122) : `ready-for-agent` à la place de `needs-triage` sur #105, #147, #125, #129 et #191, et `enhancement` sur #129 ; faits par la session le 25/11/2026.
 - [x] **Corps de la PR #220 aligné sur l'ordre de M804** (`Closes #129`, `#105`, `#147`, `#125`, `#191`, un par ligne) ; fait par la session.
 - [x] **0c, 0b-1 et visa 0d-1 consignés** (M808 à M815) : commit qui suit `64f6370`.
-- [ ] **Commit `docs:` du rang 0** : errata **`1.9.7`** de la spécification `docs/specifications/module-donnees-v1.md` (**E-1 à E-9**, rédigés par `actuary-approfondi` en 0b-1, visés en 0d-1), versés par la session.
+- [x] **Commit `docs:` du rang 0** (`e66519f`) : errata **`1.9.7`** de la spécification `docs/specifications/module-donnees-v1.md` (**E-1 à E-9**, rédigés par `actuary-approfondi` en 0b-1, visés en 0d-1), versés par la session.
 - [x] **Commentaires de préparation sur #173 et #169** (M812, Q-127 (a) : les deux issues restent hors périmètre) : faits par la session le 25/11/2026 (*rapporté, non vérifié ici*).
 - [ ] **Rang 1 — #129** (D12 exact, sans plafond) : `coder-approfondi` (circuit 1, d'office), `audit` léger, validation d'`actuary` ; critères C129-1 à C129-5 de 0b-1 (C129-5 : M813).
 
