@@ -1600,34 +1600,53 @@ r <- .essai("invariance_bilan", list())
 verifier("#149 : invariance_bilan.R sans --complet : [INFO], aucun calcul, statut 0",
          .passe(r) && length(r$sortie) == 1L && startsWith(r$sortie, "[INFO] invariance_bilan.R"))
 
-# --- image_reference.R (#67 ; #149) -----------------------------------------------------------
-# Copie minimale : ci.yml (deux jobs à conteneur, depuis #149), regenerer-references.yml et
-# CONTEXT.md. Le rapport [ECHEC] cite la ligne fautive (et non la première ligne container:).
+# --- image_reference.R (#67 ; #149 ; #196) ---------------------------------------------------
+# Copie minimale : ci.yml (deux jobs à conteneur, "tests" et "invariance", depuis #149),
+# regenerer-references.yml (job "candidat") et CONTEXT.md. Le rapport [ECHEC] cite la ligne
+# fautive (et non la première ligne container:).
 IMG_A <- paste0("rocker/r-ver:4.3.3@sha256:", strrep("a", 64L))
 IMG_B <- paste0("rocker/r-ver:4.3.3@sha256:", strrep("b", 64L))
-cas_image <- function(ci = c(IMG_A, IMG_A), context = IMG_A) {
+ci_image <- function(ci = c(IMG_A, IMG_A))
+  c("jobs:", "  controles:", "    runs-on: x", "  tests:", paste("    container:", ci[1L]),
+    "  invariance:", paste("    container:", ci[2L]))
+cas_image <- function(ci = ci_image(), context = paste0("**Plateforme de référence** : `", IMG_A, "`")) {
   .essai("image_reference", list(
-    ".github/workflows/ci.yml" = c("jobs:", "  a:", paste("    container:", ci[1L]), "  b:",
-                                   paste("    container:", ci[2L])),
-    ".github/workflows/regenerer-references.yml" = c("jobs:", "  r:", paste("    container:", IMG_A),
+    ".github/workflows/ci.yml" = ci,
+    ".github/workflows/regenerer-references.yml" = c("jobs:", "  candidat:", paste("    container:", IMG_A),
                                                       "    env:", paste("      PROVIE_IMAGE:", IMG_A)),
-    "CONTEXT.md" = paste0("**Plateforme de référence** : `", context, "`")))
+    "CONTEXT.md" = context))
 }
 r <- cas_image()
 verifier("#149 : image_reference.R : même image partout (deux conteneurs dans ci.yml), statut 0",
          .passe(r))
-r <- cas_image(context = IMG_B)
-verifier("#149 : image_reference.R : CONTEXT.md d'un autre digest que ci.yml (deux lignes container:), [ECHEC] ci.yml:3, pas d'erreur R",
-         .echoue_en(r, ".github/workflows/ci.yml", 3L, "image differente de celle de CONTEXT.md") &&
+r <- cas_image(context = paste0("**Plateforme de référence** : `", IMG_B, "`"))
+verifier("#149 : image_reference.R : CONTEXT.md d'un autre digest que ci.yml (deux lignes container:), [ECHEC] ci.yml:5, pas d'erreur R",
+         .echoue_en(r, ".github/workflows/ci.yml", 5L, "image differente de celle de CONTEXT.md") &&
            !any(grepl("Error", r$sortie, fixed = TRUE)))
-r <- cas_image(ci = c(IMG_A, IMG_B))
-verifier("#149 : image_reference.R : deuxième conteneur de ci.yml d'un autre digest, [ECHEC] à sa ligne (5)",
-         .echoue_en(r, ".github/workflows/ci.yml", 5L, "images differentes entre les lignes container:"))
-r <- cas_image(ci = c(IMG_A, "rocker/r-ver:4.3.3"))
-verifier("#149 : image_reference.R : deuxième conteneur de ci.yml non épinglé, [ECHEC] à sa ligne (5)",
-         .echoue_en(r, ".github/workflows/ci.yml", 5L, "image non epinglee par digest"))
+r <- cas_image(ci = ci_image(c(IMG_A, IMG_B)))
+verifier("#149 : image_reference.R : deuxième conteneur de ci.yml d'un autre digest, [ECHEC] à sa ligne (7)",
+         .echoue_en(r, ".github/workflows/ci.yml", 7L, "images differentes entre les lignes container:"))
+r <- cas_image(ci = ci_image(c(IMG_A, "rocker/r-ver:4.3.3")))
+verifier("#149 : image_reference.R : deuxième conteneur de ci.yml non épinglé, [ECHEC] à sa ligne (7)",
+         .echoue_en(r, ".github/workflows/ci.yml", 7L, "image non epinglee par digest"))
 verifier("#149 : image_reference.R : un ci.yml fautif ne produit aucun [ECHEC] parasite de témoin",
          !any(grepl("[ECHEC] temoin", r$sortie, fixed = TRUE)))
+# #196 : ligne container: rattachée à son job, jobs attendus exigés.
+r <- cas_image(ci = c("jobs:", "  controles:", paste("    container:", IMG_A), "  tests:", "    runs-on: x",
+                      "  invariance:", paste("    container:", IMG_A)))
+verifier("#196 : image_reference.R : le container: du job tests déplacé vers un autre job, [ECHEC] à la ligne déplacée (3)",
+         .echoue_en(r, ".github/workflows/ci.yml", 3L, "dans le job controles, non attendu"))
+r <- cas_image(ci = c("jobs:", "  tests:", "    runs-on: x", "  invariance:", paste("    container:", IMG_A)))
+verifier("#196 : image_reference.R : une des deux lignes container: de ci.yml supprimée, [ECHEC] à la clé du job (2)",
+         .echoue_en(r, ".github/workflows/ci.yml", 2L, "job tests sans ligne container:"))
+r <- cas_image(ci = c("jobs:", "  tests:", paste("    container:", IMG_A)))
+verifier("#196 : image_reference.R : job attendu absent (invariance), [ECHEC] ci.yml sans numéro de ligne",
+         .echoue_en(r, ".github/workflows/ci.yml", NA_integer_, "job attendu invariance absent"))
+r <- cas_image(context = c("- **Plateforme de référence** : sans image",
+                           paste0("- **Autre entrée** : `", IMG_B, "`")),
+               ci = ci_image(c(IMG_B, IMG_B)))
+verifier("#196 : image_reference.R : digest d'une autre entrée de CONTEXT.md (entrée sans image), [ECHEC] CONTEXT.md",
+         .echoue_en(r, "CONTEXT.md", NA_integer_, "aucune image epinglee a l'entree"))
 
 # --- caracteres_controle.R (#182) -------------------------------------------------------------
 # Aucun octet de contrôle en clair dans ce fichier (le script le balaie) : "\f" est écrit avec sa
