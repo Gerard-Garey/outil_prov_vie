@@ -24,6 +24,13 @@
 #   - « Empreinte : » est comparée au MD5 du fichier empreintes.md5 ; la concordance de ce
 #     fichier avec les fichiers de référence n'est pas lue ici (un empreintes.md5 qui porte un
 #     MD5 faux passe).
+#   - fusions : le diff combiné ne liste pas un fichier que la fusion reprend tel quel d'un
+#     parent. Une fusion qui garde l'arbre tests/reference/ d'un parent (git merge -s ours, ou
+#     git rm, à la résolution, d'un fichier que seul l'autre parent a ajouté) passe donc en
+#     [INFO] : main peut perdre des références sans [ECHEC]. Contrôle complet : issue #218.
+#     Du côté sûr, le diff combiné liste, et la fusion est refusée, quand deux modifications
+#     disjointes d'un même fichier de référence sont fusionnées automatiquement et quand la
+#     résolution supprime un fichier présent dans les deux parents.
 # Usage, depuis la racine du dépôt :
 #   bash tests/controles/commit_reference.sh <base>..<tête>   (plage de commits à contrôler)
 #   bash tests/controles/commit_reference.sh --temoins          (témoins négatifs, dépôt temporaire)
@@ -49,17 +56,17 @@ lire_noms() {
 # Contrôle d'un commit ; affiche les [ECHEC] et rend 1 si le commit en a, 0 sinon (y compris
 # s'il ne touche pas tests/reference/). Une fusion est contrôlée par son diff combiné.
 controler_commit() {
-  local c="$1" message parents parent calcule provenance empreinte md5 statut=0 n touche=0 autres=()
+  local c="$1" message parents parent calcule provenance empreinte md5 statut=0 n touche=0 autres=() refs=()
   if ! parents=$(git rev-list --parents -n 1 "$c" | wc -w); then
     echo "[ECHEC] $c : git rev-list a échoué"; return 1
   fi
   if [ "$parents" -gt 2 ]; then
     if ! lire_noms --cc "$c"; then echo "[ECHEC] $c : git diff-tree a échoué"; return 1; fi
     for n in "${NOMS[@]}"; do
-      if [[ "$n" == tests/reference/* ]]; then touche=1; autres+=("$n"); fi
+      if [[ "$n" == tests/reference/* ]]; then touche=1; refs+=("$n"); fi
     done
     if [ "$touche" -eq 1 ]; then
-      echo "[ECHEC] $c : le diff combiné d'une fusion liste un fichier de tests/reference/ (${autres[*]})"; return 1
+      echo "[ECHEC] $c : le diff combiné d'une fusion liste un fichier de tests/reference/ (${refs[*]})"; return 1
     fi
     echo "[INFO] $c : fusion, diff combiné sans fichier de tests/reference/"
     return 0
@@ -220,7 +227,7 @@ temoins() {
     git -C "$d" add -A
     git -C "$d" commit -q -m "tests: nom cité"
     lancer "$calc..HEAD"
-    if [ "$st" -ne 1 ]; then echo "[ECHEC] témoin : commit qui ne touche que tests/reference/$nom admis (statut $st)"; statut=1; fi
+    if [ "$st" -ne 1 ] || ! grep -qF 'ligne « Run : » absente' <<<"$sortie"; then echo "[ECHEC] témoin : commit qui ne touche que tests/reference/$nom admis ou refusé pour un autre motif (statut $st)"; statut=1; fi
   done
   # fusion qui ajoute tests/reference/evil.txt : refusée
   git -C "$d" reset -q --hard "$calc"
@@ -233,7 +240,7 @@ temoins() {
   git -C "$d" add -A
   git -C "$d" commit -q -m "fusion piégée"
   lancer "$calc..HEAD"
-  if [ "$st" -ne 1 ]; then echo "[ECHEC] témoin : fusion qui ajoute tests/reference/evil.txt admise (statut $st)"; statut=1; fi
+  if [ "$st" -ne 1 ] || ! grep -qF "le diff combiné d'une fusion liste un fichier de tests/reference/" <<<"$sortie"; then echo "[ECHEC] témoin : fusion qui ajoute tests/reference/evil.txt admise ou refusée pour un autre motif (statut $st)"; statut=1; fi
   # fusion propre qui apporte tests/reference/r2.txt par un parent : admise, annoncée [INFO]
   git -C "$d" reset -q --hard "$calc"
   git -C "$d" checkout -q -B cote2

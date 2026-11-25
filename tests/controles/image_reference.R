@@ -1,6 +1,7 @@
 # Controle : image de la plateforme de reference (ADR 0011, point 21 ; ADR 0010, point 26,
-# annote ; #67). La chaine `container:` du job "Tests (R 4.3.3)" de
-# .github/workflows/ci.yml et celle du job du workflow de regeneration
+# annote ; #67). La chaine `container:` des jobs "Tests (R 4.3.3)" (cle tests) et
+# "Invariance du bilan (R 4.3.3)" (cle invariance) de .github/workflows/ci.yml et celle du job
+# candidat (cle candidat) du workflow de regeneration
 # .github/workflows/regenerer-references.yml sont la meme, epinglee par digest
 # (rocker/r-ver:4.3.3@sha256:<64 hexadecimaux>), et son digest est celui que CONTEXT.md
 # consigne a l'entree "Plateforme de reference". La variable PROVIE_IMAGE du workflow de
@@ -18,8 +19,9 @@
 # d'une autre entree (`- `, `#`).
 # Limites connues (#140 ; chacune mesuree sur un cas construit) :
 #   - `image:` d'un service (`image: postgres:latest`) n'est pas lue ; une cle de job entre
-#     guillemets, ou un job dont la cle change de nom, n'est pas reconnu (le job attendu est
-#     alors absent : [ECHEC], du cote sur) ;
+#     guillemets (`"tests":`) n'est pas reconnue : sa ligne container: est alors hors d'un job
+#     identifie, ou, s'il n'en a pas, le job attendu est absent : [ECHEC], du cote sur ; de
+#     meme un job dont la cle change de nom (le job attendu est absent) ;
 #   - seule la forme `container: <image>` sur une ligne est reconnue : une valeur entre
 #     guillemets, un commentaire en fin de ligne ou la forme mapping (`container:` puis
 #     `image:`) sont refuses a tort, comme "image non epinglee" ;
@@ -185,10 +187,12 @@ wf <- function(jobs) {
 }
 wf_ci <- function(...) c("jobs:", wf(list(...)))
 J <- c("tests", "invariance")
-if (is.na(images_container(ligne_t("rocker/r-ver:4.3.3"), "tests")$anomalie)) echec("temoin : image non epinglee admise")
+tmp <- images_container(c("jobs:", "  tests:", ligne_t("rocker/r-ver:4.3.3")), "tests")
+if (is.na(tmp$anomalie) || !grepl("non epinglee", tmp$anomalie)) echec("temoin : image non epinglee admise")
 if (is.na(images_container(c("jobs:", "  tests:", "    container: x", "    container: y"), "tests")$anomalie)) echec("temoin : deux lignes container: admises")
 if (is.na(images_container(character(0), "tests")$anomalie)) echec("temoin : aucune ligne container: admise")
-if (identical(images_container(c("jobs:", "  tests:", ligne_t(autre)), "tests")$images, img_t)) echec("temoin : digest different non vu")
+tmp <- images_container(c("jobs:", "  tests:", ligne_t(autre)), "tests")$images
+if (!identical(tmp, autre) || identical(tmp, img_t)) echec("temoin : digest different non vu")
 if (is.na(images_container(c("jobs:", "  tests:", ligne_t(img_t), "    steps:", "  invariance:", ligne_t(img_t)), "tests")$anomalie)) echec("temoin : job non attendu admis")
 if (!is.na(images_container(wf_ci(tests = img_t, invariance = img_t), J)$anomalie)) echec("temoin : deux jobs attendus, meme image, refuses")
 if (is.na(images_container(wf_ci(tests = img_t, invariance = autre), J)$anomalie)) echec("temoin : deux images differentes admises")
