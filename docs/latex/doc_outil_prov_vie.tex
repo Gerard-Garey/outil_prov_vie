@@ -6712,7 +6712,18 @@ employée jusqu'à l'issue~186, ne distinguait pas, que l'empreinte de
 empreinte altérée sur une autre ligne fait différer la comparaison.
 Chaque empreinte est en outre contrôlée par
 \code{lire\_jeu()} et, si la commande existe, par \code{md5sum -c}
-(sans trace quand elle manque~: issue~197). Aucune
+lancée depuis le dossier du jeu versionné. Quand \code{md5sum} manque du
+chemin d'exécution, cette vérification n'est pas faite, mais jamais sans
+trace (issue~197, forme décidée par le mainteneur, M792, comme pour la
+voie \code{git}, section~\ref{sec:controles})~: chaque jeu sauté est
+nommé au journal par une ligne
+\code{[INFO] SAUTE~:~<jeu>~:~md5sum -c empreintes.md5}, suivie d'une
+ligne qui donne le nombre de vérifications sautées, hors du décompte des
+\code{[OK]} et sans échec, les empreintes restant contrôlées par
+\code{tools::md5sum()} dans \code{lire\_jeu()}. Un témoin rejoue ce
+saut, \code{md5sum} déclaré absent~: il vérifie qu'aucune vérification
+n'est inscrite, qu'une ligne nomme chaque jeu et que le compteur égale
+le nombre de jeux. Aucune
 comparaison d'octets n'est ainsi sautée quand la version du package est
 relevée (décision M733, issue~181)~: la comparaison de
 \code{empreintes.md5} entier, qui ne tournait qu'à version égale et ne
