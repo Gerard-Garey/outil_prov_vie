@@ -210,6 +210,12 @@ if (file.exists(file.path(DOSSIER_REFERENCES, "provenance.txt"))) {
   provenance <- tryCatch(outils$lire_liste(lire_fichier(file.path(DOSSIER_REFERENCES, "provenance.txt"))),
                          error = function(e) NULL)
 }
+# Rejeu d'une fiche de référence (point (ii)) comparé à la référence `fr`, `ff`. Le rejeu est évalué dans
+# verifier() : un refus d'appel (refus_provie ; par exemple declaration_manquante, plan_invalide) s'inscrit en
+# [ECHEC] avec son motif, sans arrêter la batterie, qui compare les couples suivants (#126).
+rejeu_reference_egal <- function(nom, e, fiche, fr, ff) {
+  verifier(nom, nrow(comparer_couple(rejouer_fiche(e$base, fiche, e$tables)$resultat, lire_fichier(fr), lire_fichier(ff))) == 0L)
+}
 resultats <- list()
 for (i in seq_len(nrow(COUPLES_REFERENCE))) {
   cr <- COUPLES_REFERENCE[i, ]
@@ -220,9 +226,12 @@ for (i in seq_len(nrow(COUPLES_REFERENCE))) {
   resultats[[cr$couple]] <- r1
   verifier(paste0(nom, " : (i) deux appels de calculer_provisions() identiques (identical, empreintes comprises)"),
            identical(calculer_couple(e), r1))
-  rj <- rejouer_fiche(e$base, lire_fiche(ecrire_fiche(r1$fiche)), e$tables)
-  verifier(paste0(nom, " : (ii) rejeu de la fiche du calcul (écrite puis relue) : même objet, aucun signalement"),
-           identical(rj$resultat, r1) && nrow(rj$signalements) == 0L)
+  # rejeu évalué dans verifier() : un refus d'appel (refus_provie) s'inscrit en [ECHEC] avec son motif,
+  # la batterie va au bout (#126)
+  verifier(paste0(nom, " : (ii) rejeu de la fiche du calcul (écrite puis relue) : même objet, aucun signalement"), {
+    rj <- rejouer_fiche(e$base, lire_fiche(ecrire_fiche(r1$fiche)), e$tables)
+    identical(rj$resultat, r1) && nrow(rj$signalements) == 0L
+  })
   dossier <- file.path(DOSSIER_REFERENCES, chemin_couple(i))
   fr <- file.path(dossier, "resultat.txt")
   ff <- file.path(dossier, "fiche.txt")
@@ -240,9 +249,8 @@ for (i in seq_len(nrow(COUPLES_REFERENCE))) {
     print(utils::head(ec, 50L), right = FALSE)
   }
   verifier(paste0(nom, " : (iii) comparaison à la référence : aucun écart (structure exacte, réels à 1e-10 mixte)"), nrow(ec) == 0L)
-  rf <- rejouer_fiche(e$base, lire_fiche(lire_fichier(ff)), e$tables)
-  verifier(paste0(nom, " : (ii) rejeu de fiche.txt : égal à la référence (écarts de version signalés sans refus)"),
-           nrow(comparer_couple(rf$resultat, lire_fichier(fr), lire_fichier(ff))) == 0L)
+  rejeu_reference_egal(paste0(nom, " : (ii) rejeu de fiche.txt : égal à la référence (écarts de version signalés sans refus)"),
+                       e, lire_fiche(lire_fichier(ff)), fr, ff)
   fiche_ref <- outils$lire_liste(lire_fichier(ff))
   informer(paste0(nom, " : empreinte du résultat recalculée ", if (identical(fiche_ref$empreintes$resultat, r1$fiche$empreintes$resultat))
     "égale" else "différente", " à celle de fiche.txt (mesure de portabilité, hors décompte)"))
@@ -251,6 +259,27 @@ for (i in seq_len(nrow(COUPLES_REFERENCE))) {
            all(vapply(names(PLATEFORME_REFERENCE), function(n) identical(pl[[n]], PLATEFORME_REFERENCE[[n]]), NA)) &&
              !is.null(provenance) && identical(pl$blas, provenance$plateforme$blas) && identical(pl$lapack, provenance$plateforme$lapack))
 }
+
+# Témoin du rejeu refusé (#126) : la fiche du couple C1, au plan rendu invalide (garantie hors de la liste fermée),
+# est refusée (plan_invalide) ; le rejeu inscrit une ligne [ECHEC] qui porte le motif, compte un seul échec, rend la
+# main (la vérification suivante s'exécute) ; le décompte du témoin est restauré, l'échec de démonstration
+# n'étant pas un échec de la batterie.
+iC1 <- which(COUPLES_REFERENCE$couple == "C1")
+fiche_refusee <- resultats[["C1"]]$fiche
+fiche_refusee$plan$perimetre$garanties <- "garantie_inconnue"
+compteurs_avant <- .harnais$compteurs
+journal_refus <- capture.output({
+  rejeu_reference_egal("rejeu refusé", entrees_couple(iC1), fiche_refusee,
+                       file.path(DOSSIER_REFERENCES, chemin_couple(iC1), "resultat.txt"),
+                       file.path(DOSSIER_REFERENCES, chemin_couple(iC1), "fiche.txt"))
+  verifier("vérification suivante", TRUE)
+})
+compteurs_refus <- .harnais$compteurs
+.harnais$compteurs <- compteurs_avant
+verifier("témoin du rejeu refusé : [ECHEC] avec le motif plan_invalide, un seul échec compté, la vérification suivante s'exécute",
+         length(journal_refus) == 2L && startsWith(journal_refus[1L], "[ECHEC] rejeu refusé -- refus plan_invalide : ") &&
+           identical(journal_refus[2L], "[OK] vérification suivante") &&
+           identical(compteurs_refus - compteurs_avant, c(ok = 1L, echec = 1L, attendu = 0L, inattendu = 0L)))
 
 section("références de non-régression : arbre tests/reference/ (ADR 0011, points 2, 5 et 23 (iv))")
 produits <- COUPLES_REFERENCE$etat == "produit"
