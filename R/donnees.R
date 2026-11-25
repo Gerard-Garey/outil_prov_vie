@@ -1330,7 +1330,8 @@ lire_declarations <- function(declarations, dico) {
 # M200, issue #33). `vue` : colonnes lues pour établir la vue seulement (règle V) ; leur refus
 # de valeur ne bloque pas la règle et n'en est pas une cause, les lignes refusées étant hors de
 # la vue (visibilité non déterminée) ; une colonne aussi lue comme valeur (`lit`, colonne
-# contrôlée) bloque toujours (M169). `partiel` (règle P) : `f()` rend un verdict à trois
+# contrôlée) bloque toujours (M169), hors mode Kleene (`kleene`, ci-dessous). `partiel`
+# (règle P) : `f()` rend un verdict à trois
 # valeurs, une valeur refusée étant inconnue (logique de Kleene, .avant3()) ; la règle
 # s'exécute sur les lignes au verdict déterminé et écarte celles au verdict inconnu (NA) ; si
 # elle en écarte une, elle garde sa ligne dans controles_non_executes, cause = le plus petit,
@@ -1351,20 +1352,30 @@ lire_declarations <- function(declarations, dico) {
 # (.regle_domaine(), .regles_b()) choisit les règles à exécuter par `ctx$passe` (fonction de
 # code, table, colonne, lit, traitement ; NULL hors de ses passes) : une règle qu'il écarte
 # n'est ni exécutée ni bloquée et rend FALSE (#56, point 5).
+# `kleene` (règle V en mode Kleene, .regle_vue() ; spécification `donnees`, erratum `1.9.7`,
+# E-1, M808) : le refus de valeur d'aucune colonne lue ne bloque la règle, colonne contrôlée
+# comprise (lue dans le mécanisme, E-1) ; `f()` rend un verdict à trois valeurs et
+# .regle_vue() écarte les lignes au verdict inconnu, cause par .cause_nd() (un seul calcul de
+# cause). Un défaut de forme ou un refus de portée table bloque toujours, comme ci-dessus.
 # `f` NULL : causes de la règle bloquée seulement (sous-cas non exécuté faute de déclaration,
 # D07b et D07c, qui reçoit aussi les causes candidates de sa branche déclarée ; spécification
 # `donnees` v1.9.1, § 3.1 et § 9.6, point (3)) : bloquée, la règle émet sa ligne comme
 # ci-dessus ; sinon rien n'est émis ni détecté et la règle rend integer(0).
 .regle <- function(ctx, code, table, colonne, lit, traitement, detection, f, colonne_ne = colonne,
-                   partiel = FALSE, vue = character(0), parente = NULL) {
+                   partiel = FALSE, vue = character(0), parente = NULL, kleene = FALSE) {
   if (!is.null(ctx$passe) && !ctx$passe(code, table, colonne, lit, traitement)) return(invisible(FALSE))
   if (is.null(ctx$base[[table]])) return(invisible(integer(0)))
+  if (kleene && partiel) stop("erreur interne de provie : r\u00e8gle ", code, " : modes partiel et Kleene ensemble",
+                              call. = FALSE)
   valeur <- unique(c(if (!is.na(colonne)) paste(table, colonne, sep = "."), lit))
   lit <- unique(c(valeur, vue))
   morceaux <- strsplit(lit, ".", fixed = TRUE)
   regle_b <- is.null(ctx$refus_pv)
-  # lignes refusées pour leur valeur, par colonne lue dont le refus de valeur ne bloque pas
-  admet <- if (!partiel) {
+  # lignes refusées pour leur valeur, par colonne lue dont le refus de valeur ne bloque pas ;
+  # règle V en mode Kleene (.regle_vue()) : toute colonne lue, colonne contrôlée comprise
+  admet <- if (kleene) {
+    lit
+  } else if (!partiel) {
     setdiff(vue, valeur)
   } else if (regle_b && !is.na(colonne) && .portee_effective(ctx$dico, code, table, colonne) != "table") {
     setdiff(lit, paste(table, colonne, sep = "."))
@@ -1863,10 +1874,21 @@ lire_declarations <- function(declarations, dico) {
 # s'il varie. Le travail sur ces lignes est le nombre de lignes fois le produit des domaines
 # lus, non le nombre de lignes de la table. Attribut `index` : par colonne lue jointe, lignes
 # de sa table jointes à chaque ligne (cause d'une ligne écartée, .regle()).
+# Pertinence exacte (règle V en mode Kleene, .regle_vue() ; spécification `donnees`, § 3.1, et
+# erratum `1.9.7`, E-3) : une entrée inconnue d'une ligne est pertinente si le verdict varie
+# quand elle seule varie, les autres valeurs inconnues fixées (colonnes de la grille d'essai
+# regroupées par les autres coordonnées) ; une ligne au verdict inconnu a toujours au moins une
+# entrée pertinente (deux affectations de verdicts différents se joignent coordonnée par
+# coordonnée). Attributs lus par la seule règle V en mode Kleene (la règle B lit `index` et
+# `d01a`, inchangés) : `index_pertinent`, par colonne lue, lignes de sa table (la ligne
+# elle-même pour une entrée de la même table) de ses seules entrées pertinentes ;
+# `d01a_pertinent`, de même pour la cause candidate D01a ; `lues`, colonnes de toutes les
+# entrées.
 .verdict3 <- function(entrees, g) {
   valeurs <- lapply(entrees, `[[`, "valeurs")
   r <- g(valeurs) %in% TRUE
   inconnu <- do.call(cbind, lapply(entrees, `[[`, "inconnu"))
+  pertinent <- matrix(FALSE, nrow = length(r), ncol = length(entrees))
   lignes <- which(rowSums(inconnu) > 0L)
   if (length(lignes) > 0L) {
     motifs <- apply(inconnu[lignes, , drop = FALSE], 1L, function(z) paste(which(z), collapse = ","))
@@ -1880,8 +1902,21 @@ lire_declarations <- function(declarations, dico) {
       nc <- nrow(grille)
       essai <- lapply(valeurs, function(x) rep(x[l], times = nc))
       for (j in seq_along(s)) essai[[s[j]]] <- rep(doms[[j]][grille[[j]]], each = nl)
-      vrais <- rowSums(matrix(g(essai) %in% TRUE, nrow = nl))
+      verdicts <- matrix(g(essai) %in% TRUE, nrow = nl)
+      vrais <- rowSums(verdicts)
       r[l] <<- ifelse(vrais == nc, TRUE, ifelse(vrais == 0L, FALSE, NA))
+      variable <- vrais > 0L & vrais < nc
+      if (!any(variable)) return(invisible(NULL))
+      for (j in seq_along(s)) {
+        # colonnes de la grille de mêmes autres coordonnées (indices de domaine, entiers)
+        autres <- if (length(s) == 1L) rep(1L, nc) else do.call(paste, c(unname(as.list(grille[-j])), sep = "\r"))
+        p <- rep(FALSE, nl)
+        for (cols in split(seq_len(nc), autres)) {
+          v <- rowSums(verdicts[, cols, drop = FALSE])
+          p <- p | (v > 0L & v < length(cols))
+        }
+        pertinent[l[p & variable], s[j]] <<- TRUE
+      }
     }
     propre <- rep(FALSE, length(r))
     for (e in entrees) if (!is.null(e$domaines)) propre <- propre | lengths(e$domaines) > 0L
@@ -1941,6 +1976,24 @@ lire_declarations <- function(declarations, dico) {
   # lignes dont une entrée lit une clé jointe en double aux occurrences divergentes (cause
   # candidate D01a d'une ligne écartée, .regle())
   if (length(d01a) > 0L) attr(r, "d01a") <- d01a
+  # entrées pertinentes (règle V en mode Kleene)
+  index_p <- list()
+  d01a_p <- list()
+  for (k in seq_along(entrees)) {
+    e <- entrees[[k]]
+    l <- which(pertinent[, k])
+    if (length(l) == 0L) next
+    lignes_e <- if (is.null(e$index)) as.list(l) else if (is.list(e$index)) e$index[l] else as.list(e$index[l])
+    if (is.null(index_p[[e$tc]])) index_p[[e$tc]] <- vector("list", length(r))
+    index_p[[e$tc]][l] <- Map(c, index_p[[e$tc]][l], lignes_e)
+    if (!is.null(e$d01a)) {
+      if (is.null(d01a_p[[e$tc]])) d01a_p[[e$tc]] <- rep(FALSE, length(r))
+      d01a_p[[e$tc]][l] <- d01a_p[[e$tc]][l] | e$d01a[l]
+    }
+  }
+  attr(r, "index_pertinent") <- index_p
+  if (length(d01a_p) > 0L) attr(r, "d01a_pertinent") <- d01a_p
+  attr(r, "lues") <- unique(vapply(entrees, `[[`, "", "tc"))
   r
 }
 
@@ -3935,25 +3988,77 @@ parties_ligne <- function() lapply(.PARTIES_LIGNE, function(p) list(table = p$ta
 # (nombre minorant) et la règle garde une ligne dans controles_non_executes, cause (γ)
 # (.cause_nd()). Sans cet attribut, NA vaut « non détecté » (inchangé). `f` NULL : causes de
 # la règle bloquée seulement (.regle()).
+# `mode` (#105, lot V ; spécification `donnees`, erratum `1.9.7`, E-1, E-3 et E-4, M808) :
+# "bloquee" (défaut, M169) : une colonne lue comme valeur et refusée pour sa valeur bloque la
+# règle, cause = motif du refus ; "kleene" : la règle s'exécute en logique de Kleene (lecture
+# existentielle) sur le noyau à trois valeurs (.entree3(), .verdict3(), .k3()) : `f()` lit la
+# valeur refusée comme inconnue et rend l'attribut `index` (son absence est une erreur interne) ;
+# une ligne de la population au verdict inconnu est écartée (nombre minorant) ; la ligne qui
+# porte la valeur refusée reste dans la population. Cause : les seuls éléments pertinents de la
+# ligne écartée (attribut `index_pertinent` de .verdict3(), pertinence exacte, exigé : son
+# absence est une erreur interne), valeur refusée qu'elle porte comprise (motif du refus, rang
+# 3), départagés avec les causes (γ) en un seul calcul (.cause_nd(), § 3.1), D01a compris
+# (`d01a_pertinent`). Garde : chaque colonne lue comme valeur et refusée pour sa valeur doit être
+# une entrée du verdict (attribut `lues` ou clé de `index`) ; sinon (valeur refusée lue brute),
+# erreur interne. Un défaut de forme ou un refus de portée table bloque dans les deux modes
+# (.regle()). Écart connu au § 3.1 : en mode "bloquee", la cause (γ) lit `index`, plus large que
+# les seuls éléments pertinents ; la pertinence exacte n'est lue qu'en mode Kleene ; l'écart
+# disparaît avec l'argument `mode` en fin de lot. Le mode est choisi
+# règle par règle à l'appel ; le recensement des règles V et de leur mode est testé
+# (tests/unitaires/donnees.R, registre des règles V).
 .regle_vue <- function(ctx, code, table, colonne, lit, traitement, detection, f, colonne_ne = colonne,
-                       vue = character(0)) {
+                       vue = character(0), mode = "bloquee") {
+  if (!identical(mode, "bloquee") && !identical(mode, "kleene")) {
+    stop("erreur interne de provie : r\u00e8gle V ", code, " (", table, ") : mode inconnu", call. = FALSE)
+  }
+  kleene <- identical(mode, "kleene")
   if (is.null(ctx$base[[table]])) return(invisible(integer(0)))
   cle <- paste(table, eclater_champ(ctx$dico$tables$cle_primaire[ctx$dico$tables$table == table])[1L], sep = ".")
   # à l'arrêté égal à l'extraction, aucune ligne n'est non déterminée (spécification, § 2.2,
-  # (g)) : les colonnes lues pour la vue (famille : version valable) sont lues comme valeurs
+  # (g)) : les colonnes lues pour la vue (famille : version valable) sont lues comme valeurs en
+  # mode "bloquee" seulement (M169) ; en mode Kleene, elles ne sont pas lues par le verdict
+  # (§ 2.2 (g), E-1) : leur refus de valeur ne bloque pas (.regle(), `kleene`) et n'est pas une
+  # entrée obligée du verdict (garde)
   totale <- .vue_totale(ctx)
   ecart <- NULL
-  res <- .regle(ctx, code, table, colonne, if (totale) c(lit, vue, cle, ctx$lit_vue[[table]]) else c(lit, cle), traitement,
-                detection, if (!is.null(f)) function() {
+  lit_valeur <- if (totale) c(lit, vue, cle, ctx$lit_vue[[table]]) else c(lit, cle)
+  # mode Kleene : colonnes lues comme valeur (colonne contrôlée, `lit`, clé ; aux deux arrêtés,
+  # sans les colonnes de vue) et refusées pour leur valeur sur une ligne au moins
+  # (.lignes_refusees() : refus de valeur et cellules manquantes de D03i), entrées obligées du
+  # verdict (garde). Limite connue : la garde est par colonne, non par lecture ; une colonne
+  # entrée du verdict et lue aussi brute dans `f()` n'est pas vue : la conversion d'une règle
+  # (G1 à G3) interdit toute lecture brute d'une colonne refusable dans `f()` en mode Kleene.
+  refusees_lues <- character(0)
+  if (kleene) {
+    lus <- unique(c(if (!is.na(colonne)) paste(table, colonne, sep = "."), lit, cle))
+    refusees_lues <- lus[vapply(strsplit(lus, ".", fixed = TRUE), function(m) !is.null(.lignes_refusees(ctx, m[1L], m[2L])),
+                                NA)]
+  }
+  res <- .regle(ctx, code, table, colonne, lit_valeur, traitement, detection, if (!is.null(f)) function() {
     r <- .verdict_vue(ctx, table, f)
+    index <- attr(r, "index")
+    d01a <- NULL
+    if (kleene) {
+      # pertinence exacte exigée (.verdict3() ; un autre noyau la fournira à sa conversion)
+      if (is.null(index) || is.null(attr(r, "index_pertinent"))) {
+        stop("erreur interne de provie : r\u00e8gle V ", code, " (", table, ") en mode Kleene sans ",
+             "verdict \u00e0 trois valeurs de pertinence exacte", call. = FALSE)
+      }
+      hors <- setdiff(refusees_lues, c(names(index), attr(r, "lues")))
+      if (length(hors) > 0L) stop("erreur interne de provie : r\u00e8gle V ", code, " (", table, ") en mode Kleene : ",
+                                  "valeur refus\u00e9e lue hors du verdict \u00e0 trois valeurs (",
+                                  paste(hors, collapse = ", "), ")", call. = FALSE)
+      index <- attr(r, "index_pertinent")
+      d01a <- attr(r, "d01a_pertinent")
+    }
     x <- ifelse(attr(r, "population"), r, FALSE)
-    if (!is.null(attr(r, "index"))) {
-      ecart <<- list(lignes = which(is.na(x)), index = attr(r, "index"))
+    if (!is.null(index)) {
+      ecart <<- list(lignes = which(is.na(x)), index = index, d01a = d01a)
     }
     x %in% TRUE
-  }, colonne_ne, vue = if (totale) character(0) else c(vue, ctx$lit_vue[[table]]))
+  }, colonne_ne, vue = if (totale) character(0) else c(vue, ctx$lit_vue[[table]]), kleene = kleene)
   if (!is.null(res) && length(ecart$lignes) > 0L) {
-    .ajouter_non_execute(ctx, code, table, colonne_ne, .cause_nd(ctx, ecart$index, ecart$lignes, code, table))
+    .ajouter_non_execute(ctx, code, table, colonne_ne, .cause_nd(ctx, ecart$index, ecart$lignes, code, table, ecart$d01a))
   }
   invisible(res)
 }
@@ -3982,10 +4087,20 @@ parties_ligne <- function() lapply(.PARTIES_LIGNE, function(p) list(table = p$ta
   visible <- which(ev$candidate & ev$statut$famille %in% TRUE)
   nd <- which(ev$candidate & is.na(ev$statut$famille))
   index0 <- attr(r0, "index")
+  # entrées pertinentes (.verdict3(), règle V en mode Kleene) : celles d'une candidate c ne
+  # comptent pour la version visible que si le verdict de c est inconnu (is.na(r0[c])), leur
+  # pertinence sur c étant celle que .verdict3() a établie. Limite connue : la pertinence du
+  # choix de version n'est pas exacte quand la version visible et une candidate partagent une
+  # inconnue (cause possiblement trop large, verdict exact) ; à trancher en G1
+  ip0 <- attr(r0, "index_pertinent")
+  dp0 <- attr(r0, "d01a_pertinent")
   r <- as.vector(r0)
   r[ev$candidate] <- FALSE
   index <- if (is.null(index0)) list() else lapply(index0, function(z) { z[ev$candidate] <- list(NULL); z })
   index$famille <- if (is.null(index$famille)) vector("list", length(r)) else index$famille
+  ip <- if (is.null(ip0)) NULL else lapply(ip0, function(z) { z[ev$candidate] <- list(NULL); z })
+  dp <- if (is.null(dp0)) NULL else lapply(dp0, function(z) { z[ev$candidate] <- FALSE; z })
+  if (!is.null(ip0)) ip$famille <- if (is.null(ip$famille)) vector("list", length(r)) else ip$famille
   # candidates non déterminées de chaque membre (un regroupement, travail linéaire)
   nd_membre <- split(nd, ev$membre[nd])[ev$membre[visible]]
   for (k in seq_along(visible)) {
@@ -4001,10 +4116,20 @@ parties_ligne <- function() lapply(.PARTIES_LIGNE, function(p) list(table = p$ta
       for (tc in names(index0)) index[[tc]][i] <- list(unique(unlist(index0[[tc]][c(i, autres)])))
       index$famille[i] <- list(unique(c(if (is.na(r0[i])) autres else differe,
                                         if ("famille" %in% names(index0)) index$famille[[i]])))
+      if (!is.null(ip0)) {
+        inconnues <- c(i, autres[is.na(r0[autres])])
+        for (tc in setdiff(names(ip0), "famille")) ip[[tc]][i] <- list(unique(unlist(ip0[[tc]][inconnues])))
+        ip$famille[i] <- list(unique(c(if (is.na(r0[i])) autres else differe,
+                                       unlist(ip0$famille[inconnues]))))
+        for (tc in names(dp0)) dp[[tc]][i] <- any(dp0[[tc]][inconnues])
+      }
     }
   }
   population[visible] <- TRUE
   attr(r, "index") <- index
+  if (!is.null(ip0)) attr(r, "index_pertinent") <- ip
+  if (!is.null(dp0)) attr(r, "d01a_pertinent") <- dp
+  if (!is.null(attr(r0, "lues"))) attr(r, "lues") <- attr(r0, "lues")
   attr(r, "population") <- population
   r
 }
@@ -4044,10 +4169,11 @@ parties_ligne <- function() lapply(.PARTIES_LIGNE, function(p) list(table = p$ta
 # vue$visibilite_non_determinee (spécification `donnees` v1.6, § 3.1, départage à rang égal,
 # #59). Ligne retenue de valeur refusée (index « table.colonne » d'une colonne qui n'est pas une
 # partie de ligne, ou ligne sans inscription : date d'effet d'un événement retenu,
-# .arret_en_cours3() ; audit de la reprise de #81, #72) : le motif du refus de valeur de la
-# colonne (.refus_valeur_de()). Une ligne écartée sans élément qui l'explique est une erreur
+# .arret_en_cours3() ; audit de la reprise de #81, #72 ; ligne qui porte la valeur refusée
+# qu'elle lit, en mode Kleene, .regle_vue()) : le motif du refus de valeur de la colonne
+# (.refus_valeur_de()). Une ligne écartée sans élément qui l'explique est une erreur
 # interne.
-.cause_nd <- function(ctx, index, lignes, code, table) {
+.cause_nd <- function(ctx, index, lignes, code, table, d01a = NULL) {
   liens <- .liens_regle1(ctx$dico)
   liens <- liens[liens$table %in% ctx$tables & liens$table_cible %in% ctx$tables, , drop = FALSE]
   statut <- .visibilite_a(ctx, "vue")$statut
@@ -4103,6 +4229,11 @@ parties_ligne <- function() lapply(.PARTIES_LIGNE, function(p) list(table = p$ta
       for (k in .refus_valeur_de(ctx, m[1L], m[2L])) if (length(intersect(k$lignes, seules)) > 0L) causes <- c(causes, k$code)
     }
   }
+  # clé jointe en double aux occurrences divergentes, entrée pertinente d'une ligne écartée
+  # (`d01a` : attribut `d01a_pertinent` de .verdict3(), règle V en mode Kleene seulement) : cause
+  # candidate D01a (erratum `1.9.7`, E-3). Chemin non atteint aujourd'hui : une clé en double est
+  # un refus D01a de portée table, qui bloque la règle avant (#169)
+  for (tc in names(d01a)) if (any(d01a[[tc]][lignes])) causes <- c(causes, "D01a")
   if (length(causes) == 0L) stop("erreur interne de provie : r\u00e8gle V : ligne \u00e9cart\u00e9e sans \u00e9l\u00e9ment non ",
                                  "d\u00e9termin\u00e9 qui l'explique (", code, ", ", table, ")", call. = FALSE)
   .cause_retenue(causes, ctx$dico, ctx$ordre_codes)

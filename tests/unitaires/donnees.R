@@ -7572,3 +7572,343 @@ verifier_egal("#175 table_refusee_vue() : vrai si et seulement si refus_tables p
                                            "evenements", "prestations", "cotisations")),
                               list(TRUE, character(0)))), 2L),
                 list("autre")))
+
+section("donnees : règles V, mode à trois valeurs sous un refus de valeur, mécanisme (#105, lot V ; spécification `donnees`, erratum `1.9.7`, E-1, E-3 et E-4, M808)")
+# Noyau par appel direct de .regle_vue() sur un contexte complet jusqu'à la vue (règle factice
+# V_factice sur assures, verdicts par .entree3(), .verdict3() et .existe_vue3()). Base : sexe
+# de AS1 hors domaine (refus de valeur, portée ligne ; AS1 reste dans la vue), AS2 de sexe M né
+# en 1960 (défaut planté). En mode "bloquee" (défaut, M169), la règle est bloquée ; en mode
+# "kleene", elle s'exécute sur les lignes au verdict déterminé. Avant (d839e42) : argument
+# `mode` absent : les cas (1) à (4) échouent (« unused argument (mode = "kleene") »), le cas (5)
+# aussi (condition non vraie), comme (4 bis) et (6) à (9) ; mesure sur une bibliothèque installée
+# depuis `git archive d839e42`.
+ctx_v105 <- function(b, arrete) {
+  ctx <- ns$.contexte(b, d, list(date_extraction = A), arrete)
+  ctx$declarations <- ns$lire_declarations(NULL, d)
+  ctx$conventions <- ns$.lire_conventions(NULL)
+  for (f in c(".regle_forme", ".regle_domaine", ".regle_cles", ".refus_induits", ".refus_regle_b", ".regle_p",
+              ".construire_vue")) ns[[f]](ctx)
+  ctx
+}
+b_v105 <- avec(function(b) { b$assures$sexe[1L] <- "X"; b })
+# exécute la règle factice ; rend (lignes détectées, constats de la règle, causes de ses lignes
+# de controles_non_executes)
+v105 <- function(b, lit, g, mode = NULL, famille = FALSE) {
+  ctx <- ctx_v105(b, A0)
+  f <- function() {
+    e <- list(s = ns$.entree3(ctx, "assures.sexe"), n = ns$.entree3(ctx, "assures.date_naissance"))
+    if (famille) e$f <- ns$.existe_vue3(ctx, "famille", ns$.valeurs(ctx, "assures", "id_assure"),
+                                        ns$.valeurs(ctx, "famille", "id_assure"), rep(TRUE, nrow(ctx$base$famille)))
+    ns$.verdict3(e, g)
+  }
+  args <- list(ctx, "V_factice", "assures", "sexe", lit, "H", "exacte", f)
+  if (!is.null(mode)) args$mode <- mode
+  res <- do.call(ns$.regle_vue, args)
+  co <- Filter(function(k) k$code == "V_factice", ctx$constats)
+  ne <- Filter(function(k) k$code == "V_factice", ctx$non_executes)
+  list(detectees = if (is.null(res)) "bloquee" else as.integer(res), constats = lapply(co, `[[`, "lignes"),
+       causes = vapply(ne, `[[`, "", "cause"))
+}
+n1965 <- D("1965-01-01")
+verifier_egal("#105, lot V, mécanisme (1) : valeur refusée lue par le verdict (sexe de AS1) et défaut planté sur AS2 : en mode Kleene, AS2 détectée, AS1 écartée, cause = motif du refus (hors_domaine, rang 3) ; en mode bloquee (défaut, M169), règle bloquée, cause hors_domaine, aucun constat",
+              list(v105(b_v105, character(0), function(v) v$s == "M", mode = "kleene"),
+                   v105(b_v105, character(0), function(v) v$s == "M")),
+              list(list(detectees = 2L, constats = list(2L), causes = "hors_domaine"),
+                   list(detectees = "bloquee", constats = list(), causes = "hors_domaine")))
+verifier_egal("#105, lot V, mécanisme (2), contre-témoin : valeur refusée lue par la règle (sexe, colonne contrôlée) que le verdict ne lit pas (né avant 1965) : en mode Kleene, AS2 détectée, aucune ligne écartée, aucune ligne de controles_non_executes ; en mode bloquee, règle bloquée",
+              list(v105(b_v105, character(0), function(v) v$n < n1965, mode = "kleene"),
+                   v105(b_v105, character(0), function(v) v$n < n1965)),
+              list(list(detectees = 2L, constats = list(2L), causes = character(0)),
+                   list(detectees = "bloquee", constats = list(), causes = "hors_domaine")))
+verifier_egal("#105, lot V, mécanisme (3), lecture existentielle : sexe M et né avant 1965 : AS1 (sexe refusé, née en 1970) fausse quel que soit son sexe, verdict déterminé : AS2 seule détectée, aucune ligne écartée",
+              v105(b_v105, character(0), function(v) v$s == "M" & v$n < n1965, mode = "kleene"),
+              list(detectees = 2L, constats = list(2L), causes = character(0)))
+# Départage avec une cause (γ) de la même clé (§ 3.1, un seul calcul de cause, .cause_nd()) :
+# ME1 (famille de AS1) sans date de saisie, de visibilité non déterminée (D03g, cause
+# declaration_absente, rang 6) ; verdict « sexe M et un membre de famille dans la vue » : AS1
+# écartée par les deux éléments, cause hors_domaine (rang 3) ; sans le refus du sexe, cause
+# declaration_absente ; sans l'un ni l'autre, rien n'est écarté.
+b_v105_f <- avec(function(b) { b$assures$sexe[1L] <- "X"; b$famille$date_saisie[1L] <- NA; b })
+b_v105_g <- avec(function(b) { b$famille$date_saisie[1L] <- NA; b })
+g_f <- function(v) v$s == "M" & v$f
+verifier_egal("#105, lot V, mécanisme (4), départage : valeur refusée (hors_domaine, rang 3) et ligne de famille non déterminée (declaration_absente, rang 6) sur la même ligne écartée : cause hors_domaine ; famille seule : declaration_absente ; ni l'une ni l'autre : aucune ligne écartée",
+              list(v105(b_v105_f, "famille.id_assure", g_f, mode = "kleene", famille = TRUE),
+                   v105(b_v105_g, "famille.id_assure", function(v) v$s == "F" & v$f, mode = "kleene", famille = TRUE),
+                   v105(base_ref, "famille.id_assure", g_f, mode = "kleene", famille = TRUE)),
+              list(list(detectees = integer(0), constats = list(), causes = "hors_domaine"),
+                   list(detectees = integer(0), constats = list(), causes = "declaration_absente"),
+                   list(detectees = integer(0), constats = list(), causes = character(0))))
+# Gardes : un mode inconnu, et un verdict sans attribut `index` en mode Kleene (règle non
+# convertie au noyau à trois valeurs), sont des erreurs internes.
+erreur_v105 <- function(expr) tryCatch({ expr; "aucune erreur" }, error = function(e) conditionMessage(e))
+ctx <- ctx_v105(b_v105, A0)
+# Un verdict qui porte `index` sans `index_pertinent` (noyau autre que .verdict3(), non encore
+# converti) est aussi refusé en mode Kleene : pas de repli sur `index` (R4).
+verifier("#105, lot V, mécanisme (5) : mode inconnu, verdict sans attribut index, et verdict avec index sans index_pertinent, en mode Kleene : erreurs internes de provie",
+         startsWith(erreur_v105(ns$.regle_vue(ctx, "V_factice", "assures", "sexe", character(0), "H", "exacte",
+                                              function() rep(FALSE, 2L), mode = "partiel")), "erreur interne de provie") &&
+           startsWith(erreur_v105(ns$.regle_vue(ctx, "V_factice", "assures", "sexe", character(0), "H", "exacte",
+                                                function() rep(FALSE, 2L), mode = "kleene")), "erreur interne de provie") &&
+           grepl("^erreur interne de provie.*pertinence exacte",
+                 erreur_v105(ns$.regle_vue(ctx_v105(b_v105, A0), "V_factice", "assures", "sexe", character(0), "H", "exacte",
+                                           function() structure(c(NA, TRUE), index = list(assures.sexe = list(1L, NULL))),
+                                           mode = "kleene"))))
+# Pertinence exacte (§ 3.1, E-3 ; .verdict3(), attribut index_pertinent) : une valeur refusée
+# que le verdict ne lit pas, ou dont il ne dépend pas, n'est pas un élément de la cause. Même base
+# que le cas (4) (sexe de AS1 refusé, ME1 non déterminée) : verdict « un membre dans la vue »
+# seul, puis « (M ou non M) et un membre dans la vue » : AS1 écartée par ME1 seule, cause
+# declaration_absente (avant la reprise : hors_domaine, la ligne s'indexait elle-même pour sa
+# valeur refusée).
+verifier_egal("#105, lot V, mécanisme (4 bis), pertinence exacte : valeur refusée sans effet sur le verdict (non lue, ou tautologie) à côté d'une ligne de famille non déterminée : cause declaration_absente, non hors_domaine",
+              list(v105(b_v105_f, "famille.id_assure", function(v) v$f, mode = "kleene", famille = TRUE),
+                   v105(b_v105_f, "famille.id_assure", function(v) (v$s == "M" | v$s != "M") & v$f, mode = "kleene", famille = TRUE)),
+              rep(list(list(detectees = integer(0), constats = list(), causes = "declaration_absente")), 2L))
+# Garde (audit, constat majeur 1) : une colonne lue comme valeur et refusée pour sa valeur qui
+# n'est pas une entrée du verdict (lue brute) est une erreur interne en mode Kleene, au lieu
+# d'une détection sur une valeur refusée. Survenance de SI1 en 2090 (refus de valeur), règle
+# factice sur assures qui la lit brute ; en mode bloquee, la règle est bloquée.
+b_v105_s <- avec(function(b) { b$sinistres$date_survenance[1L] <- D("2090-01-01"); b })
+brute_v105 <- function(ctx) function() {
+  brut <- ns$.valeurs(ctx, "sinistres", "date_survenance")
+  ns$.verdict3(list(n = ns$.entree3(ctx, "assures.date_naissance")), function(v) v$n < n1965 & any(brut > D("2080-01-01")))
+}
+ctx_s <- ctx_v105(b_v105_s, A0)
+ctx_s2 <- ctx_v105(b_v105_s, A0)
+verifier_egal("#105, lot V, mécanisme (6), garde : valeur refusée d'une colonne lue (sinistres.date_survenance) hors des entrées du verdict : erreur interne en mode Kleene ; règle bloquée en mode bloquee",
+              list(ns$.lignes_refusees(ctx_s, "sinistres", "date_survenance"),
+                   startsWith(erreur_v105(ns$.regle_vue(ctx_s, "V_factice", "assures", "sexe", "sinistres.date_survenance", "H",
+                                                        "exacte", brute_v105(ctx_s), mode = "kleene")), "erreur interne de provie"),
+                   is.null(ns$.regle_vue(ctx_s2, "V_factice", "assures", "sexe", "sinistres.date_survenance", "H", "exacte",
+                                         brute_v105(ctx_s2)))),
+              list(1L, TRUE, TRUE))
+# D01a (cause candidate d'une clé jointe en double aux occurrences divergentes, E-3) : branchée
+# dans .cause_nd() par l'argument `d01a` (attribut d01a_pertinent de .verdict3(), mode Kleene),
+# constatée par appel direct ; le chemin par une règle V n'est pas atteint : GS1 en double
+# (codes divergents) est un refus de portée table de garanties_souscrites, qui bloque la règle
+# factice sur dossiers avant son verdict (aucun constat, une ligne de controles_non_executes).
+b_v105_d <- avec(function(b) { g <- b$garanties_souscrites; g <- rbind(g, g[1L, ]); g$code_garantie[5L] <- "incapacite"
+                               b$garanties_souscrites <- g; b })
+ctx_d <- ctx_v105(b_v105_d, A0)
+f_d <- function() {
+  ix <- match(ns$.valeurs(ctx_d, "dossiers", "id_garantie_souscrite"), ns$.valeurs(ctx_d, "garanties_souscrites", "id_garantie_souscrite"))
+  ns$.verdict3(list(c = ns$.entree3(ctx_d, "garanties_souscrites.code_garantie", index = ix)), function(v) v$c == "deces")
+}
+res_d <- ns$.regle_vue(ctx_d, "V_factice", "dossiers", NA_character_, "garanties_souscrites.code_garantie", "S", "exacte", f_d,
+                       mode = "kleene")
+ctx <- ctx_v105(base_ref, A0)
+verifier_egal("#105, lot V, mécanisme (7), D01a : .cause_nd() retient D01a pour une ligne écartée dont l'entrée pertinente est une clé jointe divergente ; chemin non atteint par une règle V (GS1 en double : règle bloquée avant le verdict)",
+              list(ns$.cause_nd(ctx, list(), 1L, "V_factice", "dossiers", list(garanties_souscrites.code_garantie = c(TRUE, FALSE, FALSE))),
+                   is.null(res_d), length(Filter(function(k) k$code == "V_factice", ctx_d$constats)),
+                   length(Filter(function(k) k$code == "V_factice", ctx_d$non_executes))),
+              list("D01a", TRUE, 0L, 1L))
+# Colonne de vue à l'arrêté égal à l'extraction (§ 2.2 (g), E-1 ; décision d'actuary, lecture
+# (a)) : en mode Kleene, le refus de valeur d'une colonne lue pour la vue ne bloque pas la règle
+# et n'est pas une entrée obligée du verdict (garde) ; en mode bloquee, la colonne est lue comme
+# valeur et bloque (M169). Saisie de SI1 en 2030 (refus de valeur D02c), règle factice sur
+# famille (sexe) qui lit sinistres.date_saisie pour la vue seulement, à A (extraction).
+b_v105_v <- avec(function(b) { b$sinistres$date_saisie[1L] <- D("2030-01-01"); b })
+vue_v105 <- function(mode) {
+  ctx <- ctx_v105(b_v105_v, A)
+  f <- function() ns$.verdict3(list(s = ns$.entree3(ctx, "famille.sexe")), function(v) v$s == "M")
+  res <- ns$.regle_vue(ctx, "V_factice", "famille", "sexe", character(0), "H", "exacte", f, vue = "sinistres.date_saisie",
+                       mode = mode)
+  list(refus = ns$.lignes_refusees(ctx, "sinistres", "date_saisie"), detectees = if (is.null(res)) "bloquee" else as.integer(res),
+       causes = vapply(Filter(function(k) k$code == "V_factice", ctx$non_executes), `[[`, "", "cause"))
+}
+verifier_egal("#105, lot V, mécanisme (8), colonne de vue refusée à l'extraction : mode Kleene, règle exécutée (ME1, sexe M, détectée), aucune ligne de controles_non_executes ; mode bloquee, règle bloquée, cause D02c",
+              list(vue_v105("kleene"), vue_v105("bloquee")),
+              list(list(refus = 1L, detectees = 1L, causes = character(0)), list(refus = 1L, detectees = "bloquee", causes = "D02c")))
+# Propagation par .verdict_vue() des attributs du noyau (index_pertinent, d01a_pertinent, lues ;
+# mineur m4 de l'audit) : copie de l'espace de noms dont .visibilite_a() rend quatre versions de
+# famille (1 : candidate visible de ME1 ; 2 et 3 : candidates non déterminées de ME1 ; 4 : autre
+# membre, retenu), à A0 ; f() rend les verdicts (TRUE, NA, FALSE, FALSE) et les attributs. La
+# version 1 prend le verdict inconnu ; ses entrées pertinentes sont celles des candidates au
+# verdict inconnu (2), non celles de 3 (verdict déterminé), réunies aux candidates non
+# déterminées sous « famille » ; les candidates sont vidées ; `lues` est transmis.
+env_v105 <- new.env(parent = ns)
+for (nom in ls(ns, all.names = TRUE)) {
+  g <- get(nom, envir = ns)
+  if (is.function(g) && identical(environment(g), ns)) environment(g) <- env_v105
+  assign(nom, g, envir = env_v105)
+}
+env_v105$.visibilite_a <- function(ctx, mode) list(candidate = c(TRUE, TRUE, TRUE, FALSE),
+                                                  statut = list(famille = c(TRUE, NA, NA, TRUE)),
+                                                  membre = c("ME1", "ME1", "ME1", "ME2"))
+ctx_vv <- env_v105$.contexte(avec(function(b) { b$famille <- b$famille[c(1L, 1L, 1L, 1L), ]; b }), d, list(date_extraction = A), A0)
+ctx_vv$retenu <- list(famille = c(FALSE, FALSE, FALSE, TRUE))
+r_vv <- env_v105$.verdict_vue(ctx_vv, "famille", function() {
+  structure(c(TRUE, NA, FALSE, FALSE), index = list(),
+            index_pertinent = list(famille.sexe = list(NULL, 2L, 3L, NULL)),
+            d01a_pertinent = list(famille.lien = c(FALSE, TRUE, FALSE, FALSE), famille.situation = c(FALSE, FALSE, TRUE, FALSE)),
+            lues = "famille.sexe")
+})
+verifier_egal("#105, lot V, mécanisme (9), .verdict_vue() : index_pertinent, d01a_pertinent et lues transmis ; version visible au verdict inconnu, entrées (index et D01a) de la seule candidate au verdict inconnu (2), non de 3, et candidates non déterminées (2, 3) sous « famille » ; candidates vidées",
+              list(as.vector(r_vv), attr(r_vv, "index_pertinent"), attr(r_vv, "d01a_pertinent"), attr(r_vv, "lues"),
+                   attr(r_vv, "population")),
+              list(c(NA, FALSE, FALSE, FALSE),
+                   list(famille.sexe = list(2L, NULL, NULL, NULL), famille = list(2:3, NULL, NULL, NULL)),
+                   list(famille.lien = c(TRUE, FALSE, FALSE, FALSE), famille.situation = c(FALSE, FALSE, FALSE, FALSE)),
+                   "famille.sexe", c(TRUE, FALSE, FALSE, TRUE)))
+# Registre des règles V (#105, lot V ; pendant du critère B8) : chaque clé (code, table, colonne)
+# d'une règle V qui lit comme valeur une colonne refusable pour sa valeur (colonne contrôlée par
+# une règle R de portée colonne ou ligne, comme au critère B8 (ii), et colonnes de D03i, M701)
+# figure au recensement ci-dessous avec son mode ("bloquee", M169, ou "kleene", M808), son
+# groupe de conversion (G1 : propre à la ligne et copie, avec D01b ; G2 : jointure, existence,
+# couverture ; G3 : automate et ordre ; feuille de route, § 1.23, M808) et ses colonnes
+# refusables lues comme valeur à tout arrêté (colonne contrôlée et `lit`), puis, après « | »,
+# celles lues comme valeur à l'arrêté égal à l'extraction seulement (colonnes lues pour la vue,
+# argument `vue` et ctx$lit_vue de la table, hors les précédentes). Le
+# recensement est ici, non dans R/ : le code ne lit que l'argument `mode` de chaque appel de
+# .regle_vue(), seule source du comportement ; le registre est un contrôle, qui disparaît avec
+# l'argument en fin de lot (plan de Bdr-b5, P2). Contrôle : (i) statique, chaque appel de
+# .regle_vue() de R/donnees.R (46 sites) a un code littéral et un mode absent ou littéral, et
+# chaque site de table et de colonne littérales (37 clés) a sa clé au registre ou dans la liste
+# explicite des clés sans colonne refusable (`sans_refusable_v105`, vide aujourd'hui) ; (ii) trace de .regle_vue() pendant controler_base() sur la base de référence, à A0 et à A, sans
+# et avec les déclarations qui exécutent D02c (âge), D07b, D07c et D14 : clés concernées =
+# registre, mêmes colonnes (des deux champs), un seul mode par clé, celui du registre ; tout code d'un site est
+# atteint. Une clé non classée, ou un site dont le mode diffère du registre, fait échouer le test.
+registre_v105 <- c(
+  "D01b cotisations NA bloquee G1 cotisations.date_mouvement cotisations.debut_periode cotisations.fin_periode cotisations.montant cotisations.nature_mouvement | contrats.date_effet garanties_souscrites.date_effet",
+  "D01b dossiers NA bloquee G1 dossiers.date_ouverture | sinistres.date_saisie",
+  "D01b evenements NA bloquee G1 evenements.date_effet evenements.date_saisie evenements.type_evenement | dossiers.date_ouverture rentes.date_saisie sinistres.date_saisie",
+  "D01b prestations NA bloquee G1 prestations.date_reglement prestations.date_saisie prestations.debut_periode prestations.fin_periode prestations.montant prestations.nature_mouvement prestations.type_prestation | dossiers.date_ouverture rentes.date_saisie sinistres.date_saisie",
+  "D01b sinistres NA bloquee G1 sinistres.date_saisie sinistres.date_survenance sinistres.nature_sinistre |",
+  "D02a affiliations date_fin bloquee G1 affiliations.date_debut affiliations.date_fin | affiliations.date_saisie contrats.date_effet",
+  "D02a ayants_droit_sante fin_couverture bloquee G1 ayants_droit_sante.debut_couverture ayants_droit_sante.fin_couverture | affiliations.date_saisie ayants_droit_sante.date_saisie contrats.date_effet",
+  "D02a contrats date_debut_gestion bloquee G1 contrats.date_debut_gestion contrats.date_effet |",
+  "D02a contrats date_fin bloquee G1 contrats.date_effet contrats.date_fin |",
+  "D02a contrats date_terme bloquee G1 contrats.date_effet contrats.date_terme |",
+  "D02a cotisations fin_periode bloquee G1 cotisations.debut_periode cotisations.fin_periode | contrats.date_effet cotisations.date_mouvement garanties_souscrites.date_effet",
+  "D02a evenements date_effet bloquee G1 evenements.date_effet evenements.type_evenement sinistres.date_survenance | dossiers.date_ouverture evenements.date_saisie rentes.date_saisie sinistres.date_saisie",
+  "D02a famille date_naissance bloquee G1 famille.date_naissance famille.lien famille.situation sinistres.date_survenance | sinistres.date_saisie",
+  "D02a garanties_souscrites date_fin bloquee G1 garanties_souscrites.date_effet garanties_souscrites.date_fin | contrats.date_effet",
+  "D02a prestations fin_periode bloquee G1 prestations.debut_periode prestations.fin_periode | dossiers.date_ouverture prestations.date_reglement prestations.date_saisie rentes.date_saisie sinistres.date_saisie",
+  "D02a sinistres date_declaration bloquee G1 sinistres.date_declaration sinistres.date_survenance | sinistres.date_saisie",
+  "D02a sinistres date_instruction bloquee G1 sinistres.date_declaration sinistres.date_instruction | sinistres.date_saisie",
+  "D02a sinistres date_survenance bloquee G1 assures.date_naissance sinistres.date_survenance | sinistres.date_saisie",
+  "D02c assures date_naissance bloquee G2 affiliations.date_debut assures.date_naissance contrats.date_effet contrats.nature_contrat sinistres.date_survenance | affiliations.date_saisie sinistres.date_saisie",
+  "D02c ayants_droit_sante date_naissance bloquee G1 ayants_droit_sante.date_naissance ayants_droit_sante.date_saisie | affiliations.date_saisie contrats.date_effet",
+  "D02c designations date_naissance bloquee G1 designations.date_naissance designations.date_saisie | affiliations.date_saisie contrats.date_effet",
+  "D02c famille date_naissance bloquee G1 famille.date_naissance famille.situation sinistres.date_survenance | sinistres.date_saisie",
+  "D03a assures date_naissance bloquee G1 assures.date_naissance |",
+  "D03a famille date_naissance bloquee G1 famille.date_naissance famille.situation | sinistres.date_saisie",
+  "D03b assures sexe bloquee G1 assures.sexe |",
+  "D03b famille sexe bloquee G1 famille.sexe | sinistres.date_saisie",
+  "D03c affiliations salaire_reference bloquee G1 affiliations.salaire_reference | affiliations.date_saisie contrats.date_effet",
+  "D03e evenements categorie_invalidite bloquee G1 evenements.categorie_invalidite evenements.type_evenement | dossiers.date_ouverture evenements.date_saisie rentes.date_saisie sinistres.date_saisie",
+  "D03f cotisations NA bloquee G1 cotisations.debut_periode cotisations.fin_periode | contrats.date_effet cotisations.date_mouvement garanties_souscrites.date_effet",
+  "D03f prestations NA bloquee G1 prestations.debut_periode prestations.fin_periode prestations.type_prestation | dossiers.date_ouverture prestations.date_reglement prestations.date_saisie rentes.date_saisie sinistres.date_saisie",
+  "D03h garanties_souscrites taux_technique_tarif bloquee G1 contrats.nature_contrat garanties_souscrites.code_garantie garanties_souscrites.maintien_deces garanties_souscrites.taux_technique_tarif | contrats.date_effet garanties_souscrites.date_effet",
+  "D05 evenements motif bloquee G1 evenements.motif evenements.type_evenement | dossiers.date_ouverture evenements.date_saisie rentes.date_saisie sinistres.date_saisie",
+  "D06 evenements justificatif bloquee G2 evenements.justificatif evenements.motif evenements.type_evenement prestations.type_prestation | dossiers.date_ouverture evenements.date_saisie prestations.date_reglement prestations.date_saisie rentes.date_saisie sinistres.date_saisie",
+  "D07a dossiers NA bloquee G3 evenements.date_effet evenements.date_saisie evenements.type_evenement garanties_souscrites.code_garantie sinistres.date_survenance sinistres.nature_sinistre | dossiers.date_ouverture rentes.date_saisie sinistres.date_saisie",
+  "D07a rentes NA bloquee G3 evenements.date_effet evenements.date_saisie evenements.motif evenements.type_evenement famille.lien garanties_souscrites.code_garantie sinistres.date_survenance sinistres.nature_sinistre | dossiers.date_ouverture rentes.date_saisie sinistres.date_saisie",
+  "D07b dossiers NA bloquee G3 evenements.date_effet evenements.date_saisie evenements.type_evenement garanties_souscrites.code_garantie prestations.date_reglement prestations.nature_mouvement prestations.type_prestation | dossiers.date_ouverture prestations.date_saisie rentes.date_saisie sinistres.date_saisie",
+  "D07b rentes NA bloquee G3 evenements.date_effet evenements.date_saisie evenements.type_evenement garanties_souscrites.code_garantie prestations.date_reglement prestations.nature_mouvement | dossiers.date_ouverture prestations.date_saisie rentes.date_saisie sinistres.date_saisie",
+  "D07c dossiers NA bloquee G3 evenements.date_effet evenements.date_saisie evenements.type_evenement famille.date_deces famille.date_naissance famille.lien famille.situation garanties_souscrites.code_garantie garanties_souscrites.prolongation_handicap parametres.valeur | contrats.date_effet dossiers.date_ouverture garanties_souscrites.date_effet rentes.date_saisie sinistres.date_saisie",
+  "D07c rentes NA bloquee G3 evenements.date_effet evenements.date_saisie evenements.type_evenement famille.date_deces famille.date_naissance famille.lien famille.situation garanties_souscrites.code_garantie garanties_souscrites.prolongation_handicap parametres.valeur | contrats.date_effet dossiers.date_ouverture garanties_souscrites.date_effet rentes.date_saisie sinistres.date_saisie",
+  "D08 sinistres NA bloquee G3 evenements.date_effet evenements.motif evenements.type_evenement garanties_souscrites.code_garantie parametres.valeur sinistres.date_survenance sinistres.nature_sinistre | contrats.date_effet dossiers.date_ouverture evenements.date_saisie garanties_souscrites.date_effet rentes.date_saisie sinistres.date_saisie",
+  "D10b dossiers id_garantie_souscrite bloquee G2 garanties_souscrites.date_effet garanties_souscrites.date_fin sinistres.date_survenance | dossiers.date_ouverture sinistres.date_saisie",
+  "D10c dossiers NA bloquee G2 garanties_souscrites.code_garantie garanties_souscrites.college garanties_souscrites.date_effet garanties_souscrites.date_fin sinistres.date_survenance | contrats.date_effet dossiers.date_ouverture sinistres.date_saisie",
+  "D10d evenements NA bloquee G2 evenements.type_evenement garanties_souscrites.code_garantie garanties_souscrites.college garanties_souscrites.date_effet garanties_souscrites.date_fin sinistres.date_survenance | contrats.date_effet dossiers.date_ouverture evenements.date_saisie rentes.date_saisie sinistres.date_saisie",
+  "D10e beneficiaires qualite bloquee G1 beneficiaires.qualite garanties_souscrites.code_garantie | beneficiaires.date_saisie dossiers.date_ouverture sinistres.date_saisie",
+  "D10f evenements NA bloquee G3 evenements.date_effet evenements.date_saisie evenements.motif evenements.type_evenement garanties_souscrites.code_garantie | dossiers.date_ouverture rentes.date_saisie sinistres.date_saisie",
+  "D11a sinistres date_survenance bloquee G2 affiliations.date_debut affiliations.date_fin contrats.date_effet contrats.date_fin contrats.date_terme contrats.nature_contrat sinistres.date_survenance | affiliations.date_saisie dossiers.date_ouverture sinistres.date_saisie",
+  "D11b dossiers id_garantie_souscrite bloquee G2 affiliations.date_debut affiliations.date_fin contrats.date_effet contrats.date_fin contrats.date_terme contrats.nature_contrat garanties_souscrites.college sinistres.date_survenance | affiliations.date_saisie dossiers.date_ouverture sinistres.date_saisie",
+  "D11c affiliations college bloquee G2 affiliations.date_debut affiliations.date_fin | affiliations.date_saisie contrats.date_effet",
+  "D12 evenements type_evenement bloquee G3 evenements.date_effet evenements.motif evenements.type_evenement sinistres.nature_sinistre | dossiers.date_ouverture evenements.date_saisie rentes.date_saisie sinistres.date_saisie",
+  "D13 sinistres date_instruction bloquee G2 garanties_souscrites.code_garantie prestations.type_prestation sinistres.date_instruction sinistres.nature_sinistre | dossiers.date_ouverture prestations.date_reglement prestations.date_saisie rentes.date_saisie sinistres.date_saisie",
+  "D14 sinistres NA bloquee G2 famille.date_deces famille.date_naissance famille.lien famille.situation garanties_souscrites.code_garantie garanties_souscrites.college garanties_souscrites.conjoint_vise garanties_souscrites.date_effet garanties_souscrites.date_fin garanties_souscrites.prolongation_handicap parametres.valeur sinistres.date_instruction sinistres.date_survenance sinistres.nature_sinistre | contrats.date_effet dossiers.date_ouverture sinistres.date_saisie",
+  "somme_parts beneficiaires part bloquee G1 beneficiaires.part | beneficiaires.date_saisie dossiers.date_ouverture sinistres.date_saisie"
+)
+reg_v105 <- local({
+  p <- strsplit(sub(" \\|.*$", "", registre_v105), " ", fixed = TRUE)
+  data.frame(cle = vapply(p, function(z) paste(z[1:3], collapse = "|"), ""), mode = vapply(p, `[`, "", 4L),
+             groupe = vapply(p, `[`, "", 5L), colonnes = vapply(p, function(z) paste(z[-(1:5)], collapse = " "), ""),
+             vue = trimws(sub("^[^|]*\\|", "", registre_v105)), stringsAsFactors = FALSE)
+})
+# clés de sites littéraux sans colonne refusable lue (aucune aujourd'hui)
+sans_refusable_v105 <- character(0)
+# (i) sites de .regle_vue() dans le source
+sites_v105 <- list()
+parcourir_v105 <- function(x) {
+  if (!is.call(x)) return(invisible(NULL))
+  if (identical(x[[1L]], as.name(".regle_vue"))) sites_v105[[length(sites_v105) + 1L]] <<- match.call(ns$.regle_vue, x)
+  for (i in seq_along(x)[-1L]) if (is.call(x[[i]])) parcourir_v105(x[[i]])
+}
+for (x in parse(file.path(racine, "R", "donnees.R"), keep.source = FALSE)) parcourir_v105(x)
+codes_sites_v105 <- vapply(sites_v105, function(m) if (is.character(m$code)) m$code else NA_character_, "")
+modes_sites_v105 <- vapply(sites_v105, function(m) if (is.null(m$mode)) "bloquee" else if (is.character(m$mode)) m$mode else NA_character_, "")
+# clé d'un site de table et de colonne littérales (colonne `NA_character_` comprise), NA sinon
+litteral_v105 <- function(x) if (is.character(x)) x else if (identical(x, quote(NA_character_))) NA_character_ else NULL
+cles_sites_v105 <- unique(unlist(lapply(sites_v105, function(m) {
+  t <- litteral_v105(m$table)
+  c1 <- if (is.null(m$colonne)) NULL else litteral_v105(m$colonne)
+  if (is.null(t) || is.null(c1)) NULL else paste(m$code, t, c1, sep = "|")
+})))
+# (ii) appels exécutés : clé, mode, colonnes refusables lues comme valeur
+dl_v105 <- local({
+  ab <- ns$.regles_b(d)
+  pb <- vapply(ab, function(k) ns$.portee_effective(d, k$code, k$table, k$colonne), "")
+  sb <- vapply(ab, function(k) paste(k$table, k$colonne, sep = "."), "")
+  union(unique(sb[pb %in% c("colonne", "ligne") & vapply(ab, `[[`, "", "traitement") == "R"]),
+        paste(names(ns$.COLONNES_D03I), ns$.COLONNES_D03I, sep = "."))
+})
+emplois_v105 <- names(ns$.EMPLOIS_D02C)
+decl_v105 <- list(seuils = list(d07b_mois = 6, d02c_age_min = as.list(stats::setNames(rep(0, length(emplois_v105)), emplois_v105)),
+                                d02c_age_max = as.list(stats::setNames(rep(120, length(emplois_v105)), emplois_v105))))
+conv_v105 <- list(age = "revolu", limite_age = list(regle = "depassement", age = "revolu"))
+appels_v105 <- function(b, arrete, ...) {
+  .GlobalEnv$.appels_v105 <- list()
+  suppressMessages(trace(".regle_vue", where = ns, print = FALSE, tracer = quote(
+    .GlobalEnv$.appels_v105[[length(.GlobalEnv$.appels_v105) + 1L]] <- list(
+      code = code, table = table, colonne = colonne, mode = mode,
+      valeur = unique(c(if (!is.na(colonne)) paste(table, colonne, sep = "."), lit)),
+      vue = unique(c(vue, ctx$lit_vue[[table]]))))))
+  on.exit({ suppressMessages(untrace(".regle_vue", where = ns)); rm(".appels_v105", envir = .GlobalEnv) })
+  invisible(provie::controler_base(b, arrete, ...))
+  .GlobalEnv$.appels_v105
+}
+executes_v105 <- c(appels_v105(base_ref, A0), appels_v105(base_ref, A), appels_v105(base_ref, A0, decl_v105, conv_v105),
+                   appels_v105(base_ref, A, decl_v105, conv_v105))
+# écarts entre les appels exécutés et un registre : clés non classées, clés du registre non
+# atteintes, colonnes différentes, mode différent (ou plusieurs modes pour une clé)
+ecarts_v105 <- function(appels, reg) {
+  cle <- vapply(appels, function(k) paste(k$code, k$table, k$colonne, sep = "|"), "")
+  lues <- lapply(appels, function(k) intersect(k$valeur, dl_v105))
+  concerne <- lengths(lues) > 0L
+  cles <- unique(cle[concerne])
+  colonnes <- vapply(cles, function(k) paste(sort(unique(unlist(lues[concerne & cle == k])), method = "radix"), collapse = " "), "")
+  vues <- vapply(cles, function(k) {
+    v <- intersect(unique(unlist(lapply(appels[cle == k], `[[`, "vue"))), dl_v105)
+    paste(sort(setdiff(v, unique(unlist(lapply(appels[cle == k], `[[`, "valeur")))), method = "radix"), collapse = " ")
+  }, "")
+  modes <- vapply(cles, function(k) paste(sort(unique(vapply(appels[concerne & cle == k], `[[`, "", "mode")), method = "radix"),
+                                          collapse = ","), "")
+  i <- match(cles, reg$cle)
+  list(non_classees = sort(cles[is.na(i)], method = "radix"),
+       non_atteintes = sort(setdiff(reg$cle, cles), method = "radix"),
+       colonnes = sort(cles[!is.na(i) & (colonnes != reg$colonnes[i] | vues != reg$vue[i])], method = "radix"),
+       modes = sort(cles[!is.na(i) & modes != reg$mode[i]], method = "radix"))
+}
+aucun_v105 <- list(non_classees = character(0), non_atteintes = character(0), colonnes = character(0), modes = character(0))
+verifier_egal("#105, lot V, registre des règles V (i) : 46 sites de .regle_vue() dans R/donnees.R, code littéral, mode absent ou littéral (bloquee ou kleene) ; 27 codes ; tout code d'un site atteint par la trace ; 37 clés de sites littéraux, toutes au registre ou dans sans_refusable_v105",
+              list(length(sites_v105), sum(is.na(codes_sites_v105)), all(modes_sites_v105 %in% c("bloquee", "kleene")),
+                   length(unique(codes_sites_v105)),
+                   setdiff(codes_sites_v105, vapply(executes_v105, `[[`, "", "code")),
+                   length(cles_sites_v105), setdiff(cles_sites_v105, c(reg_v105$cle, sans_refusable_v105))),
+              list(46L, 0L, TRUE, 27L, character(0), 37L, character(0)))
+verifier_egal("#105, lot V, registre des règles V (ii) : clés exécutées qui lisent comme valeur une colonne refusable = registre (52 clés), mêmes colonnes (à tout arrêté ; à l'extraction seulement), mode unique égal au registre ; état du mécanisme : aucune règle basculée (52 bloquee : G1 33, G2 10, G3 9)",
+              list(ecarts_v105(executes_v105, reg_v105), nrow(reg_v105), table(reg_v105$mode)[["bloquee"]],
+                   as.vector(table(factor(reg_v105$groupe, levels = c("G1", "G2", "G3"))))),
+              list(aucun_v105, 52L, 52L, c(33L, 10L, 9L)))
+# le contrôle échoue sur un site non classé (registre privé d'une clé) et sur un mode différent
+reg_moins <- reg_v105[reg_v105$cle != "D01b|prestations|NA", , drop = FALSE]
+reg_mode <- reg_v105
+reg_mode$mode[reg_mode$cle == "D12|evenements|type_evenement"] <- "kleene"
+reg_vue <- reg_v105
+reg_vue$vue[reg_vue$cle == "D03b|assures|sexe"] <- "assures.date_naissance"
+verifier_egal("#105, lot V, registre des règles V (iii) : clé retirée du registre : non classée ; mode du registre différent de celui de l'appel : écart de mode ; colonne lue pour la vue ajoutée à tort : écart de colonnes",
+              list(ecarts_v105(executes_v105, reg_moins)$non_classees, ecarts_v105(executes_v105, reg_mode)$modes,
+                   ecarts_v105(executes_v105, reg_vue)$colonnes),
+              list("D01b|prestations|NA", "D12|evenements|type_evenement", "D03b|assures|sexe"))
