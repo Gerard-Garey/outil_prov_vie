@@ -7091,7 +7091,10 @@ Trois batteries se lancent depuis la racine du dépôt, dans cet ordre~:
   valeur de la version du package (section~\ref{sec:simulation-jeu}). Pour chaque couple de référence,
   elle vérifie ensuite que deux calculs rendent des objets identiques, que
   le rejeu de la fiche redonne le résultat, et compare le résultat à la
-  référence~; elle contrôle enfin l'arbre des références, la plateforme de
+  référence\fsp; un rejeu refusé (refus d'appel) s'inscrit en échec avec
+  son motif, sans arrêter la batterie, qui poursuit ses vérifications,
+  couples suivants compris
+  (issue~126, avec un témoin)~; elle contrôle enfin l'arbre des références, la plateforme de
   chaque fiche et la couverture des méthodes
   (section~\ref{sec:references}).
 \item La \textbf{batterie de concordance} compare la présente documentation
