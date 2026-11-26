@@ -379,13 +379,11 @@ LISTE_BLANCHE <- c(
     "indice",
   "R/donnees.R | .verdict_d11c | groupe3 %in% groupe3 [ l ]" =
     "indice",
-  "R/donnees.R | .regle_v_garanties | sinistre %in% avec_deces [ ! is.na ( avec_deces ) ]" =
-    "a_instruire : D10 : id_sinistre \"\" (valeur brute de .joindre()) apparie a \"\" ; releve, #164",
   "R/donnees.R | .regle_v_garanties | sub ( \"\\\\..*$\" , \"\" , lit_c ) %in% names ( ctx $ base )" =
     "metadonnee",
-  "R/donnees.R | .garantie_en_vigueur3 | .valeurs_vue ( ctx , \"garanties_souscrites\" , \"code_garantie\" ) %in% code" =
+  "R/donnees.R | .gev_brut | .valeurs_vue ( ctx , \"garanties_souscrites\" , \"code_garantie\" ) %in% code" =
     "code",
-  "R/donnees.R | .garantie_en_vigueur3 | v ( \"code_garantie\" ) %in% code" =
+  "R/donnees.R | .gev_brut | v ( \"code_garantie\" ) %in% code" =
     "code",
   "R/donnees.R | .colonne_partie | x %in% k $ lignes" =
     "indice",
@@ -471,8 +469,64 @@ LISTE_BLANCHE <- c(
     "indice",
   "R/donnees.R | .verdict_d12 | lr %in% o $ echecs" =
     "indice",
+  "R/donnees.R | .arbre3 | c1 %in% z" =
+    "metadonnee",
+  "R/donnees.R | .arbre3 | match ( tc , ordre )" =
+    "metadonnee",
+  "R/donnees.R | .arbre3 | c1 %in% partagees" =
+    "metadonnee",
+  "R/donnees.R | .verdict_d10c | code_g %in% rentes" =
+    "code",
+  "R/donnees.R | .verdict_d10c | .val3 ( a , c_id , code_g [ l ] , n ) %in% codes" =
+    "code",
+  "R/donnees.R | .verdict_d10c | sin_k %in% sin_k [ l ]" =
+    "cle_garantie : sin_k normalise par .cle_manquante(), garde !is.na(sin_k) a la meme ligne (`autres <- which(dans & !is.na(sin_k) & ...)`) : NA et \"\" hors appariement",
+  "R/donnees.R | .verdict_d10d | e %in% sans" =
+    "indice",
+  "R/donnees.R | .versions3 | .val3 ( a , c_id , code_v [ j ] , n ) %in% code" =
+    "code",
+  "R/donnees.R | .versions3 | code_v %in% code" =
+    "code",
+  "R/donnees.R | .verdict_d14_3 | x %in% code" =
+    "code",
+  "R/donnees.R | .verdict_d14_3 | nom_par %in% nom" =
+    "code",
+  "R/donnees.R | .verdict_d14_3 | gs_par %in% gs_id [ w ]" =
+    "cle_garantie : garde cle_renseignee(gs_par) a la meme ligne (`which(nom_par %in% nom & cle_renseignee(gs_par) & ...)`) : NA et \"\" hors appariement",
+  "R/donnees.R | .verdict_d14_3 | li [ k ] %in% vise [[ k ] ]" =
+    "code",
+  "R/donnees.R | .verdict_d14_3 | sin_f %in% id_s [ i ]" =
+    "cle_garantie : sin_f normalise par .cle_manquante(), garde !is.na(sin_f) a la meme ligne : NA et \"\" hors appariement",
+  "R/donnees.R | .verdict_d14_3 | sin_d %in% id_s [ i ]" =
+    "cle_garantie : sin_d normalise par .cle_manquante(), garde !is.na(sin_d) a la meme ligne : NA et \"\" hors appariement",
+  "R/donnees.R | .inconnues_versions3 | c1 %in% names ( ctx $ base [[ t ] ] )" =
+    "metadonnee",
+  "R/donnees.R | .verdict_d10c | code_b %in% rentes" =
+    "code",
+  "R/donnees.R | .verdict_d10c | sinistre %in% avec_deces [ ! is.na ( avec_deces ) ]" =
+    "a_instruire : D10 (c), lecture brute du chemin rapide (regle du mode bloquee, inchangee) : id_sinistre \"\" (valeur brute de .valeurs_vue()) apparie a \"\" ; releve, #164",
+  "R/donnees.R | .verdict_d10c | .cle_manquante ( as.character ( .valeurs ( ctx , t , \"id_contrat\" ) [ ig ] ) ) %in% inc_v $ contrats" =
+    "cle_garantie : operande de gauche normalise par .cle_manquante() (NA pour \"\"), table de droite sans NA (filtre !is.na ou unique(...[!is.na])) : NA et \"\" hors appariement",
+  "R/donnees.R | .verdict_d10c | sin_k %in% sin_inc [ ! is.na ( sin_inc ) ]" =
+    "cle_garantie : operande de gauche normalise par .cle_manquante() (NA pour \"\"), table de droite sans NA (filtre !is.na ou unique(...[!is.na])) : NA et \"\" hors appariement",
+  "R/donnees.R | .verdict_d10d | .cle_manquante ( as.character ( .valeurs ( ctx , t , \"id_contrat\" ) [ igd ] ) ) %in% inc_v $ contrats" =
+    "cle_garantie : operande de gauche normalise par .cle_manquante() (NA pour \"\"), table de droite sans NA (filtre !is.na ou unique(...[!is.na])) : NA et \"\" hors appariement",
+  "R/donnees.R | .verdict_d10d | c1 %in% names ( ctx $ base [[ tc ] ] )" =
+    "metadonnee",
+  "R/donnees.R | .verdict_d10d | .cle_manquante ( as.character ( .valeurs ( ctx , tc , \"id_contrat\" ) ) ) %in% inc_v $ contrats" =
+    "cle_garantie : operande de gauche normalise par .cle_manquante() (NA pour \"\"), table de droite sans NA (filtre !is.na ou unique(...[!is.na])) : NA et \"\" hors appariement",
+  "R/donnees.R | .verdict_d10d | sin_e %in% sin_inc [ ! is.na ( sin_inc ) ]" =
+    "cle_garantie : operande de gauche normalise par .cle_manquante() (NA pour \"\"), table de droite sans NA (filtre !is.na ou unique(...[!is.na])) : NA et \"\" hors appariement",
+  "R/donnees.R | .verdict_d10d | sin_e %in% sin_ret [ ! is.na ( sin_ret ) ]" =
+    "cle_garantie : operande de gauche normalise par .cle_manquante() (NA pour \"\"), table de droite sans NA (filtre !is.na ou unique(...[!is.na])) : NA et \"\" hors appariement",
+  "R/donnees.R | .verdict_d10d | assure_e %in% assures_inc [ ! is.na ( assures_inc ) ]" =
+    "cle_garantie : operande de gauche normalise par .cle_manquante() (NA pour \"\"), table de droite sans NA (filtre !is.na ou unique(...[!is.na])) : NA et \"\" hors appariement",
   "R/donnees.R | .verdict_d14 | lien [ k ] %in% vise [[ k ] ]" =
     "code",
+  "R/donnees.R | .verdict_d14_k | .cle_manquante ( as.character ( .valeurs ( ctx , gs , \"id_contrat\" ) [ ig ] ) ) %in% inc_v $ contrats" =
+    "cle_garantie : operande de gauche normalise par .cle_manquante() (NA pour \"\"), table de droite sans NA (filtre !is.na ou unique(...[!is.na])) : NA et \"\" hors appariement",
+  "R/donnees.R | .verdict_d14_k | id_s %in% sin_inc [ ! is.na ( sin_inc ) ]" =
+    "cle_garantie : operande de gauche normalise par .cle_manquante() (NA pour \"\"), table de droite sans NA (filtre !is.na ou unique(...[!is.na])) : NA et \"\" hors appariement",
   "R/donnees.R | .visibilite_a | liens $ table %in% tables" =
     "metadonnee",
   "R/donnees.R | .visibilite_a | liens $ table_cible %in% tables" =
