@@ -321,10 +321,24 @@ LISTE_BLANCHE <- c(
     "metadonnee",
   "R/donnees.R | .cause_nd | liens $ table_cible %in% ctx $ tables" =
     "metadonnee",
-  "R/donnees.R | .regle_v | match ( dossier , rownames ( somme ) )" =
+  "R/donnees.R | .verdict_vue | r0 [ c1 ] %in% r0 [ i ]" =
+    "code",
+  "R/donnees.R | .somme_parts3 | match ( dossier , rownames ( somme ) )" =
     "a_instruire : somme_parts : beneficiaires.id_dossier \"\" regroupe par rowsum() (ok <- !is.na(dossier) seul) ; releve, #164",
-  "R/donnees.R | .regle_v | dossier %in% brut [ nd ]" =
+  "R/donnees.R | .somme_parts3 | dossier %in% brut [ nd ]" =
     "a_instruire : somme_parts : id_dossier \"\" des beneficiaires non determines apparie a \"\" ; releve, #164",
+  "R/donnees.R | .somme_parts3 | dossier %in% k" =
+    "a_instruire : somme_parts, parts refusees (#105, G1) : meme appariement des dossiers que la regle v1.5.4 ; releve, #164",
+  "R/donnees.R | .somme_parts3 | k %in% dossier [ refusees ]" =
+    "a_instruire : somme_parts, parts refusees (#105, G1) : idem ; releve, #164",
+  "R/donnees.R | .somme_parts3 | brut [ nd ] %in% k" =
+    "a_instruire : somme_parts, parts refusees (#105, G1) : idem, beneficiaires non determines ; releve, #164",
+  "R/donnees.R | .somme_parts3 | dossier [ refusees ] %in% k" =
+    "a_instruire : somme_parts, parts refusees (#105, G1) : idem ; releve, #164",
+  "R/donnees.R | .somme_parts3 | brut [ nd_inconnu ] %in% k" =
+    "a_instruire : somme_parts, parts refusees (#105, G1) : idem, beneficiaires non determines ; releve, #164",
+  "R/donnees.R | .somme_parts3 | dossier %in% dossiers_inconnus" =
+    "a_instruire : somme_parts, parts refusees (#105, G1) : idem ; releve, #164",
   "R/donnees.R | .regle_v_parente_posterieure | liens $ table %in% ctx $ tables" =
     "metadonnee",
   "R/donnees.R | .regle_v_parente_posterieure | liens $ table_cible %in% ctx $ tables" =
@@ -333,8 +347,12 @@ LISTE_BLANCHE <- c(
     "indice",
   "R/donnees.R | .regle_v_parente_posterieure | fx %in% couvertes" =
     "indice",
-  "R/donnees.R | .regle_v_manquants | match ( vv ( \"evenements\" , \"type_evenement\" ) , te $ type_evenement )" =
+  "R/donnees.R | .regle_v_manquants | match ( x $ type , te $ type_evenement )" =
     "code",
+  "R/donnees.R | .regle_v_ordre_dates | y %in% p $ colonnes" =
+    "metadonnee",
+  "R/donnees.R | .copies3 | match ( seq_len ( n ) , order ( as.numeric ( .valeurs ( ctx , table , date ) ) , cles , method = \"radix\" , na.last = TRUE ) )" =
+    "indice",
   "R/donnees.R | .regle_v_doublons | match ( groupe , groupe )" =
     "indice",
   "R/donnees.R | .regle_v_doublons | match ( seq_along ( retenu ) , o2 )" =
@@ -395,7 +413,7 @@ LISTE_BLANCHE <- c(
     "indice",
   "R/donnees.R | .regle_v_qualites | code %in% codes" =
     "code",
-  "R/donnees.R | .regle_v_qualites | paste ( code , qualite ) %in% compatibles" =
+  "R/donnees.R | .regle_v_qualites | paste ( code , x $ qualite ) %in% compatibles" =
     "code",
   "R/donnees.R | .regle_v_couverture | sub ( \"\\\\..*$\" , \"\" , lit_c ) %in% names ( ctx $ base )" =
     "metadonnee",
