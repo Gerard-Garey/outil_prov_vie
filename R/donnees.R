@@ -1883,6 +1883,84 @@ lire_declarations <- function(declarations, dico) {
   list(tc = paste(table, p$date, sep = "."), valeurs = connue & !nd, inconnu = nd, index = NULL, domaine = c(TRUE, FALSE))
 }
 
+# Disjonction monotone de conjonctions, à trois valeurs et pertinence exacte (#105, lot V, G2a) :
+# « il existe une ligne qui satisfait » lorsque les lignes candidates partagent des cellules
+# inconnues (code de la garantie d'un dossier lu par toutes ses prestations, par exemple). Chaque
+# terme (ligne de la règle `ligne`, `faux` : un littéral connu faux, `vars` : identifiants
+# « table.colonne\rligne » de ses littéraux inconnus, chacun pouvant être vrai ou faux) ; une
+# formule monotone s'évalue exactement en Kleene (ses extrêmes sont atteints par tout vrai et tout
+# faux) ; dans sa forme minimale (termes absorbés retirés), chaque variable est pertinente.
+# Rend, par ligne de la règle (`n` lignes), la valeur (NA : inconnue) et les identifiants
+# pertinents d'une ligne inconnue.
+.ou3 <- function(n, ligne, faux, vars) {
+  v <- rep(FALSE, n)
+  pert <- vector("list", n)
+  garde <- which(!faux)
+  vrai <- unique(ligne[garde[lengths(vars[garde]) == 0L]])
+  v[vrai] <- TRUE
+  garde <- garde[!(ligne[garde] %in% vrai)]
+  for (z in split(garde, ligne[garde])) {
+    l <- ligne[z[1L]]
+    t <- unique(lapply(vars[z], function(x) sort(unique(x))))
+    minimal <- vapply(seq_along(t), function(a) !any(vapply(seq_along(t)[-a], function(b) all(t[[b]] %in% t[[a]]) &&
+                                                               length(t[[b]]) < length(t[[a]]), NA)), NA)
+    v[l] <- NA
+    pert[[l]] <- sort(unique(unlist(t[minimal])))
+  }
+  list(v = v, pert = pert)
+}
+# Entrée .verdict3() d'une disjonction .ou3() (nom `nom`), puis, sur le verdict, éclatement de
+# ses identifiants pertinents par colonne (index_pertinent, clé « table.colonne » ou « table »)
+.entree_ou3 <- function(nom, ou) list(tc = nom, valeurs = ou$v %in% TRUE, inconnu = is.na(ou$v), index = NULL,
+                                       domaine = c(TRUE, FALSE))
+.eclater3 <- function(r, noms, ou, lues = character(0)) {
+  ip <- attr(r, "index_pertinent")
+  for (k in seq_along(noms)) {
+    p <- ip[[noms[k]]]
+    ip[[noms[k]]] <- NULL
+    if (is.null(p)) next
+    for (l in which(lengths(p) > 0L)) {
+      for (id in ou[[k]]$pert[[l]]) {
+        m <- strsplit(id, "\r", fixed = TRUE)[[1L]]
+        if (is.null(ip[[m[1L]]])) ip[[m[1L]]] <- vector("list", length(r))
+        ip[[m[1L]]][l] <- list(sort(unique(c(ip[[m[1L]]][[l]], as.integer(m[2L])))))
+      }
+    }
+  }
+  attr(r, "index_pertinent") <- ip
+  attr(r, "lues") <- unique(c(setdiff(attr(r, "lues"), noms), lues))
+  r
+}
+
+# Pertinence exacte d'une cellule conditionnée (règle de tout noyau conditionné ; #105, lot V,
+# G2a ; R-G2a-1 d'`actuary`, à titre provisoire) : la cellule c, lue par plusieurs composantes
+# (atomes, références), est pertinente s'il existe une affectation des autres cellules où faire
+# varier c seule change l'issue. Propagation de paires : pour deux représentants c1 et c2 de c,
+# `couples(c1, c2)` rend, par composante, la matrice à deux colonnes des couples (issue sous c1,
+# issue sous c2) atteints sur les mêmes valeurs de ses cellules privées (représentants : réunion
+# des points de rupture relatifs à c1 et à c2 ; une composante qui ne lit pas c n'a que des
+# couples égaux) ; les couples se combinent composante par composante par `combiner` (associative,
+# vectorielle en son second argument ; `neutre` : issue neutre), ensembles produits. c est
+# pertinente si une paire donne un couple atteignable de deux composantes différentes. Le cas
+# « verdict conditionnel qui varie » en est un cas particulier ; le cas où tous les verdicts
+# conditionnels sont inconnus (c XOR d, d privée) y est compris.
+.pertinence_paires3 <- function(representants, couples, combiner, neutre) {
+  n <- length(representants)
+  if (n < 2L) return(FALSE)
+  for (a in seq_len(n - 1L)) {
+    for (b in (a + 1L):n) {
+      ens <- matrix(c(neutre, neutre), nrow = 1L)
+      for (P in couples(representants[[a]], representants[[b]])) {
+        ens <- unique(do.call(rbind, lapply(seq_len(nrow(ens)), function(i) {
+          cbind(combiner(ens[i, 1L], P[, 1L]), combiner(ens[i, 2L], P[, 2L]))
+        })))
+      }
+      if (any(ens[, 1L] != ens[, 2L])) return(TRUE)
+    }
+  }
+  FALSE
+}
+
 # Motif existentiel de Kleene (forme « jointure ou appartenance », spécification, § 2.2, B.4),
 # noyau unique des règles B (.existe3(), site 39 de .orphelines()) et V (.existe_vue3()) :
 # pour chaque valeur de `valeurs_cle`, « il existe une ligne de clé `cle` égale qui satisfait »
@@ -4154,9 +4232,11 @@ parties_ligne <- function() lapply(.PARTIES_LIGNE, function(p) list(table = p$ta
   # mode Kleene : colonnes lues comme valeur (colonne contrôlée, `lit`, clé ; aux deux arrêtés,
   # sans les colonnes de vue) et refusées pour leur valeur sur une ligne au moins
   # (.lignes_refusees() : refus de valeur et cellules manquantes de D03i), entrées obligées du
-  # verdict (garde). Limite connue : la garde est par colonne, non par lecture ; une colonne
-  # entrée du verdict et lue aussi brute dans `f()` n'est pas vue : la conversion d'une règle
-  # (G1 à G3) interdit toute lecture brute d'une colonne refusable dans `f()` en mode Kleene.
+  # verdict (garde). Limites connues : la garde est par colonne, non par lecture ; une colonne
+  # entrée du verdict et lue aussi brute dans `f()` n'est pas vue, ni une lecture brute passée
+  # par .connue3(), ni les lectures internes d'un noyau dont l'attribut `lues` est statique
+  # (.age_assure3(), .verdict_d11c(), .eclater3()) : la conversion d'une règle (G1 à G3)
+  # interdit toute lecture brute d'une colonne refusable dans `f()` en mode Kleene.
   refusees_lues <- character(0)
   if (kleene) {
     lus <- unique(c(if (!is.na(colonne)) paste(table, colonne, sep = "."), lit, cle))
@@ -5191,57 +5271,84 @@ table_refusee_vue <- function(vue, table) {
               function(x) x$type %in% c("sortie", "cloture_dossier") & is.na(x$motif) & !x$paye)
   }, mode = "kleene")
   # D06 : clôture sans justificatif ; clôture `regle` sans prestation du dossier, ou
-  # `depot_cdc` sans prestation `capital` (prestations visibles à l'arrêté)
+  # `depot_cdc` sans prestation `capital` (prestations visibles à l'arrêté). Règle V en mode
+  # Kleene (#105, lot V, G2a) : type, motif et justificatif de l'événement à trois valeurs ;
+  # « il existe une prestation du dossier » et « il existe une prestation capital du dossier »
+  # par .ou3() : prestation retenue (vraie), non déterminée (présente ou non, clé prestations),
+  # type refusé (capital ou non, clé prestations.type_prestation)
   .regle_vue(ctx, "D06", "evenements", "justificatif",
              c("evenements.type_evenement", "evenements.motif", "evenements.id_dossier", "prestations.id_dossier",
                "prestations.type_prestation"), "H;S", "exacte", function() {
-    sans_justificatif <- is.na(vv("evenements", "justificatif")) &
-      ((type() %in% "sortie" & motif() %in% c("reprise_travail", "deces")) |
-         (type() %in% "fin_service" & motif() %in% "deces_beneficiaire"))
     dossier <- vv("evenements", "id_dossier")
-    payes <- vv("prestations", "id_dossier")
-    capital <- payes[vv("prestations", "type_prestation") %in% "capital"]
-    cloture <- type() %in% "cloture_dossier" &
-      ((motif() %in% "regle" & !(dossier %in% payes[!is.na(payes)])) |
-         (motif() %in% "depot_cdc" & !(dossier %in% capital[!is.na(capital)])))
-    r <- sans_justificatif | cloture
-    # prestations non déterminées (spécification v1.5, § 2.2 (d)) : « sans prestation du
-    # dossier » vrai si aucune prestation visible ni non déterminée, faux si une visible,
-    # inconnu sinon ; verdict (a) OU (b)
-    if (!any(.nd_vue(ctx, "prestations"))) return(r)
+    n <- length(dossier)
+    retenu <- ctx$retenu$prestations
+    nd <- .nd_vue(ctx, "prestations")
     brut <- .valeurs(ctx, "prestations", "id_dossier")
-    tout <- .existe_vue3(ctx, "prestations", dossier, brut, rep(TRUE, length(brut)))
-    cap <- .existe_vue3(ctx, "prestations", dossier, brut, .valeurs(ctx, "prestations", "type_prestation") %in% "capital")
-    clot <- type() %in% "cloture_dossier"
-    .verdict3(list(sj = .connue3("sj", sans_justificatif), regle = .connue3("regle", clot & motif() %in% "regle"),
-                   cdc = .connue3("cdc", clot & motif() %in% "depot_cdc"), tout = tout, cap = cap),
-              function(x) x$sj | (x$regle & !x$tout) | (x$cdc & !x$cap))
-  }, vue = ctx$lit_vue$prestations)
+    type_p <- .valeurs(ctx, "prestations", "type_prestation")
+    type_u <- .inconnu(ctx, "prestations", "type_prestation")
+    # prestations candidates de chaque événement, comme la règle bloquée : sans prestation non
+    # déterminée, retenues de même clé (une clé "" s'apparie à "", #164) ; avec, retenues et non
+    # déterminées par la règle de la clé manquante (.existe_kleene(), #123, #158)
+    avec_nd <- any(nd)
+    cle_p <- if (avec_nd) .cle_manquante(as.character(brut)) else as.character(brut)
+    cle_ev <- if (avec_nd) .cle_manquante(as.character(dossier)) else as.character(dossier)
+    # paires (événement, prestation candidate) ; la clé "" garde son appariement sans prestation
+    # non déterminée (valeur témoin hors de toute clé)
+    if (!avec_nd) {
+      cle_p[cle_p %in% ""] <- "\001"
+      cle_ev[cle_ev %in% ""] <- "\001"
+    }
+    cle_p[!(retenu | nd)] <- NA
+    pr <- .paires(cle_ev, cle_p)
+    k <- pr$j
+    v_nd <- ifelse(nd[k], paste("prestations", k, sep = "\r"), NA_character_)
+    v_ty <- ifelse(type_u[k], paste("prestations.type_prestation", k, sep = "\r"), NA_character_)
+    sans_na <- function(x) x[!is.na(x)]
+    tout <- .ou3(n, pr$i, rep(FALSE, length(k)), lapply(seq_along(k), function(z) sans_na(v_nd[z])))
+    cap <- .ou3(n, pr$i, !type_u[k] & !(type_p[k] %in% "capital"), lapply(seq_along(k), function(z) sans_na(c(v_nd[z], v_ty[z]))))
+    r <- .verdict3(list(type = .entree3(ctx, "evenements.type_evenement"), motif = .entree3(ctx, "evenements.motif"),
+                        manque = .manquant3(ctx, "evenements.justificatif"), tout = .entree_ou3("tout", tout),
+                        cap = .entree_ou3("cap", cap)), function(x) {
+      sj <- x$manque & ((x$type %in% "sortie" & x$motif %in% c("reprise_travail", "deces")) |
+                          (x$type %in% "fin_service" & x$motif %in% "deces_beneficiaire"))
+      clot <- x$type %in% "cloture_dossier"
+      sj | (clot & x$motif %in% "regle" & !x$tout) | (clot & x$motif %in% "depot_cdc" & !x$cap)
+    })
+    .eclater3(r, c("tout", "cap"), list(tout, cap), c("prestations.id_dossier", "prestations.type_prestation"))
+  }, vue = ctx$lit_vue$prestations, mode = "kleene")
   # D13 : instruction absente (à l'arrêté) d'un sinistre décès dont le dossier `deces` a une
-  # prestation `capital` visible
+  # prestation `capital` visible. Règle V en mode Kleene (#105, lot V, G2a) : nature et
+  # instruction (partie de ligne, .partie3()) à trois valeurs ; « il existe une prestation capital
+  # d'un dossier deces du sinistre » par .ou3() : type de la prestation (clé
+  # prestations.type_prestation), code de la garantie du dossier, partagé par ses prestations (clé
+  # garanties_souscrites.code_garantie), prestation non déterminée (clé prestations)
   .regle_vue(ctx, "D13", "sinistres", "date_instruction",
              c("sinistres.nature_sinistre", "sinistres.id_sinistre", "dossiers.id_dossier", "dossiers.id_sinistre",
                "dossiers.id_garantie_souscrite", "garanties_souscrites.id_garantie_souscrite",
                "garanties_souscrites.code_garantie", "prestations.id_dossier", "prestations.type_prestation"),
              "H;S", "exacte", function() {
-    p_dossier <- vv("prestations", "id_dossier")[vv("prestations", "type_prestation") %in% "capital"]
-    gs <- .joindre(ctx, "dossiers", "id_dossier", "id_garantie_souscrite", p_dossier)
-    code <- .joindre(ctx, "garanties_souscrites", "id_garantie_souscrite", "code_garantie", gs)
-    sinistres <- .joindre(ctx, "dossiers", "id_dossier", "id_sinistre", p_dossier[code %in% "deces"])
-    sans <- vv("sinistres", "nature_sinistre") %in% "deces" & is.na(vv("sinistres", "date_instruction"))
-    r <- sans & !is.na(apparier_cles(.valeurs(ctx, "sinistres", "id_sinistre"), sinistres))
-    # prestations non déterminées (spécification v1.5, § 2.2 (d)) : vrai si une prestation
-    # `capital` d'un dossier `deces` du sinistre est visible ; faux si aucune n'est visible ni
-    # non déterminée ; inconnu sinon
-    if (!any(.nd_vue(ctx, "prestations"))) return(r)
+    n <- NROW(ctx$base$sinistres)
+    retenu <- ctx$retenu$prestations
+    nd <- .nd_vue(ctx, "prestations")
     brut <- .valeurs(ctx, "prestations", "id_dossier")
-    code_brut <- .joindre(ctx, "garanties_souscrites", "id_garantie_souscrite", "code_garantie",
-                          .joindre(ctx, "dossiers", "id_dossier", "id_garantie_souscrite", brut))
-    paye <- .existe_vue3(ctx, "prestations", .valeurs(ctx, "sinistres", "id_sinistre"),
-                         .joindre(ctx, "dossiers", "id_dossier", "id_sinistre", brut),
-                         .valeurs(ctx, "prestations", "type_prestation") %in% "capital" & code_brut %in% "deces")
-    .verdict3(list(sans = .connue3("sans", sans), paye = paye), function(x) x$sans & x$paye)
-  }, vue = ctx$lit_vue$prestations)
+    type_p <- .valeurs(ctx, "prestations", "type_prestation")
+    type_u <- .inconnu(ctx, "prestations", "type_prestation")
+    gs <- .joindre(ctx, "dossiers", "id_dossier", "id_garantie_souscrite", brut)
+    ig <- .index_jointure(ctx, "garanties_souscrites", "id_garantie_souscrite", gs)
+    code <- .valeurs(ctx, "garanties_souscrites", "code_garantie")[ig]
+    code_u <- !is.na(ig) & .inconnu(ctx, "garanties_souscrites", "code_garantie")[ig]
+    sin <- apparier_cles(.joindre(ctx, "dossiers", "id_dossier", "id_sinistre", brut), .valeurs(ctx, "sinistres", "id_sinistre"))
+    k <- which((retenu | nd) & !is.na(sin))
+    ou <- .ou3(n, sin[k], (!type_u[k] & !(type_p[k] %in% "capital")) | (!code_u[k] & !(code[k] %in% "deces")),
+               lapply(k, function(z) c(if (nd[z]) paste("prestations", z, sep = "\r"),
+                                       if (type_u[z]) paste("prestations.type_prestation", z, sep = "\r"),
+                                       if (code_u[z]) paste("garanties_souscrites.code_garantie", ig[z], sep = "\r"))))
+    r <- .verdict3(list(nature = .entree3(ctx, "sinistres.nature_sinistre"), instruction = .date3(ctx, "sinistres.date_instruction"),
+                        connue = .partie3(ctx, "sinistres"), paye = .entree_ou3("paye", ou)), function(x) {
+      x$nature %in% "deces" & (!x$connue | is.na(x$instruction)) & x$paye
+    })
+    .eclater3(r, "paye", list(ou), c("prestations.id_dossier", "prestations.type_prestation", "garanties_souscrites.code_garantie"))
+  }, vue = ctx$lit_vue$prestations, mode = "kleene")
   invisible(NULL)
 }
 
@@ -5259,12 +5366,24 @@ table_refusee_vue <- function(vue, table) {
   # garanties_souscrites en double est un refus D01a (R) de portée table, qui bloque la règle
   # avant la lecture (C83-5) ; .jointe3() y rend alors les mêmes valeurs que .joindre(), d'où
   # aucun test qui les distingue. Cause de la ligne écartée dans le chemin V : #169.
+  # Règle V en mode Kleene (#105, lot V, G2a) : survenance, effet et fin à trois valeurs
+  # (.date3()) ; « hors vigueur » est monotone en l'effet et en la fin (bornes de leur plage, et
+  # l'absence de la fin), à deux côtés en la survenance : domaine propre à la ligne, points de
+  # rupture (effet et fin, ou les bornes de leur plage, la veille et le lendemain)
   hors_vigueur <- function() {
     gs <- vv("dossiers", "id_garantie_souscrite")
-    survenance <- as.numeric(.joindre(ctx, "sinistres", "id_sinistre", "date_survenance", vv("dossiers", "id_sinistre")))
-    .verdict3(list(survenance = .connue3("sinistres.date_survenance", survenance),
-                   effet = .jointe3(ctx, "garanties_souscrites.date_effet", "id_garantie_souscrite", gs),
-                   fin = .jointe3(ctx, "garanties_souscrites.date_fin", "id_garantie_souscrite", gs)), function(x) {
+    ix_g <- .index_jointure(ctx, "garanties_souscrites", "id_garantie_souscrite", gs)
+    ix_s <- .index_jointure(ctx, "sinistres", "id_sinistre", vv("dossiers", "id_sinistre"))
+    effet0 <- .date3(ctx, "garanties_souscrites.date_effet", index = ix_g)
+    fin0 <- .date3(ctx, "garanties_souscrites.date_fin", index = ix_g)
+    voisins <- function(x) c(x - 1, x, x + 1)
+    plage_e <- .plage_date3(ctx, "garanties_souscrites", "date_effet")
+    plage_f <- .plage_date3(ctx, "garanties_souscrites", "date_fin")
+    pts <- lapply(seq_along(gs), function(l) {
+      c(voisins(if (effet0$inconnu[l]) plage_e else effet0$valeurs[l]), voisins(if (fin0$inconnu[l]) plage_f else fin0$valeurs[l]))
+    })
+    .verdict3(list(survenance = .date3(ctx, "sinistres.date_survenance", index = ix_s, points_ligne = pts), effet = effet0,
+                   fin = fin0), function(x) {
       s1 <- as.numeric(x$survenance)
       e <- as.numeric(x$effet)
       f <- as.numeric(x$fin)
@@ -5273,7 +5392,8 @@ table_refusee_vue <- function(vue, table) {
   }
   lit_b <- c(lit_gs, "garanties_souscrites.date_effet", "garanties_souscrites.date_fin", "dossiers.id_sinistre",
              "sinistres.id_sinistre", "sinistres.date_survenance")
-  for (t in c("S", "X")) .regle_vue(ctx, "D10b", "dossiers", "id_garantie_souscrite", lit_b, t, "exacte", hors_vigueur)
+  for (t in c("S", "X")) .regle_vue(ctx, "D10b", "dossiers", "id_garantie_souscrite", lit_b, t, "exacte", hors_vigueur,
+                                    mode = "kleene")
   # D10 (c) : dossier de rente ou de double effet sans dossier `deces` du même sinistre (dans
   # la vue) alors que la garantie décès est souscrite : garantie `deces` du même contrat et
   # du même collège que la garantie du dossier, dans une version en vigueur à la survenance
@@ -5570,48 +5690,18 @@ table_refusee_vue <- function(vue, table) {
 .regle_v_ages <- function(ctx) {
   conv <- ctx$conventions$age
   seuils <- ctx$declarations$seuils
-  v <- function(t, c1) .valeurs(ctx, t, c1)
-  vv <- function(t, c1) .valeurs_vue(ctx, t, c1)
   present <- function(t) !is.null(ctx$base[[t]])
-  # lignes non déterminées de la vue, valeurs brutes (NA ailleurs) : références possibles d'un
-  # assuré (spécification v1.5, § 2.2 (d))
-  vnd <- function(t, c1) { x <- v(t, c1); x[!.nd_vue(ctx, t)] <- NA; x }
-  # personne (ligne de la table de l'emploi) et date de référence, sur les lignes de la vue
-  # (`val` : .valeurs_vue(), ou `vnd` sur les lignes non déterminées) ; `source` : table et ligne
-  # de chaque référence (assures_sinistre, assures_affiliation)
-  assure_de <- function(t, val = vv) {
-    apparier_cles(val(t, "id_assure"), v("assures", "id_assure"))
-  }
-  propre <- function(t) function() list(p = seq_len(nrow(ctx$base[[t]])), date = vv(t, "date_saisie"))
-  n_de <- function(t) NROW(ctx$base[[t]])
+  # colonnes lues par emploi (les verdicts : .age_assure3(), .age_invraisemblable3())
   emplois <- list(
     assures_sinistre = list(lit = c("assures.id_assure", "sinistres.id_sinistre", "sinistres.id_assure",
-                                    "sinistres.date_survenance"), vue = ctx$lit_vue$sinistres,
-                            ref = function(val = vv) list(p = assure_de("sinistres", val), date = val("sinistres", "date_survenance"),
-                                                          table = rep("sinistres", n_de("sinistres")),
-                                                          ligne = seq_len(n_de("sinistres")))),
+                                    "sinistres.date_survenance"), vue = ctx$lit_vue$sinistres),
     assures_affiliation = list(lit = c("assures.id_assure", "affiliations.id_assure", "affiliations.date_debut",
                                        "contrats.id_assure", "contrats.date_effet", "contrats.nature_contrat"),
-                               vue = c(ctx$lit_vue$affiliations, ctx$lit_vue$contrats),
-                               ref = function(val = vv) {
-                                 ind <- val("contrats", "nature_contrat") %in% "individuel"
-                                 list(p = c(assure_de("affiliations", val), assure_de("contrats", val)[ind]),
-                                      date = c(val("affiliations", "date_debut"), val("contrats", "date_effet")[ind]),
-                                      table = c(rep("affiliations", n_de("affiliations")), rep("contrats", sum(ind))),
-                                      ligne = c(seq_len(n_de("affiliations")), which(ind)))
-                               }),
+                               vue = c(ctx$lit_vue$affiliations, ctx$lit_vue$contrats)),
     famille = list(lit = c("famille.situation", "famille.id_sinistre", "famille.date_saisie", "sinistres.id_sinistre",
-                           "sinistres.date_survenance"),
-                   ref = function() {
-                     sinistre <- vv("famille", "id_sinistre")
-                     survenance <- .joindre(ctx, "sinistres", "id_sinistre", "date_survenance", sinistre)
-                     date <- ifelse(is.na(sinistre), as.numeric(vv("famille", "date_saisie")), as.numeric(survenance))
-                     p <- seq_along(sinistre)
-                     p[vv("famille", "situation") %in% "a_naitre"] <- NA_integer_
-                     list(p = p, date = structure(date, class = "Date"))
-                   }),
-    designations = list(lit = "designations.date_saisie", ref = propre("designations")),
-    ayants_droit_sante = list(lit = "ayants_droit_sante.date_saisie", ref = propre("ayants_droit_sante")))
+                           "sinistres.date_survenance")),
+    designations = list(lit = "designations.date_saisie"),
+    ayants_droit_sante = list(lit = "ayants_droit_sante.date_saisie"))
   sans_convention <- FALSE
   for (emploi in names(emplois)) {
     t <- .EMPLOIS_D02C[[emploi]]
@@ -5631,37 +5721,12 @@ table_refusee_vue <- function(vue, table) {
     e <- emplois[[emploi]]
     mini <- seuils[[SEUILS_AGE_D02C[1L]]][[emploi]]
     maxi <- seuils[[SEUILS_AGE_D02C[2L]]][[emploi]]
-    invraisemblable <- function() {
-      r <- e$ref()
-      naissance <- vv(t, "date_naissance")[r$p]
-      age <- calculer_age(naissance, r$date, conv)
-      if (any(!is.na(naissance) & !is.na(r$date) & is.na(age))) {
-        .ajouter_non_execute(ctx, "D02c", t, NA_character_, .CAUSE_AGE_NON_DEFINI)
-      }
-      res <- seq_len(nrow(ctx$base[[t]])) %in% r$p[!is.na(age) & (age < mini | age > maxi)]
-      # assuré : vrai si une référence visible donne un âge hors bornes ; faux si aucune référence
-      # visible ni non déterminée n'en donne ; inconnu sinon (spécification v1.5, § 2.2 (d))
-      if (is.null(r$table)) return(res)
-      rn <- e$ref(vnd)
-      age_n <- calculer_age(vv(t, "date_naissance")[rn$p], rn$date, conv)
-      hors <- which(!is.na(rn$p) & !is.na(age_n) & (age_n < mini | age_n > maxi) & !res[rn$p])
-      if (length(hors) == 0L) return(res)
-      index <- list()
-      for (u in unique(rn$table[hors])) {
-        k <- hors[rn$table[hors] == u]
-        index[[u]] <- vector("list", length(res))
-        for (i in unique(rn$p[k])) index[[u]][[i]] <- rn$ligne[k[rn$p[k] == i]]
-      }
-      res[rn$p[hors]] <- NA
-      attr(res, "index") <- index
-      res
-    }
-    # règle V en mode Kleene (#105, lot V, G1) : famille, designations, ayants_droit_sante ;
-    # assures reste bloquée (G2)
+    # règle V en mode Kleene (#105, lot V, G1 ; assures : G2a)
     if (t == "assures") {
+      fa <- .age_assure3(ctx, emploi, conv, mini, maxi)
       for (traitement in c("S", "X")) {
-        .regle_vue(ctx, "D02c", t, "date_naissance", e$lit, traitement, "exacte", invraisemblable, colonne_ne = NA_character_,
-                   vue = e$vue)
+        .regle_vue(ctx, "D02c", t, "date_naissance", e$lit, traitement, "exacte", fa, colonne_ne = NA_character_,
+                   vue = e$vue, mode = "kleene")
       }
     } else {
       f3 <- .age_invraisemblable3(ctx, t, conv, mini, maxi)
@@ -5673,6 +5738,182 @@ table_refusee_vue <- function(vue, table) {
   }
   if (sans_convention) .requerir(ctx, "conventions", "D02c", "age", paste(CONVENTIONS_AGE, collapse = ";"))
   invisible(NULL)
+}
+
+# D02c à trois valeurs pour un assuré (#105, lot V, G2a ; spécification `donnees`, erratum
+# `1.9.7`, E-1 ; D-G2-2, exact par conditionnement, à titre provisoire) : emploi assures_sinistre
+# (références : survenance de chaque sinistre de l'assuré) ou assures_affiliation (date de début
+# de chaque affiliation, date d'effet de chaque contrat individuel de l'assuré). Références
+# visibles (retenues) et non déterminées (présentes ou non, clé de leur table ; leur âge non
+# défini n'est pas lu, comme la règle bloquée) ; contrat de nature refusée : référence possible
+# (clé contrats.nature_contrat). Issue d'une référence : vrai (âge hors de [mini, maxi]), faux,
+# indéfini (âge non défini) ; d'un assuré : vrai si une référence l'est, sinon indéfini si une
+# l'est, sinon faux. La naissance, lue par toutes les références, est conditionnée : chacune de
+# ses valeurs représentatives (bornes de la plage et points de rupture de chaque référence
+# possible, .points_age3()) ; les références, indépendantes sachant la naissance, se combinent
+# exactement (ensembles d'issues). Verdict : vrai si toute issue est vraie, faux si toutes
+# fausses ou toutes indéfinies (attribut indefini_certain), inconnu sinon. Pertinence : la
+# naissance par propagation de paires (.pertinence_paires3()) ; une cellule d'une référence si, pour une
+# valeur de la naissance, elle change l'issue de sa référence d'une façon que les autres
+# références possibles laissent voir. Sous-cas âge non défini : une référence visible certaine
+# d'issue indéfinie quelle que soit la naissance (comme la règle bloquée sur valeurs connues).
+# Assurés sans valeur inconnue ni référence non déterminée : calcul direct, identique à la règle
+# bloquée.
+.age_assure3 <- function(ctx, emploi, conv, mini, maxi) function() {
+  v <- function(t, c1) .valeurs(ctx, t, c1)
+  n <- NROW(ctx$base$assures)
+  ordre_issue <- c("faux", "indefini", "vrai")
+  issue <- function(nai, ref) {
+    a <- calculer_age(structure(as.numeric(nai), class = "Date"), structure(as.numeric(ref), class = "Date"), conv)
+    ifelse(!is.na(nai) & !is.na(ref) & is.na(a), "indefini", ifelse(!is.na(a) & (a < mini | a > maxi), "vrai", "faux"))
+  }
+  # références : table, ligne, assuré, date, date inconnue, présence (TRUE certaine, NA possible)
+  refs <- list()
+  ajouter <- function(t, col, presence_nature = NULL) {
+    if (is.null(ctx$base[[t]])) return(invisible(NULL))
+    m <- nrow(ctx$base[[t]])
+    retenu <- ctx$retenu[[t]]
+    nd <- .nd_vue(ctx, t)
+    p <- apparier_cles(v(t, "id_assure"), v("assures", "id_assure"))
+    presence <- rep(TRUE, m)
+    cle_presence <- rep(NA_character_, m)
+    if (!is.null(presence_nature)) {
+      nat_u <- .inconnu(ctx, t, "nature_contrat")
+      ind <- v(t, "nature_contrat") %in% "individuel"
+      presence[!ind] <- FALSE
+      presence[nat_u] <- NA
+      cle_presence[nat_u] <- paste(t, "nature_contrat", sep = ".")
+    }
+    garde <- (retenu | nd) & !is.na(p) & !(presence %in% FALSE)
+    if (!any(garde)) return(invisible(NULL))
+    refs[[length(refs) + 1L]] <<- data.frame(table = t, colonne = col, ligne = which(garde), p = p[garde],
+                                             date = as.numeric(v(t, col))[garde], date_u = .inconnu(ctx, t, col)[garde],
+                                             nd = nd[garde] & !retenu[garde], presence_u = is.na(presence[garde]),
+                                             cle_presence = cle_presence[garde], stringsAsFactors = FALSE)
+  }
+  if (emploi == "assures_sinistre") ajouter("sinistres", "date_survenance") else {
+    ajouter("affiliations", "date_debut")
+    ajouter("contrats", "date_effet", presence_nature = TRUE)
+  }
+  refs <- if (length(refs) > 0L) do.call(rbind, refs) else data.frame(p = integer(0))
+  naissance <- as.numeric(v("assures", "date_naissance"))
+  nai_u <- .inconnu(ctx, "assures", "date_naissance")
+  r <- rep(FALSE, n)
+  indefini_certain <- rep(FALSE, n)
+  ip <- list()
+  ajouter_ip <- function(tc, l, lignes) {
+    if (is.null(ip[[tc]])) ip[[tc]] <<- vector("list", n)
+    ip[[tc]][l] <<- list(sort(unique(c(ip[[tc]][[l]], lignes))))
+  }
+  certain_ndef <- FALSE
+  plage_n <- .plage_date3(ctx, "assures", "date_naissance")
+  plages <- list()
+  for (z in unique(paste(refs$table, refs$colonne))) {
+    m <- strsplit(z, " ", fixed = TRUE)[[1L]]
+    plages[[z]] <- .plage_date3(ctx, m[1L], m[2L])
+  }
+  retenu_a <- ctx$retenu$assures
+  # assurés sans inconnue ni référence non déterminée : calcul direct (vectoriel)
+  complexe <- nai_u[refs$p] | refs$date_u | refs$nd | refs$presence_u
+  lignes_c <- unique(refs$p[complexe])
+  s1 <- which(!(refs$p %in% lignes_c))
+  if (length(s1) > 0L) {
+    o <- issue(naissance[refs$p[s1]], refs$date[s1])
+    r[unique(refs$p[s1][o == "vrai"])] <- TRUE
+    ndef <- unique(refs$p[s1][o == "indefini"])
+    indefini_certain[ndef[!r[ndef]]] <- TRUE
+    if (any(retenu_a[ndef])) certain_ndef <- TRUE
+  }
+  for (z in split(which(refs$p %in% lignes_c), refs$p[refs$p %in% lignes_c])) {
+    l <- refs$p[z[1L]]
+    x <- refs[z, , drop = FALSE]
+    pl <- lapply(paste(x$table, x$colonne), function(k) plages[[k]])
+    # valeurs représentatives de la naissance (conditionnement)
+    n_dom <- if (nai_u[l]) {
+      pts <- unlist(lapply(seq_len(nrow(x)), function(k) .points_age3(conv, mini, maxi, plage_n, if (x$date_u[k]) pl[[k]] else x$date[k])))
+      unique(c(plage_n, pts[!is.na(pts) & pts >= plage_n[1L] & pts <= plage_n[2L]]))
+    } else naissance[l]
+    # issues d'une référence k sachant la naissance nv : ensemble, et cellules pertinentes
+    ref_issues <- function(k, nv) {
+      d_dom <- if (x$date_u[k]) {
+        pts <- .points_age3(conv, mini, maxi, pl[[k]], nv, ref = TRUE)
+        unique(c(pl[[k]], pts[!is.na(pts) & pts >= pl[[k]][1L] & pts <= pl[[k]][2L]]))
+      } else x$date[k]
+      o <- issue(rep(nv, length(d_dom)), d_dom)
+      if (x$nd[k]) o[o == "indefini"] <- "faux"
+      present <- unique(o)
+      absent <- x$nd[k] || x$presence_u[k]
+      list(issues = unique(c(present, if (absent) "faux")), present = present, date = length(present) > 1L,
+           presence = absent && any(present != "faux"))
+    }
+    combine <- function(sets) {
+      possible <- character(0)
+      if (any(vapply(sets, function(s1) "vrai" %in% s1, NA))) possible <- "vrai"
+      if (all(vapply(sets, function(s1) "faux" %in% s1, NA))) possible <- c(possible, "faux")
+      if (all(vapply(sets, function(s1) any(c("faux", "indefini") %in% s1), NA)) &&
+          any(vapply(sets, function(s1) "indefini" %in% s1, NA))) possible <- c(possible, "indefini")
+      possible
+    }
+    par_n <- lapply(n_dom, function(nv) lapply(seq_len(nrow(x)), ref_issues, nv))
+    ens <- lapply(par_n, function(e) combine(lapply(e, `[[`, "issues")))
+    tout <- unique(unlist(ens))
+    r[l] <- if (identical(tout, "vrai")) TRUE else if (all(tout == "faux") || identical(tout, "indefini")) FALSE else NA
+    indefini_certain[l] <- identical(tout, "indefini")
+    # sous-cas âge non défini : référence visible certaine, indéfinie pour toute naissance
+    for (k in seq_len(nrow(x))) {
+      if (retenu_a[l] && !x$nd[k] && !x$presence_u[k] && all(vapply(par_n, function(e) identical(e[[k]]$issues, "indefini"), NA))) {
+        certain_ndef <- TRUE
+      }
+    }
+    if (!is.na(r[l])) next
+    # naissance (cellule conditionnée) : propagation de paires (.pertinence_paires3()), couples de
+    # chaque référence sur les mêmes valeurs de sa date (points de rupture relatifs aux deux
+    # naissances) et de sa présence
+    if (nai_u[l]) {
+      couples_ref <- function(n1, n2) lapply(seq_len(nrow(x)), function(k) {
+        d_dom <- if (x$date_u[k]) {
+          pts <- c(.points_age3(conv, mini, maxi, pl[[k]], n1, ref = TRUE), .points_age3(conv, mini, maxi, pl[[k]], n2, ref = TRUE))
+          unique(c(pl[[k]], pts[!is.na(pts) & pts >= pl[[k]][1L] & pts <= pl[[k]][2L]]))
+        } else x$date[k]
+        o1 <- issue(rep(n1, length(d_dom)), d_dom)
+        o2 <- issue(rep(n2, length(d_dom)), d_dom)
+        if (x$nd[k]) { o1[o1 == "indefini"] <- "faux"; o2[o2 == "indefini"] <- "faux" }
+        m <- cbind(o1, o2)
+        if (x$nd[k] || x$presence_u[k]) m <- rbind(m, c("faux", "faux"))
+        unique(m)
+      })
+      maximum <- function(a, b) ordre_issue[pmax(match(a, ordre_issue), match(b, ordre_issue))]
+      if (.pertinence_paires3(as.list(n_dom), couples_ref, maximum, "faux")) ajouter_ip("assures.date_naissance", l, l)
+    }
+    for (e in par_n) {
+      for (k in seq_len(nrow(x))) {
+        # issues des autres références : la cellule de k est visible si deux issues de k
+        # diffèrent après combinaison avec une issue possible des autres
+        autres <- combine(lapply(e[-k], `[[`, "issues"))
+        if (length(autres) == 0L) autres <- "faux"
+        # deux issues de k distinguables : une issue y des autres pour laquelle max(o1, y) et
+        # max(o2, y) diffèrent
+        distingue <- function(s1) any(vapply(autres, function(y) {
+          length(unique(vapply(s1, function(o) ordre_issue[max(match(c(o, y), ordre_issue))], ""))) > 1L
+        }, NA))
+        if (e[[k]]$date && distingue(e[[k]]$present)) {
+          ajouter_ip(paste(x$table[k], x$colonne[k], sep = "."), l, x$ligne[k])
+        }
+        if (e[[k]]$presence && distingue(c("faux", setdiff(e[[k]]$issues, "faux")))) {
+          ajouter_ip(if (x$nd[k]) x$table[k] else x$cle_presence[k], l, x$ligne[k])
+        }
+      }
+    }
+  }
+  if (certain_ndef) .ajouter_non_execute(ctx, "D02c", "assures", NA_character_, .CAUSE_AGE_NON_DEFINI)
+  attr(r, "index") <- ip
+  attr(r, "index_pertinent") <- ip
+  attr(r, "indefini_certain") <- indefini_certain
+  # colonnes lues, statiques par emploi (garde de .regle_vue() : une table sans référence retenue
+  # ni non déterminée est lue tout de même)
+  attr(r, "lues") <- c("assures.date_naissance", if (emploi == "assures_sinistre") "sinistres.date_survenance" else
+                         c("affiliations.date_debut", "contrats.date_effet", "contrats.nature_contrat"))
+  r
 }
 
 # D02c à trois valeurs (#105, lot V, G1 ; spécification `donnees`, erratum `1.9.7`, E-1) pour
@@ -6691,7 +6932,7 @@ table_refusee_vue <- function(vue, table) {
   lit_cc <- paste0("affiliations.", c("id_assure", "id_contrat", "college", "date_debut", "date_fin"))
   fc <- memo(.verdict_d11c)
   for (t in c("S", "X")) {
-    .regle_vue(ctx, "D11c", "affiliations", "college", lit_cc, t, "exacte", fc, vue = ctx$lit_vue$affiliations)
+    .regle_vue(ctx, "D11c", "affiliations", "college", lit_cc, t, "exacte", fc, vue = ctx$lit_vue$affiliations, mode = "kleene")
   }
   invisible(NULL)
 }
@@ -7129,7 +7370,160 @@ table_refusee_vue <- function(vue, table) {
       else if (is.na(partie[y])) r <- .k3_index(r, .colonne_partie(ctx, "affiliations", y), i[z], y, n)
     }
   }
-  .k3_resultat(r)
+  res <- .k3_resultat(r)
+  # règle V en mode Kleene (#105, lot V, G2a ; D-G2-2, exact par conditionnement, à titre
+  # provisoire) : collège (code opaque), début et fin refusés pour leur valeur. Lignes touchées
+  # (une inconnue sur la ligne ou sur une affiliation de son groupe) recalculées par
+  # .d11c_ligne3() ; les autres gardent le verdict ci-dessus (index pertinent : son index)
+  inc <- list(college = .inconnu(ctx, "affiliations", "college"), debut = .inconnu(ctx, "affiliations", "date_debut"),
+              fin = .inconnu(ctx, "affiliations", "date_fin"))
+  ip <- attr(res, "index", exact = TRUE)
+  if (is.null(ip)) ip <- list()
+  lues <- paste0("affiliations.", c("college", "date_debut", "date_fin"))
+  porteuses <- which((inc$college | inc$debut | inc$fin) & (retenu | nd))
+  if (length(porteuses) > 0L) {
+    dans3 <- (retenu | nd) & (!is.na(college) | inc$college) & (!is.na(debut) | inc$debut)
+    groupe3 <- .code_groupe(list(assure, contrat), cles = 1:2)
+    groupe3[!dans3] <- NA
+    touchees <- which(retenu & !is.na(groupe3) & groupe3 %in% groupe3[porteuses])
+    plage_d <- .plage_date3(ctx, "affiliations", "date_debut")
+    plage_f <- .plage_date3(ctx, "affiliations", "date_fin")
+    for (l in touchees) {
+      for (tc in names(ip)) ip[[tc]][l] <- list(NULL)
+      J <- setdiff(which(groupe3 %in% groupe3[l]), l)
+      x <- .d11c_ligne3(ctx, l, J, college, debut, fin, partie, retenu, nd, inc, plage_d, plage_f)
+      res[l] <- x$v
+      for (k in seq_along(x$pert)) {
+        tc <- x$pert[[k]][1L]
+        if (is.null(ip[[tc]])) ip[[tc]] <- vector("list", n)
+        ip[[tc]][l] <- list(sort(unique(c(ip[[tc]][[l]], as.integer(x$pert[[k]][2L])))))
+      }
+    }
+  }
+  attr(res, "index") <- ip
+  attr(res, "index_pertinent") <- ip
+  attr(res, "lues") <- lues
+  res
+}
+
+# Le collège d'une affiliation n'est jamais refusé pour sa valeur (une valeur hors domaine est
+# un refus D04b, une chaîne vide un refus chaine_vide, tous deux de portée table, qui bloquent la
+# règle) : le chemin du collège inconnu n'est pas atteint par une base (comme le chemin D01a,
+# #169) ; il est vérifié par appel direct (oracle de simulation).
+# D11c pour la ligne `l` d'affiliations et ses affiliations candidates `J` (même assuré, même
+# contrat ; #105, lot V, G2a ; D-G2-2) : la ligne est détectée s'il existe j, présent, de collège
+# différent, dont la période chevauche la sienne (début de l'une au plus la fin de l'autre ; fin
+# absente ou non connue à l'arrêté : ouverte). Les cellules inconnues de la ligne (collège : les
+# collèges connus du groupe et une valeur neuve ; début : bornes de sa plage ; partie de fin non
+# déterminée : connue ou non ; fin : bornes de sa plage et absence) sont conditionnées ; sachant
+# elles, les paires sont indépendantes, chacune conjonction d'atomes sur des cellules distinctes
+# (présence d'une ligne non déterminée, collège de j, fin de j et sa partie, début de j) : Kleene
+# exact. Verdict : constant sur les affectations conditionnées, sinon NA. Pertinence : une cellule
+# conditionnée par propagation de paires (.pertinence_paires3()) ; une cellule de j si elle est
+# pertinente dans une évaluation conditionnelle (atome inconnu de sa paire, paire inconnue, aucune
+# paire vraie). Rend v et pert (couples « clé », ligne).
+.d11c_ligne3 <- function(ctx, l, J, college, debut, fin, partie, retenu, nd, inc, plage_d, plage_f) {
+  neuf <- "\001neuf"
+  fin_val <- function(c1, f1) if (!isTRUE(c1)) Inf else if (is.na(f1)) Inf else f1
+  rupture <- function(plage, pts) unique(c(plage, pts[is.finite(pts) & pts >= plage[1L] & pts <= plage[2L]]))
+  fins_j <- unlist(lapply(J, function(j) if (inc$fin[j]) plage_f else fin[j]))
+  debuts_j <- unlist(lapply(J, function(j) if (inc$debut[j]) plage_d else debut[j]))
+  dom_l <- list(
+    # collège inconnu : collèges connus du groupe, une valeur neuve, et une seconde si un collège
+    # du groupe est inconnu (le collège de j peut alors égaler l'une sans égaler l'autre)
+    college = if (inc$college[l]) unique(c(college[J][!inc$college[J] & !is.na(college[J])], neuf,
+                                           if (any(inc$college[J])) paste0(neuf, "2"))) else college[l],
+    # début et fin inconnus : bornes de leur plage et points de rupture relatifs aux cellules qui
+    # les comparent (fin de chaque j, connue ou bornes de sa plage, et le lendemain ; début de
+    # chaque j, connu ou bornes de sa plage, et la veille) : la pertinence des cellules de j se
+    # lit sur ces représentants (audit de G2a)
+    debut = if (inc$debut[l]) rupture(plage_d, c(fins_j, fins_j + 1)) else debut[l],
+    connue = if (is.na(partie[l])) c(TRUE, FALSE) else partie[l] %in% TRUE,
+    fin = if (inc$fin[l]) c(rupture(plage_f, c(debuts_j, debuts_j - 1)), NA) else fin[l])
+  cle_l <- c(college = "affiliations.college", debut = "affiliations.date_debut",
+             connue = .colonne_partie(ctx, "affiliations", l), fin = "affiliations.date_fin")
+  grille <- expand.grid(lapply(dom_l, seq_along), KEEP.OUT.ATTRS = FALSE)
+  # paire (l, j) sachant l'affectation a : valeur et cellules de j pertinentes
+  paire <- function(a, j) {
+    ci <- dom_l$college[a$college]; di <- dom_l$debut[a$debut]
+    fi <- fin_val(dom_l$connue[a$connue], dom_l$fin[a$fin])
+    atomes <- list()
+    # présence de j
+    atomes$present <- list(v = if (retenu[j]) TRUE else NA, cle = if (!retenu[j]) list(c("affiliations", j)))
+    # collège différent
+    atomes$college <- if (inc$college[j]) list(v = NA, cle = list(c("affiliations.college", j))) else
+      list(v = !identical(ci, college[j]) && !is.na(college[j]), cle = list())
+    # début de l (connu sachant a) au plus la fin de j
+    cj <- if (is.na(partie[j])) c(TRUE, FALSE) else partie[j] %in% TRUE
+    fj <- if (inc$fin[j]) c(plage_f, NA) else fin[j]
+    g <- expand.grid(c = seq_along(cj), f = seq_along(fj))
+    ov <- vapply(seq_len(nrow(g)), function(z) di <= fin_val(cj[g$c[z]], fj[g$f[z]]), NA)
+    cle1 <- list()
+    if (length(unique(ov)) > 1L) {
+      if (length(cj) > 1L && any(tapply(ov, g$f, function(z) length(unique(z)) > 1L))) cle1 <- c(cle1, list(c(.colonne_partie(ctx, "affiliations", j), j)))
+      if (length(fj) > 1L && any(tapply(ov, g$c, function(z) length(unique(z)) > 1L))) cle1 <- c(cle1, list(c("affiliations.date_fin", j)))
+    }
+    atomes$ov1 <- list(v = if (all(ov)) TRUE else if (!any(ov)) FALSE else NA, cle = cle1)
+    # début de j au plus la fin de l (sachant a)
+    dj <- if (inc$debut[j]) plage_d else debut[j]
+    ov2 <- dj <= fi
+    atomes$ov2 <- list(v = if (all(ov2)) TRUE else if (!any(ov2)) FALSE else NA,
+                       cle = if (length(unique(ov2)) > 1L) list(c("affiliations.date_debut", j)) else list())
+    vs <- vapply(atomes, `[[`, NA, "v")
+    if (any(vs %in% FALSE)) return(list(v = FALSE, cle = list()))
+    if (all(vs %in% TRUE)) return(list(v = TRUE, cle = list()))
+    list(v = NA, cle = unlist(lapply(atomes[is.na(vs)], `[[`, "cle"), recursive = FALSE))
+  }
+  ligne_a <- lapply(seq_len(nrow(grille)), function(z) {
+    a <- grille[z, , drop = FALSE]
+    if (is.na(dom_l$college[a$college]) || is.na(dom_l$debut[a$debut])) return(list(v = FALSE, cle = list()))
+    ps <- lapply(J, function(j) paire(a, j))
+    pv <- vapply(ps, `[[`, NA, "v")
+    if (any(pv %in% TRUE)) return(list(v = TRUE, cle = list()))
+    if (!any(is.na(pv))) return(list(v = FALSE, cle = list()))
+    list(v = NA, cle = unlist(lapply(ps[is.na(pv)], `[[`, "cle"), recursive = FALSE))
+  })
+  va <- vapply(ligne_a, `[[`, NA, "v")
+  v <- if (all(va %in% TRUE)) TRUE else if (all(va %in% FALSE)) FALSE else NA
+  pert <- list()
+  if (is.na(v)) {
+    # cellules de la ligne (conditionnées) : propagation de paires (.pertinence_paires3()), pour
+    # chaque affectation des autres cellules de la ligne ; couples de chaque paire (l, j) sur les
+    # mêmes valeurs des cellules de j (points de rupture relatifs aux deux affectations)
+    couples_j <- function(a1, a2) lapply(J, function(j) {
+      cote <- lapply(list(a1, a2), function(a) list(ci = dom_l$college[a$college], di = dom_l$debut[a$debut],
+                                                     fi = fin_val(dom_l$connue[a$connue], dom_l$fin[a$fin])))
+      dans_plage <- function(z, pl) z[is.finite(z) & z >= pl[1L] & z <= pl[2L]]
+      di <- vapply(cote, `[[`, 0, "di"); fi <- vapply(cote, `[[`, 0, "fi")
+      reps <- list(e = if (retenu[j]) TRUE else c(TRUE, FALSE),
+                   c = if (inc$college[j]) unique(c(college[J][!inc$college[J] & !is.na(college[J])],
+                                                    vapply(cote, `[[`, "", "ci"), paste0(neuf, j))) else college[j],
+                   p = if (is.na(partie[j])) c(TRUE, FALSE) else partie[j] %in% TRUE,
+                   f = if (inc$fin[j]) c(unique(c(plage_f, dans_plage(c(di, di - 1), plage_f))), NA) else fin[j],
+                   d = if (inc$debut[j]) unique(c(plage_d, dans_plage(c(fi, fi + 1), plage_d))) else debut[j])
+      g <- expand.grid(reps, stringsAsFactors = FALSE, KEEP.OUT.ATTRS = FALSE)
+      v <- lapply(cote, function(cs) {
+        fj <- ifelse(g$p & !is.na(g$f), g$f, Inf)
+        g$e & !is.na(g$c) & g$c != cs$ci & cs$di <= fj & g$d <= cs$fi
+      })
+      unique(cbind(v[[1L]], v[[2L]]))
+    })
+    for (nom in names(dom_l)) {
+      if (length(dom_l[[nom]]) < 2L) next
+      autres <- setdiff(names(dom_l), nom)
+      ga <- expand.grid(lapply(dom_l[autres], seq_along), KEEP.OUT.ATTRS = FALSE)
+      pertinente <- any(vapply(seq_len(nrow(ga)), function(z) {
+        .pertinence_paires3(as.list(seq_along(dom_l[[nom]])), function(i1, i2) {
+          a1 <- ga[z, , drop = FALSE]; a1[[nom]] <- i1
+          a2 <- ga[z, , drop = FALSE]; a2[[nom]] <- i2
+          couples_j(a1, a2)
+        }, `|`, FALSE)
+      }, NA))
+      if (pertinente) pert <- c(pert, list(c(cle_l[[nom]], l)))
+    }
+    pert <- c(pert, unlist(lapply(ligne_a[is.na(va)], `[[`, "cle"), recursive = FALSE))
+  }
+  list(v = v, pert = unique(pert))
 }
 
 # D12, suite d'états impossible (dictionnaire, § 4 et § 9 ; spécification `donnees` v1.6,

@@ -359,10 +359,26 @@ LISTE_BLANCHE <- c(
     "indice",
   "R/donnees.R | .regle_v_doublons | match ( groupe [ rang [ l ] ] , as.integer ( names ( nd_groupe ) ) )" =
     "indice",
-  "R/donnees.R | .regle_v_clotures | dossier %in% payes [ ! is.na ( payes ) ]" =
-    "a_instruire : D06 : evenements.id_dossier \"\" apparie a prestations.id_dossier \"\" ; releve, #164",
-  "R/donnees.R | .regle_v_clotures | dossier %in% capital [ ! is.na ( capital ) ]" =
-    "a_instruire : D06 : idem, prestations de type capital ; releve, #164",
+  "R/donnees.R | .ou3 | ligne [ garde ] %in% vrai" =
+    "indice",
+  "R/donnees.R | .ou3 | t [[ b ] ] %in% t [[ a ] ]" =
+    "indice",
+  "R/donnees.R | .age_assure3 | refs $ p %in% lignes_c" =
+    "indice",
+  "R/donnees.R | .age_assure3 | \"vrai\" %in% s1" =
+    "code",
+  "R/donnees.R | .age_assure3 | \"faux\" %in% s1" =
+    "code",
+  "R/donnees.R | .age_assure3 | c ( \"faux\" , \"indefini\" ) %in% s1" =
+    "code",
+  "R/donnees.R | .age_assure3 | \"indefini\" %in% s1" =
+    "code",
+  "R/donnees.R | .age_assure3 | match ( c ( o , y ) , ordre_issue )" =
+    "code",
+  "R/donnees.R | .verdict_d11c | groupe3 %in% groupe3 [ porteuses ]" =
+    "indice",
+  "R/donnees.R | .verdict_d11c | groupe3 %in% groupe3 [ l ]" =
+    "indice",
   "R/donnees.R | .regle_v_garanties | sinistre %in% avec_deces [ ! is.na ( avec_deces ) ]" =
     "a_instruire : D10 : id_sinistre \"\" (valeur brute de .joindre()) apparie a \"\" ; releve, #164",
   "R/donnees.R | .regle_v_garanties | sub ( \"\\\\..*$\" , \"\" , lit_c ) %in% names ( ctx $ base )" =
@@ -373,8 +389,10 @@ LISTE_BLANCHE <- c(
     "code",
   "R/donnees.R | .colonne_partie | x %in% k $ lignes" =
     "indice",
-  "R/donnees.R | .regle_v_ages | seq_len ( nrow ( ctx $ base [[ t ] ] ) ) %in% r $ p [ ! is.na ( age ) & ( age < mini | age > maxi ) ]" =
-    "indice",
+  "R/donnees.R | .age_assure3 | match ( a , ordre_issue )" =
+    "code",
+  "R/donnees.R | .age_assure3 | match ( b , ordre_issue )" =
+    "code",
   "R/donnees.R | .regle_v_limite_age | v ( \"evenements\" , \"type_evenement\" ) %in% types" =
     "code",
   "R/donnees.R | .regle_v_limite_age | \"famille\" %in% names ( ctx $ base )" =

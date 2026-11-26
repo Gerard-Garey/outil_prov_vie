@@ -3878,11 +3878,11 @@ r_m701 <- lapply(list(A0, A), function(a) cb(x40_gs_na, a))
 b_gs5 <- avec(function(b) { g <- b$garanties_souscrites[1L, ]; g$id_garantie_souscrite <- "GS5"; g$date_effet <- D(NA)
   b$garanties_souscrites <- rbind(b$garanties_souscrites, g); b })
 r_ct2 <- cb(avec(function(b) { b$contrats$date_effet[2L] <- D(NA); b }), A)
-verifier_egal("M701 : GS1 sans date d'effet, à A0 et à A : D10b, D10c, D10d non exécutés, cause D03i, D02a (garanties_souscrites.date_fin) exécutée, déterminée (#105, G1), aucun refus ; GS5 sans date d'effet : chevauchement GS1;GS5 à A0 et à A ; CT2 sans date d'effet à A : D02a sur date_debut_gestion non exécutée, cause D03i, sur date_terme et date_fin déterminée (#105, G1) ; détection de D03i inchangée",
+verifier_egal("M701 : GS1 sans date d'effet, à A0 et à A : D10c, D10d non exécutés, cause D03i, D02a (garanties_souscrites.date_fin) exécutée, déterminée (#105, G1), D10b exécutée, déterminée (aucun dossier de la vue sur GS1 ; #105, G2a), aucun refus ; GS5 sans date d'effet : chevauchement GS1;GS5 à A0 et à A ; CT2 sans date d'effet à A : D02a sur date_debut_gestion non exécutée, cause D03i, sur date_terme et date_fin déterminée (#105, G1) ; détection de D03i inchangée",
               list(lapply(r_m701, ne_m701), vapply(r_m701, function(r) nrow(r$refus_tables), 0L),
                    vapply(list(A0, A), function(a) ligne(cb(b_gs5, a)$controles, "chevauchement", "garanties_souscrites")$identifiants, ""),
                    ne_m701(r_ct2), lapply(r_m701, function(r) ligne(r$controles, "D03i")$identifiants)),
-              list(rep(list(c("D10b dossiers id_garantie_souscrite D03i", "D10c dossiers NA D03i", "D10d evenements NA D03i")), 2L),
+              list(rep(list(c("D10c dossiers NA D03i", "D10d evenements NA D03i")), 2L),
                    c(0L, 0L), c("GS1;GS5", "GS1;GS5"),
                    "D02a contrats date_debut_gestion D03i",
                    list("GS1", "GS1")))
@@ -7806,7 +7806,7 @@ registre_v105 <- c(
   "D02a sinistres date_declaration kleene G1 sinistres.date_declaration sinistres.date_survenance | sinistres.date_saisie",
   "D02a sinistres date_instruction kleene G1 sinistres.date_declaration sinistres.date_instruction | sinistres.date_saisie",
   "D02a sinistres date_survenance kleene G1 assures.date_naissance sinistres.date_survenance | sinistres.date_saisie",
-  "D02c assures date_naissance bloquee G2 affiliations.date_debut assures.date_naissance contrats.date_effet contrats.nature_contrat sinistres.date_survenance | affiliations.date_saisie sinistres.date_saisie",
+  "D02c assures date_naissance kleene G2 affiliations.date_debut assures.date_naissance contrats.date_effet contrats.nature_contrat sinistres.date_survenance | affiliations.date_saisie sinistres.date_saisie",
   "D02c ayants_droit_sante date_naissance kleene G1 ayants_droit_sante.date_naissance ayants_droit_sante.date_saisie | affiliations.date_saisie contrats.date_effet",
   "D02c designations date_naissance kleene G1 designations.date_naissance designations.date_saisie | affiliations.date_saisie contrats.date_effet",
   "D02c famille date_naissance kleene G1 famille.date_naissance famille.situation sinistres.date_survenance | sinistres.date_saisie",
@@ -7820,7 +7820,7 @@ registre_v105 <- c(
   "D03f prestations NA kleene G1 prestations.debut_periode prestations.fin_periode prestations.type_prestation | dossiers.date_ouverture prestations.date_reglement prestations.date_saisie rentes.date_saisie sinistres.date_saisie",
   "D03h garanties_souscrites taux_technique_tarif kleene G1 contrats.nature_contrat garanties_souscrites.code_garantie garanties_souscrites.maintien_deces garanties_souscrites.taux_technique_tarif | contrats.date_effet garanties_souscrites.date_effet",
   "D05 evenements motif kleene G1 evenements.motif evenements.type_evenement | dossiers.date_ouverture evenements.date_saisie rentes.date_saisie sinistres.date_saisie",
-  "D06 evenements justificatif bloquee G2 evenements.justificatif evenements.motif evenements.type_evenement prestations.type_prestation | dossiers.date_ouverture evenements.date_saisie prestations.date_reglement prestations.date_saisie rentes.date_saisie sinistres.date_saisie",
+  "D06 evenements justificatif kleene G2 evenements.justificatif evenements.motif evenements.type_evenement prestations.type_prestation | dossiers.date_ouverture evenements.date_saisie prestations.date_reglement prestations.date_saisie rentes.date_saisie sinistres.date_saisie",
   "D07a dossiers NA bloquee G3 evenements.date_effet evenements.date_saisie evenements.type_evenement garanties_souscrites.code_garantie sinistres.date_survenance sinistres.nature_sinistre | dossiers.date_ouverture rentes.date_saisie sinistres.date_saisie",
   "D07a rentes NA bloquee G3 evenements.date_effet evenements.date_saisie evenements.motif evenements.type_evenement famille.lien garanties_souscrites.code_garantie sinistres.date_survenance sinistres.nature_sinistre | dossiers.date_ouverture rentes.date_saisie sinistres.date_saisie",
   "D07b dossiers NA bloquee G3 evenements.date_effet evenements.date_saisie evenements.type_evenement garanties_souscrites.code_garantie prestations.date_reglement prestations.nature_mouvement prestations.type_prestation | dossiers.date_ouverture prestations.date_saisie rentes.date_saisie sinistres.date_saisie",
@@ -7828,16 +7828,16 @@ registre_v105 <- c(
   "D07c dossiers NA bloquee G3 evenements.date_effet evenements.date_saisie evenements.type_evenement famille.date_deces famille.date_naissance famille.lien famille.situation garanties_souscrites.code_garantie garanties_souscrites.prolongation_handicap parametres.valeur | contrats.date_effet dossiers.date_ouverture garanties_souscrites.date_effet rentes.date_saisie sinistres.date_saisie",
   "D07c rentes NA bloquee G3 evenements.date_effet evenements.date_saisie evenements.type_evenement famille.date_deces famille.date_naissance famille.lien famille.situation garanties_souscrites.code_garantie garanties_souscrites.prolongation_handicap parametres.valeur | contrats.date_effet dossiers.date_ouverture garanties_souscrites.date_effet rentes.date_saisie sinistres.date_saisie",
   "D08 sinistres NA bloquee G3 evenements.date_effet evenements.motif evenements.type_evenement garanties_souscrites.code_garantie parametres.valeur sinistres.date_survenance sinistres.nature_sinistre | contrats.date_effet dossiers.date_ouverture evenements.date_saisie garanties_souscrites.date_effet rentes.date_saisie sinistres.date_saisie",
-  "D10b dossiers id_garantie_souscrite bloquee G2 garanties_souscrites.date_effet garanties_souscrites.date_fin sinistres.date_survenance | dossiers.date_ouverture sinistres.date_saisie",
+  "D10b dossiers id_garantie_souscrite kleene G2 garanties_souscrites.date_effet garanties_souscrites.date_fin sinistres.date_survenance | dossiers.date_ouverture sinistres.date_saisie",
   "D10c dossiers NA bloquee G2 garanties_souscrites.code_garantie garanties_souscrites.college garanties_souscrites.date_effet garanties_souscrites.date_fin sinistres.date_survenance | contrats.date_effet dossiers.date_ouverture sinistres.date_saisie",
   "D10d evenements NA bloquee G2 evenements.type_evenement garanties_souscrites.code_garantie garanties_souscrites.college garanties_souscrites.date_effet garanties_souscrites.date_fin sinistres.date_survenance | contrats.date_effet dossiers.date_ouverture evenements.date_saisie rentes.date_saisie sinistres.date_saisie",
   "D10e beneficiaires qualite kleene G1 beneficiaires.qualite garanties_souscrites.code_garantie | beneficiaires.date_saisie dossiers.date_ouverture sinistres.date_saisie",
   "D10f evenements NA bloquee G3 evenements.date_effet evenements.date_saisie evenements.motif evenements.type_evenement garanties_souscrites.code_garantie | dossiers.date_ouverture rentes.date_saisie sinistres.date_saisie",
   "D11a sinistres date_survenance bloquee G2 affiliations.date_debut affiliations.date_fin contrats.date_effet contrats.date_fin contrats.date_terme contrats.nature_contrat sinistres.date_survenance | affiliations.date_saisie dossiers.date_ouverture sinistres.date_saisie",
   "D11b dossiers id_garantie_souscrite bloquee G2 affiliations.date_debut affiliations.date_fin contrats.date_effet contrats.date_fin contrats.date_terme contrats.nature_contrat garanties_souscrites.college sinistres.date_survenance | affiliations.date_saisie dossiers.date_ouverture sinistres.date_saisie",
-  "D11c affiliations college bloquee G2 affiliations.date_debut affiliations.date_fin | affiliations.date_saisie contrats.date_effet",
+  "D11c affiliations college kleene G2 affiliations.date_debut affiliations.date_fin | affiliations.date_saisie contrats.date_effet",
   "D12 evenements type_evenement bloquee G3 evenements.date_effet evenements.motif evenements.type_evenement sinistres.nature_sinistre | dossiers.date_ouverture evenements.date_saisie rentes.date_saisie sinistres.date_saisie",
-  "D13 sinistres date_instruction bloquee G2 garanties_souscrites.code_garantie prestations.type_prestation sinistres.date_instruction sinistres.nature_sinistre | dossiers.date_ouverture prestations.date_reglement prestations.date_saisie rentes.date_saisie sinistres.date_saisie",
+  "D13 sinistres date_instruction kleene G2 garanties_souscrites.code_garantie prestations.type_prestation sinistres.date_instruction sinistres.nature_sinistre | dossiers.date_ouverture prestations.date_reglement prestations.date_saisie rentes.date_saisie sinistres.date_saisie",
   "D14 sinistres NA bloquee G2 famille.date_deces famille.date_naissance famille.lien famille.situation garanties_souscrites.code_garantie garanties_souscrites.college garanties_souscrites.conjoint_vise garanties_souscrites.date_effet garanties_souscrites.date_fin garanties_souscrites.prolongation_handicap parametres.valeur sinistres.date_instruction sinistres.date_survenance sinistres.nature_sinistre | contrats.date_effet dossiers.date_ouverture sinistres.date_saisie",
   "somme_parts beneficiaires part kleene G1 beneficiaires.part | beneficiaires.date_saisie dossiers.date_ouverture sinistres.date_saisie"
 )
@@ -7918,10 +7918,10 @@ verifier_egal("#105, lot V, registre des règles V (i) : 47 sites de .regle_vue(
                    setdiff(codes_sites_v105, vapply(executes_v105, `[[`, "", "code")),
                    length(cles_sites_v105), setdiff(cles_sites_v105, c(reg_v105$cle, sans_refusable_v105))),
               list(47L, 0L, TRUE, 27L, character(0), 37L, character(0)))
-verifier_egal("#105, lot V, registre des règles V (ii) : clés exécutées qui lisent comme valeur une colonne refusable = registre (52 clés), mêmes colonnes (à tout arrêté ; à l'extraction seulement), mode unique égal au registre ; état après la conversion G1 : 33 clés de G1 en mode kleene, 19 en mode bloquee (G2 10, G3 9)",
+verifier_egal("#105, lot V, registre des règles V (ii) : clés exécutées qui lisent comme valeur une colonne refusable = registre (52 clés), mêmes colonnes (à tout arrêté ; à l'extraction seulement), mode unique égal au registre ; état après la conversion G2a : 38 clés en mode kleene (G1 33, G2a 5 : D02c assures, D06, D13, D10b, D11c), 14 en mode bloquee (G2 5, G3 9)",
               list(ecarts_v105(executes_v105, reg_v105), nrow(reg_v105),
-                   as.vector(table(factor(paste(reg_v105$groupe, reg_v105$mode), levels = c("G1 kleene", "G2 bloquee", "G3 bloquee"))))),
-              list(aucun_v105, 52L, c(33L, 10L, 9L)))
+                   as.vector(table(factor(paste(reg_v105$groupe, reg_v105$mode), levels = c("G1 kleene", "G2 kleene", "G2 bloquee", "G3 bloquee"))))),
+              list(aucun_v105, 52L, c(33L, 5L, 5L, 9L)))
 # le contrôle échoue sur un site non classé (registre privé d'une clé) et sur un mode différent
 reg_moins <- reg_v105[reg_v105$cle != "D01b|prestations|NA", , drop = FALSE]
 reg_mode <- reg_v105
@@ -8155,7 +8155,7 @@ invisible(cb(base_ref, A0, decl_g1(120), conv_g1)); invisible(cb(base_ref, A, de
 suppressMessages(untrace(".regle_vue", where = ns))
 cles_r4 <- unique(.GlobalEnv$.r4_v105)
 rm(".r4_v105", envir = .GlobalEnv)
-verifier_egal("#105, G1 (11) : garde R4, les 33 clés de G1 exécutées en mode kleene rendent index_pertinent",
+verifier_egal("#105, G1 (11) : garde R4, les clés exécutées en mode kleene (38 depuis G2a) rendent index_pertinent",
               list(sort(unique(sub("\\|[^|]*$", "", cles_r4)), method = "radix"), all(endsWith(cles_r4, "|TRUE"))),
               list(sort(reg_v105$cle[reg_v105$mode == "kleene"], method = "radix"), TRUE))
 # (12) arrêté égal à l'extraction : date de saisie de SI1 refusée (date de visibilité de
@@ -8228,9 +8228,10 @@ inv_v105 <- unlist(lapply(cols_g1, function(tc) {
   }, "")
 }))
 # (colonne logique, maintien_deces : deux valeurs refusées distinctes de même type n'existent pas)
-verifier_egal("#105, G1 (14) : invariance à la valeur brute : chaque colonne refusable de G1 (hors colonne logique) refusée sous les deux valeurs, bilan identique, à A0 et à A",
+verifier_egal("#105, G1 (14) : invariance à la valeur brute : chaque colonne refusable des clés en mode kleene (G1 et G2a, hors colonne logique) refusée sous les deux valeurs, bilan identique, à A0 et à A",
+              # G2a : colonnes de D02c assures, D06, D13, D10b, D11c ajoutées par le registre (affiliations.date_debut)
               list(sum(endsWith(inv_v105, " identique")), inv_v105[!endsWith(inv_v105, " identique")]),
-              list(98L, "garanties_souscrites.maintien_deces non teste"))
+              list(100L, "garanties_souscrites.maintien_deces non teste"))
 # (15) oracles par simulation (constat de simulation : nombre de cas tiré, graine locale
 # 20261125 sous le générateur de outils::avec_graine(), état global rétabli) : verdict du noyau
 # (.verdict3() sur les domaines représentatifs, ou règle exécutée) contre une énumération du
@@ -8372,3 +8373,253 @@ sim_d <- avec_graine_v105({
 verifier_egal("#105, G1 (15), constat de simulation (graine 20261125) : fin_partie 300 cas, D02c 60 cas (trois issues ; deux dates inconnues : oracle exact des quatre bords, et contenu dans la grille de 61 jours), argument du bord sur un petit rectangle pour chaque convention, somme_parts 40 cas, D01b 40 cas : verdict du noyau égal à l'oracle",
               list(sum(sim_a), sum(sim_b), sim_b2, sum(sim_c), sum(sim_d)),
               list(300L, 60L, stats::setNames(rep(TRUE, length(ns$CONVENTIONS_AGE)), ns$CONVENTIONS_AGE), 40L, 40L))
+
+section("donnees : règles V de G2a en logique de Kleene sous un refus de valeur (#105, lot V, G2a ; D-G2-1, D-G2-2 à titre provisoire)")
+# Conversion G2a : D02c assures, D06, D13, D10b, D11c en mode kleene ; noyaux exacts par
+# conditionnement (D02c assures : naissance ; D11c : cellules de la ligne). Chaque cas plante, en
+# plus de la valeur refusée, un défaut détecté sur une autre ligne : sur da40a3b, la règle est
+# bloquée (aucune détection, une ligne non exécutée de cause le motif du refus).
+g2_v105 <- function(b, code, table, arrete = A, ...) {
+  r <- cb(b, arrete, ...)
+  list(det = unique(ligne(r$controles, code, table)$identifiants), ne = ligne(r$controles_non_executes, code, table)$cause)
+}
+decl_g2 <- function(mini, maxi) list(seuils = list(d02c_age_min = as.list(stats::setNames(rep(mini, length(emplois_g1)), emplois_g1)),
+                                                   d02c_age_max = as.list(stats::setNames(rep(maxi, length(emplois_g1)), emplois_g1))))
+# D10b : survenance de SI1 refusée (D02c), à l'extraction ; DO3 (GS2 d'effet 2024-06-01, après la
+# survenance de SI2) détecté. Versions de DO1 et DO2 d'effet 2015-01-01 : la survenance inconnue
+# peut la précéder ou non, inconnu ; effet au 1901-01-01 (borne basse de la plage) : la survenance
+# ne peut la précéder, faux déterminé. Oracle quotidien.
+d10b_v105 <- function(effet) avec(function(b) {
+  b$sinistres$date_survenance[1L] <- D("1850-01-01")
+  b$garanties_souscrites$date_effet[c(1L, 3L)] <- D(effet)
+  b$garanties_souscrites$date_effet[2L] <- D("2024-06-01")
+  b
+})
+oracle_d10b <- function(effet) sort(unique(plage_dense(A) < as.numeric(D(effet))))
+verifier_egal("#105, G2a, D10b : survenance refusée, versions d'effet 2015 : inconnu (D02c) ; d'effet 1901-01-01 : faux déterminé ; DO3 détecté ; oracle quotidien",
+              list(g2_v105(d10b_v105("2015-01-01"), "D10b", "dossiers"), g2_v105(d10b_v105("1901-01-01"), "D10b", "dossiers"),
+                   oracle_d10b("2015-01-01"), oracle_d10b("1901-01-01")),
+              list(ecarte_v105("D02c", "DO3"), detecte_v105("DO3"), c(FALSE, TRUE), FALSE))
+# D02c assures (emploi assures_sinistre) : AS1 n'a pas d'affiliation (AF1 rattachée à AS2) ;
+# (a) naissance de AS1 refusée, bornes 40 et 50 ans, survenances 2000-01-01 (SI2) et 2026-12-31
+# (SI1, à l'extraction : l'âge y est toujours défini) : pour toute naissance, l'une des deux
+# références est hors bornes (ou l'âge non défini à SI2, inférieur à 40 ans à SI1) : vrai déterminé par conditionnement sur la naissance (Kleene
+# naïf, référence par référence : inconnu) ; (b) survenance de SI2 refusée, bornes 0 et 50 : SI1
+# donne 54 ans, vrai quelle que soit SI2 (non décisive, non pertinente) ; (c) naissance refusée,
+# bornes 0 et 100 : âge hors bornes, dans les bornes ou non défini (trois issues), inconnu ;
+# (d) contrat individuel CT2 de nature refusée (AS2, 56 ans à l'effet, borne 50) : référence
+# possible, AS2 écarté (cause hors_domaine) ; AS1 (54 ans à SI1) détecté
+d02c_v105 <- function(f) avec(function(b) { b$affiliations$id_assure <- "AS2"; f(b) })
+ne_d02c <- function(r) ligne(r$controles_non_executes, "D02c", "assures")$cause
+verifier_egal("#105, G2a, D02c assures : (a) conditionnement sur la naissance, deux survenances complémentaires : AS1 vrai, aucune ligne écartée ; (b) survenance non décisive : AS1 vrai ; (c) trois issues : inconnu ; (d) contrat individuel de nature refusée : inconnu (hors_domaine)",
+              list(g2_v105(d02c_v105(function(b) { b$assures$date_naissance[1L] <- D("1850-01-01")
+                                                   b$sinistres$date_survenance <- D(c("2026-12-31", "2000-01-01")); b }), "D02c", "assures", A,
+                           decl_g2(40, 50), list(age = "revolu")),
+                   g2_v105(d02c_v105(function(b) { b$sinistres$date_survenance[2L] <- D("1850-01-01"); b }), "D02c", "assures", A,
+                           decl_g2(0, 50), list(age = "revolu")),
+                   g2_v105(d02c_v105(function(b) { b$assures$date_naissance[1L] <- D("1850-01-01"); b }), "D02c", "assures", A,
+                           decl_g2(0, 100), list(age = "revolu"))$ne,
+                   g2_v105(avec(function(b) { b$contrats$nature_contrat[2L] <- "zzz"; b }), "D02c", "assures", A,
+                           decl_g2(0, 50), list(age = "revolu"))),
+              list(detecte_v105(c("AS1", "AS1;AS2")), detecte_v105("AS1;AS2"), "D02c", ecarte_v105("hors_domaine", "AS1")))
+# D06 : EV3 (sortie de SI2, justificatif absent) ; EV7, sortie reprise_travail sans justificatif,
+# détectée. Motif refusé, ou type refusé : inconnu (hors_domaine) ; clôture depot_cdc de DO1 (EV8)
+# dont la seule prestation PR2 a un type refusé : capital possible, inconnu
+ev_v105 <- function(b, ligne, id, type, motif, just = NA_character_) {
+  x <- b$evenements[ligne, ]
+  x$id_evenement <- id; x$type_evenement <- type; x$motif <- motif; x$justificatif <- just; x$montant <- NA
+  rbind(b$evenements, x)
+}
+d06_v105 <- function(f) avec(function(b) { b$evenements <- ev_v105(b, 3L, "EV7", "sortie", "reprise_travail"); f(b) })
+verifier_egal("#105, G2a, D06 : motif refusé, type refusé, type_prestation refusé de la seule prestation d'un dossier clos depot_cdc : inconnu (hors_domaine) ; EV7 détectée",
+              list(g2_v105(d06_v105(function(b) { b$evenements$justificatif[3L] <- NA; b$evenements$motif[3L] <- "zzz"; b }), "D06", "evenements"),
+                   g2_v105(d06_v105(function(b) { b$evenements$justificatif[3L] <- NA; b$evenements$type_evenement[3L] <- "zzz"; b }),
+                           "D06", "evenements"),
+                   g2_v105(d06_v105(function(b) { b$evenements <- ev_v105(b, 4L, "EV8", "cloture_dossier", "depot_cdc", "acte_deces")
+                                                  b$prestations$type_prestation[2L] <- "zzz"; b }), "D06", "evenements")),
+              rep(list(ecarte_v105("hors_domaine", "EV7")), 3L))
+# D13 : SI3, décès sans instruction, avec DO4 (garantie GS4, décès) et PR4 (capital), détecté ;
+# SI1 : instruction refusée (2090-01-01) : inconnu (D02c), à l'extraction et à A0 (partie non
+# déterminée) ; nature refusée, ou code de la garantie du dossier du capital refusé, instruction
+# absente : inconnu (hors_domaine)
+d13_v105 <- function(f) avec(function(b) {
+  s3 <- b$sinistres[1L, ]; s3$id_sinistre <- "SI3"; s3$id_assure <- "AS2"; s3$date_instruction <- NA
+  d4 <- b$dossiers[1L, ]; d4$id_dossier <- "DO4"; d4$id_sinistre <- "SI3"; d4$id_garantie_souscrite <- "GS4"
+  p4 <- b$prestations[2L, ]; p4$id_prestation <- "PR4"; p4$id_dossier <- "DO4"
+  b$sinistres <- rbind(b$sinistres, s3); b$dossiers <- rbind(b$dossiers, d4); b$prestations <- rbind(b$prestations, p4)
+  f(b)
+})
+verifier_egal("#105, G2a, D13 : instruction refusée (à l'extraction, à A0), nature refusée, code_garantie refusé : SI1 écarté ; SI3 détecté",
+              list(g2_v105(d13_v105(function(b) { b$sinistres$date_instruction[1L] <- D("2090-01-01"); b }), "D13", "sinistres"),
+                   g2_v105(d13_v105(function(b) { b$sinistres$date_instruction[1L] <- D("2090-01-01"); b }), "D13", "sinistres", A0),
+                   g2_v105(d13_v105(function(b) { b$sinistres$date_instruction[1L] <- NA; b$sinistres$nature_sinistre[1L] <- "zzz"; b }),
+                           "D13", "sinistres"),
+                   g2_v105(d13_v105(function(b) { b$sinistres$date_instruction[1L] <- NA; b$garanties_souscrites$code_garantie[1L] <- "zzz"; b }),
+                           "D13", "sinistres")),
+              list(ecarte_v105("D02c", "SI3"), ecarte_v105("D02c", "SI3"), ecarte_v105("hors_domaine", "SI3"),
+                   ecarte_v105("hors_domaine", "SI3")))
+# D11c : CT1 a deux collèges (GS5 : cadres) ; AF1 (AS1, ensemble, 2015, fin 2016-12-31 connue) et
+# AF2 (AS1, cadres) ; AF3 et AF4 (AS2, ensemble et cadres, ouvertes, 2015 et 2016) détectées.
+# Début de AF2 refusé, AF2 ouverte : chevauchement possible ou non, inconnu (D02c) ; AF2 de fin
+# 1902-01-01 : aucun chevauchement possible, faux déterminé. Le collège d'une affiliation n'est
+# jamais refusé pour sa valeur (D04b, chaine_vide : portée table ; mesuré) : le chemin du collège
+# inconnu de .d11c_ligne3() n'est pas atteint par une base, testé en (oracle) ci-dessous
+d11c_v105 <- function(debut2, fin2 = NA) avec(function(b) {
+  g5 <- b$garanties_souscrites[1L, ]; g5$id_garantie_souscrite <- "GS5"; g5$college <- "cadres"
+  b$garanties_souscrites <- rbind(b$garanties_souscrites, g5)
+  x <- b$affiliations[rep(1L, 4L), ]
+  x$id_affiliation <- paste0("AF", 1:4); x$id_assure <- c("AS1", "AS1", "AS2", "AS2")
+  x$college <- c("ensemble", "cadres", "ensemble", "cadres")
+  x$date_debut <- D(c("2015-01-01", debut2, "2015-01-01", "2016-01-01"))
+  x$date_fin <- D(c("2016-12-31", fin2, NA, NA))
+  x$date_saisie_fin <- D(c("2017-01-05", if (is.na(fin2)) NA else "2017-01-05", NA, NA))
+  x$motif_fin <- c("autre", if (is.na(fin2)) NA else "autre", NA, NA)
+  b$affiliations <- x
+  b
+})
+verifier_egal("#105, G2a, D11c : début refusé, AF2 ouverte : inconnu (D02c) ; AF2 finie en 1902 : faux ; AF3 et AF4 détectées",
+              list(g2_v105(d11c_v105("1850-01-01"), "D11c", "affiliations"), g2_v105(d11c_v105("1850-01-01", "1902-01-01"), "D11c", "affiliations")),
+              list(ecarte_v105("D02c", "AF3;AF4"), detecte_v105("AF3;AF4")))
+# Oracles par simulation (constat de simulation ; graine 20261125 sous outils::avec_graine()) :
+# noyau contre énumération exhaustive sur des plages réduites.
+# (a) D11c, .d11c_ligne3() en appel direct : ligne 1 et deux ou trois affiliations candidates,
+# collèges a ou b (ou inconnus : a, b ou une valeur neuve), débuts et fins sur la plage réduite
+# 0 à 20 (60 cas, fin au moins le début) et 0 à 5 (500 cas, fins libres, partie connue, non
+# connue ou non déterminée ; audit de G2a) (fin : ou absente), partie de fin connue ou non déterminée, candidate retenue ou non
+# déterminée ; grille de l'oracle bornée à 2e5 affectations (inconnues retirées au hasard
+# au-delà) ; oracle : chaque valeur de chaque cellule inconnue, verdict « il existe j présent,
+# de collège différent, qui chevauche »
+ctx_d11c <- list2env(list(lignes_nd = list()))
+# `haut` : borne haute de la plage réduite ; `libre` : fins tirées sans contrainte (fin avant le
+# début possible, configuration de l'audit de G2a) et partie de fin aussi connue non connue
+sim_d11c_de <- function(nb, haut, libre) avec_graine_v105({
+  vapply(seq_len(nb), function(k) {
+    m <- sample(2:3, 1L)
+    col <- sample(c("a", "b"), m, replace = TRUE); deb <- sample(0:haut, m, replace = TRUE)
+    fin <- ifelse(runif(m) < 0.3, NA, if (libre) sample(0:haut, m, replace = TRUE) else pmax(deb, sample(0:haut, m, replace = TRUE)))
+    inc <- list(college = runif(m) < 0.25, debut = runif(m) < 0.35, fin = runif(m) < 0.35)
+    partie <- if (libre) sample(c(TRUE, FALSE, NA), m, replace = TRUE, prob = c(0.6, 0.15, 0.25)) else ifelse(runif(m) < 0.2, NA, TRUE)
+    retenu <- c(TRUE, runif(m - 1L) < 0.7); nd <- !retenu
+    taille <- function() prod(ifelse(inc$college, 3, 1) * ifelse(inc$debut, haut + 1, 1) * ifelse(inc$fin, haut + 2, 1) *
+                                ifelse(is.na(partie), 2, 1) * ifelse(nd, 2, 1))
+    while (taille() > 2e5) {
+      u <- which(inc$debut | inc$fin)
+      y <- u[sample.int(length(u), 1L)]
+      inc$debut[y] <- FALSE; inc$fin[y] <- FALSE
+    }
+    x <- ns$.d11c_ligne3(ctx_d11c, 1L, 2:m, col, deb, fin, partie, retenu, nd, inc, c(0, haut), c(0, haut))
+    doms <- list()
+    for (y in seq_len(m)) {
+      doms[[paste0("c", y)]] <- if (inc$college[y]) c("a", "b", paste0("n", y)) else col[y]
+      doms[[paste0("d", y)]] <- if (inc$debut[y]) 0:haut else deb[y]
+      doms[[paste0("f", y)]] <- if (inc$fin[y]) c(0:haut, NA) else fin[y]
+      doms[[paste0("p", y)]] <- if (is.na(partie[y])) c(TRUE, FALSE) else partie[y]
+      doms[[paste0("e", y)]] <- if (nd[y]) c(TRUE, FALSE) else TRUE
+    }
+    g <- expand.grid(doms, stringsAsFactors = FALSE, KEEP.OUT.ATTRS = FALSE)
+    fv <- function(y) ifelse(g[[paste0("p", y)]] & !is.na(g[[paste0("f", y)]]), g[[paste0("f", y)]], Inf)
+    det <- Reduce(`|`, lapply(2:m, function(j) g[[paste0("e", j)]] & g[[paste0("c", j)]] != g$c1 &
+                                g$d1 <= fv(j) & g[[paste0("d", j)]] <= fv(1L)), FALSE)
+    o <- verdict_v105(det)
+    if (!identical(x$v, o)) return(FALSE)
+    if (!is.na(o)) return(TRUE)
+    # pertinence (R-G2a-1) : une cellule inconnue est pertinente si, toutes les autres fixées, le
+    # verdict varie avec elle seule ; clés du noyau
+    cle_o <- c(c = "affiliations.college", d = "affiliations.date_debut", f = "affiliations.date_fin",
+               p = "affiliations.date_saisie_fin", e = "affiliations")
+    pert_o <- character(0)
+    for (nm in names(doms)) {
+      if (length(doms[[nm]]) < 2L) next
+      autres <- setdiff(names(doms), nm)
+      cle_g <- do.call(paste, c(lapply(g[autres], as.character), sep = "\r"))
+      if (any(tapply(det, cle_g, function(z) length(unique(z)) > 1L))) pert_o <- c(pert_o, paste(cle_o[[substr(nm, 1L, 1L)]], substring(nm, 2L)))
+    }
+    pert_n <- vapply(x$pert, function(z) paste(z[1L], z[2L]), "")
+    setequal(pert_o, pert_n)
+  }, NA)
+})
+sim_d11c <- c(sim_d11c_de(60L, 20L, FALSE), sim_d11c_de(500L, 5L, TRUE))
+# (b) D02c assures, emploi assures_sinistre, .age_assure3() d'une copie de l'espace de noms dont
+# .plage_date3() rend la plage réduite 2000-01-01 à 2001-12-31 : naissance de AS1 et survenances
+# de SI1 et SI2 tirées dans la plage, chacune refusée (1850-01-01) avec probabilité 0,4 (deux au
+# plus : grille de l'oracle de 731² affectations au plus), bornes
+# [mini, maxi] tirées dans 0 à 1 an ; oracle : chaque jour de la plage pour chaque cellule refusée,
+# issues vraie, fausse, indéfinie (verdict_issues())
+env_age <- new.env(parent = ns)
+for (nom in ls(ns, all.names = TRUE)) {
+  g0 <- get(nom, envir = ns)
+  if (is.function(g0) && identical(environment(g0), ns)) environment(g0) <- env_age
+  assign(nom, g0, envir = env_age)
+}
+plage_red <- as.numeric(D(c("2000-01-01", "2001-12-31")))
+env_age$.plage_date3 <- function(ctx, table, colonne) plage_red
+sim_age <- avec_graine_v105({
+  vapply(seq_len(15L), function(k) {
+    vals <- sample(plage_red[1L]:plage_red[2L], 3L, replace = TRUE); ref <- runif(3L) < 0.4
+    if (all(ref)) ref[3L] <- FALSE
+    mini <- sample(0:1, 1L); maxi <- mini + sample(0:1, 1L); conv <- sample(ns$CONVENTIONS_AGE, 1L)
+    b <- avec(function(b) {
+      b$assures$date_naissance[1L] <- as.Date(if (ref[1L]) -43829 else vals[1L], origin = "1970-01-01")
+      b$sinistres$date_survenance <- as.Date(ifelse(ref[2:3], -43829, vals[2:3]), origin = "1970-01-01")
+      b$sinistres$date_declaration <- D("2026-01-01"); b$sinistres$date_saisie <- D("2026-01-02")
+      b$sinistres$date_instruction <- D(c("2026-01-03", NA))
+      b
+    })
+    ctx <- ctx_v105(b, A)
+    rv <- env_age$.age_assure3(ctx, "assures_sinistre", conv, mini, maxi)()
+    noyau <- as.vector(rv)[1L]
+    jours <- plage_red[1L]:plage_red[2L]
+    g <- expand.grid(n = if (ref[1L]) jours else vals[1L], s1 = if (ref[2L]) jours else vals[2L], s2 = if (ref[3L]) jours else vals[3L])
+    o1 <- issue_age(g$n, g$s1, conv, mini, maxi); o2 <- issue_age(g$n, g$s2, conv, mini, maxi)
+    o <- ifelse(o1 == "vrai" | o2 == "vrai", "vrai", ifelse(o1 == "indefini" | o2 == "indefini", "indefini", "faux"))
+    if (!identical(noyau, verdict_issues(o))) return(FALSE)
+    if (!is.na(noyau)) return(TRUE)
+    # pertinence (R-G2a-1) : cellule pertinente si, les autres fixées, l'issue varie avec elle seule
+    pert_o <- character(0)
+    for (nm in c("n", "s1", "s2")[ref]) {
+      autres <- setdiff(c("n", "s1", "s2"), nm)
+      if (any(tapply(o, paste(g[[autres[1L]]], g[[autres[2L]]]), function(z) length(unique(z)) > 1L))) pert_o <- c(pert_o, nm)
+    }
+    ip <- attr(rv, "index_pertinent")
+    pert_n <- c(if (1L %in% ip[["assures.date_naissance"]][[1L]]) "n",
+                c("s1", "s2")[c(1L, 2L) %in% ip[["sinistres.date_survenance"]][[1L]]])
+    setequal(pert_o, pert_n)
+  }, NA)
+})
+verifier_egal("#105, G2a, constat de simulation (graine 20261125) : D11c 560 cas (collège opaque, débuts, fins, partie, ligne non déterminée ; plages 0 à 20 et 0 à 5), D02c assures 15 cas (naissance et deux survenances, plage réduite, quatre conventions) : verdict et, s'il est inconnu, cellules pertinentes (index_pertinent, R-G2a-1) du noyau égaux à l'énumération exhaustive",
+              list(sum(sim_d11c), sum(sim_age)), list(560L, 15L))
+# Garde de .regle_vue() et attribut `lues` statique de .age_assure3() (audit de G2a, majeur 1) :
+# à A0, sinistres de AS1 saisis après l'arrêté (aucune référence retenue ni non déterminée) et
+# survenance de SI1 refusée ; affiliation saisie après l'arrêté et début refusé : D02c assures
+# s'exécute, sans erreur interne, sans ligne non exécutée (avant la correction : erreur interne,
+# colonne lue hors du verdict ; sur da40a3b : règle bloquée, cause D02c)
+essai_lues <- function(f) tryCatch({
+  r <- cb(avec(f), A0, decl_g2(0, 100), list(age = "revolu"))
+  ligne(r$controles_non_executes, "D02c", "assures")$cause
+}, error = function(e) conditionMessage(e))
+verifier_egal("#105, G2a, D02c assures : table de références sans ligne retenue ni non déterminée et valeur refusée (survenance, début d'affiliation), à A0 : exécutée, sans erreur ni ligne non exécutée",
+              list(essai_lues(function(b) { b$sinistres$date_saisie <- D(c("2025-12-01", "2025-12-01"))
+                                            b$sinistres$date_survenance[1L] <- D("1850-01-01"); b }),
+                   essai_lues(function(b) { b$affiliations$date_saisie <- D("2025-12-01"); b$affiliations$date_debut <- D("1850-01-01"); b })),
+              list(character(0), character(0)))
+# Pertinence par propagation de paires (.pertinence_paires3(), R-G2a-1) : verdict c XOR d, c
+# conditionnée (deux représentants), d privée : chaque verdict conditionnel est inconnu (d libre),
+# mais c est pertinente (d fixé, c change le verdict) ; verdict c OU d sous d toujours vrai : non
+# pertinente ; verdict c ET d, d toujours faux : non pertinente
+xor_couples <- function(op, d_dom) function(c1, c2) list(unique(cbind(op(c1, d_dom), op(c2, d_dom))))
+verifier_egal("#105, G2a, .pertinence_paires3() : XOR (verdicts conditionnels tous inconnus) : pertinente ; c OU d, d vrai : non pertinente ; c ET d, d faux : non pertinente",
+              list(ns$.pertinence_paires3(list(TRUE, FALSE), xor_couples(xor, c(TRUE, FALSE)), `|`, FALSE),
+                   ns$.pertinence_paires3(list(TRUE, FALSE), xor_couples(`|`, TRUE), `|`, FALSE),
+                   ns$.pertinence_paires3(list(TRUE, FALSE), xor_couples(`&`, FALSE), `|`, FALSE)),
+              list(TRUE, FALSE, FALSE))
+# Représentants du début et de la fin de la ligne (audit de G2a, reprise ciblée) : ligne 1
+# (collège B, début refusé, plage 0 à 5, fin 5, partie connue), j2 (A, début 4, fin 0, retenue),
+# j3 (A, début 5, fin 4, non déterminée) : verdict « début 0, ou j3 présente et début au plus 4 »
+# inconnu ; pour un début de 1 à 4, la présence de j3 décide : pertinente avec le début (avant :
+# représentants du début réduits aux bornes 0 et 5, la présence de j3 n'était pas vue)
+x_rep <- ns$.d11c_ligne3(list2env(list(lignes_nd = list())), 1L, 2:3, c("B", "A", "A"), c(5, 4, 5), c(5, 0, 4), c(TRUE, TRUE, TRUE),
+                         c(TRUE, TRUE, FALSE), c(FALSE, FALSE, TRUE),
+                         list(college = c(FALSE, FALSE, FALSE), debut = c(TRUE, FALSE, FALSE), fin = c(FALSE, FALSE, FALSE)), c(0, 5), c(0, 5))
+verifier_egal("#105, G2a, D11c : début de la ligne inconnu entre les fins des candidates : verdict inconnu, pertinentes le début de la ligne et la présence de j3",
+              list(x_rep$v, sort(vapply(x_rep$pert, paste, "", collapse = " "))),
+              list(NA, c("affiliations 3", "affiliations.date_debut 1")))
