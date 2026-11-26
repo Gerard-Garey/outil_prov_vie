@@ -1961,38 +1961,57 @@ lire_declarations <- function(declarations, dico) {
   FALSE
 }
 
-# Formule à trois valeurs sur un arbre, verdict et pertinence exacts (#105, lot V, G2b ; D-G2-2,
-# conditionnement sur les cellules partagées ; R-G2a-1, propagation de couples le long de
-# l'arbre, recommandation d'`actuary` appliquée à titre provisoire). Une ligne d'une règle est un
-# arbre de nœuds (.noeud3() : `op` "et", "ou" ou "non", `enfants`) et de feuilles (.feuille3() :
-# `cel`, identifiants « table.colonne\rligne » des cellules inconnues qu'elle lit, ou
-# « table\rligne » pour la présence d'une ligne de visibilité non déterminée ; `dom(sigs)` :
-# représentants de ses cellules inconnues non fixées, sachant les affectations `sigs` (liste de
-# listes nommées de cellules fixées, chacune de une ou plusieurs valeurs : réunion des points de
-# rupture relatifs à toutes ces valeurs) ; `f(a, n)` : valeur de la feuille sur `n` affectations
-# `a`, liste nommée de vecteurs par cellule, NA lu comme faux). Les feuilles qui ne partagent
-# aucune cellule sont indépendantes : leur combinaison par ensembles de valeurs est exacte. Une
-# cellule lue par deux feuilles au moins est conditionnée : domaine statique, réunion des
-# représentants rendus par ses feuilles sachant toutes les valeurs des cellules conditionnées de
-# rang inférieur (`ordre` : préfixes « table.colonne » par rang ; les autres ensuite) ; le
-# domaine d'une cellule de rang supérieur contient ainsi les points de rupture relatifs à chaque
-# représentant des cellules qu'elle compare (leçon de G2a : représentants de la ligne de D11c).
-# Verdict : vrai (faux) si toute affectation des cellules conditionnées donne l'ensemble {vrai}
-# ({faux}), inconnu sinon. Pertinence d'une cellule c (verdict inconnu seulement) : il existe
-# une affectation des autres cellules conditionnées et deux représentants c1, c2 de c dont les
-# couples (valeur sous c1, valeur sous c2) se propagent jusqu'à la racine en un couple de deux
-# valeurs différentes : couples des feuilles qui lisent c sur les mêmes valeurs de leurs autres
-# cellules, couples égaux des autres feuilles, combinaison par composante (ET, OU, NON), ensembles
-# produits (.pertinence_paires3() en est le cas d'un pli). Deux représentants de même signature
-# (mêmes valeurs des feuilles qui lisent c, sur la même grille) sont équivalents : un seul est
-# essayé. Rend `v` (TRUE, FALSE, NA) et `pert` (identifiants des cellules pertinentes).
+# Formule à trois valeurs sur un arbre (#105, lot V, G2b ; D-G2-2, conditionnement sur les
+# cellules partagées ; R-G2a-1, propagation de couples le long de l'arbre, recommandation
+# d'`actuary` appliquée à titre provisoire ; erratum E-14, budget du conditionnement). Une ligne
+# d'une règle est un arbre de nœuds (.noeud3() : `op` "et", "ou" ou "non", `enfants`) et de
+# feuilles (.feuille3() : `cel`, identifiants « table.colonne\rligne » des cellules inconnues
+# qu'elle lit, ou « table\rligne » pour la présence d'une ligne de visibilité non déterminée ;
+# `dom(sigs)` : représentants de ses cellules inconnues non fixées, sachant les affectations
+# `sigs` (liste de listes nommées de cellules fixées, chacune de une ou plusieurs valeurs :
+# réunion des points de rupture relatifs à toutes ces valeurs) ; `f(a, n)` : valeur de la
+# feuille sur `n` affectations `a`, liste nommée de vecteurs par cellule, NA lu comme faux ;
+# `lin`, facultatif : feuille évaluée sans parcourir le produit de ses cellules propres, E-14 (e),
+# .arret_feuille3()). Les feuilles qui ne partagent aucune cellule sont indépendantes : leur
+# combinaison par ensembles de valeurs est exacte. Une cellule lue par deux feuilles au moins est
+# partagée ; les cellules partagées sont groupées par « table.colonne » (rang dans `ordre`, puis
+# ordre radix du nom), et l'ensemble C des cellules conditionnées réunit les premiers groupes,
+# chacun pris en entier, tant que le décompte W(C) = (1 + n) × Π_{c∈C} |R(c)| × Σ_k G_k(C) ne
+# dépasse pas `budget` (E-14 (b) et (c) ; n : cellules inconnues lues par l'arbre ; R(c) :
+# domaine statique de c ; G_k(C) : grille propre de la feuille k, produit des représentants de
+# ses cellules hors de C sachant toutes les valeurs des cellules de C, ou son décompte `lin`).
+# Domaine statique d'une cellule de C : réunion des représentants rendus par ses feuilles sachant
+# toutes les valeurs des cellules conditionnées de rang inférieur (préfixes de `ordre` par rang ;
+# les autres ensuite, au même rang) ; le domaine d'une cellule de rang supérieur contient ainsi
+# les points de rupture relatifs à chaque représentant des cellules qu'elle compare (leçon de
+# G2a : représentants de la ligne de D11c). Une cellule partagée hors de C est lue
+# indépendamment par chaque feuille, comme une cellule propre ; une feuille dont la grille propre
+# dépasse `budget` (C vide) vaut vrai et faux. Verdict : vrai (faux) si toute affectation des
+# cellules de C donne l'ensemble {vrai} ({faux}), inconnu sinon ; exact si C contient toutes les
+# cellules partagées, approximation sûre sinon (un verdict déterminé vaut dans tout monde
+# possible). Pertinence d'une cellule c (verdict inconnu seulement) : il existe une affectation
+# des autres cellules de C et deux représentants c1, c2 de c dont les couples (valeur sous c1,
+# valeur sous c2) se propagent jusqu'à la racine en un couple de deux valeurs différentes :
+# couples des feuilles qui lisent c sur les mêmes valeurs de leurs autres cellules, couples égaux
+# des autres feuilles, combinaison par composante (ET, OU, NON), ensembles produits
+# (.pertinence_paires3() en est le cas d'un pli) ; une cellule partagée hors de C, ou lue par une
+# feuille qui dépasse le budget, est pertinente (sur-ensemble, E-14 (d)). Deux représentants de
+# même signature (mêmes valeurs des feuilles qui lisent c, sur la même grille) sont
+# équivalents : un seul est essayé. Les grilles de C sont parcourues point par point, jamais
+# construites (E-14, C-E14-6). `budget` (argument interne, contrôle des tests : Inf, ou faible) ;
+# `lineaire` (contrôle des tests) : faux, toute feuille est énumérée (`lin` ignoré). Rend `v`
+# (TRUE, FALSE, NA), `pert` (identifiants des cellules pertinentes), `w` (W(C)), `grilles`
+# (G_k(C)) et `exact` (C contient toutes les cellules partagées).
 .feuille3 <- function(cel, dom, f) list(cel = unique(cel[!is.na(cel)]), dom = dom, f = f)
 .noeud3 <- function(op, enfants) list(op = op, enfants = enfants)
 .constante3 <- function(v) .feuille3(character(0), function(sigs) list(), function(a, n) rep_len(v, n))
-.arbre3 <- function(arbre, ordre = "sinistres.date_survenance") {
+# Budget du conditionnement de .arbre3() (erratum E-14 (c) ; seuil, jugement d'expert).
+.BUDGET_ARBRE3 <- 2^22
+.arbre3 <- function(arbre, ordre = "sinistres.date_survenance", budget = .BUDGET_ARBRE3, lineaire = TRUE) {
   feuilles <- list()
   numeroter <- function(x) {
     if (is.null(x$op)) {
+      if (!lineaire) x$lin <- NULL
       feuilles[[length(feuilles) + 1L]] <<- x
       return(list(k = length(feuilles)))
     }
@@ -2004,29 +2023,68 @@ lire_declarations <- function(declarations, dico) {
   nb <- table(unlist(cel))
   partagees <- names(nb)[nb > 1L]
   lecteurs_de <- function(c1) which(vapply(cel, function(z) c1 %in% z, NA))
-  # domaines statiques des cellules conditionnées, rang par rang
-  rang <- vapply(partagees, function(c1) {
-    tc <- strsplit(c1, "\r", fixed = TRUE)[[1L]][1L]
-    r <- match(tc, ordre)
-    if (is.na(r)) length(ordre) + 1L else r
-  }, 0L)
+  # groupes « table.colonne » des cellules partagées, dans l'ordre des rangs puis radix (E-14 (c))
+  tc <- vapply(partagees, function(c1) strsplit(c1, "\r", fixed = TRUE)[[1L]][1L], "", USE.NAMES = FALSE)
+  rang <- match(tc, ordre)
+  rang[is.na(rang)] <- length(ordre) + 1L
+  groupes <- unique(tc)
+  groupes <- groupes[order(rang[match(groupes, tc)], groupes, method = "radix")]
+  # grille propre de la feuille k (cellules hors de C, sachant toutes les valeurs de C) et W(C)
+  grille_k <- function(k, C, sig) {
+    fe <- feuilles[[k]]
+    pv <- setdiff(fe$cel, C)
+    if (!is.null(fe$lin)) return(fe$lin$cout(sig, pv))
+    if (length(pv) == 0L) return(1)
+    prod(as.numeric(lengths(fe$dom(sig)[pv])))
+  }
   dom_p <- list()
-  for (r in sort(unique(rang))) {
-    groupe <- partagees[rang == r]
-    fixes <- dom_p
-    for (c1 in groupe) {
+  decompte <- function(C) {
+    sig <- list(dom_p[C])
+    g <- vapply(seq_along(feuilles), grille_k, 0, C, sig)
+    list(w = (1 + length(tous)) * prod(as.numeric(lengths(dom_p[C]))) * sum(g), g = g)
+  }
+  C <- character(0)
+  w <- decompte(C)
+  for (g in groupes) {
+    cg <- partagees[tc == g]
+    fixes <- dom_p[names(dom_p) %in% partagees[rang < rang[match(g, tc)]]]
+    for (c1 in cg) {
       d <- lapply(feuilles[lecteurs_de(c1)], function(fe) fe$dom(list(fixes))[[c1]])
       dom_p[[c1]] <- unique(do.call(c, d))
       if (length(dom_p[[c1]]) == 0L) {
         stop("erreur interne de provie : .arbre3() : cellule partag\u00e9e sans repr\u00e9sentant", call. = FALSE)
       }
     }
+    w1 <- decompte(c(C, cg))
+    if (w1$w > budget) {
+      dom_p[cg] <- NULL
+      break
+    }
+    C <- c(C, cg)
+    w <- w1
   }
-  grille <- function(cells) {
-    if (length(cells) == 0L) return(list(list()))
-    g <- expand.grid(lapply(dom_p[cells], seq_along), KEEP.OUT.ATTRS = FALSE)
-    lapply(seq_len(nrow(g)), function(i) stats::setNames(lapply(cells, function(c1) dom_p[[c1]][g[[c1]][i]]), cells))
+  libres <- setdiff(partagees, C)
+  deborde <- w$g > budget & vapply(cel, function(z) length(setdiff(z, C)) > 0L, NA)
+  # affectation numéro i (0, 1, ...) des cellules `cells` de C, la première variant le plus vite ;
+  # attribut `idx` : rangs des valeurs dans les domaines
+  affectation <- function(i, cells) {
+    s <- list()
+    idx <- integer(0)
+    for (c1 in cells) {
+      m <- length(dom_p[[c1]])
+      idx[c1] <- i %% m + 1
+      s[c1] <- list(dom_p[[c1]][idx[c1]])
+      i <- i %/% m
+    }
+    attr(s, "idx") <- idx
+    s
   }
+  # mémoïsation (résultats inchangés) : la valeur d'une feuille ne dépend que des cellules de C
+  # qu'elle lit (clé : rangs de leurs valeurs)
+  cc <- lapply(cel, function(z) intersect(z, C))
+  cle_k <- function(k, s) paste(c(k, attr(s, "idx")[cc[[k]]]), collapse = ".")
+  memo <- new.env(hash = TRUE)
+  taille <- function(cells) prod(as.numeric(lengths(dom_p[cells])))
   # valeurs de la feuille k sous chaque affectation de `sigs` (mêmes cellules fixées), sur la
   # grille commune de ses autres cellules : matrice (grille, affectations)
   valeurs_f <- function(k, sigs) {
@@ -2045,6 +2103,18 @@ lire_declarations <- function(declarations, dico) {
     }, logical(ng))
     matrix(m, nrow = ng)
   }
+  # ensemble des valeurs de la feuille k sachant l'affectation `s` des cellules de C
+  ens_f <- function(k, s) {
+    if (deborde[k]) return(c(TRUE, FALSE))
+    cle <- cle_k(k, s)
+    x <- memo[[cle]]
+    if (is.null(x)) {
+      x <- if (!is.null(feuilles[[k]]$lin)) unique(feuilles[[k]]$lin$couples(list(s))[, 1L]) else unique(valeurs_f(k, list(s))[, 1L])
+      assign(cle, x, envir = memo)
+    }
+    x
+  }
+  code <- function(u) 1L * any(u) + 2L * any(!u)
   ens <- function(x, e) {
     if (!is.null(x$k)) return(e[[x$k]])
     if (x$op == "non") return(!ens(x$enfants[[1L]], e))
@@ -2061,35 +2131,63 @@ lire_declarations <- function(declarations, dico) {
       unique(cbind(op(a[i, 1L], b[j, 1L]), op(a[i, 2L], b[j, 2L])))
     }, lapply(x$enfants, couples, cp))
   }
+  fin <- function(v, pert) list(v = v, pert = pert, w = w$w, grilles = w$g, exact = length(libres) == 0L)
   vals <- logical(0)
-  for (s in grille(partagees)) {
-    e <- lapply(seq_along(feuilles), function(k) unique(valeurs_f(k, list(s))[, 1L]))
+  vues <- new.env(hash = TRUE)
+  i <- 0
+  while (i < taille(C)) {
+    s <- affectation(i, C)
+    i <- i + 1
+    e <- lapply(seq_along(feuilles), ens_f, s)
+    cle <- paste(vapply(e, code, 0L), collapse = "")
+    if (!is.null(vues[[cle]])) next
+    assign(cle, TRUE, envir = vues)
     vals <- unique(c(vals, ens(t, e)))
     if (length(vals) == 2L) break
   }
   v <- if (identical(vals, TRUE)) TRUE else if (identical(vals, FALSE)) FALSE else NA
-  if (!is.na(v)) return(list(v = v, pert = character(0)))
+  if (!is.na(v)) return(fin(v, character(0)))
   pert <- character(0)
   for (c1 in tous) {
     lecteurs <- lecteurs_de(c1)
+    if (c1 %in% libres || any(deborde[lecteurs])) {
+      pert <- c(pert, c1)
+      next
+    }
+    lin <- vapply(feuilles[lecteurs], function(fe) !is.null(fe$lin), NA)
+    autres <- setdiff(C, c1)
     trouve <- FALSE
-    for (s in grille(setdiff(partagees, c1))) {
-      reps <- if (c1 %in% partagees) dom_p[[c1]] else feuilles[[lecteurs]]$dom(list(s))[[c1]]
-      if (length(reps) < 2L) next
-      sigs <- lapply(seq_along(reps), function(i) c(s, stats::setNames(list(reps[i]), c1)))
+    vues <- new.env(hash = TRUE)
+    i <- 0
+    while (!trouve && i < taille(autres)) {
+      s <- affectation(i, autres)
+      i <- i + 1
       cp <- vector("list", length(feuilles))
       for (k in setdiff(seq_along(feuilles), lecteurs)) {
-        u <- unique(valeurs_f(k, list(s))[, 1L])
+        u <- ens_f(k, s)
         cp[[k]] <- cbind(u, u)
       }
-      V <- lapply(lecteurs, valeurs_f, sigs)
-      signature <- vapply(seq_along(reps), function(i) paste(vapply(V, function(m) paste(as.integer(m[, i]), collapse = ""), ""),
-                                                            collapse = "|"), "")
+      # configuration déjà essayée : mêmes ensembles des autres feuilles, mêmes cellules de C
+      # lues par les feuilles qui lisent c1
+      cle <- paste(c(vapply(cp, function(z) if (is.null(z)) "" else as.character(code(z[, 1L])), ""),
+                     vapply(lecteurs, cle_k, "", s)), collapse = "|")
+      if (!is.null(vues[[cle]])) next
+      assign(cle, TRUE, envir = vues)
+      reps <- if (c1 %in% C) dom_p[[c1]] else feuilles[[lecteurs]]$dom(list(s))[[c1]]
+      if (length(reps) < 2L) next
+      sigs <- lapply(seq_along(reps), function(r) c(s, stats::setNames(list(reps[r]), c1)))
+      V <- lapply(seq_along(lecteurs), function(q) if (!lin[q]) valeurs_f(lecteurs[q], sigs))
+      signature <- vapply(seq_along(reps), function(r) paste(vapply(seq_along(lecteurs), function(q) {
+        if (lin[q]) feuilles[[lecteurs[q]]]$lin$signature(sigs[[r]]) else paste(as.integer(V[[q]][, r]), collapse = "")
+      }, ""), collapse = "|"), "")
       garde <- which(!duplicated(signature))
       if (length(garde) < 2L) next
       for (a in seq_len(length(garde) - 1L)) {
         for (b in (a + 1L):length(garde)) {
-          for (q in seq_along(lecteurs)) cp[[lecteurs[q]]] <- unique(cbind(V[[q]][, garde[a]], V[[q]][, garde[b]]))
+          for (q in seq_along(lecteurs)) {
+            cp[[lecteurs[q]]] <- if (lin[q]) feuilles[[lecteurs[q]]]$lin$couples(sigs[c(garde[a], garde[b])]) else
+              unique(cbind(V[[q]][, garde[a]], V[[q]][, garde[b]]))
+          }
           m <- couples(t, cp)
           if (any(m[, 1L] != m[, 2L])) {
             trouve <- TRUE
@@ -2098,11 +2196,10 @@ lire_declarations <- function(declarations, dico) {
         }
         if (trouve) break
       }
-      if (trouve) break
     }
     if (trouve) pert <- c(pert, c1)
   }
-  list(v = v, pert = pert)
+  fin(v, pert)
 }
 # Identifiants des cellules inconnues lues par les feuilles d'un arbre de .arbre3().
 .cellules3 <- function(x) if (is.null(x$op)) x$cel else unique(unlist(lapply(x$enfants, .cellules3)))
@@ -5575,7 +5672,7 @@ table_refusee_vue <- function(vue, table) {
   # `deces` du même sinistre dans la vue » (dossiers retenus ou non déterminés, code de leur
   # garantie) ; la cellule de code de la garantie du dossier, lue par « vise » et comme version
   # candidate de « décès souscrit », est conditionnée, comme la survenance et toute cellule lue par
-  # deux feuilles (D-G2-2) ; pertinence exacte (.arbre3()).
+  # deux feuilles (D-G2-2) ; pertinence de .arbre3() (exacte, sur-ensemble au-delà du budget, E-14).
   lit_c10 <- c(lit_gs, "dossiers.id_sinistre", "sinistres.id_sinistre", "sinistres.date_survenance",
                paste0("garanties_souscrites.", c("code_garantie", "id_contrat", "college", "date_effet", "date_fin")))
   .regle_vue(ctx, "D10c", "dossiers", NA_character_, lit_c10, "S", "exacte", function() {
@@ -5912,8 +6009,8 @@ table_refusee_vue <- function(vue, table) {
 # `lignes`, que l'élément soit vrai ou non (lues par D14 : conjoint visé et limite d'âge de la
 # version).
 # `inconnues` (#105, lot V, G2b, M810 ; spécification `donnees`, erratum `1.9.7`, E-1, E-7, E-9 ;
-# source extensible, #211) : NULL (défaut) : lecture ci-dessus, inchangée (appelants en mode
-# bloquee : .maintien_d11(), D11a et D11b) ; sinon liste alignée sur les éléments
+# source extensible, #211) : NULL (défaut) : lecture ci-dessus, inchangée (aucun appelant depuis
+# G2c : les chemins rapides lisent .gev_brut()) ; sinon liste alignée sur les éléments
 # (`survenance` : identifiant .arbre3() de la cellule de survenance inconnue, NA si connue ;
 # `college` : de même pour le collège de l'élément) : lecture existentielle à trois valeurs, rendue
 # en arbres (.versions3()) ; la garde du collège ne vaut plus que pour une cause de forme ou de
@@ -6101,9 +6198,12 @@ table_refusee_vue <- function(vue, table) {
 # individuel (hors champ du collège) ; un collège manquant ou vide (.cle_manquante()) ne
 # s'apparie à aucune affiliation.
 # `inconnues` (#105, lot V, G2b ; E-1, E-9) : NULL (défaut) : lecture ci-dessus, inchangée
-# (appelants en mode bloquee : D11a, D11b) ; sinon liste (`date` : identifiant .arbre3() de la
-# cellule de date inconnue de chaque élément, NA si connue) : couverture à trois valeurs, rendue
-# en feuilles (.couverture_arbres3()), sans `college`.
+# (chemins rapides en lecture brute) ; sinon liste (`date` : identifiant .arbre3() de la cellule de
+# date inconnue de chaque élément, NA si connue ; `college`, avec l'argument `college` : de même
+# pour le collège de l'élément, NULL si tous sont connus) : couverture à trois valeurs, rendue en
+# feuilles (.couverture_arbres3()) ; avec `college` (G2c, erratum E-13 (e)), affiliations seules,
+# collège de l'affiliation égal à celui de l'élément, l'un et l'autre pouvant être inconnus (clé
+# opaque, .feuille_college3()).
 .couverture3 <- function(ctx, assure, date, college = NULL, inconnues = NULL) {
   assure <- as.character(assure)
   date <- as.numeric(date)
@@ -6111,13 +6211,7 @@ table_refusee_vue <- function(vue, table) {
     stop("erreur interne de provie : .couverture3() : coll\u00e8ge de longueur diff\u00e9rente de celle des \u00e9l\u00e9ments ",
          "(aucun recyclage)", call. = FALSE)
   }
-  if (!is.null(inconnues)) {
-    if (!is.null(college)) {
-      stop("erreur interne de provie : .couverture3() : coll\u00e8ge et inconnues ensemble (lecture \u00e0 trois valeurs ",
-           "sans coll\u00e8ge, #105, G2c)", call. = FALSE)
-    }
-    return(.couverture_arbres3(ctx, assure, date, inconnues))
-  }
+  if (!is.null(inconnues)) return(.couverture_arbres3(ctx, assure, date, inconnues, college))
   res <- list(data.frame(i = integer(0), contrat = character(0), affiliation = logical(0), college = character(0),
                          certain = logical(0), tc = character(0), ligne = integer(0), stringsAsFactors = FALSE))
   for (t in intersect(c("affiliations", if (is.null(college)) "contrats"), names(ctx$base))) {
@@ -6175,8 +6269,10 @@ table_refusee_vue <- function(vue, table) {
 # inconnues : début (refusé, ou contrats.date_effet de D03i), fin, terme, nature, date de l'élément
 # (à deux côtés : représentants aux points de rupture de chaque borne). Rend un data.frame
 # (`i`, `contrat`, `affiliation`, `college`, `college_id` : cellule du collège refusé de
-# l'affiliation) et, en attribut `feuilles`, la feuille de chaque rangée.
-.couverture_arbres3 <- function(ctx, assure, date, inconnues) {
+# l'affiliation) et, en attribut `feuilles`, la feuille de chaque rangée. `college` (G2c, E-13
+# (e)) : affiliations seules dont le collège peut égaler celui de l'élément (`inconnues$college`
+# pour un collège d'élément inconnu) ; la feuille est alors « couvre ET même collège ».
+.couverture_arbres3 <- function(ctx, assure, date, inconnues, college = NULL) {
   res <- list(data.frame(i = integer(0), contrat = character(0), affiliation = logical(0), college = character(0),
                          college_id = character(0), stringsAsFactors = FALSE))
   feuilles <- list()
@@ -6188,7 +6284,11 @@ table_refusee_vue <- function(vue, table) {
     n <- nrow(ctx$base[[t]])
     aff <- t == "affiliations"
     c_debut <- if (aff) "date_debut" else "date_effet"
-    cel <- function(c1, l) if (.inconnu(ctx, t, c1)[l]) paste0(t, ".", c1, "\r", l) else NA_character_
+    inc <- list()
+    cel <- function(c1, l) {
+      if (is.null(inc[[c1]])) inc[[c1]] <<- .inconnu(ctx, t, c1)
+      if (inc[[c1]][l]) paste0(t, ".", c1, "\r", l) else NA_character_
+    }
     debut <- as.numeric(v(c_debut))
     fin <- as.numeric(v("date_fin"))
     terme <- if (aff) rep(NA_real_, n) else as.numeric(v("date_terme"))
@@ -6204,6 +6304,13 @@ table_refusee_vue <- function(vue, table) {
                     terme = !aff && !.obligatoire3(ctx, t, "date_terme"))
     dom_nature <- if (!aff) .domaine3(ctx, t, "nature_contrat")
     p <- .paires(assure, ifelse((retenu | nd) & admis, as.character(v("id_assure")), NA))
+    if (!is.null(college)) {
+      ce_id <- if (is.null(inconnues$college)) rep(NA_character_, length(assure)) else inconnues$college
+      k_e <- .cle_manquante(as.character(college))
+      k_a <- .cle_manquante(as.character(v("college")))
+      cu <- .inconnu(ctx, t, "college")
+      p <- p[cu[p$j] | !is.na(ce_id[p$i]) | (!is.na(k_a[p$j]) & !is.na(k_e[p$i]) & k_a[p$j] == k_e[p$i]), , drop = FALSE]
+    }
     if (nrow(p) == 0L) return(NULL)
     feuille <- function(i, l) {
       d_id <- inconnues$date[i]
@@ -6243,9 +6350,17 @@ table_refusee_vue <- function(vue, table) {
     list(df = data.frame(i = p$i, contrat = as.character(v("id_contrat"))[p$j], affiliation = rep(aff, nrow(p)),
                          college = if (aff) as.character(v("college"))[p$j] else rep(NA_character_, nrow(p)),
                          college_id = college_id, stringsAsFactors = FALSE),
-         feuilles = lapply(seq_len(nrow(p)), function(k) feuille(p$i[k], p$j[k])))
+         feuilles = {
+           col_t <- if (!is.null(college)) as.character(v("college"))
+           col_e <- if (!is.null(college)) as.character(college)
+           lapply(seq_len(nrow(p)), function(k) {
+             fe <- feuille(p$i[k], p$j[k])
+             if (is.null(college)) return(fe)
+             .noeud3("et", list(fe, .feuille_college3(ctx, college_id[k], col_t[p$j[k]], ce_id[p$i[k]], col_e[p$i[k]], TRUE)))
+           })
+         })
   }
-  for (t in intersect(c("affiliations", "contrats"), names(ctx$base))) {
+  for (t in intersect(c("affiliations", if (is.null(college)) "contrats"), names(ctx$base))) {
     x <- par_table(t)
     if (is.null(x)) next
     res[[t]] <- x$df
@@ -6929,8 +7044,10 @@ table_refusee_vue <- function(vue, table) {
 # Événements non déterminés `e` (lignes de evenements) qui peuvent suivre, dans l'ordre du § 4.2
 # (date d'effet, ordre du type, date de saisie, identifiant), l'événement retenu `d` de même
 # rang (NA : aucun événement retenu, tout événement suit) ; une valeur absente ou inconnue
-# (.date_connue()) peut suivre. Rend un vecteur logique de la longueur de `e`.
-.peut_suivre <- function(ctx, e, d) {
+# (.date_connue()) peut suivre. `type_inconnu` (D11a, D11b, #105, lot V, G2c ; E-13 (c)) : un type
+# refusé pour sa valeur est inconnu et peut suivre (sinon : lu brut, inchangé pour D07). Rend un
+# vecteur logique de la longueur de `e`.
+.peut_suivre <- function(ctx, e, d, type_inconnu = FALSE) {
   if (length(e) == 0L) return(logical(0))
   te <- ctx$dico$types_evenements
   cle_tri <- function(c1, x) if (c1 == "type_evenement") te$ordre[match(x, te$type_evenement)] else x
@@ -6939,6 +7056,7 @@ table_refusee_vue <- function(vue, table) {
   for (c1 in c("date_effet", "type_evenement", "date_saisie", "id_evenement")) {
     x <- .valeurs(ctx, "evenements", c1)
     if (c1 %in% c("date_effet", "date_saisie")) x <- .date_connue(ctx, "evenements", c1)
+    if (type_inconnu && c1 == "type_evenement") x[.inconnu(ctx, "evenements", c1)] <- NA
     xe <- cle_tri(c1, x[e])
     xd <- cle_tri(c1, x[ifelse(is.na(d), 1L, d)])
     plus <- if (is.character(xe)) mapply(function(y, z) order(c(z, y), method = "radix")[1L] == 1L && y != z, xe, xd)
@@ -7482,8 +7600,9 @@ table_refusee_vue <- function(vue, table) {
 #   (.maintien_d11() : un sinistre deces qui en relève n'est pas détecté, sans ligne
 #   non_lisible). Le cœur (non-couverture) ne lit ni evenements, ni sinistres.nature_sinistre, ni
 #   maintien_deces : seul le sous-cas les lit (.LIT_MAINTIEN_D11) ; l'une de ces colonnes
-#   illisible, le sous-cas n'est lu que pour sa partie lisible (lecture grossière gardée, Q-22,
-#   M659 ; lecture fine : #105) : un sinistre au sous-cas inconnu est écarté (non détecté ; s'il
+#   illisible pour une cause de forme ou de portée table (depuis G2c, E-13 (a) : un refus de
+#   valeur se lit ligne par ligne, ci-dessous), le sous-cas n'est lu que pour sa partie lisible
+#   (lecture grossière gardée, Q-22, M659) : un sinistre au sous-cas inconnu est écarté (non détecté ; s'il
 #   est aussi de couverture inconnue, il garde son verdict inconnu et sa cause γ), les autres
 #   détections du cœur restent, et (D11a, sinistres, NA) entre dans controles_non_executes, cause
 #   = cause directe des colonnes illisibles du sous-cas, la plus petite dans l'ordre (rang,
@@ -7498,8 +7617,8 @@ table_refusee_vue <- function(vue, table) {
 #   Contrat individuel lu sur les lignes retenues de contrats (vue, § 8.0 bis, point 1) ; une
 #   ligne non déterminée de nature individuel rend le verdict inconnu (cause γ). Le sous-cas y
 #   suit la lecture grossière de D11a (décision du mainteneur du 19/11/2026) : ses colonnes
-#   illisibles ne bloquent pas D11b, un dossier au sous-cas inconnu est écarté et (D11b,
-#   dossiers, NA) prend la cause directe.
+#   illisibles (forme ou portée table) ne bloquent pas D11b, un dossier au sous-cas inconnu est
+#   écarté et (D11b, dossiers, NA) prend la cause directe.
 # - D11c (constat sur affiliations, colonne college) : deux affiliations retenues d'un même
 #   assuré au même contrat, dans deux collèges distincts, dont les périodes de couverture se
 #   chevauchent (bornes incluses ; fin connue à l'arrêté, fin inconnue à l'arrêté ouverte) ; une
@@ -7510,6 +7629,11 @@ table_refusee_vue <- function(vue, table) {
 # non déterminée ; clé de garantie souscrite en double aux occurrences divergentes : verdict de
 # chaque valeur, inconnu s'ils diffèrent (index sur les occurrences, cause candidate D01a ;
 # chemin non atteignable tant que le refus D01a de portée table bloque la règle, #169).
+# D11a et D11b en mode Kleene (#105, lot V, G2c, M808, M811 ; erratum E-13) : un refus de valeur
+# d'une colonne lue (cœur ou sous-cas) est une inconnue de la ligne (.verdict_d11(),
+# .verdict_d11b() : chemin rapide en lecture brute, arbres de .arbre3() sur les lignes complexes ;
+# sous-cas .maintien_arbres3(), arrêt en cours .arret_feuille3(), approximation E-13 (c)) ; une
+# ligne au verdict inconnu est écartée, cause = ses éléments pertinents (motif du refus, causes γ).
 .regle_v_couverture <- function(ctx) {
   lit_c <- c(paste0("affiliations.", c("id_assure", "id_contrat", "college", "date_debut", "date_fin")),
              paste0("contrats.", c("id_contrat", "nature_contrat", "id_assure", "date_effet", "date_fin", "date_terme")))
@@ -7524,12 +7648,17 @@ table_refusee_vue <- function(vue, table) {
       verdict
     }
   }
-  f <- memo(.verdict_d11)
-  for (t in c("S", "X")) .regle_vue(ctx, "D11a", "sinistres", "date_survenance", lit, t, "exacte", f, vue = vue)
+  # Règles V en mode Kleene (#105, lot V, G2c, M808, M811 ; erratum E-13) : chemin rapide en lecture
+  # brute, arbre par ligne complexe (.verdict_d11(), .verdict_d11b())
+  lit_a <- unique(c(lit, "sinistres.date_survenance"))
+  f <- memo(function(ctx) .verdict_d11(ctx, lit_a))
+  for (t in c("S", "X")) .regle_vue(ctx, "D11a", "sinistres", "date_survenance", lit, t, "exacte", f, vue = vue, mode = "kleene")
   lit_b <- unique(c(lit, "sinistres.date_survenance", "garanties_souscrites.college"))
   vue_b <- c(vue, ctx$lit_vue$sinistres)
-  fb <- memo(.verdict_d11b)
-  for (t in c("S", "X")) .regle_vue(ctx, "D11b", "dossiers", "id_garantie_souscrite", lit_b, t, "exacte", fb, vue = vue_b)
+  fb <- memo(function(ctx) .verdict_d11b(ctx, lit_b))
+  for (t in c("S", "X")) {
+    .regle_vue(ctx, "D11b", "dossiers", "id_garantie_souscrite", lit_b, t, "exacte", fb, vue = vue_b, mode = "kleene")
+  }
   lit_cc <- paste0("affiliations.", c("id_assure", "id_contrat", "college", "date_debut", "date_fin"))
   fc <- memo(.verdict_d11c)
   for (t in c("S", "X")) {
@@ -7546,9 +7675,11 @@ table_refusee_vue <- function(vue, table) {
                        paste0("garanties_souscrites.", c("maintien_deces", "code_garantie", "college", "date_effet", "date_fin")),
                        paste0("evenements.", c("id_sinistre", "type_evenement", "date_effet", "date_saisie", "id_evenement")))
 
-# Verdict de D11a sur les lignes de sinistres (.regle_v_couverture()) : vecteur logique, attribut
+# Lecture brute de D11a (règle du mode bloquee, inchangée, sous-cas lu en entier) : chemin rapide de
+# la règle V en mode Kleene, exact sur les sinistres qui ne lisent aucune cellule inconnue ni ligne
+# de visibilité non déterminée (.verdict_d11() ; #105, lot V, G2c) : vecteur logique, attribut
 # `index` s'il est inconnu.
-.verdict_d11 <- function(ctx) {
+.verdict_d11_brut <- function(ctx) {
   v <- function(t, c1) .valeurs(ctx, t, c1)
   ns <- nrow(ctx$base$sinistres)
   id_s <- as.character(v("sinistres", "id_sinistre"))
@@ -7638,51 +7769,33 @@ table_refusee_vue <- function(vue, table) {
   }
   en_cause[!avec] <- list(NULL)
   # sous-cas du maintien de la garantie décès : sinistres deces non couverts (vrai ou inconnu)
-  lire <- .lecture_maintien_d11(ctx)
-  actif <- function() v("sinistres", "nature_sinistre") %in% "deces" & !(r$v %in% FALSE)
-  if (lire$n && lire$m && lire$e) {
-    m3 <- .maintien_d11(ctx, seq_len(ns), actif(), en_cause)
-    return(.k3_resultat(.k3_op(`&`, r, .k3(!m3$v, m3$index))))
-  }
-  # partie lisible du sous-cas ; nature illisible : tout sinistre non couvert. Sous-cas inconnu :
-  # écarté (vrai -> faux ; inconnu : garde l'index de la couverture) ; aucun sous-cas n'y est
-  # vrai (la partie illisible le rend inconnu)
-  inconnu <- if (lire$n) {
-    is.na(.maintien_d11(ctx, seq_len(ns), actif(), en_cause, lire_maintien = lire$m, lire_evenements = lire$e)$v)
-  } else {
-    !(r$v %in% FALSE)
-  }
-  res <- .k3_resultat(r)
-  res[inconnu & res %in% TRUE] <- FALSE
-  if (any(ctx$retenu$sinistres & inconnu)) .ecarter_maintien_d11(ctx, "D11a", "sinistres")
-  res
+  actif <- v("sinistres", "nature_sinistre") %in% "deces" & !(r$v %in% FALSE)
+  m3 <- .maintien_d11(ctx, seq_len(ns), actif, en_cause)
+  .k3_resultat(.k3_op(`&`, r, .k3(!m3$v, m3$index)))
 }
 
 # Lecture grossière du sous-cas du maintien (Q-22, M659 ; D11a, et D11b par décision du
-# mainteneur du 19/11/2026) : parties lisibles du sous-cas, colonnes de .LIT_MAINTIEN_D11 lues
-# comme .regle() (lues comme valeurs : toute cause ; colonnes de la vue de evenements : cause
-# autre qu'un refus de valeur, toute cause à l'extraction) : `n` (nature du sinistre), `m`
-# (maintien_deces et garantie en vigueur), `e` (evenements).
+# mainteneur du 19/11/2026) : parties lisibles du sous-cas, colonnes de .LIT_MAINTIEN_D11 et
+# colonnes de la vue de evenements : `n` (nature du sinistre), `m` (maintien_deces et garantie en
+# vigueur), `e` (evenements). Depuis la conversion G2c (#105, lot V, M811 ; erratum E-13 (a)), une
+# partie n'est illisible que pour une cause de forme ou de portée table (.cause_hors_valeur()) ; un
+# refus de valeur, à tout arrêté, extraction comprise, se lit ligne par ligne (.maintien_arbres3()).
 .lecture_maintien_d11 <- function(ctx) {
   lit_m <- .LIT_MAINTIEN_D11
-  illisible_vue_ev <- any(vapply(setdiff(ctx$lit_vue$evenements, lit_m), function(tc) {
-    m <- strsplit(tc, ".", fixed = TRUE)[[1L]]
-    (.vue_totale(ctx) || is.null(.lignes_refusees(ctx, m[1L], m[2L]))) && !is.na(.cause(ctx, m[1L], m[2L]))
-  }, NA))
-  lisible <- function(prefixe) is.null(.cause_lecture(ctx, grep(paste0("^", prefixe, "\\."), lit_m, value = TRUE)))
-  list(n = is.na(.cause(ctx, "sinistres", "nature_sinistre")), m = lisible("garanties_souscrites"),
-       e = lisible("evenements") && !illisible_vue_ev)
+  lisible <- function(lus) is.null(.cause_hors_valeur(ctx, lus))
+  list(n = lisible("sinistres.nature_sinistre"), m = lisible(grep("^garanties_souscrites\\.", lit_m, value = TRUE)),
+       e = lisible(c(grep("^evenements\\.", lit_m, value = TRUE), setdiff(ctx$lit_vue$evenements, lit_m))))
 }
 # Ligne (`code`, `table`, NA) de controles_non_executes d'une ligne écartée au sous-cas du
 # maintien illisible : cause directe des colonnes illisibles du sous-cas (comme
-# .lecture_maintien_d11()), départagée (§ 3.1, .cause_retenue(), comme M169).
+# .lecture_maintien_d11() : cause de forme ou de portée table, une colonne refusée pour sa valeur
+# n'est pas candidate ; E-13 (a)), départagée (§ 3.1, .cause_retenue(), comme M169).
 .ecarter_maintien_d11 <- function(ctx, code, table) {
   lit_m <- .LIT_MAINTIEN_D11
   tc_m <- c(lit_m, setdiff(ctx$lit_vue$evenements, lit_m))
   candidates <- lapply(tc_m, function(tc) {
     m <- strsplit(tc, ".", fixed = TRUE)[[1L]]
-    vue_seule <- !(tc %in% lit_m) && !.vue_totale(ctx) && !is.null(.lignes_refusees(ctx, m[1L], m[2L]))
-    if (vue_seule) character(0) else .causes(ctx, m[1L], m[2L])
+    if (!is.null(.lignes_refusees(ctx, m[1L], m[2L]))) character(0) else .causes(ctx, m[1L], m[2L])
   })
   cause <- .cause_retenue(unlist(candidates), ctx$dico, ctx$ordre_codes)
   lu <- tc_m[vapply(candidates, function(z) cause %in% z, NA)]
@@ -7705,10 +7818,12 @@ table_refusee_vue <- function(vue, table) {
 # Contrat individuel : hors sous-cas (affiliations seules). maintien_deces FALSE, ou pas de
 # garantie deces à ce collège : la paire est hors sous-cas, sans lecture de evenements ; version
 # non déterminée qui le porterait : inconnu (index : ces versions). `actif` : éléments évalués
-# (les autres : faux ; l'appelant y met les sinistres deces). `lire_maintien`, `lire_evenements`
-# FAUX (colonnes illisibles, lecture grossière, Q-22, M659) : la partie non lue rend la paire
-# inconnue, sans index (l'appelant écarte avec la cause directe).
-.maintien_d11 <- function(ctx, sin, actif, en_cause = NULL, college = NULL, lire_maintien = TRUE, lire_evenements = TRUE) {
+# (les autres : faux ; l'appelant y met les sinistres deces). Lecture brute (#105, lot V, G2c) :
+# chemin rapide de D11a et D11b seulement (.verdict_d11_brut(), .verdict_d11b_brut()), sur des
+# éléments qui ne lisent aucune cellule inconnue ; la version en vigueur est lue par .gev_brut()
+# (sans la garde du collège de .garantie_en_vigueur3()) ; la lecture à trois valeurs est
+# .maintien_arbres3().
+.maintien_d11 <- function(ctx, sin, actif, en_cause = NULL, college = NULL) {
   v <- function(t, c1) .valeurs(ctx, t, c1)
   n <- length(sin)
   m3 <- .k3(rep(FALSE, n))
@@ -7759,17 +7874,13 @@ table_refusee_vue <- function(vue, table) {
   # maintien_deces de la garantie deces de (contrat, collège) de l'affiliation, en vigueur à la
   # survenance de l'arrêt : vrai si une version retenue le porte ; inconnu sinon si une version
   # non déterminée peut le porter ; faux sinon (dont : aucune garantie deces à ce collège)
-  if (lire_maintien) {
-    g <- .garantie_en_vigueur3(ctx, "deces", list(contrat = v("affiliations", "id_contrat")[a],
-                                                   college = v("affiliations", "college")[a]), surv[s])
-    maintien <- v("garanties_souscrites", "maintien_deces")
-    vrai <- vapply(g$versions, function(j) any(maintien[j] %in% TRUE), NA)
-    possible <- lapply(g$versions_nd, function(j) j[!(maintien[j] %in% FALSE)])
-    mt <- .k3(ifelse(vrai, TRUE, ifelse(lengths(possible) > 0L, NA, FALSE)))
-    for (z in which(is.na(mt$v))) mt <- .k3_index(mt, "garanties_souscrites", z, possible[[z]], nt)
-  } else {
-    mt <- .k3(rep(NA, nt))
-  }
+  g <- .gev_brut(ctx, "deces", list(contrat = v("affiliations", "id_contrat")[a], college = v("affiliations", "college")[a]),
+                 surv[s], rep(TRUE, nt), TRUE)
+  maintien <- v("garanties_souscrites", "maintien_deces")
+  vrai <- vapply(g$versions, function(j) any(maintien[j] %in% TRUE), NA)
+  possible <- lapply(g$versions_nd, function(j) j[!(maintien[j] %in% FALSE)])
+  mt <- .k3(ifelse(vrai, TRUE, ifelse(lengths(possible) > 0L, NA, FALSE)))
+  for (z in which(is.na(mt$v))) mt <- .k3_index(mt, "garanties_souscrites", z, possible[[z]], nt)
   # paires hors sous-cas (maintien_deces faux) : evenements n'est pas lu pour elles
   garde <- !(mt$v %in% FALSE)
   if (!any(garde)) return(m3)
@@ -7780,13 +7891,8 @@ table_refusee_vue <- function(vue, table) {
   nt <- length(e)
   sr <- .k3(ifelse(ctx$retenu$sinistres[s], TRUE, NA))
   for (z in which(is.na(sr$v))) sr <- .k3_index(sr, "sinistres", z, s[z], nt)
-  if (lire_evenements) {
-    ec_fin <- .arret_en_cours3(ctx, s, fin[a])
-    ec_deces <- .arret_en_cours3(ctx, s, surv[sin[e]], strict = TRUE)
-  } else {
-    ec_fin <- .k3(rep(NA, nt))
-    ec_deces <- ec_fin
-  }
+  ec_fin <- .arret_en_cours3(ctx, s, fin[a])
+  ec_deces <- .arret_en_cours3(ctx, s, surv[sin[e]], strict = TRUE)
   .k3_par(e, .k3_op(`&`, mt, sr, ec_fin, ec_deces), n, "un")
 }
 
@@ -7847,18 +7953,18 @@ table_refusee_vue <- function(vue, table) {
   x
 }
 
-# Verdict de D11b sur les lignes de dossiers (.regle_v_couverture()) : vecteur logique, attribut
-# `index` s'il est inconnu. Contrat et collège de la garantie lus sur toutes les occurrences de sa
-# clé (C-5 de #164, même règle que le contrat de D11a) : verdict de chaque occurrence, connu s'ils
+# Lecture brute de D11b (règle du mode bloquee, inchangée, sous-cas lu en entier) : chemin rapide de
+# la règle V en mode Kleene (.verdict_d11b() ; #105, lot V, G2c) : vecteur logique, attribut `index`
+# s'il est inconnu. Contrat et collège de la garantie lus sur toutes les occurrences de sa clé (C-5
+# de #164, même règle que le contrat de D11a) : verdict de chaque occurrence, connu s'ils
 # concordent, inconnu sinon (index : les occurrences de garanties_souscrites).
-.verdict_d11b <- function(ctx) {
+.verdict_d11b_brut <- function(ctx) {
   v <- function(t, c1) .valeurs(ctx, t, c1)
   nd <- nrow(ctx$base$dossiers)
   s <- apparier_cles(v("dossiers", "id_sinistre"), v("sinistres", "id_sinistre"))
   assure <- as.character(v("sinistres", "id_assure"))
   surv <- as.numeric(v("sinistres", "date_survenance"))
-  lire <- .lecture_maintien_d11(ctx)
-  deces <- if (lire$n) v("sinistres", "nature_sinistre") %in% "deces"
+  deces <- v("sinistres", "nature_sinistre") %in% "deces"
   # occurrences de la garantie du dossier (une seule hors clé en double ; NA : aucune ligne)
   idx <- .index_jointure(ctx, "garanties_souscrites", "id_garantie_souscrite", v("dossiers", "id_garantie_souscrite"))
   occ <- attr(idx, "occurrences")
@@ -7875,7 +7981,6 @@ table_refusee_vue <- function(vue, table) {
   # garantie de couple (contrat, collège) renseigné, contrat non individuel
   champ <- which(!is.na(contrat) & !is.na(college) & !is.na(s[cd$d]) & is.na(apparier_cles(contrat, individuel)))
   atome <- .k3(rep(FALSE, nrow(cd)))
-  ecarte <- rep(FALSE, nrow(cd))
   if (length(champ) > 0L) {
     se <- s[cd$d[champ]]
     ne <- length(champ)
@@ -7888,20 +7993,9 @@ table_refusee_vue <- function(vue, table) {
     k_cv <- .cle_manquante(as.character(cv$college))
     autre <- .existe_couverture3(cv[cv$affiliation & !is.na(k_cv) & k_cv != college[champ][cv$i], , drop = FALSE], ne)
     x <- .k3_op(`&`, .k3(!dans_college$v, dans_college$index), autre)
-    # sous-cas du maintien restreint aux affiliations du collège du dossier, au contrat du dossier ;
-    # lecture grossière (comme D11a) : une partie illisible rend le sous-cas inconnu, le dossier
-    # est écarté (vrai -> faux), la cause directe est écrite ci-dessous
-    if (lire$n && lire$m && lire$e) {
-      m3 <- .maintien_d11(ctx, se, deces[se], en_cause = as.list(contrat[champ]), college = college[champ])
-      x <- .k3_op(`&`, x, .k3(!m3$v, m3$index))
-    } else {
-      inconnu <- if (lire$n) {
-        is.na(.maintien_d11(ctx, se, deces[se], en_cause = as.list(contrat[champ]), college = college[champ],
-                            lire_maintien = lire$m, lire_evenements = lire$e)$v)
-      } else rep(TRUE, ne)
-      ecarte[champ] <- inconnu & !(x$v %in% FALSE)
-      x$v[ecarte[champ] & x$v %in% TRUE] <- FALSE
-    }
+    # sous-cas du maintien restreint aux affiliations du collège du dossier, au contrat du dossier
+    m3 <- .maintien_d11(ctx, se, deces[se], en_cause = as.list(contrat[champ]), college = college[champ])
+    x <- .k3_op(`&`, x, .k3(!m3$v, m3$index))
     # contrat individuel peut-être, par une ligne non déterminée : vrai -> inconnu
     if (length(ind_nd) > 0L) {
       for (z in which(x$v %in% TRUE | is.na(x$v))) {
@@ -7917,7 +8011,6 @@ table_refusee_vue <- function(vue, table) {
       atome$index[[tc]][champ] <- x$index[[tc]]
     }
   }
-  if (any(ecarte & ctx$retenu$dossiers[cd$d])) .ecarter_maintien_d11(ctx, "D11b", "dossiers")
   # par dossier : verdict de chaque occurrence ; connu s'ils concordent
   r <- .k3_par(cd$d, atome, nd, "un")
   for (d in unique(cd$d[duplicated(cd$d)])) {
@@ -7929,6 +8022,718 @@ table_refusee_vue <- function(vue, table) {
     for (tc in names(atome$index)) r <- .k3_index(r, tc, d, unlist(atome$index[[tc]][z[is.na(vs)]]), nd)
   }
   .k3_resultat(r)
+}
+
+# --- D11a et D11b en logique de Kleene (#105, lot V, G2c ; M808, M811 ; erratum E-13) -----------
+# Ordre de conditionnement des cellules de .arbre3() pour D11a et D11b : survenances, puis dates
+# des affiliations, des contrats et des versions de garanties ; puis collèges des affiliations,
+# avant ceux des garanties (un collège de garantie inconnu, comparé à celui d'une affiliation qui
+# peut égaler un collège connu d'une version, reçoit ce collège parmi ses représentants).
+.ORDRE_D11 <- c("sinistres.date_survenance", "affiliations.date_debut", "affiliations.date_fin", "contrats.date_effet",
+                "contrats.date_fin", "contrats.date_terme", "garanties_souscrites.date_effet", "garanties_souscrites.date_fin",
+                "affiliations.college", "garanties_souscrites.college")
+
+# Feuille de .arbre3() « deux collèges égaux » (`egal`) ou « deux collèges renseignés différents »
+# (sinon), clé opaque (E-13 (b) et (e) ; représentation de .versions3()) : `id_a`, `id_e`, cellules
+# inconnues (NA : valeur connue `val_a`, `val_e`) ; un collège connu manquant ou vide ne s'apparie
+# à rien (.egal_cle3()) ; représentants d'un collège inconnu : la valeur de l'autre (connue ou
+# fixée), deux valeurs neuves et, si sa colonne n'est pas obligatoire, l'absence (comme
+# .versions3() ; réserve R2 d'`actuary`). Constante sans cellule inconnue.
+.feuille_college3 <- function(ctx, id_a, val_a, id_e, val_e, egal) {
+  if (is.na(id_a) && is.na(id_e)) {
+    ka <- .cle_manquante(as.character(val_a))
+    ke <- .cle_manquante(as.character(val_e))
+    x <- !is.na(ka) & !is.na(ke) & (if (egal) ka == ke else ka != ke)
+    return(.constante3(x %in% TRUE))
+  }
+  neuf <- function(id) {
+    m <- strsplit(strsplit(id, "\r", fixed = TRUE)[[1L]][1L], ".", fixed = TRUE)[[1L]]
+    c("\r1", "\r2", if (!.obligatoire3(ctx, m[1L], m[2L])) NA_character_)
+  }
+  dom <- function(sigs) {
+    d <- list()
+    if (!is.na(id_a)) d[[id_a]] <- unique(c(if (is.na(id_e)) val_e else .fixees3(sigs, id_e, character(0)), neuf(id_a)))
+    if (!is.na(id_e)) d[[id_e]] <- unique(c(if (is.na(id_a)) val_a else .fixees3(sigs, id_a, character(0)), neuf(id_e)))
+    d
+  }
+  f <- function(a, n) {
+    x <- .val3(a, id_a, val_a, n)
+    y <- .val3(a, id_e, val_e, n)
+    (.egal_cle3(x, id_a) & .egal_cle3(y, id_e) & (if (egal) x == y else x != y)) %in% TRUE
+  }
+  .feuille3(c(id_a, id_e), dom, f)
+}
+
+# Feuille de .arbre3() sur des dates (noms de `ids` : cellules inconnues, NA pour une valeur connue
+# de `vals`) : `f(x, n)` sur la liste nommée des valeurs ; représentants d'une date inconnue k : les
+# bornes de sa plage (`plages`), l'absence si `absents`, et les points de rupture relatifs aux
+# dates qu'elle compare (`refs[[k]]` : noms ; valeurs connues, fixées, ou bornes de leur plage).
+.feuille_dates3 <- function(ids, vals, plages, absents, refs, f) {
+  noms <- names(ids)
+  dom <- function(sigs) {
+    point <- function(o) if (is.na(ids[[o]])) vals[[o]] else {
+      y <- .fixees3(sigs, ids[[o]], numeric(0))
+      if (length(y)) y else plages[[o]]
+    }
+    d <- list()
+    for (k in noms) if (!is.na(ids[[k]])) d[[ids[[k]]]] <- .reps_date3(plages[[k]], absents[[k]], unlist(lapply(refs[[k]], point)))
+    d
+  }
+  g <- function(a, n) f(stats::setNames(lapply(noms, function(k) .val3(a, ids[[k]], vals[[k]], n)), noms), n) %in% TRUE
+  .feuille3(unname(ids), dom, g)
+}
+
+# Feuille « l'arrêt du sinistre `s` est en cours à la date t » (.arret_en_cours3() à trois valeurs ;
+# #105, lot V, G2c ; erratum E-13 (c), approximation de la nature de M813, D-G2-3 ; colonnes de
+# evenements lues une fois, `ev`, .evenements_d11()) : t vaut `t` ou,
+# si `t_id` n'est pas NA, la cellule inconnue `t_id` (plage `plage`, absence `absent` ; t absente :
+# vrai, l'appelant teste la présence) ; `strict` : événements d'effet strictement antérieur. Le
+# dernier événement retenu connu (type sortie ou rechute, date d'effet connue) d'effet au plus t
+# (.dernier_evenement()) donne le verdict de base (pas de sortie). Sont facultatifs un événement
+# non déterminé, un événement retenu de date d'effet ou de type inconnu, pris s'ils ne sont pas
+# certainement postérieurs à t et peuvent suivre le dernier connu (.peut_suivre(), type inconnu
+# pouvant suivre) : chacun a une cellule privée à la feuille (suffixe `uid` : ni conditionnée
+# entre les deux points, ni entre les paires), de domaine l'absence d'effet et ses types possibles
+# (type inconnu : sortie, rechute ; un autre type est sans effet) ; le premier pris fixe le verdict.
+# Les valeurs de la feuille sont ainsi le verdict de base et chaque type possible d'un facultatif :
+# sûr (inconnu au lieu de déterminé, jamais l'inverse). Représentants de t : points de rupture des
+# dates d'effet connues. Identifiants : « evenements\re\ruid » (non déterminé), sinon
+# « evenements.date_effet\re\ruid » ou « evenements.type_evenement\re\ruid » ; un événement retenu
+# de date et de type inconnus inscrit le second dans l'environnement `alias` (index_pertinent).
+# Feuille `lin` de .arbre3() (E-14 (e)) : valeurs, couples et décompte en coût linéaire en le
+# nombre de facultatifs, sans parcourir le produit de leurs types possibles.
+.arret_feuille3 <- function(ctx, ev, s, t, t_id, strict, plage, absent, uid, alias) {
+  type <- ev$type
+  tu <- ev$tu
+  eff <- ev$eff
+  eu <- ev$eu
+  nde <- ev$nde
+  e <- ev$par_s[[s]]
+  if (is.null(e)) e <- integer(0)
+  D <- e[ev$ret[e] & !tu[e] & !eu[e] & !is.na(eff[e])]
+  Fk <- e[nde[e] | tu[e] | eu[e]]
+  if (length(D) > 1L) {
+    te <- ctx$dico$types_evenements
+    D <- D[order(eff[D], te$ordre[match(type[D], te$type_evenement)], ev$saisie[D], ev$id[D], method = "radix")]
+  }
+  effF <- ifelse(eu[Fk], NA_real_, eff[Fk])
+  ids <- ifelse(nde[Fk], paste0("evenements\r", Fk, "\r", uid),
+                ifelse(eu[Fk], paste0("evenements.date_effet\r", Fk, "\r", uid), paste0("evenements.type_evenement\r", Fk, "\r", uid)))
+  for (q in which(!nde[Fk] & eu[Fk] & tu[Fk])) assign(ids[q], paste0("evenements.type_evenement\r", Fk[q]), envir = alias)
+  doms <- lapply(Fk, function(k) c(NA_character_, if (tu[k]) c("sortie", "rechute") else type[k]))
+  ps <- if (length(Fk) == 0L) matrix(logical(0), nrow = 0L, ncol = length(D) + 1L) else {
+    matrix(vapply(c(NA_integer_, D), function(d) .peut_suivre(ctx, Fk, rep(d, length(Fk)), type_inconnu = TRUE), logical(length(Fk))),
+           nrow = length(Fk))
+  }
+  if (is.na(t_id) && length(Fk) == 0L) {
+    if (is.na(t)) return(.constante3(TRUE))
+    k <- which(if (strict) eff[D] < t else eff[D] <= t)
+    return(.constante3(length(k) == 0L || type[D[max(k)]] %in% "rechute"))
+  }
+  dom <- function(sigs) {
+    d <- list()
+    if (!is.na(t_id)) d[[t_id]] <- .reps_date3(plage, absent, c(eff[D], effF[!is.na(effF)]))
+    for (q in seq_along(Fk)) d[[ids[q]]] <- doms[[q]]
+    d
+  }
+  f <- function(a, n) {
+    tv <- .val3(a, t_id, t, n)
+    vapply(seq_len(n), function(r) {
+      x <- tv[r]
+      if (is.na(x)) return(TRUE)
+      dans <- function(y) if (strict) y < x else y <= x
+      k <- which(dans(eff[D]))
+      dp <- if (length(k)) max(k) else 0L
+      for (q in seq_along(Fk)) {
+        pk <- a[[ids[q]]][r]
+        if (is.na(pk) || dans(effF[q]) %in% FALSE || !ps[q, dp + 1L]) next
+        return(pk == "rechute")
+      }
+      dp == 0L || type[D[dp]] %in% "rechute"
+    }, NA)
+  }
+  fe <- .feuille3(c(t_id, ids), dom, f)
+  # évaluation événement par événement (E-14 (e) ; même verdict et même pertinence que
+  # l'énumération de `f`) : sachant t, verdict de base et facultatifs pris possibles ; les
+  # valeurs de la feuille sous une ou deux affectations `sigs` (qui ne diffèrent que par une
+  # cellule) se calculent en un passage sur les facultatifs, dans l'ordre, par l'ensemble des
+  # états atteignables (par affectation : non fixé, faux, vrai ; neuf états au plus) ; t libre
+  # (non fixé dans `sigs`) : réunion sur ses représentants
+  etat <- function(x) {
+    if (is.na(x)) return(NULL)
+    dans <- function(y) if (strict) y < x else y <= x
+    k <- which(dans(eff[D]))
+    dp <- if (length(k)) max(k) else 0L
+    list(base = dp == 0L || type[D[dp]] %in% "rechute", pris = !(dans(effF) %in% FALSE) & ps[, dp + 1L])
+  }
+  dates_t <- function(sigs) {
+    if (is.na(t_id)) return(list(rep(t, length(sigs))))
+    if (t_id %in% names(sigs[[1L]])) return(list(vapply(sigs, function(s1) as.numeric(s1[[t_id]]), 0)))
+    lapply(dom(sigs)[[t_id]], function(x) rep(x, length(sigs)))
+  }
+  couples <- function(sigs) {
+    m <- length(sigs)
+    res <- matrix(NA, nrow = 0L, ncol = m)
+    for (x in dates_t(sigs)) {
+      et <- lapply(x, etat)
+      st <- matrix(ifelse(vapply(et, is.null, NA), 2L, 0L), nrow = 1L)
+      for (q in seq_along(Fk)) {
+        pris <- vapply(et, function(z) !is.null(z) && z$pris[q], NA)
+        if (!any(pris)) next
+        opts <- if (ids[q] %in% names(sigs[[1L]])) matrix(vapply(sigs, function(s1) as.character(s1[[ids[q]]]), ""), nrow = 1L) else
+          matrix(rep(doms[[q]], m), ncol = m)
+        st <- unique(do.call(rbind, lapply(seq_len(nrow(opts)), function(o) {
+          s2 <- st
+          for (j in which(pris & !is.na(opts[o, ]))) s2[s2[, j] == 0L, j] <- 1L + (opts[o, j] == "rechute")
+          s2
+        })))
+      }
+      for (j in seq_len(m)) if (!is.null(et[[j]])) st[st[, j] == 0L, j] <- 1L + et[[j]]$base
+      res <- unique(rbind(res, st == 2L))
+    }
+    res
+  }
+  # signature d'une affectation : deux affectations de même signature donnent la même fonction
+  # des cellules libres de la feuille
+  signature <- function(s1) {
+    tx <- if (!is.na(t_id) && t_id %in% names(s1)) {
+      z <- etat(as.numeric(s1[[t_id]]))
+      if (is.null(z)) "absente" else paste(z$base, paste(as.integer(z$pris), collapse = ""))
+    } else "libre"
+    paste(c(tx, vapply(ids[ids %in% names(s1)], function(q) as.character(s1[[q]]), "")), collapse = ";")
+  }
+  # décompte linéaire : représentants de t s'il est libre, fois une issue par type possible de
+  # chaque facultatif, et le verdict de base
+  cout <- function(sig, pv) {
+    nt <- if (!is.na(t_id) && t_id %in% pv) length(dom(sig)[[t_id]]) else 1
+    nt * (1 + sum(lengths(doms[ids %in% pv]) - 1))
+  }
+  fe$lin <- list(couples = couples, signature = signature, cout = cout)
+  fe
+}
+
+# Colonnes de evenements lues par .arret_feuille3(), une fois par verdict : type et date d'effet
+# (valeurs, refus de valeur), statut dans la vue, date de saisie et identifiant (ordre du § 4.2),
+# clé du sinistre de chaque ligne de sinistres (`sid`) et, par clé de sinistre, les événements
+# retenus ou non déterminés de type sortie ou rechute, ou de type inconnu, alignés sur les lignes
+# de sinistres (`par_s`).
+.evenements_d11 <- function(ctx) {
+  ev <- function(c1) .valeurs(ctx, "evenements", c1)
+  x <- list(type = ev("type_evenement"), tu = .inconnu(ctx, "evenements", "type_evenement"), eff = as.numeric(ev("date_effet")),
+            eu = .inconnu(ctx, "evenements", "date_effet"), ret = ctx$retenu$evenements,
+            saisie = as.numeric(ev("date_saisie")), id = ev("id_evenement"),
+            sid = .cle_manquante(as.character(.valeurs(ctx, "sinistres", "id_sinistre"))))
+  if (is.null(x$ret)) x$ret <- logical(0)
+  x$nde <- .nd_vue(ctx, "evenements") & !x$ret
+  sin <- .cle_manquante(as.character(ev("id_sinistre")))
+  k <- which(!is.na(sin) & (x$ret | x$nde) & (x$tu | x$type %in% c("sortie", "rechute")))
+  par_sin <- split(k, sin[k])
+  x$par_s <- par_sin[apparier_cles(x$sid, names(par_sin))]
+  x
+}
+
+# Sous-cas du maintien de la garantie décès à trois valeurs, en arbres de .arbre3() (lecture de
+# .maintien_d11() ; #105, lot V, G2c ; erratum E-13 (b) à (d)) : pour chaque élément (ligne `sl` de
+# sinistres, le décès), les paires (affiliation a, sinistre s) qui peuvent l'ouvrir, et l'arbre de
+# chacune : fin de a antérieure au décès ; s survenu pendant a ; s de nature arret_travail ; s
+# présent (non déterminé : cellule « sinistres\rs ») ; maintien_deces TRUE d'une version deces en
+# vigueur à la survenance de s, de même (contrat, collège) que a (.garantie_en_vigueur3() à trois
+# valeurs, cellule de maintien_deces refusé, domaine {TRUE, FALSE}) ; arrêt en cours à la fin de
+# a et, strictement, au décès (.arret_feuille3()) ; avec `college`, collège de a égal à celui de
+# l'élément (`college_id` : cellule inconnue ; .feuille_college3()). Affiliations : retenues, partie
+# de fin visible (inchangé), début et fin connus ou inconnus (fin de domaine « date ou absente »),
+# contrat renseigné parmi `contrats[[z]]` (NULL : tout contrat ; l'appelant ajoute « contrat en
+# cause »). Sinistres s : retenus ou non déterminés, de nature arret_travail ou inconnue, de
+# survenance connue ou inconnue. `lire` (.lecture_maintien_d11()) : une partie illisible pour une
+# cause de forme ou de portée table est une feuille de `pseudo()` (lecture grossière). Les paires
+# certainement fausses (dates connues, aucune version qui peut porter le maintien) sont omises.
+# Rend, par élément, list(a, s, arbres).
+.maintien_arbres3 <- function(ctx, sl, contrats, college = NULL, college_id = NULL, lire, pseudo, alias) {
+  v <- function(t, c1) .valeurs(ctx, t, c1)
+  inc <- list()
+  cel <- function(t, c1, l) {
+    tc <- paste0(t, ".", c1)
+    if (is.null(inc[[tc]])) inc[[tc]] <<- .inconnu(ctx, t, c1)
+    ifelse(inc[[tc]][l], paste0(tc, "\r", l), NA_character_)
+  }
+  out <- rep(list(list(a = integer(0), s = integer(0), arbres = list())), length(sl))
+  assure <- .cle_manquante(as.character(v("sinistres", "id_assure")))
+  surv <- as.numeric(v("sinistres", "date_survenance"))
+  su <- .inconnu(ctx, "sinistres", "date_survenance")
+  nat <- v("sinistres", "nature_sinistre")
+  nu <- .inconnu(ctx, "sinistres", "nature_sinistre")
+  nd_s <- .nd_vue(ctx, "sinistres") & !ctx$retenu$sinistres
+  na <- NROW(ctx$base$affiliations)
+  partie <- if (.vue_totale(ctx)) NULL else .visibilite_a(ctx, "vue")$parties$affiliations
+  if (is.null(partie)) partie <- rep(TRUE, na)
+  debut <- as.numeric(v("affiliations", "date_debut"))
+  du <- .inconnu(ctx, "affiliations", "date_debut")
+  fin <- as.numeric(v("affiliations", "date_fin"))
+  fu <- .inconnu(ctx, "affiliations", "date_fin")
+  contrat_a <- .cle_manquante(as.character(v("affiliations", "id_contrat")))
+  col_a <- as.character(v("affiliations", "college"))
+  col_ak <- .cle_manquante(col_a)
+  cu <- .inconnu(ctx, "affiliations", "college")
+  ass_a <- .cle_manquante(as.character(v("affiliations", "id_assure")))
+  aff_ok <- ctx$retenu$affiliations & partie %in% TRUE & (du | !is.na(debut)) & (fu | !is.na(fin)) & !is.na(contrat_a) & !is.na(ass_a)
+  arr_ok <- (ctx$retenu$sinistres | nd_s) & (!lire$n | nu | nat %in% "arret_travail") & (su | !is.na(surv)) & !is.na(assure)
+  # candidats par élément (listes alignées par `[`, sans recherche par nom dans une boucle)
+  a_par <- split(which(aff_ok), ass_a[aff_ok])
+  s_par <- split(which(arr_ok), assure[arr_ok])
+  a_el <- a_par[apparier_cles(assure[sl], names(a_par))]
+  s_el <- s_par[apparier_cles(assure[sl], names(s_par))]
+  if (is.null(contrats)) contrats <- vector("list", length(sl))
+  cand <- Map(function(z, l, ct, a, s) {
+    if (is.na(assure[l]) || (!su[l] && is.na(surv[l])) || is.null(a) || is.null(s)) return(NULL)
+    if (!is.null(ct)) a <- a[!is.na(apparier_cles(contrat_a[a], ct))]
+    if (!is.null(college)) {
+      ke <- .cle_manquante(as.character(college[z]))
+      if (!is.na(college_id[z]) || !is.na(ke)) a <- a[cu[a] | !is.na(college_id[z]) | (!is.na(col_ak[a]) & col_ak[a] == ke) %in% TRUE]
+    }
+    if (!su[l]) a <- a[fu[a] | fin[a] < surv[l]]
+    y <- lapply(a, function(x) s[su[s] | du[x] | fu[x] | (surv[s] >= debut[x] & surv[s] <= fin[x])])
+    list(E = rep(z, sum(lengths(y))), A = rep(a, lengths(y)), S = as.integer(unlist(y)))
+  }, seq_along(sl), sl, contrats, a_el, s_el)
+  E <- as.integer(unlist(lapply(cand, `[[`, "E")))
+  A <- as.integer(unlist(lapply(cand, `[[`, "A")))
+  S <- as.integer(unlist(lapply(cand, `[[`, "S")))
+  if (length(E) == 0L) return(out)
+  # maintien_deces d'une version deces en vigueur à la survenance de s, de même (contrat, collège)
+  if (lire$m) {
+    g <- .garantie_en_vigueur3(ctx, "deces", list(contrat = v("affiliations", "id_contrat")[A], college = col_a[A]), surv[S],
+                               inconnues = list(survenance = cel("sinistres", "date_survenance", S),
+                                                college = cel("affiliations", "college", A)))
+    maintien <- v("garanties_souscrites", "maintien_deces")
+    mu <- .inconnu(ctx, "garanties_souscrites", "maintien_deces")
+    porte <- lapply(g$candidates, function(j) j[mu[j] | maintien[j] %in% TRUE])
+    garde <- lengths(porte) > 0L
+    E <- E[garde]
+    A <- A[garde]
+    S <- S[garde]
+    k_g <- which(garde)
+  }
+  plage_s <- .plage_date3(ctx, "sinistres", "date_survenance")
+  abs_s <- !.obligatoire3(ctx, "sinistres", "date_survenance")
+  plage_d <- .plage_date3(ctx, "affiliations", "date_debut")
+  abs_d <- !.obligatoire3(ctx, "affiliations", "date_debut")
+  plage_f <- .plage_date3(ctx, "affiliations", "date_fin")
+  dom_nat <- .domaine3(ctx, "sinistres", "nature_sinistre")
+  ev <- if (lire$e) .evenements_d11(ctx)
+  porte_k <- if (lire$m) porte[k_g] else vector("list", length(E))
+  arbres <- Map(function(k, pk) {
+    z <- E[k]
+    a <- A[k]
+    s <- S[k]
+    l <- sl[z]
+    f_id <- cel("affiliations", "date_fin", a)
+    sl_id <- cel("sinistres", "date_survenance", l)
+    ss_id <- cel("sinistres", "date_survenance", s)
+    lt <- .feuille_dates3(c(f = f_id, s = sl_id), list(f = fin[a], s = surv[l]), list(f = plage_f, s = plage_s),
+                          list(f = TRUE, s = abs_s), list(f = "s", s = "f"),
+                          function(x, n) !is.na(x$f) & !is.na(x$s) & x$f < x$s)
+    dans <- .feuille_dates3(c(d = cel("affiliations", "date_debut", a), s = ss_id, f = f_id), list(d = debut[a], s = surv[s], f = fin[a]),
+                            list(d = plage_d, s = plage_s, f = plage_f), list(d = abs_d, s = abs_s, f = TRUE),
+                            list(d = "s", s = c("d", "f"), f = "s"),
+                            function(x, n) !is.na(x$d) & !is.na(x$s) & !is.na(x$f) & x$d <= x$s & x$s <= x$f)
+    termes <- list(lt, dans)
+    if (!lire$n) {
+      termes <- c(termes, list(pseudo()))
+    } else if (nu[s]) {
+      n_id <- paste0("sinistres.nature_sinistre\r", s)
+      termes <- c(termes, list(.feuille3(n_id, function(sigs) stats::setNames(list(dom_nat), n_id),
+                                         function(a1, n) a1[[n_id]] %in% "arret_travail")))
+    }
+    if (nd_s[s]) {
+      p_id <- paste0("sinistres\r", s)
+      termes <- c(termes, list(.feuille3(p_id, function(sigs) stats::setNames(list(c(TRUE, FALSE)), p_id), function(a1, n) a1[[p_id]])))
+    }
+    if (lire$m) {
+      kk <- k_g[k]
+      mt <- lapply(pk, function(j) {
+        fv <- g$feuille(kk, j)
+        if (!mu[j]) return(fv)
+        m_id <- paste0("garanties_souscrites.maintien_deces\r", j)
+        .noeud3("et", list(fv, .feuille3(m_id, function(sigs) stats::setNames(list(c(TRUE, FALSE)), m_id),
+                                         function(a1, n) a1[[m_id]] %in% TRUE)))
+      })
+      termes <- c(termes, list(.noeud3("ou", mt)))
+    } else {
+      termes <- c(termes, list(pseudo()))
+    }
+    if (lire$e) {
+      termes <- c(termes, list(.arret_feuille3(ctx, ev, s, fin[a], f_id, FALSE, plage_f, TRUE, paste0("f", k), alias),
+                               .arret_feuille3(ctx, ev, s, surv[l], sl_id, TRUE, plage_s, abs_s, paste0("d", k), alias)))
+    } else {
+      termes <- c(termes, list(pseudo(), pseudo()))
+    }
+    if (!is.null(college)) termes <- c(termes, list(.feuille_college3(ctx, cel("affiliations", "college", a), col_a[a], college_id[z], college[z], TRUE)))
+    .noeud3("et", termes)
+  }, seq_along(E), porte_k)
+  par_el <- split(seq_along(E), factor(E, levels = seq_along(sl)))
+  Map(function(k) list(a = A[k], s = S[k], arbres = arbres[k]), par_el)
+}
+
+# Assurés (clés renseignées) dont une ligne lue par le cœur ou le sous-cas de D11a et D11b porte une
+# cellule inconnue ou est de visibilité non déterminée (#105, lot V, G2c) : sinistres (nature,
+# survenance), événements de leurs sinistres (type, date d'effet ; non la date de saisie ni
+# l'identifiant, E-13 (b)), affiliations et contrats (dates, nature, collège, partie de fin non
+# déterminée), versions de leurs contrats (.inconnues_versions3(), maintien_deces). Délimite le
+# chemin rapide (lecture brute) de D11a et D11b.
+.assures_inconnus_d11 <- function(ctx) {
+  u <- function(t, c1) if (c1 %in% names(ctx$base[[t]])) .inconnu(ctx, t, c1) else rep(FALSE, NROW(ctx$base[[t]]))
+  cle <- function(t, c1) .cle_manquante(as.character(.valeurs(ctx, t, c1)))
+  nd <- function(t) .nd_vue(ctx, t) & !ctx$retenu[[t]]
+  gs <- "garanties_souscrites"
+  inc_v <- .inconnues_versions3(ctx)
+  m_u <- (ctx$retenu[[gs]] | nd(gs)) & u(gs, "maintien_deces")
+  contrats_inc <- unique(c(inc_v$contrats, cle(gs, "id_contrat")[m_u]))
+  contrats_inc <- contrats_inc[!is.na(contrats_inc)]
+  out <- character(0)
+  if (!is.null(ctx$base$evenements)) {
+    xe <- (ctx$retenu$evenements | nd("evenements")) & (nd("evenements") | u("evenements", "type_evenement") | u("evenements", "date_effet"))
+    sin_ev <- cle("evenements", "id_sinistre")[xe]
+  } else sin_ev <- character(0)
+  xs <- (ctx$retenu$sinistres | nd("sinistres")) &
+    (nd("sinistres") | u("sinistres", "nature_sinistre") | u("sinistres", "date_survenance") |
+       !is.na(apparier_cles(cle("sinistres", "id_sinistre"), sin_ev)))
+  out <- cle("sinistres", "id_assure")[xs]
+  for (tc in intersect(c("affiliations", "contrats"), names(ctx$base))) {
+    partie <- if (.vue_totale(ctx)) NULL else .visibilite_a(ctx, "vue")$parties[[tc]]
+    x <- (ctx$retenu[[tc]] | nd(tc)) & (nd(tc) | u(tc, "date_debut") | u(tc, "date_effet") | u(tc, "date_fin") | u(tc, "date_terme") |
+                                          u(tc, "nature_contrat") | u(tc, "college") | (if (is.null(partie)) FALSE else is.na(partie)) |
+                                          !is.na(apparier_cles(cle(tc, "id_contrat"), contrats_inc)))
+    out <- c(out, cle(tc, "id_assure")[x])
+  }
+  unique(out[!is.na(out)])
+}
+
+# Traitement commun d'un arbre de D11a ou D11b évalué par .arbre3() (ligne `l` de `n`) : une cellule
+# de lecture grossière pertinente (« grossier\r... ») écarte la ligne par le sous-cas illisible
+# (`ecarte`) et n'entre pas dans index_pertinent ; sans autre cellule pertinente, la ligne est
+# faux (vrai -> faux, comme la lecture grossière du mode bloquee) ; un verdict inconnu sans
+# aucune cellule pertinente est une erreur interne (E-14 (d) : inconnu, pertinence non vide ;
+# réserve m2 de l'audit) ; une cellule « d01a\rm » (contrat
+# aux occurrences divergentes, C-5) inscrit les occurrences `occ(m)` sous garanties_souscrites et
+# la cause candidate D01a ; un alias (.arret_feuille3()) ajoute sa colonne. Rend list(v, ip, d01a,
+# ecarte).
+.issue_d11 <- function(x, l, n, ip, d01a, alias, occ) {
+  pert <- x$pert
+  g <- grepl("^grossier\r", pert)
+  ecarte <- is.na(x$v) && any(g)
+  pert <- pert[!g]
+  if (is.na(x$v) && length(pert) == 0L && !any(g)) {
+    stop("erreur interne de provie : .issue_d11() : verdict inconnu sans cellule pertinente", call. = FALSE)
+  }
+  v1 <- if (is.na(x$v) && length(pert) == 0L) FALSE else x$v
+  if (is.na(v1)) {
+    dd <- grep("^d01a\r", pert, value = TRUE)
+    for (id in dd) {
+      m <- as.integer(sub("^d01a\r", "", id))
+      if (is.null(ip$garanties_souscrites)) ip$garanties_souscrites <- vector("list", n)
+      ip$garanties_souscrites[l] <- list(sort(unique(c(ip$garanties_souscrites[[l]], occ(m)))))
+      if (is.null(d01a$garanties_souscrites)) d01a$garanties_souscrites <- rep(FALSE, n)
+      d01a$garanties_souscrites[l] <- TRUE
+    }
+    pert <- setdiff(pert, dd)
+    al <- as.list(alias)
+    pert <- c(pert, unlist(al[intersect(pert, names(al))], use.names = FALSE))
+    ip <- .ip_cellules3(ip, l, pert, n)
+  }
+  list(v = v1, ip = ip, d01a = d01a, ecarte = ecarte)
+}
+
+# Verdict à trois valeurs de D11a (.regle_v_couverture() ; #105, lot V, G2c, M808, M811 ; erratum
+# E-13) : lecture brute (.verdict_d11_brut()) sur les sinistres retenus qui ne lisent aucune cellule
+# inconnue ni ligne de visibilité non déterminée (assuré hors de .assures_inconnus_d11(), aucun
+# dossier non déterminé ni contrat aux occurrences divergentes) ; un arbre par autre sinistre
+# retenu, évalué par .arbre3() : « cœur ET NON sous-cas ». Cœur : OU, sur les dossiers retenus,
+# de « le contrat du dossier ne couvre pas la survenance » (NON OU des feuilles de .couverture3() à
+# trois valeurs de ce contrat ; contrat manquant : vrai, #157 ; occurrences divergentes : cellule
+# « d01a\rm » de domaine leurs valeurs) et, sur les dossiers non déterminés, « présent ET ne
+# couvre pas » ; sans dossier retenu, aussi « aucun dossier non déterminé présent ET aucun contrat
+# ne couvre ». Sous-cas : nature deces ET OU, sur les paires de .maintien_arbres3() (contrats des
+# dossiers retenus ; sans dossier retenu, tout contrat), de « contrat en cause ET paire » (contrat
+# en cause : un dossier retenu de ce contrat ne le couvre pas). La survenance du décès et toute
+# cellule lue par deux feuilles sont conditionnées (D-G2-2, E-13 (d)). Lecture grossière (cause de
+# forme ou de portée table, .lecture_maintien_d11()) : toute ligne retenue par l'arbre, partie
+# illisible en feuille de lecture grossière (.issue_d11()), ligne (D11a, sinistres, NA) de cause
+# directe (.ecarter_maintien_d11()). Rend le vecteur logique (NA : inconnu) et ses attributs
+# `index_pertinent` (et `index`, le même), `d01a_pertinent` et `lues` (statiques). `forcer`
+# (contrôle des tests) : chemin rapide désactivé ; hors des lignes complexes, une lecture brute
+# indéterminée est une erreur interne.
+.verdict_d11 <- function(ctx, lues = NULL, forcer = FALSE) {
+  v <- function(t, c1) .valeurs(ctx, t, c1)
+  ns <- nrow(ctx$base$sinistres)
+  lire <- .lecture_maintien_d11(ctx)
+  grossier <- !(lire$n && lire$m && lire$e)
+  r_brut <- if (grossier) rep(NA, ns) else .verdict_d11_brut(ctx)
+  r <- as.vector(r_brut) %in% TRUE
+  id_s <- as.character(v("sinistres", "id_sinistre"))
+  nd_d <- .nd_vue(ctx, "dossiers") & !ctx$retenu$dossiers
+  p <- .paires(id_s, ifelse(ctx$retenu$dossiers | nd_d, as.character(v("dossiers", "id_sinistre")), NA))
+  ret <- ctx$retenu$dossiers[p$j]
+  jc <- .cle3(.jointe3(ctx, "garanties_souscrites.id_contrat", "id_garantie_souscrite", v("dossiers", "id_garantie_souscrite")[p$j]))
+  contrat_d <- as.character(jc$valeurs)
+  diverge <- jc$inconnu
+  assure <- .cle_manquante(as.character(v("sinistres", "id_assure")))
+  inc_a <- .assures_inconnus_d11(ctx)
+  complexe <- ctx$retenu$sinistres & (forcer | grossier | seq_len(ns) %in% p$i[!ret | diverge] | !is.na(apparier_cles(assure, inc_a)))
+  if (any(ctx$retenu$sinistres & !complexe & is.na(r_brut))) {
+    stop("erreur interne de provie : D11a : lecture brute ind\u00e9termin\u00e9e hors du chemin \u00e0 trois valeurs", call. = FALSE)
+  }
+  r[complexe] <- FALSE
+  ip <- list()
+  d01a <- list()
+  ecarte <- rep(FALSE, ns)
+  L <- which(complexe)
+  if (length(L) > 0L) {
+    surv <- as.numeric(v("sinistres", "date_survenance"))
+    s_id <- ifelse(.inconnu(ctx, "sinistres", "date_survenance"), paste0("sinistres.date_survenance\r", seq_len(ns)), NA_character_)
+    nat <- v("sinistres", "nature_sinistre")
+    nu <- .inconnu(ctx, "sinistres", "nature_sinistre")
+    dom_nat <- .domaine3(ctx, "sinistres", "nature_sinistre")
+    cv <- .couverture3(ctx, v("sinistres", "id_assure")[L], surv[L], inconnues = list(date = s_id[L]))
+    fe <- attr(cv, "feuilles")
+    k_cv <- .cle_manquante(as.character(cv$contrat))
+    contrat_a <- .cle_manquante(as.character(v("affiliations", "id_contrat")))
+    alias <- new.env(parent = emptyenv())
+    k_g <- 0L
+    pseudo <- function() {
+      k_g <<- k_g + 1L
+      id <- paste0("grossier\r0\r", k_g)
+      .feuille3(id, function(sigs) stats::setNames(list(c(TRUE, FALSE)), id), function(a, n) a[[id]])
+    }
+    rows_z <- split(seq_len(nrow(cv)), factor(cv$i, levels = seq_along(L)))
+    ms_l <- split(seq_len(nrow(p)), factor(p$i, levels = seq_len(ns)))
+    # sous-cas du maintien : contrats en cause (dossiers retenus) ; sans dossier retenu, tout contrat
+    en_cause <- lapply(L, function(l) {
+      rm <- ms_l[[l]][ret[ms_l[[l]]]]
+      if (length(rm) == 0L) return(NULL)
+      x <- unique(unlist(lapply(rm, function(m) if (diverge[m]) jc$domaines[[m]] else contrat_d[m])))
+      x[!is.na(x)]
+    })
+    mt_l <- .maintien_arbres3(ctx, L, en_cause, lire = lire, pseudo = pseudo, alias = alias)
+    for (z in seq_along(L)) {
+      l <- L[z]
+      rows <- rows_z[[z]]
+      couvre <- function(cx) {
+        k <- rows[!is.na(k_cv[rows]) & k_cv[rows] == cx]
+        if (length(k)) .noeud3("ou", fe[k]) else .constante3(FALSE)
+      }
+      nc_val <- function(cx) if (is.na(cx)) .constante3(TRUE) else .noeud3("non", list(couvre(cx)))
+      nc <- function(m, filtre = NULL) {
+        if (!diverge[m]) {
+          if (!is.null(filtre) && all(is.na(apparier_cles(contrat_d[m], filtre)))) return(.constante3(FALSE))
+          return(nc_val(contrat_d[m]))
+        }
+        vals <- jc$domaines[[m]]
+        if (!is.null(filtre)) vals <- vals[!is.na(apparier_cles(vals, filtre))]
+        if (length(vals) == 0L) return(.constante3(FALSE))
+        id <- paste0("d01a\r", m)
+        dm <- jc$domaines[[m]]
+        .noeud3("ou", lapply(vals, function(cx) .noeud3("et", list(
+          .feuille3(id, function(sigs) stats::setNames(list(dm), id), function(a, n) if (is.na(cx)) is.na(a[[id]]) else !is.na(apparier_cles(a[[id]], cx))),
+          nc_val(cx)))))
+      }
+      ms <- ms_l[[l]]
+      rm <- ms[ret[ms]]
+      nm <- ms[!ret[ms]]
+      pres <- function(m) {
+        id <- paste0("dossiers\r", p$j[m])
+        .feuille3(id, function(sigs) stats::setNames(list(c(TRUE, FALSE)), id), function(a, n) a[[id]])
+      }
+      t_nd <- lapply(nm, function(m) .noeud3("et", list(pres(m), nc(m))))
+      # dossiers retenus de même contrat (occurrences concordantes) : un seul terme
+      cu <- unique(contrat_d[rm[!diverge[rm]]])
+      rd <- rm[diverge[rm]]
+      coeur <- if (length(rm) > 0L) .noeud3("ou", c(lapply(cu, nc_val), lapply(rd, nc), t_nd)) else {
+        aucun <- .noeud3("non", list(if (length(rows) > 0L) .noeud3("ou", fe[rows]) else .constante3(FALSE)))
+        .noeud3("ou", c(t_nd, list(.noeud3("et", c(lapply(nm, function(m) .noeud3("non", list(pres(m)))), list(aucun))))))
+      }
+      mt <- mt_l[[z]]
+      # nature illisible (lecture grossière) : sous-cas inconnu pour tout sinistre (§ 8.7, v1.6.3)
+      sous <- if (lire$n) .constante3(FALSE) else pseudo()
+      if (lire$n && length(mt$a) > 0L) {
+        deces <- if (nu[l]) {
+          n_id <- paste0("sinistres.nature_sinistre\r", l)
+          .feuille3(n_id, function(sigs) stats::setNames(list(dom_nat), n_id), function(a, n) a[[n_id]] %in% "deces")
+        } else .constante3(nat[l] %in% "deces")
+        paires <- lapply(seq_along(mt$a), function(q) {
+          ca <- contrat_a[mt$a[q]]
+          inc <- if (length(rm) > 0L) {
+            .noeud3("ou", c(if (!is.na(apparier_cles(ca, cu))) list(nc_val(ca)) else list(.constante3(FALSE)), lapply(rd, nc, filtre = ca)))
+          } else .constante3(TRUE)
+          .noeud3("et", list(inc, mt$arbres[[q]]))
+        })
+        sous <- .noeud3("et", list(deces, .noeud3("ou", paires)))
+      }
+      x <- .arbre3(.noeud3("et", list(coeur, .noeud3("non", list(sous)))), .ORDRE_D11)
+      is <- .issue_d11(x, l, ns, ip, d01a, alias, function(m) jc$index[[m]])
+      r[l] <- is$v
+      ip <- is$ip
+      d01a <- is$d01a
+      ecarte[l] <- is$ecarte
+    }
+  }
+  if (any(ctx$retenu$sinistres & ecarte)) .ecarter_maintien_d11(ctx, "D11a", "sinistres")
+  attr(r, "index_pertinent") <- ip
+  attr(r, "index") <- ip
+  if (length(d01a) > 0L) attr(r, "d01a_pertinent") <- d01a
+  attr(r, "lues") <- lues
+  r
+}
+
+# Verdict à trois valeurs de D11b (.regle_v_couverture() ; #105, lot V, G2c, M808, M811 ; erratum
+# E-13) : lecture brute (.verdict_d11b_brut()) sur les dossiers retenus qui ne lisent aucune cellule
+# inconnue ni ligne de visibilité non déterminée (assuré de leur sinistre hors de
+# .assures_inconnus_d11(), une seule occurrence de leur garantie, collège connu, aucun contrat de
+# même clé non déterminé ou de nature inconnue) ; un arbre par autre dossier retenu et occurrence,
+# évalué par .arbre3() : « NON contrat individuel ET NON couvert dans ce collège ET couvert dans un
+# autre collège ET NON sous-cas restreint au collège ». Contrat individuel : lignes de contrats de
+# même clé, retenues ou non déterminées (présence), de nature individuel ou inconnue
+# (`contrats.nature_contrat`, E-13 (b)). « Dans ce collège » : .couverture3() à trois valeurs avec
+# `college` (E-13 (e)) ; « dans un autre collège » : affiliations du même contrat, collège
+# renseigné et différent (.feuille_college3(), même clé opaque). Sous-cas : .maintien_arbres3()
+# restreint au contrat et au collège de la garantie. Occurrences divergentes (C-5) : verdict de
+# chaque occurrence, combiné comme la lecture brute. Lecture grossière, attributs et `forcer` :
+# comme .verdict_d11().
+.verdict_d11b <- function(ctx, lues = NULL, forcer = FALSE) {
+  v <- function(t, c1) .valeurs(ctx, t, c1)
+  gs <- "garanties_souscrites"
+  nd <- nrow(ctx$base$dossiers)
+  lire <- .lecture_maintien_d11(ctx)
+  grossier <- !(lire$n && lire$m && lire$e)
+  r_brut <- if (grossier) rep(NA, nd) else .verdict_d11b_brut(ctx)
+  r <- as.vector(r_brut) %in% TRUE
+  s <- apparier_cles(v("dossiers", "id_sinistre"), v("sinistres", "id_sinistre"))
+  assure <- .cle_manquante(as.character(v("sinistres", "id_assure")))
+  idx <- .index_jointure(ctx, gs, "id_garantie_souscrite", v("dossiers", "id_garantie_souscrite"))
+  occ <- attr(idx, "occurrences")
+  o <- lapply(seq_len(nd), function(d) if (!is.null(occ) && length(occ[[d]]) > 0L) occ[[d]] else idx[d])
+  contrat_g <- .cle_manquante(as.character(v(gs, "id_contrat")))
+  col_g <- as.character(v(gs, "college"))
+  col_u <- .inconnu(ctx, gs, "college")
+  id_c <- .cle_manquante(as.character(v("contrats", "id_contrat")))
+  nat_c <- v("contrats", "nature_contrat")
+  nat_u <- .inconnu(ctx, "contrats", "nature_contrat")
+  nd_c <- .nd_vue(ctx, "contrats") & !ctx$retenu$contrats
+  c_inc <- unique(id_c[(nd_c & nat_c %in% "individuel") | ((ctx$retenu$contrats | nd_c) & nat_u)])
+  c_inc <- c_inc[!is.na(c_inc)]
+  inc_a <- .assures_inconnus_d11(ctx)
+  compl_o <- function(d) {
+    j <- o[[d]]
+    length(j) > 1L || any(col_u[j] %in% TRUE) || any(!is.na(apparier_cles(contrat_g[j], c_inc)))
+  }
+  complexe <- ctx$retenu$dossiers & (forcer | grossier | vapply(seq_len(nd), compl_o, NA) |
+                                       (!is.na(s) & !is.na(apparier_cles(assure[s], inc_a))))
+  if (any(ctx$retenu$dossiers & !complexe & is.na(r_brut))) {
+    stop("erreur interne de provie : D11b : lecture brute ind\u00e9termin\u00e9e hors du chemin \u00e0 trois valeurs", call. = FALSE)
+  }
+  r[complexe] <- FALSE
+  ip <- list()
+  d01a <- list()
+  ecarte <- rep(FALSE, nd)
+  Dd <- which(complexe)
+  cd <- data.frame(d = rep(Dd, lengths(o[Dd])), o = unlist(o[Dd]))
+  cd <- cd[!is.na(cd$o) & !is.na(s[cd$d]) & !is.na(contrat_g[cd$o]) & (col_u[cd$o] | !is.na(.cle_manquante(col_g[cd$o]))), , drop = FALSE]
+  if (nrow(cd) > 0L) {
+    se <- s[cd$d]
+    surv <- as.numeric(v("sinistres", "date_survenance"))
+    s_id <- ifelse(.inconnu(ctx, "sinistres", "date_survenance"), paste0("sinistres.date_survenance\r", seq_along(surv)), NA_character_)
+    c_id <- ifelse(col_u[cd$o], paste0(gs, ".college\r", cd$o), NA_character_)
+    nat <- v("sinistres", "nature_sinistre")
+    nu <- .inconnu(ctx, "sinistres", "nature_sinistre")
+    dom_nat <- .domaine3(ctx, "sinistres", "nature_sinistre")
+    dom_nc <- .domaine3(ctx, "contrats", "nature_contrat")
+    cvc <- .couverture3(ctx, v("sinistres", "id_assure")[se], surv[se], college = col_g[cd$o],
+                        inconnues = list(date = s_id[se], college = c_id))
+    cv <- .couverture3(ctx, v("sinistres", "id_assure")[se], surv[se], inconnues = list(date = s_id[se]))
+    fc <- attr(cvc, "feuilles")
+    fe <- attr(cv, "feuilles")
+    alias <- new.env(parent = emptyenv())
+    k_g <- 0L
+    pseudo <- function() {
+      k_g <<- k_g + 1L
+      id <- paste0("grossier\r0\r", k_g)
+      .feuille3(id, function(sigs) stats::setNames(list(c(TRUE, FALSE)), id), function(a, n) a[[id]])
+    }
+    mt <- .maintien_arbres3(ctx, se, as.list(contrat_g[cd$o]), college = col_g[cd$o], college_id = c_id, lire = lire,
+                            pseudo = pseudo, alias = alias)
+    k1_k <- split(seq_len(nrow(cvc)), factor(cvc$i, levels = seq_len(nrow(cd))))
+    k2_k <- split(seq_len(nrow(cv)), factor(cv$i, levels = seq_len(nrow(cd))))
+    c_ind <- which(!is.na(id_c) & (ctx$retenu$contrats | nd_c) & (nat_u | nat_c %in% "individuel"))
+    c_par <- split(c_ind, id_c[c_ind])
+    c_el <- c_par[apparier_cles(contrat_g[cd$o], names(c_par))]
+    res <- Map(function(k, k1, k2, cl, mtk) {
+      cg <- contrat_g[cd$o[k]]
+      if (any(ctx$retenu$contrats[cl] & !nat_u[cl])) return(list(v = FALSE, pert = character(0)))
+      ind <- lapply(cl, function(c1) {
+        termes <- list()
+        if (nat_u[c1]) {
+          n_id <- paste0("contrats.nature_contrat\r", c1)
+          termes <- c(termes, list(.feuille3(n_id, function(sigs) stats::setNames(list(dom_nc), n_id),
+                                             function(a, n) a[[n_id]] %in% "individuel")))
+        }
+        if (nd_c[c1]) {
+          p_id <- paste0("contrats\r", c1)
+          termes <- c(termes, list(.feuille3(p_id, function(sigs) stats::setNames(list(c(TRUE, FALSE)), p_id), function(a, n) a[[p_id]])))
+        }
+        .noeud3("et", termes)
+      })
+      k1 <- k1[!is.na(apparier_cles(cvc$contrat[k1], cg))]
+      k2 <- k2[cv$affiliation[k2] & !is.na(apparier_cles(cv$contrat[k2], cg))]
+      dans <- if (length(k1) > 0L) .noeud3("ou", fc[k1]) else .constante3(FALSE)
+      autre <- if (length(k2) > 0L) .noeud3("ou", Map(function(q, fq) .noeud3("et", list(fq,
+        .feuille_college3(ctx, cv$college_id[q], cv$college[q], c_id[k], col_g[cd$o[k]], FALSE))), k2, fe[k2])) else .constante3(FALSE)
+      sous <- if (lire$n) .constante3(FALSE) else pseudo()
+      if (lire$n && length(mtk$a) > 0L) {
+        l <- se[k]
+        deces <- if (nu[l]) {
+          n_id <- paste0("sinistres.nature_sinistre\r", l)
+          .feuille3(n_id, function(sigs) stats::setNames(list(dom_nat), n_id), function(a, n) a[[n_id]] %in% "deces")
+        } else .constante3(nat[l] %in% "deces")
+        sous <- .noeud3("et", list(deces, .noeud3("ou", mtk$arbres)))
+      }
+      termes <- list(.noeud3("non", list(dans)), autre, .noeud3("non", list(sous)))
+      if (length(ind) > 0L) termes <- c(list(.noeud3("non", list(.noeud3("ou", ind)))), termes)
+      .arbre3(.noeud3("et", termes), .ORDRE_D11)
+    }, seq_len(nrow(cd)), k1_k, k2_k, c_el, mt)
+    # par dossier : une occurrence, son verdict ; occurrences divergentes : verdict de chaque
+    # occurrence (hors champ : faux), connu s'ils concordent
+    z_d <- split(seq_len(nrow(cd)), factor(cd$d, levels = unique(cd$d)))
+    for (it in Map(function(d, z, oq) list(d = d, z = z, oq = oq, res = res[z]), as.integer(names(z_d)), z_d, o[as.integer(names(z_d))])) {
+      d <- it$d
+      z <- it$z
+      oq <- it$oq
+      if (length(oq) == 1L) {
+        is <- .issue_d11(it$res[[1L]], d, nd, ip, d01a, alias, function(m) integer(0))
+        r[d] <- is$v
+        ip <- is$ip
+        ecarte[d] <- is$ecarte
+        next
+      }
+      vs <- c(vapply(it$res, `[[`, NA, "v"), if (length(z) < length(oq)) FALSE)
+      r[d] <- if (all(vs %in% TRUE)) TRUE else if (all(vs %in% FALSE)) FALSE else NA
+      if (!is.na(r[d])) next
+      if (length(unique(vs)) > 1L) {
+        if (is.null(ip[[gs]])) ip[[gs]] <- vector("list", nd)
+        ip[[gs]][d] <- list(sort(unique(oq)))
+        if (is.null(d01a[[gs]])) d01a[[gs]] <- rep(FALSE, nd)
+        d01a[[gs]][d] <- TRUE
+      }
+      for (x in it$res[is.na(vs[seq_along(z)])]) {
+        is <- .issue_d11(x, d, nd, ip, d01a, alias, function(m) integer(0))
+        ip <- is$ip
+        ecarte[d] <- ecarte[d] || is$ecarte
+      }
+    }
+  }
+  if (any(ctx$retenu$dossiers & ecarte)) .ecarter_maintien_d11(ctx, "D11b", "dossiers")
+  attr(r, "index_pertinent") <- ip
+  attr(r, "index") <- ip
+  if (length(d01a) > 0L) attr(r, "d01a_pertinent") <- d01a
+  attr(r, "lues") <- lues
+  r
 }
 
 # Verdict de D11c sur les lignes d'affiliations (.regle_v_couverture()) : vecteur logique, attribut

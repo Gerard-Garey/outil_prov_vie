@@ -433,18 +433,22 @@ LISTE_BLANCHE <- c(
     "code",
   "R/donnees.R | .regle_v_couverture | sub ( \"\\\\..*$\" , \"\" , lit_c ) %in% names ( ctx $ base )" =
     "metadonnee",
-  "R/donnees.R | .verdict_d11 | kd %in% kc [ cv $ certain ]" =
+  "R/donnees.R | .verdict_d11_brut | kd %in% kc [ cv $ certain ]" =
     "indice",
-  "R/donnees.R | .verdict_d11 | kd %in% kc [ ! cv $ certain ]" =
+  "R/donnees.R | .verdict_d11_brut | kd %in% kc [ ! cv $ certain ]" =
     "indice",
-  "R/donnees.R | .verdict_d11 | seq_len ( ns ) %in% cv $ i [ cv $ certain ]" =
+  "R/donnees.R | .verdict_d11_brut | seq_len ( ns ) %in% cv $ i [ cv $ certain ]" =
     "indice",
-  "R/donnees.R | .verdict_d11 | seq_len ( ns ) %in% cv $ i [ ! cv $ certain ]" =
+  "R/donnees.R | .verdict_d11_brut | seq_len ( ns ) %in% cv $ i [ ! cv $ certain ]" =
     "indice",
-  "R/donnees.R | .ecarter_maintien_d11 | tc %in% lit_m" =
-    "metadonnee",
   "R/donnees.R | .ecarter_maintien_d11 | cause %in% z" =
     "code",
+  "R/donnees.R | .arret_feuille3 | match ( type [ D ] , te $ type_evenement )" =
+    "code",
+  "R/donnees.R | .assures_inconnus_d11 | c1 %in% names ( ctx $ base [[ t ] ] )" =
+    "metadonnee",
+  "R/donnees.R | .verdict_d11 | seq_len ( ns ) %in% p $ i [ ! ret | diverge ]" =
+    "indice",
   "R/donnees.R | .pas_d12 | match ( type , te $ type_evenement )" =
     "code",
   "R/donnees.R | .pas_d12 | etat %in% eclater_champ ( te $ etat_depuis [ i ] )" =
@@ -473,7 +477,27 @@ LISTE_BLANCHE <- c(
     "metadonnee",
   "R/donnees.R | .arbre3 | match ( tc , ordre )" =
     "metadonnee",
-  "R/donnees.R | .arbre3 | c1 %in% partagees" =
+  "R/donnees.R | .arbre3 | match ( groupes , tc )" =
+    "metadonnee",
+  "R/donnees.R | .arbre3 | names ( dom_p ) %in% partagees [ rang < rang [ match ( g , tc ) ] ]" =
+    "metadonnee",
+  "R/donnees.R | .arbre3 | match ( g , tc )" =
+    "metadonnee",
+  "R/donnees.R | .arbre3 | c1 %in% libres" =
+    "metadonnee",
+  "R/donnees.R | .arbre3 | c1 %in% C" =
+    "metadonnee",
+  "R/donnees.R | .arret_feuille3 | t_id %in% names ( sigs [[ 1L ] ] )" =
+    "metadonnee",
+  "R/donnees.R | .arret_feuille3 | ids [ q ] %in% names ( sigs [[ 1L ] ] )" =
+    "metadonnee",
+  "R/donnees.R | .arret_feuille3 | t_id %in% names ( s1 )" =
+    "metadonnee",
+  "R/donnees.R | .arret_feuille3 | ids %in% names ( s1 )" =
+    "metadonnee",
+  "R/donnees.R | .arret_feuille3 | t_id %in% pv" =
+    "metadonnee",
+  "R/donnees.R | .arret_feuille3 | ids %in% pv" =
     "metadonnee",
   "R/donnees.R | .verdict_d10c | code_g %in% rentes" =
     "code",
