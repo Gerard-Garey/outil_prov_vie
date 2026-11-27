@@ -3189,7 +3189,7 @@ cas, non preuve)\fsp; elle vérifie aussi que toute cause
 \code{declarations\_requises}.
 
 \textbf{Règles~V sous un refus de valeur} (spécification, erratum~1.9.7,
-E-1, E-3, E-4, E-10 et E-12 à E-15\fsp; décision du mainteneur du
+E-1, E-3, E-4, E-10, E-12 à E-15 et E-17\fsp; décision du mainteneur du
 25~novembre~2026, M808, qui rouvre M169 et la lève pour les
 règles~V\fsp; décisions de session confirmées a posteriori par le
 mainteneur le 27~novembre~2026, M825\fsp; issue~105, lot~V). Jusqu'à
@@ -3305,7 +3305,10 @@ s'exécute désormais en logique de Kleene, en lecture existentielle.
   (E-13~(d))\fsp; ordre des événements de l'arrêt en cours
   (E-13~(c))\fsp; budget (E-14)\fsp; statut de service (E-15~(c))\fsp;
   projection de la cellule de choix de version sur toutes les versions non
-  déterminées du membre (pertinence seulement, point suivant).
+  déterminées du membre (pertinence seulement, point suivant)\fsp;
+  présences de deux éléments non déterminés par une même ascendante,
+  tenues pour indépendantes (E-17~(f), point «~Lignes de visibilité non
+  déterminée du paramètre~»).
 \item \textbf{Statut de service à trois valeurs} (E-15~(c) et~(d), D07a,
   D07b, D07c sur \code{rentes}, D10f). La base est la classe du dernier
   événement porteur retenu, de type et de date d'effet connus, d'effet au
@@ -3368,6 +3371,97 @@ s'exécute désormais en logique de Kleene, en lecture existentielle.
   pour le sinistre~S2 de D08. Le paramètre est lu par une seule fonction
   pour D07c, D08 et D14 (\code{.valeur\_parametre3()}), la limite d'âge
   par une seule règle pour D07c et D14 (\code{.limite\_enfant3()}).
+\item \textbf{Lignes de visibilité non déterminée du paramètre} (D07c,
+  D08\fsp; erratum~1.9.7, E-6 et E-17\fsp; décisions du mainteneur du
+  25~novembre~2026, M814, et du 27~novembre~2026, M829\fsp; issue~125).
+  Le paramètre se lit sur deux ensembles de lignes de \code{parametres}.
+  Pour D08 et un sinistre~S1, $K$ est fait des lignes retenues
+  \code{delai\_rechute\_jours} des garanties souscrites des dossiers
+  retenus de~S1 de code \code{incapacite}, et $P$ des lignes de même nom
+  des garanties des dossiers de~S1 de visibilité non déterminée, et des
+  garanties de visibilité non déterminée de ses dossiers retenus, de code
+  \code{incapacite}\fsp; un code inconnu fait compter la ligne selon sa
+  valeur. Pour D07c et une rente ou un dossier, $K$ est fait des lignes
+  retenues \code{age\_limite} et \code{age\_limite\_etudes} de sa garantie
+  souscrite, et $P$ des mêmes lignes quand cette garantie est de
+  visibilité non déterminée. \code{parametres} n'ayant pas de visibilité
+  propre (dictionnaire de la base, §~6), $K$ et $P$ ne coexistent jamais
+  pour une même garantie (résultat exact)\fsp; une rente ou un dossier non
+  déterminés relèvent de la population, non de~$P$, et une ligne invisible
+  de façon déterminée n'est ni dans~$K$ ni dans~$P$.
+  \begin{itemize}[itemsep=0pt]
+  \item \emph{Présence.} Une ligne de~$P$ est lue dans l'arbre de la
+    ligne sous la présence de l'élément non déterminé qui la porte~: la
+    cellule du dossier, ou celle de la garantie, une seule par garantie,
+    ses lignes de \code{parametres} étant présentes ensemble (exact). Une
+    ligne portée par deux éléments non déterminés, garantie non déterminée
+    d'un dossier non déterminé, est active sous la conjonction des deux
+    présences, tenues pour indépendantes si ces deux éléments sont non
+    déterminés par une même ascendante (approximation sûre ci-dessous). Dans chaque affectation, la valeur est la valeur commune des
+    lignes actives de $K \cup P$ (présentes et, pour D08, de code
+    \code{incapacite}), une valeur refusée étant énumérée\fsp; sans ligne
+    active, ou si les valeurs actives diffèrent, elle n'est pas définie
+    dans cette affectation, avec les mêmes effets que ci-dessus~: la paire
+    est fausse (D08)\fsp; l'enfant est tenu pour non éteint (D07c), un
+    \code{age\_limite\_etudes} sans ligne active cédant la place à
+    \code{age\_limite}. La fonction \code{.valeur\_parametre3()} reçoit
+    pour cela la matrice des lignes actives par affectation (argument
+    \code{actif}\fsp; sans lui, toutes les lignes sont actives, ce que lit
+    D14). Une ligne qui lit une ligne de~$P$ passe par l'arbre, jamais par
+    le chemin rapide.
+  \item \emph{Statut et \code{parametre\_non\_defini}.} La cause n'est
+    émise que si la valeur peut décider, et dans deux cas seulement~:
+    $K$ et $P$ vides, les lignes de~$P$ comptant comme présentes\fsp; $K$
+    portant deux valeurs connues distinctes ou plus, $P$ n'entrant pas
+    dans ce compte. Une ligne de garantie de code inconnu peut vider~$K$
+    (lecture existentielle, E-15~(e)), quand une ligne de~$P$ compte comme
+    présente~; cette asymétrie est renvoyée à l'issue~229. Si $K = \{d\}$ et $P \subseteq \{d\}$, la valeur est~$d$
+    dans toute affectation. Dans les autres cas ($K$ vide et $P$ non
+    vide\fsp; $K = \{d\}$ et une valeur de~$P$ différente de~$d$\fsp; valeur
+    de~$K$ inconnue), la valeur n'est pas déterminée~: une ligne au
+    verdict inconnu est écartée, avec la cause~($\gamma$) de l'élément non
+    déterminé, départagée avec les autres causes de la même clé. Une
+    garantie, ou un dossier, invisible de façon déterminée garde
+    \code{parametre\_non\_defini}, $K$ et $P$ y étant vides (E-6).
+  \item \emph{«~Sinistre écarté~»} (lecture~(A), M829, jugement
+    d'expert). M814 se lit «~écarté si son verdict en dépend~»~: la règle
+    qu'E-15~(e) applique aux valeurs refusées est étendue aux lignes
+    de~$P$. Une ligne dont le verdict est faux dans toute affectation
+    (paire hors de tout délai possible, enfant non éteint que les lignes
+    de~$P$ soient présentes ou non) n'est ni écartée ni portée en ligne~:
+    la cause~($\gamma$) ne remplace \code{parametre\_non\_defini}, et le
+    verdict ne devient inconnu, que si la présence des lignes de~$P$ peut
+    changer le verdict. C'est un écart déclaré à la lettre de M814.
+    L'alternative écartée, lire comme inconnue une affectation où le
+    paramètre n'est pas défini, valeurs refusées comprises (lecture~(B)),
+    aurait écarté ces lignes et changé des résultats de la conversion de
+    D07c et de D08~; elle est renvoyée à l'issue~229.
+  \item \emph{Approximation sûre} (E-17~(f)). Les présences de deux
+    éléments non déterminés par une même ascendante (le dossier et la
+    sortie d'un sinistre~S1 non déterminé, par exemple) sont tenues pour
+    indépendantes~: des affectations impossibles s'ajoutent, ce qui peut
+    rendre inconnu un verdict déterminé, jamais l'inverse. C'est une
+    dérogation de plus à l'exactitude.
+  \item \emph{Erreur interne.} Une ligne de \code{parametres} de
+    visibilité non déterminée sous une garantie retenue est une erreur
+    interne, levée à la lecture de la ligne (D07c~: ligne d'un enfant\fsp;
+    D08~: ligne lue par le terme d'une paire). Le cas est inatteignable~:
+    \code{parametres} n'a pas de visibilité propre (elle n'a ni date de
+    visibilité, ni colonne de D02b, ni partie de ligne, et n'est pas une
+    table de D03g), son seul lien de visibilité est sa garantie souscrite,
+    et un défaut de forme de cette clé refuse la table, dont aucune ligne
+    n'est alors non déterminée. L'invariant suppose aussi qu'une clé
+    primaire en double refuse sa table en portée table (D01a)\fsp; si cette
+    portée changeait, cas que suit l'issue~169, la garde serait à revoir.
+  \end{itemize}
+  Les populations des deux règles, la sortie non déterminée d'effet
+  postérieur à l'arrêté (D08) et les lignes de~$P$ de D14, qui garde
+  E-12~(d), restent hors de ce point (issue~229). La batterie unitaire
+  vérifie ces règles sur des témoins (critères C125-1 à C125-8), par des
+  oracles qui énumèrent toutes les présences et valeurs refusées
+  (C125-9), par la comparaison du chemin rapide et du chemin forcé
+  (C125-10) et par l'invariance à l'ordre des lignes, en mode exact et
+  sous un budget faible (C125-11).
 \item \textbf{Règle non exécutée faute de déclaration} (E-11,
   E-15~(f)\fsp; D07b sans \code{seuils\$d07b\_mois}, D07c et D14 sans
   \code{conventions\$limite\_age}). L'unité en service (D07b), la ligne
@@ -3880,7 +3974,10 @@ sous deux entrées déclarées~: la règle, \code{atteinte} ou
 \code{depassement} (entrée \code{conventions\$limite\_age\$regle}), et la
 convention d'âge, \code{revolu} ou \code{millesime} (entrée
 \code{conventions\$limite\_age\$age})\fsp; traitement hypothèse par défaut ou
-signalement. Sans la convention d'âge ou les bornes, le contrôle D02c n'est
+signalement. Les paramètres de la limite d'une garantie de visibilité
+non déterminée sont lus sous sa présence (issue~125\fsp; point «~Lignes
+de visibilité non déterminée du paramètre~» du paragraphe «~Règles~V
+sous un refus de valeur~»). Sans la convention d'âge ou les bornes, le contrôle D02c n'est
 pas exécuté
 (\code{declaration\_absente}) et la déclaration manquante figure dans
 \code{declarations\_requises}. Sans la convention de limite d'âge, il en va
@@ -3972,7 +4069,11 @@ simulés est renvoyée à l'issue~117.
   d'un dossier de S1\fsp; paramètre absent ou à plusieurs valeurs pour une
   paire qui peut décider~: \code{parametre\_non\_defini}. Traitement
   hypothèse par défaut ou signalement, détection présomptive, constat sur
-  \code{sinistres} (S2). Sous un refus de valeur (issue~105\fsp;
+  \code{sinistres} (S2). Les lignes du paramètre de visibilité non
+  déterminée sont lues sous la présence de l'élément qui les porte
+  (issue~125\fsp; point «~Lignes de visibilité non déterminée du
+  paramètre~» du paragraphe «~Règles~V sous un refus de valeur~»). Sous
+  un refus de valeur (issue~105\fsp;
   erratum~1.9.7, E-15), un code de garantie inconnu fait compter la
   ligne du paramètre selon sa valeur, et une valeur refusée du délai est
   inconnue (point «~Paramètre non déterminable~» du paragraphe «~Règles~V
