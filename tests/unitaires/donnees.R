@@ -8210,6 +8210,135 @@ verifier_egal("#105, lot V, registre des règles V (iii) : clé retirée du regi
                    ecarts_v105(executes_v105, reg_vue)$colonnes),
               list("D01b|prestations|NA", "D12|evenements|type_evenement", "D03b|assures|sexe"))
 
+section("donnees : auto-lecture d'une colonne refusée dans le mécanisme (#147, M809 ; spécification donnees, erratum 1.9.7, E-2 et E-16)")
+# Option (a) de M809 : statu quo du code. Une règle de portée table, ou une règle V, qui lit sa
+# propre colonne la lit dans le mécanisme : une cellule refusée pour sa valeur (`""` comprise) y
+# est une valeur inconnue dans le domaine de la colonne, seule la cause change (E-16, (a) et (b)).
+# Les tests verrouillent le recensement (E-16, (c)) et ses conséquences (critères C147-1 à C147-5,
+# E-16, (e)).
+# C147-1 : sites B dérivés du registre .regles_b() : portée effective table, colonne non NA, et
+# colonne propre refusable pour sa valeur (contrôlée par une règle R de portée autre que table,
+# comme .lectures_regle_b()). Liste classée : D10a sur prestations.type_prestation (site 23).
+sites_auto_table_147 <- function(reg, por = ns$.portees_registre(d, reg)) {
+  soi <- vapply(reg, function(k) paste(k$table, k$colonne, sep = "."), "")
+  tr <- vapply(reg, `[[`, "", "traitement")
+  refusables <- unique(soi[por != "table" & tr == "R"])
+  cle <- vapply(reg, function(k) paste(k$code, k$table, k$colonne, sep = "|"), "")
+  sort(unique(cle[por == "table" & !vapply(reg, function(k) is.na(k$colonne), NA) & soi %in% refusables]), method = "radix")
+}
+classes_147 <- c("D10a|prestations|type_prestation")
+ecarts_147 <- function(reg, ...) {
+  s <- sites_auto_table_147(reg, ...)
+  list(non_classes = setdiff(s, classes_147), non_atteints = setdiff(classes_147, s))
+}
+liste_147 <- function(x) if (length(x)) paste(x, collapse = ", ") else "aucun"
+e_147 <- ecarts_147(ns$.regles_b(d))
+verifier(sprintf("#147, C147-1 : sites B de portée table qui lisent leur propre colonne, refusable pour sa valeur = {D10a prestations.type_prestation} ; non classés : %s ; non atteints : %s",
+                 liste_147(e_147$non_classes), liste_147(e_147$non_atteints)),
+         !length(e_147$non_classes) && !length(e_147$non_atteints))
+# C147-5 : le contrôle de C147-1 détecte un site ajouté au registre (règle R de portée table sur
+# evenements.motif, colonne refusable pour sa valeur)
+reg_m_147 <- c(ns$.regles_b(d), list(list(code = "D10a", table = "evenements", colonne = "motif", lit = character(0), traitement = "R")))
+verifier_egal("#147, C147-5 : le contrôle de C147-1 échoue sur un site ajouté au registre (D10a evenements.motif, non classé)",
+              ecarts_147(reg_m_147), list(non_classes = "D10a|evenements|motif", non_atteints = character(0)))
+# C147-2 : PR2 (dossier DO1, garantie deces) de type "", "zz" puis NA : la cellule inconnue est
+# énumérée sur le domaine, le verdict de D10a y prend deux valeurs, la ligne est écartée ; refus de
+# portée ligne de la cellule, aucun constat D10a ni refus de la table ; seule la cause change.
+lig_147 <- function(v) {
+  b <- base_ref
+  b$prestations$type_prestation[2] <- v
+  r <- cb(b)
+  x <- r$controles_non_executes
+  list(ne = x$cause[x$code == "D10a" & x$table == "prestations" & x$colonne %in% "type_prestation"],
+       refus = paste(r$refus_tables$table, r$refus_tables$colonne, r$refus_tables$motif, r$refus_tables$portee,
+                     r$refus_tables$identifiants),
+       d10a = sum(r$controles$code == "D10a"), sans_cause = within(x, cause <- NULL))
+}
+w_147 <- lapply(list("", "zz", NA_character_), lig_147)
+verifier_egal("#147, C147-2 : PR2 de type \"\", \"zz\", NA : ligne (D10a, prestations, type_prestation) de cause chaine_vide, hors_domaine, manquant_obligatoire ; seul refus, de portée ligne sur PR2, de même motif ; aucun constat D10a",
+              lapply(w_147, `[`, c("ne", "refus", "d10a")),
+              lapply(c("chaine_vide", "hors_domaine", "manquant_obligatoire"), function(m)
+                list(ne = m, refus = paste("prestations type_prestation", m, "ligne PR2"), d10a = 0L)))
+verifier("#147, C147-2 : controles_non_executes identique hors cause sous \"\", \"zz\" et NA",
+         identical(w_147[[1]]$sans_cause, w_147[[2]]$sans_cause) && identical(w_147[[1]]$sans_cause, w_147[[3]]$sans_cause))
+r_147 <- cb(base_ref)
+verifier("#147, C147-2 : témoin, base de référence intacte sans ligne D10a dans controles_non_executes ni constat D10a",
+         !any(r_147$controles_non_executes$code == "D10a") && !any(r_147$controles$code == "D10a"))
+# C147-3 : sites V dérivés de la trace de .regle_vue() du registre des règles V (executes_v105 :
+# base de référence à A0 et à A, sans et avec les déclarations qui exécutent D02c (âge), D07b,
+# D07c et D14) : clés dont la colonne propre est une colonne refusable (dl_v105) lue comme valeur.
+# 31 clés, dont les quatre de D02c, atteintes seulement sous les déclarations ; toutes en mode
+# kleene, à l'appel comme au registre ; 7 de type character.
+cle_appel_147 <- vapply(executes_v105, function(k) paste(k$code, k$table, k$colonne, sep = "|"), "")
+auto_147 <- vapply(executes_v105, function(k) !is.na(k$colonne) && paste(k$table, k$colonne, sep = ".") %in% intersect(k$valeur, dl_v105), NA)
+auto_v_147 <- sort(unique(cle_appel_147[auto_147]), method = "radix")
+type_147 <- function(cle) {
+  z <- strsplit(cle, "|", fixed = TRUE)[[1]]
+  d$colonnes$type[d$colonnes$table == z[2] & d$colonnes$colonne == z[3]]
+}
+car_v_147 <- Filter(function(k) type_147(k) == "character", auto_v_147)
+verifier_egal("#147, C147-3 : sites V qui lisent leur propre colonne, refusable pour sa valeur, comme valeur : 31 clés figées, aucune en mode bloquee (appels et registre) ; 7 de type character",
+              list(auto_v_147, sort(unique(vapply(executes_v105[auto_147], `[[`, "", "mode")), method = "radix"),
+                   unique(reg_v105$mode[match(auto_v_147, reg_v105$cle)]), car_v_147),
+              list(c("D02a|affiliations|date_fin", "D02a|ayants_droit_sante|fin_couverture", "D02a|contrats|date_debut_gestion",
+                     "D02a|contrats|date_fin", "D02a|contrats|date_terme", "D02a|cotisations|fin_periode",
+                     "D02a|evenements|date_effet", "D02a|famille|date_naissance", "D02a|garanties_souscrites|date_fin",
+                     "D02a|prestations|fin_periode", "D02a|sinistres|date_declaration", "D02a|sinistres|date_instruction",
+                     "D02a|sinistres|date_survenance", "D02c|assures|date_naissance", "D02c|ayants_droit_sante|date_naissance",
+                     "D02c|designations|date_naissance", "D02c|famille|date_naissance", "D03a|assures|date_naissance",
+                     "D03a|famille|date_naissance", "D03b|assures|sexe", "D03b|famille|sexe",
+                     "D03c|affiliations|salaire_reference", "D03e|evenements|categorie_invalidite",
+                     "D03h|garanties_souscrites|taux_technique_tarif", "D05|evenements|motif", "D06|evenements|justificatif",
+                     "D10e|beneficiaires|qualite", "D11a|sinistres|date_survenance", "D12|evenements|type_evenement",
+                     "D13|sinistres|date_instruction", "somme_parts|beneficiaires|part"),
+                   "kleene", "kleene",
+                   c("D03b|assures|sexe", "D03b|famille|sexe", "D03e|evenements|categorie_invalidite", "D05|evenements|motif",
+                     "D06|evenements|justificatif", "D10e|beneficiaires|qualite", "D12|evenements|type_evenement")))
+# C147-4 : pour chaque cellule de la base de référence d'une colonne propre character d'une clé de
+# C147-3, et de prestations.type_prestation : bilans sous "" et sous "zz" identiques, hors la cause
+# (controles_non_executes ; cause d'une composante de l'enjeu empêchée, #122, seule cellule
+# refusée de la base) et hors le refus de la cellule (ligne de controles et de refus_tables, motif
+# des lignes d'enjeu de ce refus).
+norm_147 <- function(r, t, c) {
+  cel <- function(x, champ) x$table == t & x$colonne %in% c & x[[champ]] %in% c("chaine_vide", "hors_domaine")
+  r$controles_non_executes$cause <- NULL
+  r$controles <- r$controles[!cel(r$controles, "code"), , drop = FALSE]
+  r$refus_tables <- r$refus_tables[!cel(r$refus_tables, "motif"), , drop = FALSE]
+  rownames(r$controles) <- rownames(r$refus_tables) <- NULL
+  r$enjeu$motif[cel(r$enjeu, "motif")] <- "refus_cellule"
+  r$enjeu$cause[r$enjeu$cause %in% c("chaine_vide", "hors_domaine")] <- "cause_cellule"
+  r
+}
+cols_147 <- unique(c(sub("^[^|]*\\|", "", car_v_147), "prestations|type_prestation"))
+c4_147 <- local({
+  n <- 0L
+  ecarts <- character(0)
+  for (tc in cols_147) {
+    z <- strsplit(tc, "|", fixed = TRUE)[[1]]
+    for (i in seq_len(nrow(base_ref[[z[1]]]))) {
+      b1 <- base_ref
+      b1[[z[1]]][[z[2]]][i] <- ""
+      b2 <- base_ref
+      b2[[z[1]]][[z[2]]][i] <- "zz"
+      n <- n + 1L
+      if (!identical(norm_147(cb(b1), z[1], z[2]), norm_147(cb(b2), z[1], z[2]))) ecarts <- c(ecarts, paste(tc, i))
+    }
+  }
+  list(n, ecarts)
+})
+verifier_egal("#147, C147-4 : 31 cellules (assures.sexe, famille.sexe, evenements.categorie_invalidite, motif, justificatif et type_evenement, beneficiaires.qualite, prestations.type_prestation) : bilans sous \"\" et \"zz\" identiques hors cause et hors refus de la cellule",
+              c4_147, list(31L, character(0)))
+# D03b (défaut « manquant ») sur un sexe "" : verdict faux déterminé, sans ligne écartée ni
+# constat (E-16, (b) ; le domaine ne contient pas le manquant)
+d03b_147 <- unlist(lapply(list(c("assures", "1"), c("assures", "2"), c("famille", "1")), function(z) {
+  b <- base_ref
+  b[[z[1]]]$sexe[as.integer(z[2])] <- ""
+  r <- cb(b)
+  c(sum(r$controles_non_executes$code == "D03b"), sum(r$controles$code == "D03b"))
+}))
+verifier_egal("#147, C147-4 : D03b sur un sexe \"\" (assures, deux lignes ; famille) : ni ligne écartée ni constat",
+              d03b_147, rep(0L, 6L))
+
 section("donnees : règles V de G1 en logique de Kleene sous un refus de valeur (#105, lot V, G1 ; spécification `donnees`, erratum `1.9.7`, E-1 ; M808)")
 # Conversion G1 : 33 clés (registre_v105, groupe G1) en mode kleene. Chaque cas plante une
 # valeur refusée (hors bornes D02c, hors domaine, D09, manquant obligatoire) et lit la clé
