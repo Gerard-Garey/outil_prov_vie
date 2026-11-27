@@ -8002,10 +8002,11 @@ table_refusee_vue <- function(vue, table) {
 
 # Ordre du conditionnement des arbres de D07 (c) (E-14 (c), E-15 (h), jugement d'expert ; constant,
 # indépendant de l'ordre des lignes) : dates, présences, types, lien, situation, choix de la version
-# d'un membre, codes et prolongation de la garantie, `parametres.valeur` en dernier (les
+# d'un membre, présence d'une garantie non déterminée (lignes de P, #125, E-17 (b)), codes et
+# prolongation de la garantie, `parametres.valeur` en dernier (les
 # représentants d'une limite inconnue dépendent des naissances fixées).
 .ORDRE_D07C <- c("famille.date_naissance", "famille.date_deces", "evenements.date_effet", "evenements", "evenements.type_evenement",
-                 "famille.lien", "famille.situation", "choix", "garanties_souscrites.code_garantie",
+                 "famille.lien", "famille.situation", "choix", "garanties_souscrites", "garanties_souscrites.code_garantie",
                  "garanties_souscrites.prolongation_handicap", "parametres.valeur")
 
 # Lectures communes de D07 (c) à trois valeurs (.verdict_d07c(), .non_defini_d07c() ; #105, lot V,
@@ -8013,13 +8014,15 @@ table_refusee_vue <- function(vue, table) {
 # famille et de evenements : dans la vue pour une ligne retenue, D02a sous H compris, comme la lecture
 # brute ; brutes sinon ; dates en nombre), `cel(tc, l)` (cellule de domaine statique : dates
 # d'événement et de décès autour de l'arrêté, colonnes énumérées par leurs valeurs utiles),
-# `pres(t, l)` (présence d'une ligne de visibilité non déterminée), `k(nom, g)` (lignes retenues de
-# parametres du paramètre `nom` de la garantie souscrite de clé `g`, comme .parametre_garantie()),
-# `pval` et `pu` (valeurs et inconnues de parametres.valeur), `statuts(nom, cle)` (statut d'un
-# paramètre sous E-15 (e), par clé), `par_inconnu(cle)` (une valeur de limite inconnue, par clé) et
+# `pres(t, l)` (présence d'une ligne de visibilité non déterminée), `k(nom, g)` (lignes de parametres
+# du paramètre `nom` de la garantie souscrite de clé `g` : retenues, K, comme .parametre_garantie(),
+# et de visibilité non déterminée, P ; #125, erratum E-17 (a)), `pval` et `pu` (valeurs et inconnues
+# de parametres.valeur), `statuts(nom, cle)` (statut d'un paramètre sous E-15 (e) et E-17 (c), par
+# clé), `par_inconnu(cle)` (une valeur de limite inconnue ou une ligne de P, par clé) et
 # `enfant(j, w, g, eteint)` (feuille de .arbre3() « la version `j` de famille est à
 # charge et éteinte » (`eteint` vrai) ou « à charge et non éteinte » sous la garantie souscrite de
-# ligne `w` et de clé `g` ; .limite_enfant3(), paramètres à trois valeurs par .valeur_parametre3()).
+# ligne `w` et de clé `g` ; .limite_enfant3(), paramètres à trois valeurs par .valeur_parametre3(),
+# lignes de P actives sous la présence de leur garantie non déterminée, E-17 (b)).
 .lectures_d07c3 <- function(ctx, la) {
   gs <- "garanties_souscrites"
   a <- as.numeric(ctx$arrete)
@@ -8065,9 +8068,14 @@ table_refusee_vue <- function(vue, table) {
   }
   g$nd <- function(t) .nd_vue(ctx, t) & !ctx$retenu[[t]]
   g$pres <- function(t, l) .cel3(if (g$nd(t)[l]) paste0(t, "\r", l) else NA_character_, TRUE, c(TRUE, FALSE))
-  # lignes retenues de parametres par paramètre et clé de garantie souscrite (comme .parametre_garantie())
+  # lignes de parametres par paramètre et clé de garantie souscrite : retenues (K, comme
+  # .parametre_garantie()) et de visibilité non déterminée (P, nom lu brut ; #125, E-17 (a)) ; une
+  # ligne invisible de façon déterminée n'est ni dans K ni dans P
   gp <- .valeurs(ctx, "parametres", "id_garantie_souscrite")
-  nom_p <- .valeurs_vue(ctx, "parametres", "parametre")
+  ret_p <- ctx$retenu$parametres
+  nd_p <- g$nd("parametres")
+  nd_g <- g$nd(gs)
+  nom_p <- ifelse(ret_p, .valeurs_vue(ctx, "parametres", "parametre"), ifelse(nd_p, .valeurs(ctx, "parametres", "parametre"), NA))
   par_k <- list()
   g$k <- function(nom, cle) {
     if (is.null(par_k[[nom]])) {
@@ -8081,24 +8089,25 @@ table_refusee_vue <- function(vue, table) {
   }
   g$pval <- as.numeric(.valeurs(ctx, "parametres", "valeur"))
   g$pu <- u("parametres.valeur")
-  # par clé de garantie souscrite `cle` (vecteur) : statut du paramètre `nom` (K, lignes retenues ; P
-  # vide jusqu'à #125) sous E-15 (e) : absent (K vide), ambigu (deux valeurs connues distinctes ou
-  # plus), valeur (toutes connues et égales), indetermine ; `par_inconnu` : une valeur de K inconnue
-  # pour l'un des paramètres de limite
+  # par clé de garantie souscrite `cle` (vecteur) : statut du paramètre `nom` sous E-15 (e) et E-17
+  # (c) : absent (K et P vides), ambigu (deux valeurs connues distinctes ou plus dans K ; P n'entre
+  # pas dans ce compte), indetermine (P non vide, ou une valeur de K inconnue), valeur (K de valeurs
+  # connues et égales, P vide) ; `par_inconnu` : une valeur de K inconnue ou une ligne de P, pour
+  # l'un des paramètres de limite
   g$statuts <- function(nom, cle) {
     k <- which(nom_p %in% nom & cle_renseignee(gp))
     if (length(k) == 0L) return(rep("absent", length(cle)))
     cles <- as.character(gp[k])
-    conn <- ifelse(g$pu[k], NA_real_, g$pval[k])
+    conn <- ifelse(g$pu[k] | !ret_p[k], NA_real_, g$pval[k])
     n_conn <- tapply(conn, cles, function(x) length(unique(x[!is.na(x)])))
-    inc <- tapply(g$pu[k], cles, any)
+    inc <- tapply(g$pu[k] | !ret_p[k], cles, any)
     i <- apparier_cles(cle, names(n_conn))
     ifelse(is.na(i), "absent", ifelse(n_conn[i] >= 2L, "ambigu", ifelse(inc[i], "indetermine", "valeur")))
   }
   g$par_inconnu <- function(cle) {
     k <- which(nom_p %in% c("age_limite", "age_limite_etudes") & cle_renseignee(gp))
     if (length(k) == 0L) return(rep(FALSE, length(cle)))
-    inc <- tapply(g$pu[k], as.character(gp[k]), any)
+    inc <- tapply(g$pu[k] | !ret_p[k], as.character(gp[k]), any)
     i <- apparier_cles(cle, names(inc))
     !is.na(i) & inc[i] %in% TRUE
   }
@@ -8119,6 +8128,27 @@ table_refusee_vue <- function(vue, table) {
     k2 <- g$k("age_limite_etudes", cle)
     kp <- c(k1, k2)
     ids_p <- ifelse(g$pu[kp], paste0("parametres.valeur\r", kp), NA_character_)
+    # présence des lignes de P (E-17 (b)) : cellule de la garantie souscrite non déterminée, une
+    # seule pour toutes ses lignes (exact). Une ligne non déterminée sous une garantie retenue est
+    # une erreur interne, levée à sa lecture : parametres n'a pas de visibilité propre (absente de
+    # .DATES_VISIBILITE, .COLONNES_D02B, .PARTIES_LIGNE et des tables de D03g : .refus_vue() ne
+    # l'atteint pas) ; son seul lien de la règle 1 est sa garantie souscrite ; une clé de lien
+    # illisible par sa forme refuse la table, dont .nd_vue() ne rend alors aucune ligne (#125,
+    # réserve R1 d'actuary ; sonde mesurée)
+    pres_k <- function(k) {
+      if (ret_p[k]) return(NA_character_)
+      if (is.na(w) || !nd_g[w]) {
+        stop("erreur interne de provie : D07c : ligne de parametres non d\u00e9termin\u00e9e sous une garantie souscrite ",
+             "retenue", call. = FALSE)
+      }
+      paste0(gs, "\r", w)
+    }
+    pr1 <- vapply(k1, pres_k, "")
+    pr2 <- vapply(k2, pres_k, "")
+    ids_pr <- unique(c(pr1, pr2))
+    ids_pr <- ids_pr[!is.na(ids_pr)]
+    actif <- function(a_, n, pr) if (length(pr) == 0L || all(is.na(pr))) NULL else
+      vapply(pr, function(z) if (is.na(z)) rep(TRUE, n) else a_[[z]] %in% TRUE, logical(n))
     dom <- function(sigs) {
       out <- list()
       # limites connues et limites inconnues fixées (sinon : relatives aux naissances fixées)
@@ -8135,6 +8165,7 @@ table_refusee_vue <- function(vue, table) {
       if (!is.na(ids[["li"]])) out[[ids[["li"]]]] <- reps("famille.lien")
       if (!is.na(ids[["si"]])) out[[ids[["si"]]]] <- reps("famille.situation")
       if (!is.na(ids[["ph"]])) out[[ids[["ph"]]]] <- reps("garanties_souscrites.prolongation_handicap")
+      for (z in ids_pr) out[[z]] <- c(TRUE, FALSE)
       if (any(!is.na(ids_p))) {
         # limite inconnue : âges atteints aux naissances possibles (franchissement : âge et âge + 1),
         # valeurs connues, et une valeur distincte de toutes
@@ -8153,13 +8184,13 @@ table_refusee_vue <- function(vue, table) {
       d1 <- .val3(a_, ids[["dd"]], x$dd, n)
       phv <- .val3(a_, ids[["ph"]], x$ph, n)
       charge <- li %in% "enfant" & (is.na(d1) | d1 > a)
-      l1 <- .valeur_parametre3(a_, k1, g$pval, g$pu, n)
-      l2 <- .valeur_parametre3(a_, k2, g$pval, g$pu, n)
+      l1 <- .valeur_parametre3(a_, k1, g$pval, g$pu, n, actif(a_, n, pr1))
+      l2 <- .valeur_parametre3(a_, k2, g$pval, g$pu, n, actif(a_, n, pr2))
       e <- .limite_enfant3(la, st, structure(as.numeric(b), class = "Date"), rep(ctx$arrete, n), phv,
                            list(valeur = l1$val, ambigu = l1$ambigu), list(valeur = l2$val, ambigu = l2$ambigu))
       charge & (if (eteint) e$eteint else !e$eteint)
     }
-    .feuille3(c(ids, ids_p), dom, f)
+    .feuille3(c(ids, ids_p, ids_pr), dom, f)
   }
   g
 }
@@ -8173,7 +8204,7 @@ table_refusee_vue <- function(vue, table) {
 }
 
 # Verdict à trois valeurs de D07 (c) sur `t` (rentes ou dossiers ; #105, lot V, G3c ; erratum E-15
-# (a) à (e), (h)) : lecture brute (.verdict_d07c_brut()) sur les lignes retenues qui ne lisent aucune
+# (a) à (e), (h) ; #125, E-17) : lecture brute (.verdict_d07c_brut()) sur les lignes retenues qui ne lisent aucune
 # cellule inconnue ni ligne de visibilité non déterminée (code et prolongation_handicap de la
 # garantie souscrite, paramètres age_limite et age_limite_etudes ; rente : aucun facultatif du
 # statut de service, une seule version valable possible du membre, de colonnes connues ; dossier :
@@ -8187,7 +8218,8 @@ table_refusee_vue <- function(vue, table) {
 # éteint) ET OU, sur les membres et leurs versions, de choix = version ET à charge éteint ». Une
 # version d'un autre assuré est hors charge. Inconnues (E-15 (b)) : code et prolongation_handicap de
 # la garantie, lien, naissance, situation et décès des versions, valeurs des paramètres (E-15 (e) :
-# une ligne retenue de valeur refusée compte dans K, sa valeur énumérée), type et date d'effet des
+# une ligne retenue de valeur refusée compte dans K, sa valeur énumérée ; E-17 (b) : une ligne de P
+# lue sous la présence de sa garantie), type et date d'effet des
 # événements, présence des lignes non déterminées, choix de la version valable d'un membre (cellule
 # de domaine ses versions possibles, .versions_membre() ; E-15 (d), exacte : sa pertinence inscrit
 # toutes les versions non déterminées du membre). Cellules partagées conditionnées sous le budget
@@ -8337,8 +8369,8 @@ table_refusee_vue <- function(vue, table) {
 # D-G3-4) : la table `t` va dans controles_non_executes (colonne NA, .CAUSE_PARAMETRE_NON_DEFINI) s'il
 # existe une affectation des inconnues sous laquelle la limite d'un enfant est non définie (statut
 # absent ou ambigu de age_limite, ou de age_limite_etudes pour un enfant scolarise ou apprenti :
-# g$statuts(), valeur refusée comptée inconnue, jamais une valeur de plus ; une limite indéterminée
-# n'est pas non définie) et décide : rente retenue possiblement rente_education et non éteinte
+# g$statuts(), valeur refusée comptée inconnue, jamais une valeur de plus ; absent : K et P vides,
+# ambigu : sur K seul, E-17 (c) ; une limite indéterminée n'est pas non définie) et décide : rente retenue possiblement rente_education et non éteinte
 # (.service_possible3()), version possible du membre possiblement à charge (lien enfant, non décédé
 # à l'arrêté), d'âge possiblement défini, hors handicap certain sous prolongation_handicap ; dossier
 # retenu ou de visibilité non déterminée, possiblement double_effet, non clos de façon certaine,
@@ -8509,13 +8541,15 @@ table_refusee_vue <- function(vue, table) {
 }
 
 # Ordre du conditionnement des arbres de D08 (E-14 (c), E-15 (h), jugement d'expert ; constant,
-# indépendant de l'ordre des lignes) : dates, présences, type et motif des événements, natures, codes
+# indépendant de l'ordre des lignes) : dates, présences (événements ; dossiers et garanties
+# souscrites porteurs des lignes de P, #125, E-17 (b)), type et motif des événements, natures, codes
 # de garantie, `parametres.valeur` en dernier (les représentants d'un délai inconnu dépendent des
 # dates fixées).
-.ORDRE_D08 <- c("sinistres.date_survenance", "evenements.date_effet", "evenements", "evenements.type_evenement", "evenements.motif",
-                "sinistres.nature_sinistre", "garanties_souscrites.code_garantie", "parametres.valeur")
+.ORDRE_D08 <- c("sinistres.date_survenance", "evenements.date_effet", "evenements", "dossiers", "garanties_souscrites",
+                "evenements.type_evenement", "evenements.motif", "sinistres.nature_sinistre", "garanties_souscrites.code_garantie",
+                "parametres.valeur")
 
-# Verdict à trois valeurs de D08 (#105, lot V, G3c ; erratum E-15 (a), (b), (e), (h)) : lecture brute
+# Verdict à trois valeurs de D08 (#105, lot V, G3c ; erratum E-15 (a), (b), (e), (h) ; #125, E-17) : lecture brute
 # (.verdict_d08_brut()) sur les sinistres retenus qui ne lisent aucune cellule inconnue ni ligne de
 # visibilité non déterminée (nature et survenance ; sorties possibles d'un autre sinistre de
 # l'assuré, dans la vue, non déterminées ou de type, motif ou date d'effet inconnus ; nature de S1,
@@ -8523,17 +8557,22 @@ table_refusee_vue <- function(vue, table) {
 # .arbre3() : « S2 arret_travail ET OU, sur les sorties possibles e d'un autre sinistre S1 de
 # l'assuré, de : présente ET de type sortie ET de motif reprise_travail ET S1 arret_travail ET (non
 # déterminée : effet au plus l'arrêté) ET 0 <= survenance de S2 - effet de e < délai de S1 ». Délai
-# de S1 (E-6 étendu, E-15 (e)) : K, lignes retenues de delai_rechute_jours des garanties des
+# de S1 (E-6 étendu, E-15 (e), E-17) : K, lignes retenues de delai_rechute_jours des garanties des
 # dossiers retenus de S1 de code incapacite (code inconnu : la ligne compte selon sa valeur), valeur
-# refusée énumérée ; valeur unique, NA sinon (.valeur_parametre3()). Représentants : survenance et
+# refusée énumérée ; P (#125, E-17 (a)), lignes de même nom des garanties des dossiers non
+# déterminés de S1 et des garanties non déterminées de ses dossiers, actives sous la présence de
+# l'élément non déterminé qui les porte (cellules « dossiers » et « garanties_souscrites », E-17 (b)) ;
+# valeur commune des lignes actives, NA sinon (.valeur_parametre3()). Un S1 qui porte une ligne de P
+# passe par l'arbre. Représentants : survenance et
 # effet aux points de rupture de l'écart (0 et chaque délai connu ou fixé ; bornes de la plage et
 # arrêté pour une date libre), délai aux écarts possibles et à leur successeur, valeurs connues et
 # une valeur distincte de toutes. Cellules partagées conditionnées sous le budget d'E-14
 # (.ORDRE_D08). Délai non déterminable qui peut décider (lecture existentielle, conditions lues
 # séparément, E-15 (e) ; approximation par excès admise, jamais par défaut) : sinistre retenu
 # possiblement arret_travail, de verdict non vrai, et sortie possible d'écart possiblement positif
-# ou nul dont le délai de S1 est possiblement non défini (K possiblement vide, ou deux valeurs
-# connues distinctes possibles ; une valeur refusée n'est pas une valeur distincte) :
+# ou nul dont le délai de S1 est possiblement non défini (K et P possiblement vides, P comptée
+# présente, ou deux valeurs connues distinctes possibles dans K, P hors du compte, E-17 (c) ; une
+# valeur refusée n'est pas une valeur distincte) :
 # .CAUSE_PARAMETRE_NON_DEFINI, une seule évaluation pour les deux chemins. Attributs et `forcer` :
 # comme .verdict_d07c().
 .verdict_d08 <- function(ctx, lues, forcer = FALSE) {
@@ -8566,31 +8605,55 @@ table_refusee_vue <- function(vue, table) {
     (nat_u[i1x] | nat[i1x] %in% "arret_travail") & (!nde | !((eff > a) %in% TRUE))
   pe <- .paires(ifelse(ctx$retenu$sinistres, assure, NA), ifelse(cand_e, assure[i1x], NA))
   pe <- pe[(id_s[pe$i] != id_s[i1[pe$j]]) %in% TRUE, , drop = FALSE]
-  # délai de S1 : dossiers retenus de S1 de code incapacite ou inconnu, lignes de K de chacun
+  # délai de S1 : dossiers retenus ou de visibilité non déterminée de S1 de code incapacite ou
+  # inconnu, lignes de K et de P de chacun (#125, erratum E-17 (a)) : lignes de parametres retenues
+  # (K) ou non déterminées (P, nom lu brut), et lignes retenues d'un dossier non déterminé (P) ;
+  # présence d'une ligne de P (E-17 (b)) : cellule du dossier non déterminé (`pres_d`) et cellule de
+  # la garantie souscrite non déterminée de la ligne (`pres_k`). Une ligne non déterminée sous une
+  # garantie retenue (`sans_porteur`) est une erreur interne, levée à sa lecture (terme d'une
+  # paire) : parametres n'a pas de visibilité propre (absente de .DATES_VISIBILITE,
+  # .COLONNES_D02B, .PARTIES_LIGNE et des tables de D03g : .refus_vue() ne l'atteint pas) ; son
+  # seul lien de la règle 1 est sa garantie souscrite ; une clé de lien illisible par sa forme
+  # refuse la table, dont .nd_vue() ne rend alors aucune ligne (#125, réserve R1 d'actuary)
   gs_d <- v("dossiers", "id_garantie_souscrite")
   igd <- .index_jointure(ctx, gs, "id_garantie_souscrite", gs_d)
   igd1 <- ifelse(is.na(igd), 1L, igd)
   code_d <- v(gs, "code_garantie")[igd]
   cu_d <- !is.na(igd) & u(gs, "code_garantie")[igd1]
-  qd <- .paires(id_s, ifelse(ctx$retenu$dossiers & (cu_d | code_d %in% "incapacite"), as.character(v("dossiers", "id_sinistre")), NA))
+  nd_d <- .nd_vue(ctx, "dossiers") & !ctx$retenu$dossiers
+  qd <- .paires(id_s, ifelse((ctx$retenu$dossiers | nd_d) & (cu_d | code_d %in% "incapacite"), as.character(v("dossiers", "id_sinistre")),
+                             NA))
   dos_s <- split(qd$j, factor(qd$i, levels = seq_len(ns)))
-  kp <- which(.valeurs_vue(ctx, "parametres", "parametre") %in% "delai_rechute_jours")
+  pres_d <- ifelse(nd_d, paste0("dossiers\r", seq_along(nd_d)), NA_character_)
+  ret_p <- ctx$retenu$parametres
+  nd_p <- .nd_vue(ctx, "parametres") & !ret_p
+  nom_p <- ifelse(ret_p, .valeurs_vue(ctx, "parametres", "parametre"), ifelse(nd_p, v("parametres", "parametre"), NA))
+  kp <- which(nom_p %in% "delai_rechute_jours")
   gp <- as.character(v("parametres", "id_garantie_souscrite"))[kp]
+  igp <- .index_jointure(ctx, gs, "id_garantie_souscrite", gp)
+  nd_g <- .nd_vue(ctx, gs) & !ctx$retenu[[gs]]
+  pres_k <- rep(NA_character_, max(c(0L, kp)))
+  sans_porteur <- rep(FALSE, max(c(0L, kp)))
+  g_nd <- !is.na(igp) & nd_g[ifelse(is.na(igp), 1L, igp)]
+  pres_k[kp] <- ifelse(!ret_p[kp] & g_nd, paste0(gs, "\r", igp), NA_character_)
+  sans_porteur[kp] <- !ret_p[kp] & !g_nd
   pval <- as.numeric(v("parametres", "valeur"))
   pu <- u("parametres", "valeur")
   pk <- .paires(as.character(gs_d), gp)
   k_dossier <- split(kp[pk$j], factor(pk$i, levels = seq_along(gs_d)))
   k_de <- function(d) k_dossier[[d]]
-  # lignes de K par sinistre S1 (paires sinistre, ligne de parametres, par ses dossiers possibles) :
-  # S1 à inconnue (nature, code d'un dossier, valeur de K), K certain vide, deux valeurs connues
-  # distinctes possibles (dossiers de code inconnu compris)
+  # lignes de K et de P par sinistre S1 (paires sinistre, ligne de parametres, par ses dossiers
+  # possibles) : S1 à inconnue (nature, code d'un dossier, valeur de K, ligne de P), K et P certains
+  # vides (P comptée présente), deux valeurs connues distinctes possibles dans K (dossiers de code
+  # inconnu compris ; P n'entre pas dans ce compte, E-17 (c))
   qk <- .paires(as.character(gs_d)[qd$j], gp)
   s_k <- qd$i[qk$i]
   k_k <- kp[qk$j]
   certain_k <- !cu_d[qd$j[qk$i]]
-  s1_inc <- nat_u | tabulate(qd$i[cu_d[qd$j]], ns) > 0L | tabulate(s_k[pu[k_k]], ns) > 0L
+  dans_p <- nd_d[qd$j[qk$i]] | !ret_p[k_k]
+  s1_inc <- nat_u | tabulate(qd$i[cu_d[qd$j]], ns) > 0L | tabulate(s_k[pu[k_k] | dans_p], ns) > 0L
   kmin_vide <- tabulate(s_k[certain_k], ns) == 0L
-  conn <- !pu[k_k]
+  conn <- !pu[k_k] & !dans_p
   deux_valeurs <- rep(FALSE, ns)
   if (any(conn)) {
     n_val <- tapply(pval[k_k][conn], s_k[conn], function(x) length(unique(x)))
@@ -8622,7 +8685,16 @@ table_refusee_vue <- function(vue, table) {
       cid <- ifelse(cu_d[dl], paste0("garanties_souscrites.code_garantie\r", igd[dl]), NA_character_)
       kl <- lapply(dl, k_de)
       kall <- sort(unique(unlist(kl)))
+      if (any(sans_porteur[kall])) {
+        stop("erreur interne de provie : D08 : ligne de parametres non d\u00e9termin\u00e9e sous une garantie souscrite retenue",
+             call. = FALSE)
+      }
       vid <- ifelse(pu[kall], paste0("parametres.valeur\r", kall), NA_character_)
+      # présences des lignes de P lues (dossiers porteurs d'une ligne ; garanties ou lignes)
+      pdl <- ifelse(lengths(kl) > 0L, pres_d[dl], NA_character_)
+      pk_l <- pres_k[kall]
+      pid <- unique(c(pdl, pk_l))
+      pid <- pid[!is.na(pid)]
       ids <- c(p = if (nde[e]) paste0("evenements\r", e) else NA_character_, ty = id_cel("evenements.type_evenement", e, tu[e]),
                mo = id_cel("evenements.motif", e, mu[e]), ns1 = id_cel("sinistres.nature_sinistre", s, nat_u[s]),
                ef = id_cel("evenements.date_effet", e, eu[e]), sv = id_cel("sinistres.date_survenance", l, surv_u[l]))
@@ -8654,24 +8726,24 @@ table_refusee_vue <- function(vue, table) {
         if (!is.na(ids[["mo"]])) out[[ids[["mo"]]]] <- reps_u("evenements", "motif", "reprise_travail")
         if (!is.na(ids[["ns1"]])) out[[ids[["ns1"]]]] <- reps_u("sinistres", "nature_sinistre", "arret_travail")
         for (z in cid[!is.na(cid)]) out[[z]] <- reps_u(gs, "code_garantie", "incapacite")
+        for (z in pid) out[[z]] <- c(TRUE, FALSE)
         out
       }
-      # délai par affectation : lignes de K des dossiers de code incapacite (connu, ou inconnu
-      # affecté), valeur unique, NA sinon
+      # délai par affectation : lignes actives de K et de P, celles des dossiers de code incapacite
+      # (connu, ou inconnu affecté) et, pour P, présents (E-17 (b)), valeur commune, NA sinon
+      # (.valeur_parametre3())
       delai <- function(a_, n) {
-        if (all(is.na(cid))) return(.valeur_parametre3(a_, kall, pval, pu, n)$val)
+        if (all(is.na(cid)) && length(pid) == 0L) return(.valeur_parametre3(a_, kall, pval, pu, n)$val)
         if (length(kall) == 0L) return(rep(NA_real_, n))
-        m <- matrix(vapply(seq_along(kall), function(q) .val3(a_, vid[q], pval[kall[q]], n), numeric(n)), nrow = n)
         actif <- matrix(FALSE, n, length(kall))
         for (q in seq_along(dl)) {
           if (length(kl[[q]]) == 0L) next
           x <- if (is.na(cid[q])) rep(TRUE, n) else a_[[cid[q]]] %in% "incapacite"
+          if (!is.na(pdl[q])) x <- x & a_[[pdl[q]]] %in% TRUE
           actif[, match(kl[[q]], kall)] <- actif[, match(kl[[q]], kall)] | x
         }
-        vapply(seq_len(n), function(i) {
-          y <- m[i, actif[i, ]]
-          if (length(y) > 0L && all(y == y[1L]) %in% TRUE) y[1L] else NA_real_
-        }, 0)
+        for (q in which(!is.na(pk_l))) actif[, q] <- actif[, q] & a_[[pk_l[q]]] %in% TRUE
+        .valeur_parametre3(a_, kall, pval, pu, n, actif)$val
       }
       f <- function(a_, n) {
         pr <- if (is.na(ids[["p"]])) rep(TRUE, n) else a_[[ids[["p"]]]]
@@ -8682,7 +8754,7 @@ table_refusee_vue <- function(vue, table) {
         if (nde[e]) x <- x & (ef <= a) %in% TRUE
         x
       }
-      .feuille3(c(ids, cid, vid), dom, f)
+      .feuille3(c(ids, cid, vid, pid), dom, f)
     }
     for (l in L) {
       termes <- lapply(pe_l[[l]], function(e) terme(l, e))
@@ -11125,16 +11197,27 @@ table_refusee_vue <- function(vue, table) {
 
 # Valeur d'un paramètre de garantie souscrite sur `n` affectations `a` de .arbre3() (une seule
 # implémentation, lue par D14, .verdict_d14_3(), et par D07 (c) et D08 ; #105, lot V, G3c) : lignes
-# `ks` de parametres, valeurs `val`, inconnues `u` (cellule « parametres.valeur\rk ») ; `val`, la
-# valeur commune des lignes (NA sans ligne ou si elles diffèrent), `ambigu` (au moins une ligne et
-# des valeurs qui diffèrent).
-.valeur_parametre3 <- function(a, ks, val, u, n) {
+# `ks` de parametres, valeurs `val`, inconnues `u` (cellule « parametres.valeur\rk ») ; `actif`
+# (facultatif ; #125, erratum E-17 (b)) : matrice logique n × length(ks) des lignes actives de
+# chaque affectation (ligne de P présente ; D08 : dossier de code incapacite), NULL : toutes
+# actives (D14) ; `val`, la valeur commune des lignes actives (NA sans ligne active ou si elles
+# diffèrent), `ambigu` (au moins une ligne active et des valeurs qui diffèrent).
+.valeur_parametre3 <- function(a, ks, val, u, n, actif = NULL) {
   if (length(ks) == 0L) return(list(val = rep(NA_real_, n), ambigu = rep(FALSE, n)))
   m <- vapply(ks, function(k) .val3(a, if (u[k]) paste0("parametres.valeur\r", k) else NA_character_, val[k], n), numeric(n))
   m <- matrix(m, nrow = n)
-  egal <- rowSums(m == m[, 1L]) == ncol(m)
+  if (is.null(actif)) {
+    egal <- rowSums(m == m[, 1L]) == ncol(m)
+    egal[is.na(egal)] <- FALSE
+    return(list(val = ifelse(egal, m[, 1L], NA_real_), ambigu = !egal))
+  }
+  actif <- matrix(actif, nrow = n)
+  nb <- rowSums(actif)
+  # valeur de la première ligne active, comparée aux autres lignes actives
+  ref <- m[cbind(seq_len(n), max.col(actif, ties.method = "first"))]
+  egal <- nb > 0L & rowSums((m == ref) | !actif) == ncol(m)
   egal[is.na(egal)] <- FALSE
-  list(val = ifelse(egal, m[, 1L], NA_real_), ambigu = !egal)
+  list(val = ifelse(egal, ref, NA_real_), ambigu = nb > 0L & !egal)
 }
 
 # Limite d'âge possiblement non déterminable (.verdict_d14_3(), `parametre_non_defini` lu de façon
