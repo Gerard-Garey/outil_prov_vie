@@ -1773,9 +1773,10 @@ signalement (\textbf{règle~V}), en logique à trois valeurs (paragraphe
 étape suppose les précédentes~: une clé mal typée ne se joint pas, et la vue
 suppose des clés résolues. Les règles~P et~V et la vue ne lisent ni une
 table refusée en portée table, ni une colonne illisible par sa forme, ni
-une valeur refusée~: une valeur refusée est inconnue pour la règle~P et
-la vue, et bloque la règle~V qui la lit comme valeur (paragraphe
-«~Refus de valeur et vue~» ci-dessous). La règle~B elle-même tient pour
+une valeur refusée~: une valeur refusée est inconnue pour la règle~P, la
+vue et, depuis l'issue~105, la règle~V qui la lit comme valeur, qu'elle
+bloquait auparavant (paragraphes «~Refus de valeur et vue~» et «~Règles~V
+sous un refus de valeur~» ci-dessous). La règle~B elle-même tient pour
 inconnue une valeur refusée par une strate antérieure (paragraphe
 «~Règle~B à trois valeurs~»).
 
@@ -2061,10 +2062,13 @@ suivant~:
   \code{parente\_non\_determinee}\fsp; une fille d'une parente invisible
   de façon déterminée l'est elle-même et n'est pas inscrite. Une partie de
   ligne non déterminée est seule masquée, la ligne reste dans la vue.
-\item Les \textbf{règles~V} ne sont plus bloquées par un refus de valeur
+\item Les \textbf{règles~V} ne sont pas bloquées par un refus de valeur
   sur une colonne qu'elles ne lisent que pour établir la vue~: les lignes
   non déterminées sont hors de la vue. Une règle~V qui lit la colonne
-  comme valeur reste bloquée, avec le motif du refus pour cause (M169).
+  comme valeur s'exécute en logique de Kleene, la valeur refusée étant
+  inconnue (paragraphe «~Règles~V sous un refus de valeur~» ci-dessous)\fsp;
+  jusqu'à l'issue~105, elle restait bloquée, avec le motif du refus pour
+  cause (M169, rouverte et levée pour les règles~V par M808).
 \item Un refus de valeur n'appelle aucune déclaration dans
   \code{declarations\_requises}~: c'est un refus, qu'aucune déclaration ne
   lève (dictionnaire de la base, §~1.10)\fsp; l'exclusion déclarée demandée
@@ -2126,8 +2130,11 @@ parente\fsp; pour une règle~P empêchée par un défaut de forme,
 l'origine du refus induit porte toutes les colonnes lues dont le défaut de
 forme empêche la règle, et non la seule première lue (issue~59). Une colonne refusée
 pour sa valeur n'est alors ni la cause ni l'origine, et aucune ligne de
-la table n'est inscrite sous un refus de valeur. Une règle qui lit la
-colonne refusée comme valeur garde la cause directe (M169, M185).
+la table n'est inscrite sous un refus de valeur. Une règle~B qui lit la
+colonne refusée comme valeur garde la cause directe (M169, M185). Une
+règle~V n'est pas empêchée par le refus de valeur~: bloquée par le refus
+de portée table, elle en prend la cause, et la valeur refusée n'en est
+pas une (spécification, erratum~1.9.7, E-10).
 
 \textbf{Motif et alternative écartée} (jugement d'expert, spécification,
 §~2.2). Un refus de valeur désigne ses lignes, unité de compte du refus
@@ -2296,18 +2303,21 @@ règle~P.
   l'enjeu, ne regroupe jamais un identifiant manquant ou vide (chaque
   ligne compte une fois), et tient un «~NA~» littéral pour un identifiant
   distinct. Ces sites sont latents~: aucune base ne les atteint, une clé
-  manquante ou vide, ou un collège refusé de
-  \code{garanties\_souscrites}, refusant sa table ou bloquant la
-  règle~V qui la lirait (M169)\fsp; la batterie unitaire les vérifie par
-  des appels internes. Un collège de \code{garanties\_souscrites} lu avec
-  une cause de lecture, quelle qu'elle soit, est une erreur interne de
-  \code{.garantie\_en\_vigueur3()}, sans verdict rendu (lecture large,
-  retenue par le mainteneur le 16~novembre~2026, M626, qui équivaut à la
-  lecture restreinte aux refus sur tous les états atteignables)\fsp; la
-  lecture à trois valeurs d'un collège refusé, écrite par la
-  spécification (version~1.8, «~Collège refusé~»), sera mise en œuvre
-  avec l'issue~105, si la règle~V cesse d'être bloquée, et la garde
-  restreinte alors aux causes autres que les refus de valeur. Une
+  manquante ou vide refusant sa table\fsp; la batterie unitaire les
+  vérifie par des appels internes. Un collège de
+  \code{garanties\_souscrites} refusé pour sa valeur est, depuis
+  l'issue~105, lu de façon existentielle (spécification, version~1.8,
+  «~Collège refusé~», et erratum~1.9.7, E-7\fsp; décision du mainteneur
+  du 25~novembre~2026, M810, qui rouvre M613 et M626)~: c'est une clé
+  opaque, qui peut être égale à chaque collège connu candidat, ou à
+  aucun, et les valeurs inconnues de \code{.garantie\_en\_vigueur3()}
+  (collège, code, \code{date\_fin}, \code{date\_effet} de D03i) lui sont
+  passées en argument. Un collège lu avec une cause de forme ou de portée
+  table reste une erreur interne de \code{.garantie\_en\_vigueur3()}, sans
+  verdict rendu, la règle~V qui le lit étant bloquée avant (garde de
+  M626, restreinte à ces causes\fsp; avant l'issue~105, elle valait pour
+  toute cause de lecture, la règle~V étant alors bloquée par tout
+  refus). Une
   composante de la clé absente, ou de longueur différente de celle des
   survenances, est aussi une erreur interne, sans recyclage. Le chemin
   de la population de couverture exclue suit enfin la même règle
@@ -2820,7 +2830,12 @@ conjonction de Kleene~:
   18~novembre~2026, M701). La ligne est alors non déterminée, inscrite
   sous le motif D03i, y compris sous l'exclusion de D03i (M686,
   M703)\fsp; une règle~B ou~P qui lit la date est exécutée en partie, une
-  règle~V qui la lit est bloquée (M169), avec la cause D03i (rang~3).
+  règle~V qui la lit s'exécute en logique de Kleene, la date étant
+  inconnue (spécification, erratum~1.9.7, E-1\fsp; décision du mainteneur
+  du 26~novembre~2026, M820\fsp; paragraphe «~Règles~V sous un refus de
+  valeur~»), et une ligne qu'elle écarte de ce fait prend la cause D03i
+  (rang~3)\fsp; jusqu'à l'issue~105, cette règle~V était bloquée (M169),
+  avec la même cause.
   Motif (jugement d'expert, M701 et M703)~: lire la date manquante comme
   connue absente rendrait déterminés des verdicts qui ne le sont pas, et
   la visibilité est un fait de la donnée~: l'exclusion retire la ligne
@@ -3018,16 +3033,14 @@ précision P2 de M222\fsp; version~1.5.4, M226).
   référence antérieure à la naissance) ne rend pas inconnu le verdict de
   D02c sur \code{assures} et n'émet pas \code{age\_non\_defini}, émis pour
   une référence de la vue seulement.
-  De même, pour D07c sur \code{rentes} et sur \code{dossiers},
-  \code{parametre\_non\_defini} n'est émis que pour un enfant de la
-  vue~: un enfant non déterminé, ou une candidate d'un membre à version
-  valable non déterminée, dont la limite d'âge n'est pas déterminable est
-  tenu pour non éteint, sans émettre cette cause. Pour un enfant non
-  déterminé, la règle est celle de l'âge ci-dessus. Pour les candidates d'un
-  membre visible, c'est un écart à la substitution du critère~6~(c)~: si la
-  limite n'est déterminable pour aucune candidate, la cause serait émise
-  dans tout état, et D07c ne laisse aujourd'hui aucune trace (issue~50 du
-  dépôt).
+  Pour D07c sur \code{rentes} et sur \code{dossiers}, en revanche,
+  \code{parametre\_non\_defini} se lit, depuis la conversion de la règle
+  (issue~105), sur toutes les versions possibles du membre, candidates et
+  versions non déterminées comprises (point «~Paramètre non
+  déterminable~» du paragraphe «~Règles~V sous un refus de valeur~»)~:
+  l'écart à la substitution du critère~6~(c) que relevait l'issue~50 du
+  dépôt (une limite indéterminable pour toutes les candidates d'un membre
+  visible ne laissait aucune trace) ne vaut plus.
 \end{itemize}
 
 {\small
@@ -3127,6 +3140,197 @@ l'est dans tous les états, et écartée si et seulement si le verdict varie
 cas, non preuve)\fsp; elle vérifie aussi que toute cause
 \code{declaration\_absente} d'une règle~V a sa ligne dans
 \code{declarations\_requises}.
+
+\textbf{Règles~V sous un refus de valeur} (spécification, erratum~1.9.7,
+E-1, E-3, E-4, E-10 et E-12 à E-15\fsp; décision du mainteneur du
+25~novembre~2026, M808, qui rouvre M169 et la lève pour les
+règles~V\fsp; décisions de session confirmées a posteriori par le
+mainteneur le 27~novembre~2026, M825\fsp; issue~105, lot~V). Jusqu'à
+l'issue~105, une règle~V qui lisait comme valeur une colonne refusée pour
+sa valeur était bloquée, avec le motif du refus pour cause (M169). Elle
+s'exécute désormais en logique de Kleene, en lecture existentielle.
+
+\begin{itemize}[itemsep=2pt]
+\item \textbf{Règle} (E-1, E-4, E-10). Une valeur refusée pour sa valeur,
+  et une date manquante de D03i hors de sa détection (M701), sont des
+  valeurs inconnues dans le domaine de leur colonne, jamais lues
+  brutes\fsp; la ligne qui les porte reste dans la population. Le verdict d'une ligne est
+  inconnu si deux affectations de ses inconnues (valeurs inconnues, et
+  éléments non déterminés du paragraphe précédent) lui donnent deux
+  verdicts différents~; la ligne est alors écartée (nombre minorant), et
+  la règle garde une ligne dans \code{controles\_non\_executes}. Un défaut
+  de forme ou un refus de portée table bloque toujours la règle, qui en
+  prend la cause, la valeur refusée n'en étant pas une. Les règles~B ne
+  changent pas (paragraphe «~Règle~B à trois valeurs, par strates~»).
+  Mesure sur le code~: les 47 appels de la règle commune des règles~V
+  (\code{.regle\_vue()}) de \code{R/donnees.R}, pour 27 codes, sont tous
+  en mode Kleene\fsp; le registre des règles~V de la batterie unitaire
+  recense 52 clés (code, table, colonne) qui lisent comme valeur une
+  colonne refusable, toutes en mode Kleene, aucune bloquée
+  (critère~C-G3-1). Le mode «~bloquée~» ne subsiste que comme valeur par
+  défaut de l'argument et comme chemin de code non atteint, dont le
+  retrait est renvoyé à l'issue~226 (M827).
+\item \textbf{Cause} (E-3). Une ligne écartée prend, parmi ses seuls
+  éléments pertinents (ceux dont l'état ou la valeur peut changer son
+  verdict), le motif du refus de la valeur qu'elle lit (rang~3) et les
+  causes~($\gamma$) de ses éléments non déterminés, départagés en un seul
+  calcul selon la priorité des causes~; une clé jointe en double aux
+  occurrences divergentes y ajoute D01a. La liste fermée des causes ne
+  change pas. La pertinence est exacte, sauf dans les dérogations
+  ci-dessous, où elle est un sur-ensemble.
+\item \textbf{Inconnues} (E-13~(b), E-15~(b)). Chaque règle a sa liste
+  fermée de colonnes lues comme inconnues\fsp; s'y ajoutent la présence
+  d'une ligne de visibilité non déterminée et, pour un membre de
+  \code{famille}, le choix de sa version valable. La date de saisie et
+  l'identifiant d'un événement ne sont pas des inconnues~: pour l'arrêt en
+  cours (D11a, D11b) et le statut de service (D07a, D07b, D07c, D10f), ils
+  ne départagent que deux événements de même date d'effet et de même
+  type, donc de même classe et de même transition (résultat exact)\fsp;
+  D12 ne lit pas la date de saisie, et l'identifiant, clé primaire, n'est
+  jamais inconnu (point D12 ci-dessous).
+\item \textbf{Chemin rapide et arbre} (E-12~(a), E-15~(a)). Une ligne qui
+  ne lit aucune valeur inconnue ni ligne de visibilité non déterminée est
+  évaluée en lecture brute, ce qui est exact sur elle. Les autres sont
+  évaluées par un arbre (conjonctions, disjonctions et négations de
+  feuilles, chaque feuille lisant ses cellules inconnues), par la fonction
+  interne \code{.arbre3()}~: une cellule lue par plusieurs feuilles est
+  conditionnée, c'est-à-dire fixée tour à tour à chacun de ses
+  représentants (valeurs qui suffisent à décider), de sorte que le
+  verdict et la pertinence des cellules conditionnées sont exacts. Les
+  cellules se conditionnent dans un ordre constant par règle, indépendant
+  de l'ordre des lignes~: les dates avant les seuils et les codes, une
+  cellule dont les représentants dépendent d'une autre après elle,
+  \code{parametres.valeur} en dernier (E-15~(h), jugement d'expert)\fsp;
+  pour D11a et D11b, les collèges (d'affiliation, puis de garantie) après
+  les dates (E-13~(d), confirmé par M825). Hors des lignes ainsi
+  évaluées, une lecture brute indéterminée est une erreur interne. La
+  batterie unitaire compare les deux chemins, l'arbre étant forcé sur
+  toutes les lignes, et exige des bilans identiques (critère~C-G3-4).
+\item \textbf{Budget du conditionnement} (E-14\fsp; seuil confirmé par
+  M825). Le conditionnement exact a un coût exponentiel en le nombre de
+  cellules partagées. Il est donc borné par un décompte~$W(C)$ des
+  évaluations du verdict pour un ensemble~$C$ de cellules conditionnées,
+  calculé avant toute évaluation, indépendant de la machine et de l'ordre
+  des lignes~: le nombre de cellules inconnues de l'arbre plus un, fois le
+  produit des domaines des cellules de~$C$, fois la somme, sur les
+  feuilles, du produit des représentants de leurs autres cellules sachant
+  les valeurs de~$C$\fsp; une feuille évaluée événement par événement (arrêt
+  en cours, statut de service) y compte linéairement. Les cellules
+  partagées sont groupées par colonne, dans l'ordre du conditionnement,
+  et $C$ est la réunion des premiers groupes, chacun pris en entier, tant
+  que $W(C)$ ne dépasse pas $B = 2^{22} = 4\,194\,304$ (constante interne
+  \code{.BUDGET\_ARBRE3}). Si $C$ contient toutes les cellules partagées,
+  le calcul est exact. Sinon, une cellule partagée hors de~$C$ est lue
+  indépendamment par chaque feuille, et une feuille dont la grille propre
+  dépasse~$B$, même sans cellule conditionnée, vaut inconnue. Un verdict
+  déterminé vaut alors dans tout monde possible (résultat exact), la
+  pertinence est un sur-ensemble, et la ligne inconnue est écartée par le
+  mécanisme commun, sans cause propre au budget. Statuts~: approximation
+  sûre, dont la sûreté est un résultat exact\fsp; le seuil~$B$ est un
+  jugement d'expert, dont le motif est de borner le coût d'une ligne~: le
+  conditionnement exact a pris plusieurs minutes pour une seule ligne sur
+  des cas mesurés de D11a, D10d et D14 (E-14~(a)). Alternatives
+  écartées~: un écart avec une cause propre (la liste fermée des causes
+  ne change pas), un seuil en nombre d'inconnues (mauvais indicateur du
+  coût), un algorithme exact plus rapide (renvoyé à une issue de
+  performance). Ce motif est soumis au mainteneur (erratum~E-18 de la
+  spécification). Les représentants d'une cellule ne dépendent que des
+  cellules de rang strictement inférieur dans l'ordre du conditionnement,
+  deux cellules de même rang ne se conditionnant pas l'une l'autre
+  (défaut latent des clés opaques, non atteint par les règles actuelles,
+  suivi par l'issue~227)\fsp; $W$ compte les évaluations du verdict, non la
+  recherche des cellules pertinentes, de sorte que le coût total n'est
+  pas borné par~$B$ (issue~228). Des arbres de la batterie unitaire ont
+  un décompte, toutes cellules partagées conditionnées, supérieur à~$B$~:
+  ils sont donc approchés, sans effet sur leurs verdicts (critère~C-E14-4~: sur une base à sept refus, trois arbres
+  de D11a et D11b sur vingt et un\fsp; D10d à quatre dossiers non
+  déterminés, un arbre sur un\fsp; D14 à deux enfants, un arbre sur six).
+\item \textbf{Dérogations à l'exactitude}, toutes des approximations
+  sûres (inconnu au lieu de déterminé, jamais l'inverse\fsp; pertinence
+  sur-ensemble)~: \code{somme\_parts} au-delà de vingt bénéficiaires non
+  déterminés (version~1.5.4)\fsp; D12 sous une date d'effet inconnue et
+  pertinence de D12 (M813, E-15~(g))\fsp; partie de fin non déterminée
+  d'une ligne non déterminée, tenue pour indépendante de sa présence
+  (E-12~(c))\fsp; présences de versions candidates tenues pour
+  indépendantes, celles d'un même membre de \code{famille} pour D14
+  (E-12~(c), exclusivité renvoyée à l'issue~230) et celles d'une même
+  garantie (contrat, collège) dans la garantie en vigueur à la survenance
+  (E-13~(d))\fsp; ordre des événements de l'arrêt en cours
+  (E-13~(c))\fsp; budget (E-14)\fsp; statut de service (E-15~(c))\fsp;
+  projection de la cellule de choix de version sur toutes les versions non
+  déterminées du membre (pertinence seulement, point suivant).
+\item \textbf{Statut de service à trois valeurs} (E-15~(c) et~(d), D07a,
+  D07b, D07c sur \code{rentes}, D10f). La base est la classe du dernier
+  événement porteur retenu, de type et de date d'effet connus, d'effet au
+  plus l'arrêté (paragraphe «~Contrôles écrits à la fermeture partielle de
+  l'issue~34~»). Sont facultatifs, s'ils ne sont pas certainement
+  postérieurs à l'arrêté et peuvent suivre la base, les événements
+  rattachés à l'unité non déterminés, retenus de date d'effet inconnue ou
+  retenus de type inconnu. Le domaine d'un facultatif est «~sans effet~»
+  et ses classes possibles~: la classe de son type s'il est connu\fsp;
+  sinon service, suspension et extinction, et, pour un dossier,
+  l'extinction par \code{cloture\_dossier} ou par une sortie de son
+  sinistre\fsp; un événement de type inconnu rattaché au dossier par son
+  seul sinistre n'a que «~sans effet~» et l'extinction par une sortie. Le
+  verdict est inconnu si une classe possible d'un facultatif le change, et
+  tous les facultatifs ainsi pris sont pertinents~: la feuille est un
+  modèle sûr de la chronologie, non la chronologie elle-même, et ses
+  cellules lui sont propres (non conditionnées avec les autres feuilles).
+  Perte connue~: un événement retenu de date inconnue certainement
+  antérieure à l'arrêté, sans base, est tenu pour facultatif. Limite non
+  sûre~: un événement retenu dont la date d'effet est tenue pour inconnue
+  par D02a sous \code{H} est absent du statut (ni base, ni
+  facultatif)~: le verdict peut être déterminé à tort, dans un sens comme
+  dans l'autre\fsp; une \code{fin\_service} ignorée peut faire détecter à
+  tort D07a, D07b, D07c sur \code{rentes} ou D10f (issue~170). La
+  feuille est évaluée événement par événement, en temps linéaire, par la
+  même implémentation que l'arrêt en cours de D11a et D11b. Le choix de
+  la version valable d'un membre (D07a sur \code{rentes}, D07c) est une
+  cellule de domaine ses versions possibles, ce qui rend leur exclusivité
+  exacte\fsp; sa pertinence est projetée sur toutes les versions non
+  déterminées du membre. La lecture brute antérieure lisait la date et le
+  type refusés d'un événement retenu (défaut corrigé).
+\item \textbf{Paramètre non déterminable} (E-15~(e)\fsp; D07c, limite
+  d'âge\fsp; D08, délai de rechute). Une ligne retenue du paramètre dont
+  la valeur est refusée compte avec une valeur inconnue. Si les lignes
+  portent deux valeurs connues distinctes ou plus, ou s'il n'y a aucune
+  ligne~: \code{parametre\_non\_defini}\fsp; si elles ne portent qu'une
+  valeur connue $d$ et que toute autre valeur est connue et égale à~$d$~:
+  $d$\fsp; sinon, la valeur n'est pas déterminée, et une ligne dont le
+  verdict en dépend est écartée. Une affectation où la limite d'âge
+  n'est pas définie (\code{age\_limite} non défini, ou
+  \code{age\_limite\_etudes} à valeurs différentes pour un enfant
+  scolarisé ou apprenti\fsp; sans \code{age\_limite\_etudes},
+  \code{age\_limite} s'applique) tient l'enfant pour non éteint (D07c)\fsp;
+  une affectation où le délai n'est pas défini rend la paire fausse
+  (D08).
+  «~La valeur peut décider~» se lit de façon existentielle, ses
+  conditions lues séparément~: approximation par excès, qui peut émettre
+  \code{parametre\_non\_defini} en trop, jamais l'omettre, comme pour D14
+  (E-12~(d)). Pour D07c sur \code{dossiers}, une ligne n'est émise que si
+  aucun enfant de l'assuré n'est non éteint de façon déterminée (version
+  déterminée, colonnes et paramètres connus\fsp; M187). Écarts entre
+  règles, renvoyés à l'issue~229~: pour D14, deux lignes du paramètre
+  dont l'une a une valeur refusée en font un paramètre à plusieurs valeurs
+  (\code{parametre\_non\_defini}, E-12~(d)), quand D07c et D08 tiennent la
+  valeur pour définie mais inconnue et écartent la ligne qui en
+  dépend\fsp;
+  la population de \code{parametre\_non\_defini} est faite des lignes
+  retenues ou de visibilité non déterminée pour D07c sur \code{dossiers}
+  et pour D14, des seules lignes retenues pour D07c sur \code{rentes} et
+  pour le sinistre~S2 de D08. Le paramètre est lu par une seule fonction
+  pour D07c, D08 et D14 (\code{.valeur\_parametre3()}), la limite d'âge
+  par une seule règle pour D07c et D14 (\code{.limite\_enfant3()}).
+\item \textbf{Règle non exécutée faute de déclaration} (E-11,
+  E-15~(f)\fsp; D07b sans \code{seuils\$d07b\_mois}, D07c et D14 sans
+  \code{conventions\$limite\_age}). L'unité en service (D07b), la ligne
+  candidate (D07c) et le sinistre candidat (D14) se lisent de façon
+  existentielle~: une valeur refusée rend l'unité ou la ligne possible,
+  et une colonne n'est «~illisible~» que par une cause de forme ou de
+  portée table. De même, pour D10d, l'indicateur du sinistre sans dossier
+  ne compte que ces causes, un type d'événement refusé rendant le passage
+  possible (E-12~(b)).
+\end{itemize}
 
 \textbf{Le bilan.} Il est rendu en liste nommée de onze éléments, dans cet
 ordre~:
@@ -3348,10 +3552,13 @@ exacte pour \code{famille}, que l'issue~49 demande.
   dépend le verdict d'une règle~V\fsp; dans les deux cas, la déclaration
   manquante figure dans \code{declarations\_requises}. Une règle D07b ou
   D07c non exécutée faute de son seuil ou de sa convention reçoit, avec
-  \code{declaration\_absente}, les causes candidates de la règle bloquée
-  de sa branche déclarée (mêmes colonnes lues), de sorte qu'une cause
-  directe de rang~3 l'emporte (spécification, erratum~1.9.1, point~(3),
-  M696)\fsp;
+  \code{declaration\_absente}, les causes candidates de sa branche
+  déclarée (mêmes colonnes lues), de sorte qu'une cause directe de rang~3
+  l'emporte (spécification, erratum~1.9.1, point~(3), M696)\fsp; depuis
+  l'issue~105, ces causes ne sont plus que des causes de forme ou de
+  portée table, une valeur refusée ne bloquant plus la branche
+  (erratum~1.9.7, E-15~(f)\fsp; point «~Règle non exécutée faute de
+  déclaration~» du paragraphe «~Règles~V sous un refus de valeur~»)\fsp;
 \item \code{non\_lisible}~: sous-cas qu'aucune colonne de la base ne permet
   de lire. Cette cause n'a plus de producteur~: ses deux sous-cas, la
   ligne de D03h sur un décès collectif et le sous-cas du maintien de la
@@ -3651,7 +3858,9 @@ D10. Le défaut D11 l'est de même (D11a, point~D11 ci-dessous). Tous sont des r
 n'est un refus~R. Chacun, sauf D10~(e), lit une autre ligne que la
 sienne~: c'est une clé exposée (tableau des clés exposées ci-dessus), dont
 une ligne au verdict inconnu est écartée, avec la cause~($\gamma$). Une
-règle qui lit comme valeur une colonne refusée reste bloquée (M169). Une
+règle qui lit comme valeur une colonne refusée s'exécute en logique de
+Kleene (paragraphe «~Règles~V sous un refus de valeur~»), et n'est
+bloquée que par un défaut de forme ou un refus de portée table. Une
 déclaration n'est requise que si un constat ou une ligne candidate peut
 changer une ligne du bilan, comme pour D07~(c). Le simulateur n'injecte
 aucun de ces défauts~: chaque contrôle est éprouvé sur des bases
@@ -3716,7 +3925,17 @@ simulés est renvoyée à l'issue~117.
   d'un dossier de S1\fsp; paramètre absent ou à plusieurs valeurs pour une
   paire qui peut décider~: \code{parametre\_non\_defini}. Traitement
   hypothèse par défaut ou signalement, détection présomptive, constat sur
-  \code{sinistres} (S2).
+  \code{sinistres} (S2). Sous un refus de valeur (issue~105\fsp;
+  erratum~1.9.7, E-15), un code de garantie inconnu fait compter la
+  ligne du paramètre selon sa valeur, et une valeur refusée du délai est
+  inconnue (point «~Paramètre non déterminable~» du paragraphe «~Règles~V
+  sous un refus de valeur~»). Une sortie non déterminée n'entre dans une
+  paire que si son effet peut être au plus l'arrêté, alors qu'une sortie
+  retenue y entre quelle que soit sa date d'effet~: cette asymétrie est
+  exacte sous l'hypothèse de D02b, qui rend invisible la sortie d'effet
+  postérieur à l'arrêté, et constitue sans elle une approximation non
+  sûre, qui peut rendre faux un verdict inconnu, la ligne n'étant alors
+  ni écartée ni signalée (issue~229).
 \item \textbf{D10~(d)}, passage en invalidité sans garantie invalidité.
   Événement \code{passage\_invalidite} dont le sinistre n'a, pour aucun
   (contrat, collège) de ses dossiers, de version \code{invalidite} en
@@ -3795,9 +4014,25 @@ simulés est renvoyée à l'issue~117.
   \code{evenements} n'est alors pas lu\fsp; vrai, il laisse le décès non
   détecté, sans aucune ligne\fsp; inconnu, il écarte le décès, avec la
   cause directe de la valeur refusée, ou la cause~($\gamma$) d'une version
-  ou d'un événement non déterminé. Un événement retenu dont la date
-  d'effet est refusée pour sa valeur compte comme non déterminé. Un
-  contrat individuel est hors du sous-cas. Interprétations déclarées
+  ou d'un événement non déterminé. Pour dire si l'arrêt est en cours,
+  sont \emph{facultatifs} un événement non déterminé, un événement retenu
+  de date d'effet inconnue et un événement retenu de type inconnu~: à
+  chaque date~$t$ séparément, l'événement compte s'il n'est pas
+  certainement postérieur à~$t$ et s'il peut suivre le dernier événement
+  retenu connu, un type inconnu se lisant comme \code{sortie},
+  \code{rechute} ou type sans effet\fsp; il rend le verdict inconnu si l'un
+  de ses types possibles le change (spécification, erratum~1.9.7,
+  E-13~(c)\fsp; approximation sûre, de la nature de M813, la date ou le
+  type inconnus n'étant pas conditionnés conjointement entre les deux
+  dates, ni entre les paires d'affiliation et d'arrêt qui les partagent).
+  Les autres cellules partagées (survenances, natures, cellules de
+  l'affiliation, \code{maintien\_deces}, versions, collège) sont
+  conditionnées exactement, dans la limite du budget (paragraphe
+  «~Règles~V sous un refus de valeur~»)\fsp; les dates d'effet connues des
+  sorties et rechutes des arrêts candidats sont des points de rupture
+  d'une date inconnue, de sorte que l'ordre d'un événement de date connue
+  par rapport à elle est exact (E-13~(d)). Un contrat individuel est hors
+  du sous-cas. Interprétations déclarées
   (jugements d'expert, M669 et M670)~: (1)~le terme de la période
   d'incapacité ou d'invalidité (loi n\textsuperscript{o}~89-1009,
   art.~7-1, al.~1, 2\textsuperscript{e}~phrase, lue sur la consolidation
@@ -3817,32 +4052,45 @@ simulés est renvoyée à l'issue~117.
   est détecté, signalé et exclu. Limite relevée (issue~173)~: une
   affiliation de visibilité non déterminée, ou dont la partie de fin l'est,
   qui ouvrirait le sous-cas, est ignorée au lieu de rendre le verdict
-  inconnu\fsp; le cas est latent dans les couples de référence, dont aucune
-  garantie ne porte \code{maintien\_deces} vrai. Le sous-cas
+  inconnu\fsp; de même, un dossier non déterminé dont le contrat n'est pas
+  compté parmi les contrats en cause (commentaire déposé sur l'issue~173,
+  M828)\fsp; ces cas sont latents dans les couples de référence, dont
+  aucune garantie ne porte \code{maintien\_deces} vrai, et la batterie
+  unitaire code en échec attendu l'affiliation et le dossier non
+  déterminés. Le sous-cas
   \code{non\_lisible} de la version~1.5 du dictionnaire, qui ne pouvait
   pas dire si un contrat porte le maintien, est remplacé, et la cause
   \code{non\_lisible} n'a plus de producteur.
 
   \emph{Sous-cas illisible} (décision du mainteneur du 13~novembre~2026,
-  gardée par M659\fsp; lecture fine renvoyée à l'issue~105). Les colonnes
-  que lit le seul sous-cas forment une liste fermée~: la nature du
-  sinistre\fsp; \code{maintien\_deces}, le code, le collège et les dates
-  de la garantie souscrite\fsp; le sinistre, le type, la date d'effet, la
-  date de saisie et l'identifiant des événements (ces deux derniers pour
-  l'ordre). Si l'une d'elles est illisible, le sous-cas n'est lu que pour
-  sa partie lisible~: le décès dont le sous-cas devient inconnu est
-  écarté, et la ligne (D11a, \code{sinistres}, \code{NA}) prend la cause
-  directe des colonnes illisibles du sous-cas, départagée comme toute
-  cause. La date d'effet d'un événement refusée pour sa valeur, lue par le
-  sous-cas, l'est ainsi grossièrement~: le sous-cas est écarté avec la
-  cause directe, et le verdict non déterminé d'un événement de date
-  refusée n'est atteint que par appel interne. Écart de lettre à la
-  décision M710, consigné ici~: M710 indexe ce verdict non déterminé
-  «~sur \code{evenements}~»\fsp; le code l'indexe sous
-  «~\code{evenements.date\_effet}~» pour un événement retenu de date
-  d'effet refusée, afin que la cause~($\gamma$) retenue soit le motif du
-  refus de valeur de cette colonne (issue~72), et garde l'index
-  «~\code{evenements}~» pour un événement de visibilité non déterminée.
+  rouverte par M811\fsp; spécification, erratum~1.9.7, E-8 et
+  E-13~(a)). Les colonnes que lit le seul sous-cas forment une liste
+  fermée~: la nature du sinistre\fsp; \code{maintien\_deces}, le code, le
+  collège et les dates de la garantie souscrite\fsp; le sinistre, le type,
+  la date d'effet, la date de saisie et l'identifiant des événements (ces
+  deux derniers pour l'ordre). Si l'une d'elles, ou une colonne de la vue
+  d'\code{evenements}, porte une cause de forme ou de portée table, le
+  sous-cas n'est lu que pour sa partie lisible~: le décès dont le
+  sous-cas devient inconnu est écarté, et la ligne (D11a,
+  \code{sinistres}, \code{NA}) prend la cause directe des colonnes
+  illisibles du sous-cas, départagée comme toute cause (lecture
+  grossière). Un refus de valeur ne déclenche jamais cette lecture, à
+  aucun arrêté, extraction comprise~: depuis l'issue~105, il se lit
+  ligne par ligne (version, événement de l'arrêt, nature du sinistre),
+  et une ligne dont le sous-cas devient inconnu par lui est écartée par
+  le mécanisme commun des règles~V, avec le motif du refus pour cause,
+  sans ligne de lecture grossière~: une même ligne n'a jamais les deux
+  sorties. Un événement retenu de date d'effet refusée est indexé sous
+  «~\code{evenements.date\_effet}~» (et de type refusé, sous
+  «~\code{evenements.type\_evenement}~»), afin que la cause~($\gamma$)
+  retenue soit le motif du refus (issue~72), et un événement de
+  visibilité non déterminée sous «~\code{evenements}~»~; c'est un écart
+  de lettre à la décision M710, qui indexe ce verdict «~sur
+  \code{evenements}~». La date de saisie et l'identifiant ne sont pas des
+  inconnues du verdict~: ils ne départagent que deux événements de même
+  date d'effet et de même type, l'ordre des types distinguant
+  \code{sortie} et \code{rechute}, et ces deux événements donnent le même
+  verdict (résultat exact, E-13~(b)).
 
   \emph{Clés manquantes ou vides.} Dans ce sous-cas, l'assuré des
   couvertures, le contrat en cause, l'assuré des sinistres d'arrêt de
@@ -3891,10 +4139,16 @@ simulés est renvoyée à l'issue~117.
   hors du champ\fsp; une ligne de contrat de visibilité non déterminée
   rend le verdict inconnu (cause~($\gamma$)). Le contrat et le collège de
   la garantie sont lus sur toutes les occurrences de sa clé, comme pour
-  D11a. Le sous-cas du maintien y suit la même lecture grossière que pour
-  D11a (M710)~: un dossier dont le sous-cas devient inconnu par une
-  colonne illisible est écarté, avec la ligne (D11b, \code{dossiers},
-  \code{NA}) de cause directe. Traitement signalement et exclusion par
+  D11a. Le sous-cas du maintien y suit la même lecture que pour D11a
+  (M710, M811)~: un dossier dont le sous-cas devient inconnu par une
+  colonne de cause de forme ou de portée table est écarté, avec la ligne
+  (D11b, \code{dossiers}, \code{NA}) de cause directe\fsp; par un refus de
+  valeur, il l'est par le mécanisme commun. S'y ajoutent, comme inconnues,
+  le collège de la garantie du dossier et la nature du contrat, un
+  contrat de nature inconnue pouvant être individuel, donc hors du champ
+  (E-13~(b))\fsp; un collège inconnu est une clé opaque, lue dans la
+  couverture par la même fonction, un collège connu manquant ou vide ne
+  s'appariant à rien (E-13~(e)). Traitement signalement et exclusion par
   famille, détection exacte, constat sur
   \code{dossiers.id\_garantie\_souscrite}.
 \item \textbf{D11c}, affiliations simultanées (spécification,
@@ -3971,6 +4225,25 @@ simulés est renvoyée à l'issue~117.
   (M819) et suivi par l'issue~221. Le plafond de dix événements non
   déterminés (constante interne \code{.MAX\_EVENEMENTS\_ND\_D12}), au-delà
   duquel chaque événement retenu du sinistre était inconnu, est retiré.
+
+  \emph{Valeurs refusées} (issue~105, lot~V\fsp; erratum~1.9.7,
+  E-15~(g)). Les transitions multiples d'un type ou d'un motif inconnus et
+  la date facultative s'appliquent à une valeur refusée pour sa valeur,
+  jamais lue brute (paragraphe «~Règles~V sous un refus de valeur~»)~: un
+  motif absent d'une \code{sortie}, refusé (\code{manquant\_obligatoire}),
+  est ainsi énuméré sur les six motifs de ce type. Une nature de sinistre
+  inconnue fait propager les événements du sinistre comme pour un arrêt
+  de travail~; le verdict est «~nature \code{arret\_travail}~» et
+  «~premier échec~», exact (cellules distinctes), la cellule de nature
+  étant pertinente quand le second terme n'est pas faux. La pertinence
+  des cellules de l'automate, qui fonde la cause~($\gamma$), est un
+  sur-ensemble~: tous les éléments du sinistre indexés par le verdict
+  (événements non déterminés restés après l'élagage, sous la clé
+  \code{evenements}\fsp; événements retenus de date d'effet, de type ou de
+  motif inconnus, sous leur colonne), et non les seuls dont la valeur
+  change le verdict. C'est une approximation sûre de la cause seulement,
+  le verdict restant celui qui est décrit ci-dessus\fsp; la lecture exacte
+  est renvoyée à l'issue~221, point~1.
 \item \textbf{D14}, dossier double effet non ouvert. Sinistre
   \code{deces} instruit à l'arrêté, dont un dossier \code{deces} a une
   garantie \code{double\_effet} en vigueur à la survenance pour son
@@ -4545,7 +4818,9 @@ le poste (\code{lectures.csv}) et les clés étrangères du dictionnaire~:
   mainteneur, M704)~: l'alternative écartée, laisser le poste lire la
   colonne et coder la limite en échec attendu, rendrait une provision
   dégradée sans signal\fsp; la restriction de l'arrêt aux unités qui
-  lisent la ligne est renvoyée à l'issue~105.
+  lisent la ligne, renvoyée d'abord à l'issue~105 (point~2), en a été
+  détachée vers l'issue~225 (décision du mainteneur du 27~novembre~2026,
+  M826).
 \end{itemize}
 
 \noindent Les parties de ligne sont la fin d'un contrat ou d'une
