@@ -1848,7 +1848,12 @@ suivantes~:
 \item \textbf{liste par clé}~: éléments \code{<cle>=<valeur>} joints par
   «~;~», au moins un, aucun élément vide (donc aucun «~;~» en tête, en
   fin ou doublé), aucun blanc de la classe \code{.BLANCS} (paragraphe
-  «~Règle~B à trois valeurs~» ci-dessous), clés distinctes, ordre libre,
+  «~Règle~B à trois valeurs~» ci-dessous\fsp; une autre espace, U+00A0 ou
+  U+202F par exemple, n'est pas un blanc et se lit comme un caractère de
+  la clé ou de la valeur~: dictionnaire de la base, version~1.6, erratum
+  du 27~novembre~2026, versé en place par exception à M103, et option~(a)
+  de la décision du mainteneur du même jour, M830\fsp; issue~191), clés
+  distinctes, ordre libre,
   la clé allant jusqu'au premier «~=~»~: D03b (clés parmi \code{assure},
   \code{conjoint}, \code{enfant}, \code{autre}\fsp; valeurs \code{F} ou
   \code{M}, et pour \code{conjoint} aussi \code{oppose\_assure} ou
@@ -1856,8 +1861,10 @@ suivantes~:
   de valeur \code{sans\_suite} ou \code{refus}, et \code{decompte}, de
   valeur \code{compte} ou \code{non\_compte}) et D03c (clé~: code de
   collège non vide, du domaine de \code{college}\fsp; montant de forme
-  \code{[0-9]+(\textbackslash.[0-9]+)?}, sans signe ni exposant, fini une fois lu en
-  double précision, section~\ref{sec:engagement-capital})\fsp;
+  \code{[0-9]+(\textbackslash.[0-9]+)?}, sans signe, ni exposant, ni
+  séparateur de milliers, ni espace d'aucune sorte, fini une fois lu en
+  double précision, forme que le dictionnaire écrit depuis son erratum du
+  27~novembre~2026, section~\ref{sec:engagement-capital})\fsp;
 \item \textbf{décimal} de forme \code{-?[0-9]+(\textbackslash.[0-9]+)?([eE][-+]?[0-9]+)?},
   borné, bornes incluses, comparées sur le nombre lu sans tolérance~: D03h
   dans $[-0{,}05\,;\,0{,}10]$, D13 dans $[0\,;\,1]$\fsp;
@@ -5499,7 +5506,8 @@ décidée par le mainteneur le 12~novembre~2026)~:
   euros (par exemple \code{A=40000;B=25000.50} pour deux collèges \code{A} et \code{B}). La forme
   est stricte et contrôlée au plan, pour toute ligne déclarée, lue ou non,
   de tout référentiel et de tout poste (section~\ref{sec:donnees-bilan},
-  paragraphe «~Forme de la valeur des hypothèses par défaut~»)~: un blanc,
+  paragraphe «~Forme de la valeur des hypothèses par défaut~»)~: un blanc
+  (classe \code{.BLANCS}), une espace d'une autre sorte dans un montant,
   une notation exponentielle, un «~;~» final, un montant négatif, un
   montant non fini (une suite de chiffres hors de la plage des nombres en
   double précision, lue comme infinie) ou un collège répété font refuser
