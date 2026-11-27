@@ -12046,3 +12046,125 @@ cat("  #125, C125-11 (ordre des présences) : (cause, arbres à présence approc
     vapply(budget_p_125, function(x) paste(unlist(x), collapse = " "), ""), "\n")
 verifier_egal("#125, C125-11 (reprise, constat mineur 1) : arbres à lignes de P au budget 60, DO3 ou GS2 non déterminés, délai refusé, deux sorties : SI3 écarté (D09 ; D03i sous GS2 non déterminée), deux arbres à présence approchés, présence conditionnée avant parametres.valeur (W = 42), bilan invariant à l'ordre des lignes",
               budget_p_125, list(list("sinistres NA D09", 2, 42, TRUE), list("sinistres NA D03i", 2, 42, TRUE)))
+
+# --- #191 : espaces non ASCII admis (option (a), M830) ------------------------------------
+# Décision M830, option (a) ; erratum du dictionnaire 1.6, § 1.6 et § 9 : U+00A0, U+202F et les
+# autres espaces non ASCII sont admis et lus comme des caractères ; seuls les blancs ASCII de
+# `.BLANCS` (" \t\n\v\f\r") comptent (chaîne vide, domaine du collège, forme des listes par clé).
+# Toutes les chaînes non ASCII sont écrites par échappements \u (le fichier reste ASCII pour ces
+# caractères). Mutants rejoués hors du dépôt, sur une copie de la bibliothèque : μ1, détection des
+# espaces Unicode dans .contient_blanc() ; μ2, U+00A0 ajouté à .BLANCS : chacun fait échouer au
+# moins un test de cette section. μ3, [[:space:]] : sous sa forme Perl (perl = TRUE), la classe ne
+# reconnaît aucun de ces espaces (R 4.3.3, mesuré sous les locales C et C.utf8) : mutant équivalent
+# sur les chaînes UTF-8 valides, aucun test ne le tue ; sous sa forme par défaut (TRE), elle ne reconnaît U+3000 et U+2003 que sous
+# une locale UTF-8 (C.utf8) : le mutant survit sous la locale C et n'est tué que sous C.utf8.
+section("donnees : #191, espaces non ASCII admis (option (a), M830 ; dictionnaire 1.6, § 1.6 et § 9)")
+espaces_191 <- c(u00a0 = "\u00a0", u202f = "\u202f", u3000 = "\u3000", u2003 = "\u2003", ufeff = "\ufeff")
+
+# C191-1 : collège de GS2 (garanties_souscrites), domaine du collège (M656) : un refus de domaine
+# ne vient que d'un blanc ASCII. Les cinq valeurs donnent aussi un constat D11b (le collège de GS2
+# diffère de celui de AF1, dont DO3 dépend) : constat de couverture, sans rapport avec le domaine.
+college_gs2_191 <- function(x) { b <- base_ref; b$garanties_souscrites$college[2L] <- x; b }
+bilan_college_191 <- function(x) {
+  r <- controler_base(college_gs2_191(x), A)
+  k <- r$controles$table == "garanties_souscrites" & r$controles$colonne %in% "college"
+  list(refus = paste(r$refus_tables$motif, r$refus_tables$table, r$refus_tables$colonne),
+       controles = paste(r$controles$code[k]))
+}
+for (nom in names(espaces_191)) {
+  verifier_egal(paste0("#191, C191-1 : collège de GS2 « A<", sub("^U", "U+", toupper(nom)), ">B » (espace non ASCII) : aucun refus, aucun constat sur college"),
+                bilan_college_191(paste0("A", espaces_191[[nom]], "B")), list(refus = character(0), controles = character(0)))
+}
+# chaque cas positif a les mêmes contrôles et les mêmes refus que le témoin « AB » (sans espace)
+resume_college_191 <- function(x) { r <- controler_base(college_gs2_191(x), A); list(r$controles, r$refus_tables) }
+verifier_egal("#191, C191-1 : collège de GS2 avec espace non ASCII : mêmes contrôles et mêmes refus que le témoin « AB » (sans espace), pour chacun des cinq espaces",
+              lapply(espaces_191, function(e) identical(resume_college_191(paste0("A", e, "B")), resume_college_191("AB"))),
+              lapply(espaces_191, function(e) TRUE))
+for (cas in list(list("U+0020", "A B"), list("U+0009", "A\tB"))) {
+  verifier_egal(paste0("#191, C191-1 : contre-témoin, collège de GS2 « A<", cas[[1L]], ">B » (blanc ASCII) : refus hors_domaine de college (règle du domaine du collège)"),
+                bilan_college_191(cas[[2L]]),
+                list(refus = "hors_domaine garanties_souscrites college", controles = "hors_domaine"))
+}
+verifier_egal("#191, C191-1 : .contient_blanc() ne retient que les blancs ASCII ; .BLANCS est la classe fermée \" \\t\\n\\v\\f\\r\"",
+              list(ns$.contient_blanc(paste0("A", c(espaces_191, "\u00e9", ""), "B")),
+                   ns$.contient_blanc(c("A B", "A\tB", "A\nB", "A\vB", "A\fB", "A\rB")), ns$.BLANCS),
+              list(rep(FALSE, 7L), rep(TRUE, 6L), " \t\n\v\f\r"))
+
+# C191-2 : forme des hypothèses D03c (.forme_hypothese_admise(motif, valeur) ; montant de forme
+# .FORME_MONTANT_D03C, « [0-9]+(\.[0-9]+)? ») : un espace non ASCII fait partie du collège, jamais
+# du montant.
+verifier_egal("#191, C191-2 : D03c, collège avec espace non ASCII (U+00A0, U+202F, U+3000, U+2003, U+FEFF) : forme admise",
+              vapply(paste0("A", espaces_191, "B=100"), function(v) ns$.forme_hypothese_admise("D03c", v), NA, USE.NAMES = FALSE),
+              rep(TRUE, 5L))
+verifier_egal("#191, C191-2 : D03c, collège avec blanc ASCII, ou blanc (ASCII ou non ASCII) dans le montant : forme refusée",
+              vapply(c("A B=100", "A\tB=100", "ensemble=30 000", "ensemble= 30000", "ensemble=30\u00a0000", "ensemble=\u00a030000",
+                       "ensemble=30000\u202f"), function(v) ns$.forme_hypothese_admise("D03c", v), NA, USE.NAMES = FALSE),
+              rep(FALSE, 7L))
+
+# C191-3 : de bout en bout. Collège « non<U+00A0>cadres » dans GS1 à GS3 et AF1 (salaire manquant :
+# D03c), hypothèse D03c déclarée pour les deux référentiels. Écrite avec le même collège : aucun
+# refus, la déclaration couvre le constat ; écrite avec U+0020 : plan_invalide (blanc ASCII dans le
+# collège de la déclaration, forme refusée par lire_declarations()).
+college_nbsp_191 <- "non\u00a0cadres"
+base_d03c_191 <- local({
+  b <- base_ref
+  b$garanties_souscrites$college[1:3] <- college_nbsp_191
+  b$affiliations$college <- college_nbsp_191
+  b$affiliations$salaire_reference <- NA_real_
+  b
+})
+decl_d03c_191 <- function(valeur) list(hypotheses = hyp2("D03c", valeur = valeur))
+bilan_d03c_191 <- function(valeur) {
+  r <- controler_base(base_d03c_191, A, declarations = decl_d03c_191(valeur))
+  list(nrow(r$refus_tables), paste(r$hypotheses_defaut$motif, r$hypotheses_defaut$referentiel, r$hypotheses_defaut$nombre),
+       any(r$declarations_requises$motif == "D03c"))
+}
+verifier_egal("#191, C191-3 : collège « non<U+00A0>cadres », déclaration D03c du même collège : aucun refus, D03c en hypotheses_defaut sous comptes_sociaux (1) et solvabilite_2 (1), aucune déclaration D03c attendue",
+              bilan_d03c_191("non\u00a0cadres=30000"),
+              list(0L, paste("D03c", c("comptes_sociaux", "solvabilite_2"), 1L), FALSE))
+verifier_egal("#191, C191-3 : même déclaration D03c écrite avec U+0020 (« non cadres=30000 ») : plan_invalide",
+              motif_de(bilan_d03c_191("non cadres=30000")), "plan_invalide")
+# Contre-témoin « autre=30000 » : controler_base() ne lit pas le collège des clés (le bilan est le même
+# que pour « non<U+00A0>cadres=30000 », aucun refus) ; seul .salaire_d03c() distingue le collège et ne
+# trouve aucun salaire pour « non<U+00A0>cadres » sous la clé « autre ».
+verifier_egal("#191, C191-3 : contre-témoin, déclaration D03c « autre=30000 » : même bilan que pour le collège « non<U+00A0>cadres » (aucun refus, D03c en hypotheses_defaut)",
+              bilan_d03c_191("autre=30000"), bilan_d03c_191("non\u00a0cadres=30000"))
+verifier_egal("#191, C191-3 : .salaire_d03c() : 30000 pour la clé « non<U+00A0>cadres » du collège « non<U+00A0>cadres », NA pour la clé « non cadres » (U+0020) et pour la clé « autre »",
+              c(ns$.salaire_d03c("non\u00a0cadres=30000", college_nbsp_191, "tous", FALSE),
+                ns$.salaire_d03c("non cadres=30000", college_nbsp_191, "tous", FALSE),
+                ns$.salaire_d03c("autre=30000", college_nbsp_191, "tous", FALSE)),
+              c(30000, NA_real_, NA_real_))
+
+# C191-4 : clés. Un espace non ASCII est un caractère de la clé : renseignée, non vide ; une clé
+# faite seulement de U+0020 est une chaîne vide (chaine_vide, sans appariement).
+verifier_egal("#191, C191-4 : cle_renseignee() : VRAI pour U+00A0 seul, FAUX pour U+0020 seul et pour la chaîne vide",
+              ns$cle_renseignee(c("\u00a0", " ", "")), c(TRUE, FALSE, FALSE))
+id_dossier_ev2_191 <- function(x) {
+  b <- base_ref; b$evenements$id_dossier[2L] <- x
+  r <- controler_base(b, A)
+  list(paste(r$controles$code, r$controles$table, r$controles$colonne, r$controles$identifiants), paste(r$refus_tables$motif, r$refus_tables$table, r$refus_tables$colonne))
+}
+verifier_egal("#191, C191-4 : id_dossier de EV2 = U+00A0 : D04b (référence orpheline) sur EV2, aucun chaine_vide, aucun refus",
+              id_dossier_ev2_191("\u00a0"), list("D04b evenements id_dossier EV2", character(0)))
+verifier_egal("#191, C191-4 : contre-témoin, id_dossier de EV2 = U+0020 : chaine_vide sur EV2, pas de D04b",
+              id_dossier_ev2_191(" "), list("chaine_vide evenements id_dossier EV2", "chaine_vide evenements id_dossier"))
+base_do3_191 <- local({
+  b <- base_ref
+  for (t in names(b)) for (cn in names(b[[t]])) {
+    if (is.character(b[[t]][[cn]])) b[[t]][[cn]][b[[t]][[cn]] %in% "DO3"] <- "DO\u00a03"
+  }
+  b
+})
+# Le renommage est cohérent : le résultat entier de controler_base() (11 composants) est identique à celui
+# de base_ref, y compris sous U+0020 (une clé peut contenir un U+0020) ; la non-vacuité de la comparaison se
+# lit sur un renommage partiel (dossiers seulement), qui crée des références orphelines et change le résultat.
+bilan_do3_191 <- function() {
+  r <- controler_base(base_do3_191, A)
+  list(sum(unlist(lapply(base_do3_191, function(x) unlist(lapply(x, function(y) y %in% "DO\u00a03"))))), nrow(r$refus_tables),
+       nrow(r$controles), identical(r, controler_base(base_ref, A)))
+}
+verifier_egal("#191, C191-4 : dossier DO3 renommé « DO<U+00A0>3 » partout (dossiers, evenements, prestations, evaluations_gestion) : aucun refus, aucun constat, résultat de controler_base() identique à celui de base_ref",
+              bilan_do3_191(), list(4L, 0L, 0L, TRUE))
+verifier("#191, C191-4 : témoin de non-vacuité, DO3 renommé « DO<U+00A0>3 » dans dossiers seulement : résultat de controler_base() différent de celui de base_ref",
+         { b <- base_ref; b$dossiers$id_dossier[b$dossiers$id_dossier == "DO3"] <- "DO\u00a03"
+           !identical(controler_base(b, A), controler_base(base_ref, A)) })
