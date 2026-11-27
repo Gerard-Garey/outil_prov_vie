@@ -2001,7 +2001,8 @@ lire_declarations <- function(declarations, dico) {
 # construites (E-14, C-E14-6). `budget` (argument interne, contrôle des tests : Inf, ou faible) ;
 # `lineaire` (contrôle des tests) : faux, toute feuille est énumérée (`lin` ignoré). Rend `v`
 # (TRUE, FALSE, NA), `pert` (identifiants des cellules pertinentes), `w` (W(C)), `grilles`
-# (G_k(C)) et `exact` (C contient toutes les cellules partagées).
+# (G_k(C)), `exact` (C contient toutes les cellules partagées) et `w_inf` (W avec toutes les
+# cellules partagées, décompte sans évaluation).
 .feuille3 <- function(cel, dom, f) list(cel = unique(cel[!is.na(cel)]), dom = dom, f = f)
 .noeud3 <- function(op, enfants) list(op = op, enfants = enfants)
 .constante3 <- function(v) .feuille3(character(0), function(sigs) list(), function(a, n) rep_len(v, n))
@@ -2038,32 +2039,44 @@ lire_declarations <- function(declarations, dico) {
     prod(as.numeric(lengths(fe$dom(sig)[pv])))
   }
   dom_p <- list()
-  decompte <- function(C) {
-    sig <- list(dom_p[C])
+  decompte <- function(C, dp = dom_p) {
+    sig <- list(dp[C])
     g <- vapply(seq_along(feuilles), grille_k, 0, C, sig)
-    list(w = (1 + length(tous)) * prod(as.numeric(lengths(dom_p[C]))) * sum(g), g = g)
+    list(w = (1 + length(tous)) * prod(as.numeric(lengths(dp[C]))) * sum(g), g = g)
+  }
+  # domaines statiques des cellules du groupe `g`, sachant ceux de `dp` (rangs inférieurs) ; NULL
+  # si une cellule n'a aucun représentant
+  domaines_g <- function(g, dp) {
+    fixes <- dp[names(dp) %in% partagees[rang < rang[match(g, tc)]]]
+    for (c1 in partagees[tc == g]) {
+      d <- lapply(feuilles[lecteurs_de(c1)], function(fe) fe$dom(list(fixes))[[c1]])
+      dp[[c1]] <- unique(do.call(c, d))
+      if (length(dp[[c1]]) == 0L) return(NULL)
+    }
+    dp
   }
   C <- character(0)
   w <- decompte(C)
   for (g in groupes) {
     cg <- partagees[tc == g]
-    fixes <- dom_p[names(dom_p) %in% partagees[rang < rang[match(g, tc)]]]
-    for (c1 in cg) {
-      d <- lapply(feuilles[lecteurs_de(c1)], function(fe) fe$dom(list(fixes))[[c1]])
-      dom_p[[c1]] <- unique(do.call(c, d))
-      if (length(dom_p[[c1]]) == 0L) {
-        stop("erreur interne de provie : .arbre3() : cellule partag\u00e9e sans repr\u00e9sentant", call. = FALSE)
-      }
-    }
-    w1 <- decompte(c(C, cg))
-    if (w1$w > budget) {
-      dom_p[cg] <- NULL
-      break
-    }
+    dp <- domaines_g(g, dom_p)
+    if (is.null(dp)) stop("erreur interne de provie : .arbre3() : cellule partag\u00e9e sans repr\u00e9sentant", call. = FALSE)
+    w1 <- decompte(c(C, cg), dp)
+    if (w1$w > budget) break
+    dom_p <- dp
     C <- c(C, cg)
     w <- w1
   }
   libres <- setdiff(partagees, C)
+  # W avec toutes les cellules partagées conditionnées (`w_inf`, champ interne de contrôle des
+  # tests, C-E14-4) : même décompte, sans évaluation ; W(C) si C les contient toutes ; NA si une
+  # cellule hors de C n'a aucun représentant
+  w_inf <- w$w
+  if (length(libres) > 0L) {
+    dp <- dom_p
+    for (g in setdiff(groupes, unique(tc[partagees %in% C]))) if (!is.null(dp)) dp <- domaines_g(g, dp)
+    w_inf <- if (is.null(dp)) NA_real_ else decompte(partagees, dp)$w
+  }
   deborde <- w$g > budget & vapply(cel, function(z) length(setdiff(z, C)) > 0L, NA)
   # affectation numéro i (0, 1, ...) des cellules `cells` de C, la première variant le plus vite ;
   # attribut `idx` : rangs des valeurs dans les domaines
@@ -2131,7 +2144,7 @@ lire_declarations <- function(declarations, dico) {
       unique(cbind(op(a[i, 1L], b[j, 1L]), op(a[i, 2L], b[j, 2L])))
     }, lapply(x$enfants, couples, cp))
   }
-  fin <- function(v, pert) list(v = v, pert = pert, w = w$w, grilles = w$g, exact = length(libres) == 0L)
+  fin <- function(v, pert) list(v = v, pert = pert, w = w$w, grilles = w$g, exact = length(libres) == 0L, w_inf = w_inf)
   vals <- logical(0)
   vues <- new.env(hash = TRUE)
   i <- 0
@@ -8943,7 +8956,10 @@ table_refusee_vue <- function(vue, table) {
 # D03a). Verdict à trois valeurs sans plafond (#129 ; erratum `1.9.7`, E-5 ; M813) : propagation,
 # en un passage dans l'ordre, de l'ensemble des configurations de l'automate (.propager_d12()),
 # exact hors date d'effet inconnue ; approximation sûre sous une date refusée (M813) ; voir
-# .verdict_d12().
+# .verdict_d12(). Règle V en mode Kleene (#105, lot V, G3a ; erratum E-15 (g)) : une valeur refusée
+# lue (type, date d'effet, motif, nature du sinistre) est une inconnue du verdict, jamais lue
+# brute ; une ligne au verdict inconnu est écartée, cause = ses éléments pertinents (index de
+# .verdict_d12(), sur-ensemble déclaré : D-G3-3).
 .regle_v_suites <- function(ctx) {
   lit <- c(paste0("evenements.", c("id_evenement", "id_sinistre", "type_evenement", "date_effet", "motif")),
            "sinistres.id_sinistre", "sinistres.nature_sinistre")
@@ -8953,7 +8969,7 @@ table_refusee_vue <- function(vue, table) {
     verdict
   }
   for (t in c("S", "X")) .regle_vue(ctx, "D12", "evenements", "type_evenement", lit, t, "exacte", f,
-                                     vue = ctx$lit_vue$sinistres)
+                                     vue = ctx$lit_vue$sinistres, mode = "kleene")
   invisible(NULL)
 }
 
@@ -9134,7 +9150,14 @@ table_refusee_vue <- function(vue, table) {
 # par order()) : l'événement est facultatif à chaque intervalle de la suite des dates connues,
 # entre les événements d'un groupe compris (une position par intervalle, transitions « sauter » ou
 # l'un de ces événements, autant de passages qu'il y en a) : approximation sûre, inconnu au lieu
-# de déterminé, jamais l'inverse (M813).
+# de déterminé, jamais l'inverse (M813). Nature du sinistre refusée pour sa valeur (erratum E-15
+# (g), #105, lot V, G3a) : les événements du sinistre sont propagés comme pour un arrêt de
+# travail ; verdict « nature arret_travail » ET « premier échec » (cellules distinctes, exact) :
+# faux si le second terme est faux, inconnu sinon, index « sinistres.nature_sinistre » (ligne du
+# sinistre) ; avant G3a, la nature refusée était lue brute (sinistre hors de la population). Rend
+# aussi `index_pertinent` (le même que `index`, sur-ensemble des cellules pertinentes de
+# l'automate, D-G3-3 ; liste vide sans verdict inconnu) et `lues` (colonnes lues, statiques ;
+# evenements.date_saisie n'est lue que par la vue, E-15 (b)).
 .verdict_d12 <- function(ctx) {
   v <- function(t, c1) .valeurs(ctx, t, c1)
   te <- ctx$dico$types_evenements
@@ -9142,11 +9165,16 @@ table_refusee_vue <- function(vue, table) {
   type <- v("evenements", "type_evenement")
   sin <- .cle_manquante(as.character(v("evenements", "id_sinistre")))
   k <- apparier_cles(sin, v("sinistres", "id_sinistre"))
-  arret <- !is.na(k) & v("sinistres", "nature_sinistre")[ifelse(is.na(k), 1L, k)] %in% "arret_travail"
+  ks <- ifelse(is.na(k), 1L, k)
+  # nature du sinistre refusée pour sa valeur (E-15 (g)) : inconnue, jamais lue brute ; les
+  # événements du sinistre sont propagés comme pour un arrêt de travail
+  nature_inc <- .inconnu(ctx, "sinistres", "nature_sinistre")
+  nat_inc <- !is.na(k) & nature_inc[ks]
+  arret <- !is.na(k) & !nature_inc[ks] & v("sinistres", "nature_sinistre")[ks] %in% "arret_travail"
   auto <- te$type_evenement[!is.na(te$etat_depuis) & nzchar(te$etat_depuis)]
   type_inc <- .inconnu(ctx, "evenements", "type_evenement")
   motif_inc <- .inconnu(ctx, "evenements", "motif")
-  etat <- arret & (type %in% auto | type_inc)
+  etat <- (arret | nat_inc) & (type %in% auto | type_inc)
   ret <- which(ctx$retenu$evenements & etat)
   est_nd <- .nd_vue(ctx, "evenements") & etat
   nd <- which(est_nd)
@@ -9196,7 +9224,8 @@ table_refusee_vue <- function(vue, table) {
   }
   r <- rep(FALSE, n)
   index <- list(evenements = vector("list", n), evenements.date_effet = vector("list", n),
-                evenements.type_evenement = vector("list", n), evenements.motif = vector("list", n))
+                evenements.type_evenement = vector("list", n), evenements.motif = vector("list", n),
+                sinistres.nature_sinistre = vector("list", n))
   # motif lu : type inconnu, ou type dont le domaine des motifs n'est pas vide
   sortie_possible <- type_inc | type %in% te$type_evenement[nzchar(te$motifs) & !is.na(te$motifs)]
   groupes_n <- split(nd, sin[nd])
@@ -9243,10 +9272,21 @@ table_refusee_vue <- function(vue, table) {
                      evenements.motif = lr[motif_inc[lr] & sortie_possible[lr]])
     for (tc in names(elements)) if (length(elements[[tc]]) > 0L) index[[tc]][inc] <- list(elements[[tc]])
   }
+  # « nature arret_travail » ET « premier échec » (E-15 (g), cellules distinctes, exact) : sous une
+  # nature inconnue, faux si le second terme est faux, inconnu sinon ; la cellule de nature est
+  # pertinente quand le second terme n'est pas faux
+  sous_nature <- which(nat_inc & !(r %in% FALSE))
+  r[sous_nature] <- NA
+  index$sinistres.nature_sinistre[sous_nature] <- as.list(k[sous_nature])
   if (anyNA(r)) {
     garde <- names(index) == "evenements" | !vapply(index, function(x) all(vapply(x, is.null, NA)), NA)
     attr(r, "index") <- index[garde]
+    attr(r, "index_pertinent") <- index[garde]
+  } else {
+    attr(r, "index_pertinent") <- list()
   }
+  attr(r, "lues") <- c(paste0("evenements.", c("id_evenement", "id_sinistre", "type_evenement", "date_effet", "motif", "date_saisie")),
+                       "sinistres.id_sinistre", "sinistres.nature_sinistre")
   r
 }
 

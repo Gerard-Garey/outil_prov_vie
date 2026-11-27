@@ -479,7 +479,9 @@ LISTE_BLANCHE <- c(
     "metadonnee",
   "R/donnees.R | .arbre3 | match ( groupes , tc )" =
     "metadonnee",
-  "R/donnees.R | .arbre3 | names ( dom_p ) %in% partagees [ rang < rang [ match ( g , tc ) ] ]" =
+  "R/donnees.R | .arbre3 | names ( dp ) %in% partagees [ rang < rang [ match ( g , tc ) ] ]" =
+    "metadonnee",
+  "R/donnees.R | .arbre3 | partagees %in% C" =
     "metadonnee",
   "R/donnees.R | .arbre3 | match ( g , tc )" =
     "metadonnee",
