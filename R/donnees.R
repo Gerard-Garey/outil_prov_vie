@@ -6750,9 +6750,8 @@ table_refusee_vue <- function(vue, table) {
 
 # D07 (c), fin de charge non enregistrée (dictionnaire, § 9 ; spécification, §§ 5.3 et 5.4),
 # sur la vue : rente d'éducation non éteinte, en service ou suspendue (rentes ; statut de
-# service commun, .statut_service(), spécification `donnees` v1.6, § 8.0 bis, point 3), ou
-# dossier double_effet non clos
-# (dossiers ; ni clos ni de second décès retenu) dont chaque enfant à charge a atteint sa
+# service commun, spécification `donnees` v1.6, § 8.0 bis, point 3), ou dossier double_effet non
+# clos (dossiers ; ni clos ni de second décès retenu) dont chaque enfant à charge a atteint sa
 # limite d'âge à l'arrêté : âge (conventions$limite_age$age, naissance réelle) au moins égal à
 # age_limite (age_limite_etudes pour un enfant scolarise ou apprenti, si le paramètre existe),
 # plus 1 sous la règle `depassement` ;
@@ -6763,18 +6762,23 @@ table_refusee_vue <- function(vue, table) {
 # limite non déterminable (paramètre absent ou à valeurs distinctes) non plus, et la table va
 # dans controles_non_executes (.CAUSE_PARAMETRE_NON_DEFINI) si la limite peut décider de la
 # détection (dossiers : aucun autre enfant non éteint de façon déterminée ; rentes : un seul
-# enfant, toujours). Traitement
+# enfant, toujours ; lecture existentielle, .non_defini_d07c()). Traitement
 # H ou S. Sans conventions$limite_age : non exécuté (cause declaration_absente) et
 # déclaration requise (rubrique conventions, cles limite_age$regle et limite_age$age), s'il
-# existe au moins une ligne candidate (.candidats_d07c()) ; sans ligne candidate, exécuté à
-# vide, sans exigence (spécification de B2, docs/specifications/b2-capital-deces-v1.md,
-# § 6.3, niveau 1 : une déclaration qui ne peut changer aucune ligne du bilan ne bloque pas).
+# existe au moins une ligne candidate (.candidats_d07c(), lue de façon existentielle, erratum
+# E-15 (f)) ; sans ligne candidate, exécuté à vide, sans exigence (spécification de B2,
+# docs/specifications/b2-capital-deces-v1.md, § 6.3, niveau 1 : une déclaration qui ne peut
+# changer aucune ligne du bilan ne bloque pas).
 # Constat sur la table qui porte la charge (rentes, dossiers), colonne NA, code D07c (lettrage
 # du dictionnaire 1.6, M660 ; une clé par sous-cas, spécification `donnees` v1.9, § 9.6). Sans
-# déclaration, chaque table non exécutée reçoit aussi les causes candidates de la règle bloquée
-# de la branche déclarée (mêmes colonnes lues, `lit` et `vue_commun`, définies une fois ;
-# .regle_vue() sans `f`) : une cause directe (rang 3) l'emporte sur declaration_absente (rang
-# 6), qui reste dans declarations_requises (spécification `donnees` v1.9.1, § 9.6, point (3)).
+# déclaration, chaque table non exécutée reçoit aussi les causes de forme ou de portée table de la
+# règle bloquée de la branche déclarée (mêmes colonnes lues, `lit` et `vue_commun`, définies une
+# fois ; .regle_vue() sans `f`, mode Kleene) : une cause directe (rang 3) l'emporte sur
+# declaration_absente (rang 6), qui reste dans declarations_requises (spécification `donnees`
+# v1.9.1, § 9.6, point (3) ; erratum E-15 (f)).
+# Règle V en mode Kleene (#105, lot V, G3c, M808 ; erratum E-15 (a) à (f), (h)) : chemin rapide en
+# lecture brute (.verdict_d07c_brut()) sur les lignes qui ne lisent aucune cellule inconnue ni ligne
+# de visibilité non déterminée, arbre de .arbre3() sur les autres (.verdict_d07c()).
 .regle_v_limite_age <- function(ctx) {
   tables <- intersect(c("rentes", "dossiers"), names(ctx$base))
   la <- ctx$conventions$limite_age
@@ -6793,7 +6797,7 @@ table_refusee_vue <- function(vue, table) {
     if (!.candidats_d07c(ctx)) return(invisible(NULL))
     for (t in tables) {
       .ajouter_non_execute(ctx, "D07c", t, NA_character_, "declaration_absente")
-      .regle_vue(ctx, "D07c", t, NA_character_, lit[[t]], "H;S", "exacte", NULL, vue = vue_commun)
+      .regle_vue(ctx, "D07c", t, NA_character_, lit[[t]], "H;S", "exacte", NULL, vue = vue_commun, mode = "kleene")
     }
     if (length(tables) > 0L) {
       .requerir(ctx, "conventions", "D07c", "limite_age$regle", paste(REGLES_LIMITE_AGE, collapse = ";"))
@@ -6801,178 +6805,33 @@ table_refusee_vue <- function(vue, table) {
     }
     return(invisible(NULL))
   }
-  v <- function(t, c1) .valeurs(ctx, t, c1)
-  vv <- function(t, c1) .valeurs_vue(ctx, t, c1)
-  a <- as.numeric(ctx$arrete)
-  gs_de <- function(dossier) .joindre(ctx, "dossiers", "id_dossier", "id_garantie_souscrite", dossier)
-  code_de <- function(gs) .joindre(ctx, "garanties_souscrites", "id_garantie_souscrite", "code_garantie", gs)
-  # Les colonnes ne sont lues (et converties) que dans les fonctions passées à .regle_vue(),
-  # après le contrôle des causes des colonnes lues (aucune conversion d'une colonne refusée).
-  # enfant éteint à l'arrêté (paires enfant de famille, garantie souscrite) : .enfant_eteint(),
-  # seule implémentation, lue aussi par D14 (à la survenance)
-  eteint <- function(m, gs, val = vv) .enfant_eteint(ctx, la, m, gs, rep(ctx$arrete, length(m)), val)
-  # limite non déterminable pour une ligne candidate : la table va dans controles_non_executes
-  # (colonne NA, cause parametre_non_defini) ; les autres lignes restent contrôlées
-  noter <- function(t, e) {
-    if (any(e$non_defini)) .ajouter_non_execute(ctx, "D07c", t, NA_character_, .CAUSE_PARAMETRE_NON_DEFINI)
-    e$eteint
-  }
-  # enfant à charge : ligne valable dans la vue, lien enfant, non décédé à l'arrêté (`val` = v :
-  # sur toute version, valeurs brutes)
-  a_charge <- function(val = vv) {
-    deces <- as.numeric(val("famille", "date_deces"))
-    !is.na(val("famille", "id_membre")) & val("famille", "lien") %in% "enfant" & (is.na(deces) | deces > a)
-  }
-  # verdict à trois valeurs (spécification v1.5, § 2.2 (d) ; M218) : événements non déterminés de
-  # type `types`, d'effet au plus l'arrêté ou inconnu (seuls ils peuvent être retenus)
-  ev_nd <- function(types) {
-    effet <- .date_connue(ctx, "evenements", "date_effet")
-    which(.nd_vue(ctx, "evenements") & v("evenements", "type_evenement") %in% types & !((effet > a) %in% TRUE))
-  }
-  # versions de famille dont l'état est en jeu : candidates d'un membre à version valable non
-  # déterminée (.visibilite_a()), et versions non déterminées d'un membre sans version visible
-  vis_f <- if ("famille" %in% names(ctx$base)) .visibilite_a(ctx, "vue") else NULL
-  fam_nd <- function() .famille_en_jeu(ctx)
-  # verdict de la vue `r` gardé tel quel sans élément en jeu (`en_jeu` faux) ; sinon,
-  # conjonction à trois valeurs (.verdict3()) de ses entrées
-  garder <- function(r, en_jeu, entrees, g) if (en_jeu) .verdict3(entrees, g) else r
-  # événements de la vue de date d'effet au plus l'arrêté
-  evenements_retenus <- function() {
-    type <- vv("evenements", "type_evenement")
-    effet <- as.numeric(vv("evenements", "date_effet"))
-    list(type = type, retenu = !is.na(type) & !is.na(effet) & effet <= a)
-  }
-  .regle_vue(ctx, "D07c", "rentes", NA_character_, lit$rentes, "H;S", "exacte", function() {
-    nr <- nrow(ctx$base$rentes)
-    # rente non éteinte à l'arrêté (en service ou suspendue) : statut de service commun à D07 (a),
-    # (b) et (c) (.statut_service(), spécification `donnees` v1.6, § 8.0 bis, point 3)
-    st <- .statut_service(ctx, "rentes")
-    en_service <- st$classe %in% .NON_ETEINT
-    gs <- gs_de(v("rentes", "id_dossier"))
-    # clés appariées : une clé manquante ou vide ne s'apparie à rien (apparier_cles(), #158)
-    m <- apparier_cles(v("rentes", "id_membre"), vv("famille", "id_membre"))
-    education <- code_de(gs) %in% "rente_education"
-    ok <- education & en_service & !is.na(m)
-    ok[ok] <- a_charge()[m[ok]]
-    if (any(ok)) ok[ok] <- noter("rentes", eteint(m[ok], gs[ok]))
-    # « non éteinte » inconnu si un événement non déterminé qui peut suivre le dernier retenu dans
-    # l'ordre du § 4.2 est d'une autre classe (.service3())
-    s3 <- .service3(ctx, st, .NON_ETEINT)
-    # enfant : version valable dans la vue, ou chaque candidate d'un membre à version valable non
-    # déterminée ; inconnu si elles diffèrent
-    enfant <- !is.na(m)
-    enfant[enfant] <- a_charge()[m[enfant]]
-    if (any(enfant)) enfant[enfant] <- eteint(m[enfant], gs[enfant])$eteint
-    index_e <- vector("list", nr)
-    cand <- if (is.null(vis_f$candidate)) integer(0) else which(vis_f$candidate)
-    sans_m <- which(is.na(m) & !is.na(apparier_cles(v("rentes", "id_membre"), vis_f$membre[cand])))
-    cand_m <- split(cand, vis_f$membre[cand])[as.character(v("rentes", "id_membre"))[sans_m]]
-    for (k in seq_along(sans_m)) {
-      i <- sans_m[k]
-      cm <- cand_m[[k]]
-      x <- a_charge(v)[cm]
-      x[x] <- eteint(cm[x], rep(gs[i], sum(x)), v)$eteint
-      visible <- vis_f$statut$famille[cm] %in% TRUE
-      enfant[i] <- x[visible][1L]
-      if (length(unique(x)) > 1L) index_e[[i]] <- cm[!visible & x != enfant[i]]
-    }
-    e3 <- list(tc = "famille", valeurs = enfant, inconnu = lengths(index_e) > 0L, index = index_e, domaine = c(TRUE, FALSE))
-    garder(ok, st$nd > 0L || length(cand) > 0L, list(education = .connue3("education", education), s = s3, e = e3),
-           function(x) x$education & x$s & x$e)
-  }, vue = vue_commun)
+  .regle_vue(ctx, "D07c", "rentes", NA_character_, lit$rentes, "H;S", "exacte", function() .verdict_d07c(ctx, "rentes", la, lit$rentes),
+             vue = vue_commun, mode = "kleene")
   # double effet : un dossier clos, ou dont le second décès est retenu à l'arrêté (le droit
   # au capital s'y fixe, avis d'`actuary`, Q3 (b)), n'est pas candidat
-  .regle_vue(ctx, "D07c", "dossiers", NA_character_, lit$dossiers, "H;S", "exacte", function() {
-    nd <- nrow(ctx$base$dossiers)
-    ev <- evenements_retenus()
-    gs <- v("dossiers", "id_garantie_souscrite")
-    fin <- ev$retenu & ev$type %in% c("cloture_dossier", "second_deces")
-    clos <- !is.na(apparier_cles(v("dossiers", "id_dossier"), v("evenements", "id_dossier")[fin]))
-    double_effet <- code_de(gs) %in% "double_effet"
-    candidat <- double_effet & !clos
-    base <- function() {
-      if (!any(candidat)) return(rep(FALSE, nd))
-      assure <- .joindre(ctx, "sinistres", "id_sinistre", "id_assure", v("dossiers", "id_sinistre"))
-      assure[!candidat] <- NA
-      enfants <- which(a_charge())
-      p <- .paires(assure, vv("famille", "id_assure")[enfants])
-      if (nrow(p) == 0L) return(rep(FALSE, nd))
-      x <- eteint(enfants[p$j], gs[p$i])
-      nb <- tabulate(p$i, nd)
-      nb_eteints <- tabulate(p$i[x$eteint], nd)
-      # la limite non déterminable n'est notée que si elle peut décider de la détection : aucun
-      # enfant du dossier non éteint de façon déterminée (avis d'`actuary`) ; un tel enfant
-      # (limite déterminée non atteinte, handicapé sous prolongation, naissance manquante)
-      # écarte le dossier quel que soit l'enfant ambigu
-      bloque <- tabulate(p$i[!x$eteint & !x$non_defini], nd) > 0L
-      noter("dossiers", list(eteint = x$eteint, non_defini = x$non_defini & !bloque[p$i]))
-      candidat & nb > 0L & nb_eteints == nb
-    }
-    r <- base()
-    # « candidat » inconnu si une clôture ou un second décès non déterminé (effet au plus
-    # l'arrêté ou inconnu) existe
-    kn <- ev_nd(c("cloture_dossier", "second_deces"))
-    pc <- rep(FALSE, NROW(ctx$base$evenements))
-    pc[kn] <- TRUE
-    clos3 <- .existe_vue3(ctx, "evenements", v("dossiers", "id_dossier"), v("evenements", "id_dossier"), fin | pc)
-    # « chaque enfant à charge éteint » (au moins un) : par membre de l'assuré, catégories
-    # possibles (hors charge, éteint, non éteint) de sa version valable, de chaque candidate, ou
-    # de chaque version non déterminée d'un membre sans version visible (hors charge compris) ;
-    # vrai possible si chaque membre peut être hors charge ou éteint et l'un éteint ; faux
-    # possible si l'un peut être non éteint, ou tous hors charge
-    enjeu_f <- fam_nd()
-    index_e <- vector("list", nd)
-    e_val <- r
-    if (any(enjeu_f)) {
-      assure <- .joindre(ctx, "sinistres", "id_sinistre", "id_assure", v("dossiers", "id_sinistre"))
-      assure[!(double_effet & !(clos3$valeurs))] <- NA
-      lignes_f <- which(ctx$retenu$famille | enjeu_f)
-      p <- .paires(assure, v("famille", "id_assure")[lignes_f])
-      if (nrow(p) > 0L) {
-        j <- lignes_f[p$j]
-        charge <- a_charge(v)[j]
-        cat_f <- ifelse(!charge, "hors", "non_eteint")
-        if (any(charge)) cat_f[charge][eteint(j[charge], gs[p$i][charge], v)$eteint] <- "eteint"
-        sans_visible <- enjeu_f[j] & !vis_f$candidate[j]
-        membre <- paste(p$i, vis_f$membre[j], sep = "\r")
-        possibles <- split(c(cat_f, rep("hors", sum(sans_visible))), c(membre, membre[sans_visible]))
-        de_i <- as.integer(sub("\r.*$", "", names(possibles)))
-        peut <- function(cat) vapply(possibles, function(z) cat %in% z, NA)
-        peut_ok <- peut("hors") | peut("eteint")
-        vrai <- tapply(peut_ok, de_i, all) & tapply(peut("eteint"), de_i, any)
-        faux <- tapply(peut("non_eteint"), de_i, any) | tapply(peut("hors"), de_i, all)
-        i_vrai <- as.integer(names(vrai))
-        e_val[i_vrai] <- vrai & !faux
-        # incertitude : un membre a plusieurs catégories possibles, ce que seule une version non
-        # déterminée en jeu permet (candidate, ou version d'un membre sans version visible)
-        incertain <- i_vrai[vrai & faux]
-        nd_j <- enjeu_f[j] & !(vis_f$statut$famille[j] %in% TRUE) & p$i %in% incertain
-        index_e[incertain] <- lapply(split(j[nd_j], factor(p$i[nd_j], levels = incertain)), function(z) sort(unique(z)))
-      }
-    }
-    e3 <- list(tc = "famille", valeurs = e_val, inconnu = lengths(index_e) > 0L, index = index_e, domaine = c(TRUE, FALSE))
-    garder(r, length(kn) > 0L || any(enjeu_f), list(de = .connue3("de", double_effet), clos = clos3, e = e3),
-           function(x) x$de & !x$clos & x$e)
-  }, vue = vue_commun)
+  .regle_vue(ctx, "D07c", "dossiers", NA_character_, lit$dossiers, "H;S", "exacte",
+             function() .verdict_d07c(ctx, "dossiers", la, lit$dossiers), vue = vue_commun, mode = "kleene")
   invisible(NULL)
 }
 
 # Existence d'au moins une ligne candidate de D07 (c) (spécification de B2, § 6.3, niveau 1) :
 # une ligne de rentes, dans la vue (retenue ou de visibilité non déterminée, .nd_vue()), dont
 # le dossier relève d'une garantie souscrite rente_education, ou une ligne de dossiers, dans la
-# vue, de garantie souscrite double_effet (jointure sur les valeurs brutes, comme D07 (c)). Si
-# une colonne de la jointure ne se lit pas (refus de forme, de valeur ou de portée table,
-# .cause()), chaque ligne de la table compte comme candidate (sens prudent : la déclaration
-# est demandée). Rend TRUE ou FALSE.
+# vue, de garantie souscrite double_effet (jointure sur les valeurs brutes, comme D07 (c)). Lecture
+# existentielle (#105, lot V, G3c ; erratum E-15 (f)) : un code de garantie refusé pour sa valeur
+# rend la ligne candidate ; si une colonne de la jointure ne se lit pas pour une cause de forme ou
+# de portée table (.cause_hors_valeur()), chaque ligne de la table compte comme candidate (sens
+# prudent : la déclaration est demandée). Rend TRUE ou FALSE.
 .candidats_d07c <- function(ctx) {
   code_lus <- c("garanties_souscrites.id_garantie_souscrite", "garanties_souscrites.code_garantie")
   candidats <- function(table, lus, code, gs_de) {
     n <- NROW(ctx$base[[table]])
     if (n == 0L) return(FALSE)
-    if (!is.null(.cause_lecture(ctx, c(lus, code_lus)))) return(TRUE)
+    if (!is.null(.cause_hors_valeur(ctx, c(lus, code_lus)))) return(TRUE)
     dans_vue <- ctx$retenu[[table]] | .nd_vue(ctx, table)
-    gs <- gs_de()
-    any(dans_vue & .joindre(ctx, "garanties_souscrites", "id_garantie_souscrite", "code_garantie", gs) %in% code)
+    ig <- .index_jointure(ctx, "garanties_souscrites", "id_garantie_souscrite", gs_de())
+    inconnu <- !is.na(ig) & .inconnu(ctx, "garanties_souscrites", "code_garantie")[ifelse(is.na(ig), 1L, ig)]
+    any(dans_vue & (inconnu | .valeurs(ctx, "garanties_souscrites", "code_garantie")[ig] %in% code))
   }
   gs_rentes <- function() {
     dossier <- .valeurs(ctx, "rentes", "id_dossier")
@@ -7004,27 +6863,38 @@ table_refusee_vue <- function(vue, table) {
 }
 
 # Enfant éteint à la date `date` (Date, une par élément) sous la règle de limite d'âge `la`
-# (conventions$limite_age), seule implémentation, lue par D07 (c) (à l'arrêté) et D14 (à la
-# survenance, spécification `donnees` v1.6, § 8.9) : pour chaque paire (ligne de famille `m`,
-# garantie souscrite `gs`), `eteint`, et `non_defini` (limite non déterminable pour un enfant dont
-# elle décide : âge connu, hors prolongation pour handicap ; paramètre absent ou à plusieurs
-# valeurs, avis d'`actuary`, Q3 (a)). Prolongation pour études : enfant scolarise ou apprenti
-# (décision du mainteneur, jugement d'expert : l'apprentissage vaut poursuite d'études, comme
-# pour la rente d'éducation du recensement des méthodes) ; sans age_limite_etudes, age_limite.
-# `val` : lecture des colonnes de famille (valeurs de la vue, ou brutes pour une version non
-# déterminée). `sous` (lu par D14) : enfant sous sa limite de façon déterminée (prolongation pour
-# handicap, ou âge connu et limite déterminée non atteinte).
+# (conventions$limite_age), lue par D07 (c) (à l'arrêté, lecture brute) et D14 (à la survenance,
+# spécification `donnees` v1.6, § 8.9) : pour chaque paire (ligne de famille `m`, garantie souscrite
+# `gs`), les issues de .limite_enfant3() sur la situation et la naissance de `m` (`val` : lecture
+# des colonnes de famille, valeurs de la vue, ou brutes pour une version non déterminée), les
+# paramètres age_limite et age_limite_etudes de `gs` (.parametre_garantie()) et sa
+# prolongation_handicap.
 .enfant_eteint <- function(ctx, la, m, gs, date, val) {
-  situation <- val("famille", "situation")[m]
-  etudes_ok <- situation %in% c("scolarise", "apprenti")
   l1 <- .parametre_garantie(ctx, "age_limite", gs)
   l2 <- .parametre_garantie(ctx, "age_limite_etudes", gs)
+  ph <- .joindre(ctx, "garanties_souscrites", "id_garantie_souscrite", "prolongation_handicap", gs)
+  .limite_enfant3(la, val("famille", "situation")[m], val("famille", "date_naissance")[m], date, ph, l1, l2)
+}
+
+# Limite d'âge d'un enfant, seule implémentation de la règle (lue par .enfant_eteint(), lecture
+# brute de D07 (c) et D14, et par la feuille de l'enfant de D07 (c) à trois valeurs,
+# .lectures_d07c3() ; #105, lot V, G3c) : situation `situation`, naissance `naissance` (Date), date
+# `date`, prolongation_handicap `ph`, paramètres `l1` (age_limite) et `l2` (age_limite_etudes),
+# listes `valeur` (NA s'il manque ou prend plusieurs valeurs) et `ambigu` (plusieurs valeurs) :
+# `eteint`, et `non_defini` (limite non déterminable pour un enfant dont elle décide : âge connu,
+# hors prolongation pour handicap ; paramètre absent ou à plusieurs valeurs, avis d'`actuary`,
+# Q3 (a)). Prolongation pour études : enfant scolarise ou apprenti (décision du mainteneur,
+# jugement d'expert : l'apprentissage vaut poursuite d'études, comme pour la rente d'éducation du
+# recensement des méthodes) ; sans age_limite_etudes, age_limite. `sous` (lu par D14) : enfant sous
+# sa limite de façon déterminée (prolongation pour handicap, ou âge connu et limite déterminée non
+# atteinte).
+.limite_enfant3 <- function(la, situation, naissance, date, ph, l1, l2) {
+  etudes_ok <- situation %in% c("scolarise", "apprenti")
   limite <- ifelse(etudes_ok & !is.na(l2$valeur), l2$valeur, l1$valeur)
   limite[etudes_ok & l2$ambigu] <- NA_real_
   limite <- limite + (la$regle == "depassement")
-  age <- calculer_age(val("famille", "date_naissance")[m], date, la$age)
-  handicap <- .joindre(ctx, "garanties_souscrites", "id_garantie_souscrite", "prolongation_handicap", gs) %in% TRUE &
-    situation %in% "handicape"
+  age <- calculer_age(naissance, date, la$age)
+  handicap <- ph %in% TRUE & situation %in% "handicape"
   decide <- !is.na(age) & !handicap
   list(eteint = decide & !is.na(limite) & age >= limite, non_defini = decide & is.na(limite),
        sous = handicap | (decide & !is.na(limite) & age < limite))
@@ -7986,6 +7856,580 @@ table_refusee_vue <- function(vue, table) {
   r
 }
 
+# --- D07 (c) et D08 en logique de Kleene (#105, lot V, G3c ; erratum E-15 (a) à (f), (h) ; D-G3-1,
+# D-G3-2, D-G3-4 à D-G3-6) --------------------------------------------------------------------
+# Lecture brute de D07 (c) sur `table` (règle du mode bloquee, inchangée ; chemin rapide de la règle
+# V en mode Kleene, exact sur les lignes qui ne lisent aucune cellule inconnue ni ligne de visibilité
+# non déterminée) : verdict à trois valeurs (.verdict3()) : statut de service (.statut_service(),
+# .service3()), clôture (.existe_vue3()), enfants de versions en jeu. La limite non déterminable
+# n'est pas notée ici (.non_defini_d07c()).
+.verdict_d07c_brut <- function(ctx, table, la) {
+  v <- function(t, c1) .valeurs(ctx, t, c1)
+  vv <- function(t, c1) .valeurs_vue(ctx, t, c1)
+  a <- as.numeric(ctx$arrete)
+  gs_de <- function(dossier) .joindre(ctx, "dossiers", "id_dossier", "id_garantie_souscrite", dossier)
+  code_de <- function(gs) .joindre(ctx, "garanties_souscrites", "id_garantie_souscrite", "code_garantie", gs)
+  # enfant éteint à l'arrêté (paires enfant de famille, garantie souscrite) : .enfant_eteint()
+  eteint <- function(m, gs, val = vv) .enfant_eteint(ctx, la, m, gs, rep(ctx$arrete, length(m)), val)
+  # enfant à charge : ligne valable dans la vue, lien enfant, non décédé à l'arrêté (`val` = v :
+  # sur toute version, valeurs brutes)
+  a_charge <- function(val = vv) {
+    deces <- as.numeric(val("famille", "date_deces"))
+    !is.na(val("famille", "id_membre")) & val("famille", "lien") %in% "enfant" & (is.na(deces) | deces > a)
+  }
+  # verdict à trois valeurs (spécification v1.5, § 2.2 (d) ; M218) : événements non déterminés de
+  # type `types`, d'effet au plus l'arrêté ou inconnu (seuls ils peuvent être retenus)
+  ev_nd <- function(types) {
+    effet <- .date_connue(ctx, "evenements", "date_effet")
+    which(.nd_vue(ctx, "evenements") & v("evenements", "type_evenement") %in% types & !((effet > a) %in% TRUE))
+  }
+  # versions de famille dont l'état est en jeu : candidates d'un membre à version valable non
+  # déterminée (.visibilite_a()), et versions non déterminées d'un membre sans version visible
+  vis_f <- if ("famille" %in% names(ctx$base)) .visibilite_a(ctx, "vue") else NULL
+  fam_nd <- function() .famille_en_jeu(ctx)
+  # verdict de la vue `r` gardé tel quel sans élément en jeu (`en_jeu` faux) ; sinon,
+  # conjonction à trois valeurs (.verdict3()) de ses entrées
+  garder <- function(r, en_jeu, entrees, g) if (en_jeu) .verdict3(entrees, g) else r
+  # événements de la vue de date d'effet au plus l'arrêté
+  evenements_retenus <- function() {
+    type <- vv("evenements", "type_evenement")
+    effet <- as.numeric(vv("evenements", "date_effet"))
+    list(type = type, retenu = !is.na(type) & !is.na(effet) & effet <= a)
+  }
+  if (table == "rentes") {
+    nr <- nrow(ctx$base$rentes)
+    # rente non éteinte à l'arrêté (en service ou suspendue) : statut de service commun à D07 (a),
+    # (b) et (c) (.statut_service(), spécification `donnees` v1.6, § 8.0 bis, point 3)
+    st <- .statut_service(ctx, "rentes")
+    en_service <- st$classe %in% .NON_ETEINT
+    gs <- gs_de(v("rentes", "id_dossier"))
+    # clés appariées : une clé manquante ou vide ne s'apparie à rien (apparier_cles(), #158)
+    m <- apparier_cles(v("rentes", "id_membre"), vv("famille", "id_membre"))
+    education <- code_de(gs) %in% "rente_education"
+    ok <- education & en_service & !is.na(m)
+    ok[ok] <- a_charge()[m[ok]]
+    if (any(ok)) ok[ok] <- eteint(m[ok], gs[ok])$eteint
+    # « non éteinte » inconnu si un événement non déterminé qui peut suivre le dernier retenu dans
+    # l'ordre du § 4.2 est d'une autre classe (.service3())
+    s3 <- .service3(ctx, st, .NON_ETEINT)
+    # enfant : version valable dans la vue, ou chaque candidate d'un membre à version valable non
+    # déterminée ; inconnu si elles diffèrent
+    enfant <- !is.na(m)
+    enfant[enfant] <- a_charge()[m[enfant]]
+    if (any(enfant)) enfant[enfant] <- eteint(m[enfant], gs[enfant])$eteint
+    index_e <- vector("list", nr)
+    cand <- if (is.null(vis_f$candidate)) integer(0) else which(vis_f$candidate)
+    sans_m <- which(is.na(m) & !is.na(apparier_cles(v("rentes", "id_membre"), vis_f$membre[cand])))
+    cand_m <- split(cand, vis_f$membre[cand])[as.character(v("rentes", "id_membre"))[sans_m]]
+    for (k in seq_along(sans_m)) {
+      i <- sans_m[k]
+      cm <- cand_m[[k]]
+      x <- a_charge(v)[cm]
+      x[x] <- eteint(cm[x], rep(gs[i], sum(x)), v)$eteint
+      visible <- vis_f$statut$famille[cm] %in% TRUE
+      enfant[i] <- x[visible][1L]
+      if (length(unique(x)) > 1L) index_e[[i]] <- cm[!visible & x != enfant[i]]
+    }
+    e3 <- list(tc = "famille", valeurs = enfant, inconnu = lengths(index_e) > 0L, index = index_e, domaine = c(TRUE, FALSE))
+    return(garder(ok, st$nd > 0L || length(cand) > 0L, list(education = .connue3("education", education), s = s3, e = e3),
+                  function(x) x$education & x$s & x$e))
+  }
+  nd <- nrow(ctx$base$dossiers)
+  ev <- evenements_retenus()
+  gs <- v("dossiers", "id_garantie_souscrite")
+  fin <- ev$retenu & ev$type %in% c("cloture_dossier", "second_deces")
+  clos <- !is.na(apparier_cles(v("dossiers", "id_dossier"), v("evenements", "id_dossier")[fin]))
+  double_effet <- code_de(gs) %in% "double_effet"
+  candidat <- double_effet & !clos
+  base <- function() {
+    if (!any(candidat)) return(rep(FALSE, nd))
+    assure <- .joindre(ctx, "sinistres", "id_sinistre", "id_assure", v("dossiers", "id_sinistre"))
+    assure[!candidat] <- NA
+    enfants <- which(a_charge())
+    p <- .paires(assure, vv("famille", "id_assure")[enfants])
+    if (nrow(p) == 0L) return(rep(FALSE, nd))
+    x <- eteint(enfants[p$j], gs[p$i])
+    nb <- tabulate(p$i, nd)
+    nb_eteints <- tabulate(p$i[x$eteint], nd)
+    candidat & nb > 0L & nb_eteints == nb
+  }
+  r <- base()
+  # « candidat » inconnu si une clôture ou un second décès non déterminé (effet au plus
+  # l'arrêté ou inconnu) existe
+  kn <- ev_nd(c("cloture_dossier", "second_deces"))
+  pc <- rep(FALSE, NROW(ctx$base$evenements))
+  pc[kn] <- TRUE
+  clos3 <- .existe_vue3(ctx, "evenements", v("dossiers", "id_dossier"), v("evenements", "id_dossier"), fin | pc)
+  # « chaque enfant à charge éteint » (au moins un) : par membre de l'assuré, catégories
+  # possibles (hors charge, éteint, non éteint) de sa version valable, de chaque candidate, ou
+  # de chaque version non déterminée d'un membre sans version visible (hors charge compris) ;
+  # vrai possible si chaque membre peut être hors charge ou éteint et l'un éteint ; faux
+  # possible si l'un peut être non éteint, ou tous hors charge
+  enjeu_f <- fam_nd()
+  index_e <- vector("list", nd)
+  e_val <- r
+  if (any(enjeu_f)) {
+    assure <- .joindre(ctx, "sinistres", "id_sinistre", "id_assure", v("dossiers", "id_sinistre"))
+    assure[!(double_effet & !(clos3$valeurs))] <- NA
+    lignes_f <- which(ctx$retenu$famille | enjeu_f)
+    p <- .paires(assure, v("famille", "id_assure")[lignes_f])
+    if (nrow(p) > 0L) {
+      j <- lignes_f[p$j]
+      charge <- a_charge(v)[j]
+      cat_f <- ifelse(!charge, "hors", "non_eteint")
+      if (any(charge)) cat_f[charge][eteint(j[charge], gs[p$i][charge], v)$eteint] <- "eteint"
+      sans_visible <- enjeu_f[j] & !vis_f$candidate[j]
+      membre <- paste(p$i, vis_f$membre[j], sep = "\r")
+      possibles <- split(c(cat_f, rep("hors", sum(sans_visible))), c(membre, membre[sans_visible]))
+      de_i <- as.integer(sub("\r.*$", "", names(possibles)))
+      peut <- function(cat) vapply(possibles, function(z) cat %in% z, NA)
+      peut_ok <- peut("hors") | peut("eteint")
+      vrai <- tapply(peut_ok, de_i, all) & tapply(peut("eteint"), de_i, any)
+      faux <- tapply(peut("non_eteint"), de_i, any) | tapply(peut("hors"), de_i, all)
+      i_vrai <- as.integer(names(vrai))
+      e_val[i_vrai] <- vrai & !faux
+      # incertitude : un membre a plusieurs catégories possibles, ce que seule une version non
+      # déterminée en jeu permet (candidate, ou version d'un membre sans version visible)
+      incertain <- i_vrai[vrai & faux]
+      nd_j <- enjeu_f[j] & !(vis_f$statut$famille[j] %in% TRUE) & p$i %in% incertain
+      index_e[incertain] <- lapply(split(j[nd_j], factor(p$i[nd_j], levels = incertain)), function(z) sort(unique(z)))
+    }
+  }
+  e3 <- list(tc = "famille", valeurs = e_val, inconnu = lengths(index_e) > 0L, index = index_e, domaine = c(TRUE, FALSE))
+  garder(r, length(kn) > 0L || any(enjeu_f), list(de = .connue3("de", double_effet), clos = clos3, e = e3),
+         function(x) x$de & !x$clos & x$e)
+}
+
+# Ordre du conditionnement des arbres de D07 (c) (E-14 (c), E-15 (h), jugement d'expert ; constant,
+# indépendant de l'ordre des lignes) : dates, présences, types, lien, situation, choix de la version
+# d'un membre, codes et prolongation de la garantie, `parametres.valeur` en dernier (les
+# représentants d'une limite inconnue dépendent des naissances fixées).
+.ORDRE_D07C <- c("famille.date_naissance", "famille.date_deces", "evenements.date_effet", "evenements", "evenements.type_evenement",
+                 "famille.lien", "famille.situation", "choix", "garanties_souscrites.code_garantie",
+                 "garanties_souscrites.prolongation_handicap", "parametres.valeur")
+
+# Lectures communes de D07 (c) à trois valeurs (.verdict_d07c(), .non_defini_d07c() ; #105, lot V,
+# G3c ; erratum E-15 (b), (d), (e)) : `u(tc)` (cellules inconnues d'une colonne), `val(tc)` (valeurs de
+# famille et de evenements : dans la vue pour une ligne retenue, D02a sous H compris, comme la lecture
+# brute ; brutes sinon ; dates en nombre), `cel(tc, l)` (cellule de domaine statique : dates
+# d'événement et de décès autour de l'arrêté, colonnes énumérées par leurs valeurs utiles),
+# `pres(t, l)` (présence d'une ligne de visibilité non déterminée), `k(nom, g)` (lignes retenues de
+# parametres du paramètre `nom` de la garantie souscrite de clé `g`, comme .parametre_garantie()),
+# `pval` et `pu` (valeurs et inconnues de parametres.valeur), `statuts(nom, cle)` (statut d'un
+# paramètre sous E-15 (e), par clé), `par_inconnu(cle)` (une valeur de limite inconnue, par clé) et
+# `enfant(j, w, g, eteint)` (feuille de .arbre3() « la version `j` de famille est à
+# charge et éteinte » (`eteint` vrai) ou « à charge et non éteinte » sous la garantie souscrite de
+# ligne `w` et de clé `g` ; .limite_enfant3(), paramètres à trois valeurs par .valeur_parametre3()).
+.lectures_d07c3 <- function(ctx, la) {
+  gs <- "garanties_souscrites"
+  a <- as.numeric(ctx$arrete)
+  memo <- new.env(hash = TRUE)
+  u <- function(tc) {
+    x <- memo[[paste0("u:", tc)]]
+    if (is.null(x)) {
+      m <- strsplit(tc, ".", fixed = TRUE)[[1L]]
+      x <- .inconnu(ctx, m[1L], m[2L])
+      assign(paste0("u:", tc), x, envir = memo)
+    }
+    x
+  }
+  val <- function(tc) {
+    x <- memo[[paste0("v:", tc)]]
+    if (is.null(x)) {
+      m <- strsplit(tc, ".", fixed = TRUE)[[1L]]
+      x <- .valeurs(ctx, m[1L], m[2L])
+      ret <- ctx$retenu[[m[1L]]]
+      if (m[1L] %in% c("famille", "evenements") && any(ret)) x[ret] <- .valeurs_vue(ctx, m[1L], m[2L])[ret]
+      if (inherits(x, "Date")) x <- as.numeric(x)
+      assign(paste0("v:", tc), x, envir = memo)
+    }
+    x
+  }
+  utiles <- list("evenements.type_evenement" = c("cloture_dossier", "second_deces"), "famille.lien" = "enfant",
+                 "famille.situation" = c("scolarise", "apprenti", "handicape"),
+                 "garanties_souscrites.code_garantie" = c("rente_education", "double_effet"),
+                 "garanties_souscrites.prolongation_handicap" = c(TRUE, FALSE))
+  reps <- function(tc) {
+    m <- strsplit(tc, ".", fixed = TRUE)[[1L]]
+    if (tc %in% c("evenements.date_effet", "famille.date_deces")) {
+      return(.reps_date3(.plage_date3(ctx, m[1L], m[2L]), !.obligatoire3(ctx, m[1L], m[2L]), a))
+    }
+    .reps_utiles3(ctx, tc, utiles[[tc]])
+  }
+  g <- list(a = a, u = u, val = val)
+  g$cel <- function(tc, l) {
+    if (is.na(l)) return(.cel3(NA_character_, NA))
+    m <- strsplit(tc, ".", fixed = TRUE)[[1L]]
+    x <- if (m[1L] %in% c("famille", "evenements")) val(tc)[l] else .valeurs(ctx, m[1L], m[2L])[l]
+    .cel3(if (u(tc)[l]) paste0(tc, "\r", l) else NA_character_, x, if (u(tc)[l]) reps(tc))
+  }
+  g$nd <- function(t) .nd_vue(ctx, t) & !ctx$retenu[[t]]
+  g$pres <- function(t, l) .cel3(if (g$nd(t)[l]) paste0(t, "\r", l) else NA_character_, TRUE, c(TRUE, FALSE))
+  # lignes retenues de parametres par paramètre et clé de garantie souscrite (comme .parametre_garantie())
+  gp <- .valeurs(ctx, "parametres", "id_garantie_souscrite")
+  nom_p <- .valeurs_vue(ctx, "parametres", "parametre")
+  par_k <- list()
+  g$k <- function(nom, cle) {
+    if (is.null(par_k[[nom]])) {
+      k <- which(nom_p %in% nom & cle_renseignee(gp))
+      par_k[[nom]] <<- if (length(k)) split(k, as.character(gp[k])) else list()
+    }
+    cle <- .cle_manquante(as.character(cle))
+    if (is.na(cle)) return(integer(0))
+    z <- par_k[[nom]][[cle]]
+    if (is.null(z)) integer(0) else z
+  }
+  g$pval <- as.numeric(.valeurs(ctx, "parametres", "valeur"))
+  g$pu <- u("parametres.valeur")
+  # par clé de garantie souscrite `cle` (vecteur) : statut du paramètre `nom` (K, lignes retenues ; P
+  # vide jusqu'à #125) sous E-15 (e) : absent (K vide), ambigu (deux valeurs connues distinctes ou
+  # plus), valeur (toutes connues et égales), indetermine ; `par_inconnu` : une valeur de K inconnue
+  # pour l'un des paramètres de limite
+  g$statuts <- function(nom, cle) {
+    k <- which(nom_p %in% nom & cle_renseignee(gp))
+    if (length(k) == 0L) return(rep("absent", length(cle)))
+    cles <- as.character(gp[k])
+    conn <- ifelse(g$pu[k], NA_real_, g$pval[k])
+    n_conn <- tapply(conn, cles, function(x) length(unique(x[!is.na(x)])))
+    inc <- tapply(g$pu[k], cles, any)
+    i <- apparier_cles(cle, names(n_conn))
+    ifelse(is.na(i), "absent", ifelse(n_conn[i] >= 2L, "ambigu", ifelse(inc[i], "indetermine", "valeur")))
+  }
+  g$par_inconnu <- function(cle) {
+    k <- which(nom_p %in% c("age_limite", "age_limite_etudes") & cle_renseignee(gp))
+    if (length(k) == 0L) return(rep(FALSE, length(cle)))
+    inc <- tapply(g$pu[k], as.character(gp[k]), any)
+    i <- apparier_cles(cle, names(inc))
+    !is.na(i) & inc[i] %in% TRUE
+  }
+  dep <- if (la$regle == "depassement") 1 else 0
+  plage_n <- .plage_date3(ctx, "famille", "date_naissance")
+  abs_n <- !.obligatoire3(ctx, "famille", "date_naissance")
+  ph_v <- .valeurs(ctx, gs, "prolongation_handicap")
+  g$enfant <- function(j, w, cle, eteint) {
+    force(j); force(w); force(cle); force(eteint)
+    cel <- function(tc, l) {
+      if (is.na(l) || !u(tc)[l]) NA_character_ else paste0(tc, "\r", l)
+    }
+    ids <- c(li = cel("famille.lien", j), na = cel("famille.date_naissance", j), si = cel("famille.situation", j),
+             dd = cel("famille.date_deces", j), ph = cel("garanties_souscrites.prolongation_handicap", w))
+    x <- list(li = val("famille.lien")[j], na = val("famille.date_naissance")[j], si = val("famille.situation")[j],
+              dd = val("famille.date_deces")[j], ph = if (is.na(w)) NA else ph_v[w])
+    k1 <- g$k("age_limite", cle)
+    k2 <- g$k("age_limite_etudes", cle)
+    kp <- c(k1, k2)
+    ids_p <- ifelse(g$pu[kp], paste0("parametres.valeur\r", kp), NA_character_)
+    dom <- function(sigs) {
+      out <- list()
+      # limites connues et limites inconnues fixées (sinon : relatives aux naissances fixées)
+      lims <- unique(c(g$pval[kp][!g$pu[kp]], unlist(lapply(ids_p[!is.na(ids_p)], function(z) .fixees3(sigs, z, numeric(0))),
+                                                        use.names = FALSE))) + dep
+      lims <- lims[!is.na(lims)]
+      nv <- x$na
+      if (!is.na(ids[["na"]])) {
+        pts <- unlist(lapply(lims, function(L) .points_age3(la$age, L, L, plage_n, a)), use.names = FALSE)
+        out[[ids[["na"]]]] <- .reps_date3(plage_n, abs_n, pts)
+        nv <- .fixees3(sigs, ids[["na"]], out[[ids[["na"]]]])
+      }
+      if (!is.na(ids[["dd"]])) out[[ids[["dd"]]]] <- reps("famille.date_deces")
+      if (!is.na(ids[["li"]])) out[[ids[["li"]]]] <- reps("famille.lien")
+      if (!is.na(ids[["si"]])) out[[ids[["si"]]]] <- reps("famille.situation")
+      if (!is.na(ids[["ph"]])) out[[ids[["ph"]]]] <- reps("garanties_souscrites.prolongation_handicap")
+      if (any(!is.na(ids_p))) {
+        # limite inconnue : âges atteints aux naissances possibles (franchissement : âge et âge + 1),
+        # valeurs connues, et une valeur distincte de toutes
+        ages <- calculer_age(structure(as.numeric(nv), class = "Date"), rep(ctx$arrete, length(nv)), la$age)
+        ages <- ages[!is.na(ages)]
+        r <- pmax(0, unique(c(g$pval[kp][!g$pu[kp]], ages - dep, ages + 1 - dep)))
+        r <- unique(c(r, max(c(r, 0)) + 1))
+        for (z in ids_p[!is.na(ids_p)]) out[[z]] <- r
+      }
+      out
+    }
+    f <- function(a_, n) {
+      li <- .val3(a_, ids[["li"]], x$li, n)
+      b <- .val3(a_, ids[["na"]], x$na, n)
+      st <- .val3(a_, ids[["si"]], x$si, n)
+      d1 <- .val3(a_, ids[["dd"]], x$dd, n)
+      phv <- .val3(a_, ids[["ph"]], x$ph, n)
+      charge <- li %in% "enfant" & (is.na(d1) | d1 > a)
+      l1 <- .valeur_parametre3(a_, k1, g$pval, g$pu, n)
+      l2 <- .valeur_parametre3(a_, k2, g$pval, g$pu, n)
+      e <- .limite_enfant3(la, st, structure(as.numeric(b), class = "Date"), rep(ctx$arrete, n), phv,
+                           list(valeur = l1$val, ambigu = l1$ambigu), list(valeur = l2$val, ambigu = l2$ambigu))
+      charge & (if (eteint) e$eteint else !e$eteint)
+    }
+    .feuille3(c(ids, ids_p), dom, f)
+  }
+  g
+}
+
+# Versions de famille possiblement enfants d'un dossier de D07 (c) (vecteur logique sur les lignes de
+# famille) : retenues ou en jeu (.famille_en_jeu()), de lien enfant ou inconnu (une version de lien
+# connu autre est hors charge, sans effet sur le verdict).
+.enfants_possibles_d07c <- function(ctx, g) {
+  if (is.null(ctx$retenu$famille)) return(logical(0))
+  (ctx$retenu$famille | .famille_en_jeu(ctx)) & (g$u("famille.lien") | g$val("famille.lien") %in% "enfant")
+}
+
+# Verdict à trois valeurs de D07 (c) sur `t` (rentes ou dossiers ; #105, lot V, G3c ; erratum E-15
+# (a) à (e), (h)) : lecture brute (.verdict_d07c_brut()) sur les lignes retenues qui ne lisent aucune
+# cellule inconnue ni ligne de visibilité non déterminée (code et prolongation_handicap de la
+# garantie souscrite, paramètres age_limite et age_limite_etudes ; rente : aucun facultatif du
+# statut de service, une seule version valable possible du membre, de colonnes connues ; dossier :
+# aucun événement de clôture ou de second décès possible de la vue non déterminé ou à inconnue,
+# membres de l'assuré retenus, de colonnes connues) ; un arbre par autre ligne retenue, évalué par
+# .arbre3() : pour une rente, « rente_education ET non éteinte (.feuille_service3(), cellules
+# privées, E-15 (c)) ET OU, sur les versions possibles du membre, de choix = version ET enfant à
+# charge éteint » ; pour un dossier, « double_effet ET NON clos (OU des clôtures et seconds décès
+# possibles : présent ET de type cloture_dossier ou second_deces ET d'effet au plus l'arrêté) ET,
+# pour chaque membre de l'assuré, NON (OU, sur ses versions, de choix = version ET à charge non
+# éteint) ET OU, sur les membres et leurs versions, de choix = version ET à charge éteint ». Une
+# version d'un autre assuré est hors charge. Inconnues (E-15 (b)) : code et prolongation_handicap de
+# la garantie, lien, naissance, situation et décès des versions, valeurs des paramètres (E-15 (e) :
+# une ligne retenue de valeur refusée compte dans K, sa valeur énumérée), type et date d'effet des
+# événements, présence des lignes non déterminées, choix de la version valable d'un membre (cellule
+# de domaine ses versions possibles, .versions_membre() ; E-15 (d), exacte : sa pertinence inscrit
+# toutes les versions non déterminées du membre). Cellules partagées conditionnées sous le budget
+# d'E-14 (.ORDRE_D07C). La limite non déterminable qui peut décider est notée par
+# .non_defini_d07c() (lecture existentielle, une seule évaluation pour les deux chemins). Rend le
+# vecteur logique (NA : inconnu) et ses attributs `index_pertinent` (et `index`, le même) et `lues`
+# (statiques). `forcer` (contrôle des tests) : chemin rapide désactivé ; hors des lignes complexes,
+# une lecture brute indéterminée est une erreur interne.
+.verdict_d07c <- function(ctx, t, la, lues, forcer = FALSE) {
+  v <- function(t1, c1) .valeurs(ctx, t1, c1)
+  g <- .lectures_d07c3(ctx, la)
+  a <- g$a
+  n <- NROW(ctx$base[[t]])
+  rentes <- t == "rentes"
+  brut <- as.vector(.verdict_d07c_brut(ctx, t, la))
+  r <- brut %in% TRUE
+  cle <- if (rentes) .joindre(ctx, "dossiers", "id_dossier", "id_garantie_souscrite", v("rentes", "id_dossier")) else
+    v("dossiers", "id_garantie_souscrite")
+  ig <- .index_jointure(ctx, "garanties_souscrites", "id_garantie_souscrite", cle)
+  ig1 <- ifelse(is.na(ig), 1L, ig)
+  w_u <- function(tc) !is.na(ig) & g$u(tc)[ig1]
+  par_u <- g$par_inconnu(cle)
+  fam_u <- g$u("famille.lien") | g$u("famille.date_naissance") | g$u("famille.situation") | g$u("famille.date_deces")
+  complexe <- w_u("garanties_souscrites.code_garantie") | w_u("garanties_souscrites.prolongation_handicap") | par_u
+  if (rentes) {
+    sk <- .service_k3(ctx, "rentes")
+    p <- .versions_membre(ctx, v("rentes", "id_membre"))
+    pv <- split(seq_len(nrow(p)), factor(p$i, levels = seq_len(n)))
+    jf <- ifelse(is.na(p$j), 1L, p$j)
+    complexe <- complexe | sk$complexe | lengths(pv) > 1L | tabulate(p$i[!is.na(p$nd) | (!is.na(p$j) & fam_u[jf])], n) > 0L
+  } else {
+    dos <- .cle_manquante(as.character(v("dossiers", "id_dossier")))
+    # clôtures et seconds décès possibles du dossier, dans la vue
+    tu <- g$u("evenements.type_evenement")
+    eu <- g$u("evenements.date_effet")
+    nde <- g$nd("evenements")
+    type_e <- g$val("evenements.type_evenement")
+    eff_e <- g$val("evenements.date_effet")
+    cand_e <- (ctx$retenu$evenements | nde) & (tu | type_e %in% c("cloture_dossier", "second_deces")) &
+      (eu | ifelse(nde, !((eff_e > a) %in% TRUE), (eff_e <= a) %in% TRUE))
+    pe <- .paires(dos, ifelse(cand_e, as.character(v("evenements", "id_dossier")), NA))
+    pe_l <- split(pe$j, factor(pe$i, levels = seq_len(n)))
+    # membres de l'assuré du sinistre : versions retenues ou en jeu de même assuré, possiblement
+    # enfants (une version de lien connu autre est hors charge) ; versions possibles de chacun
+    assure <- .cle_manquante(as.character(.joindre(ctx, "sinistres", "id_sinistre", "id_assure", v("dossiers", "id_sinistre"))))
+    fa <- .cle_manquante(as.character(v("famille", "id_assure")))
+    fm <- .cle_manquante(as.character(v("famille", "id_membre")))
+    pf <- .paires(ifelse(ctx$retenu$dossiers, assure, NA), ifelse(.enfants_possibles_d07c(ctx, g), fa, NA))
+    membres <- unique(fm[pf$j])
+    membres <- membres[!is.na(membres)]
+    pm <- .versions_membre(ctx, membres)
+    rows_m <- split(seq_len(nrow(pm)), factor(pm$i, levels = seq_along(membres)))
+    membres_l <- split(apparier_cles(fm[pf$j], membres), factor(pf$i, levels = seq_len(n)))
+    complexe <- complexe | tabulate(pe$i[nde[pe$j] | tu[pe$j] | eu[pe$j]], n) > 0L |
+      tabulate(pf$i[!ctx$retenu$famille[pf$j] | fam_u[pf$j]], n) > 0L
+  }
+  complexe <- ctx$retenu[[t]] & (forcer | complexe)
+  # garde du chemin rapide : hors des lignes complexes, la lecture brute est déterminée
+  if (any(ctx$retenu[[t]] & !complexe & is.na(brut))) {
+    stop("erreur interne de provie : D07c : lecture brute ind\u00e9termin\u00e9e hors du chemin \u00e0 trois valeurs", call. = FALSE)
+  }
+  r[complexe] <- FALSE
+  ip <- list()
+  L <- which(complexe)
+  code_est <- function(l, x) .feuille_valeurs3(list(g$cel("garanties_souscrites.code_garantie", ig[l])), function(z, n) (z[[1L]] == x) %in% TRUE)
+  if (length(L) > 0L && rentes) {
+    choix <- function(id) {
+      q <- pv[[as.integer(sub("^choix\r", "", id))]]
+      y <- p$nd[q]
+      y[!is.na(y)]
+    }
+    for (l in L) {
+      al <- new.env(parent = emptyenv())
+      rows <- pv[[l]]
+      id_choix <- paste0("choix\r", l)
+      dom_choix <- ifelse(is.na(p$j[rows]), "-", as.character(p$j[rows]))
+      termes <- list()
+      for (z in seq_along(rows)) {
+        j <- p$j[rows[z]]
+        if (is.na(j)) next
+        e <- g$enfant(j, ig[l], cle[l], TRUE)
+        if (length(rows) > 1L) e <- .et_arbre3(list(.feuille_choix3(id_choix, dom_choix, dom_choix[z]), e))
+        termes <- c(termes, list(e))
+      }
+      x <- .arbre3(.et_arbre3(list(code_est(l, "rente_education"), .feuille_service3(ctx, sk, l, .NON_ETEINT, al), .ou_arbre3(termes))),
+                   .ORDRE_D07C)
+      r[l] <- x$v
+      ip <- .issue3(x, l, n, ip, al, choix)
+    }
+  } else if (length(L) > 0L) {
+    choix <- function(id) {
+      y <- pm$nd[rows_m[[as.integer(sub("^choix\r", "", id))]]]
+      y[!is.na(y)]
+    }
+    for (l in L) {
+      al <- new.env(parent = emptyenv())
+      # clôture : un événement retenu de valeurs connues la rend certaine
+      clos <- list()
+      for (e in pe_l[[l]]) {
+        if (!nde[e] && !tu[e] && !eu[e]) {
+          clos <- list(.constante3(TRUE))
+          break
+        }
+        clos <- c(clos, list(.feuille_valeurs3(list(g$pres("evenements", e), g$cel("evenements.type_evenement", e),
+                                                     g$cel("evenements.date_effet", e)),
+                                                function(z, n) z[[1L]] & z[[2L]] %in% c("cloture_dossier", "second_deces") &
+                                                  (z[[3L]] <= a) %in% TRUE)))
+      }
+      eteints <- list()
+      non_eteints <- list()
+      for (mi in unique(membres_l[[l]])) {
+        rows <- rows_m[[mi]]
+        id_choix <- paste0("choix\r", mi)
+        dom_choix <- ifelse(is.na(pm$j[rows]), "-", as.character(pm$j[rows]))
+        ae <- list()
+        an <- list()
+        for (z in seq_along(rows)) {
+          j <- pm$j[rows[z]]
+          # version absente, ou d'un autre assuré : hors charge
+          if (is.na(j) || is.na(apparier_cles(fa[j], assure[l]))) next
+          fe <- g$enfant(j, ig[l], cle[l], TRUE)
+          fn <- g$enfant(j, ig[l], cle[l], FALSE)
+          if (length(rows) > 1L) {
+            fe <- .et_arbre3(list(.feuille_choix3(id_choix, dom_choix, dom_choix[z]), fe))
+            fn <- .et_arbre3(list(.feuille_choix3(id_choix, dom_choix, dom_choix[z]), fn))
+          }
+          ae <- c(ae, list(fe))
+          an <- c(an, list(fn))
+        }
+        eteints <- c(eteints, list(.ou_arbre3(ae)))
+        non_eteints <- c(non_eteints, list(.non_arbre3(.ou_arbre3(an))))
+      }
+      x <- .arbre3(.et_arbre3(list(code_est(l, "double_effet"), .non_arbre3(.ou_arbre3(clos)), .et_arbre3(non_eteints),
+                                   .ou_arbre3(eteints))), .ORDRE_D07C)
+      r[l] <- x$v
+      ip <- .issue3(x, l, n, ip, al, choix)
+    }
+  }
+  .non_defini_d07c(ctx, t, la, g, cle, ig)
+  attr(r, "index_pertinent") <- ip
+  attr(r, "index") <- ip
+  attr(r, "lues") <- lues
+  r
+}
+
+# Limite non déterminable de D07 (c) qui peut décider (§ 5.3 ; erratum E-6 étendu, E-15 (e) ;
+# D-G3-4) : la table `t` va dans controles_non_executes (colonne NA, .CAUSE_PARAMETRE_NON_DEFINI) s'il
+# existe une affectation des inconnues sous laquelle la limite d'un enfant est non définie (statut
+# absent ou ambigu de age_limite, ou de age_limite_etudes pour un enfant scolarise ou apprenti :
+# g$statuts(), valeur refusée comptée inconnue, jamais une valeur de plus ; une limite indéterminée
+# n'est pas non définie) et décide : rente retenue possiblement rente_education et non éteinte
+# (.service_possible3()), version possible du membre possiblement à charge (lien enfant, non décédé
+# à l'arrêté), d'âge possiblement défini, hors handicap certain sous prolongation_handicap ; dossier
+# retenu ou de visibilité non déterminée, possiblement double_effet, non clos de façon certaine,
+# sans enfant de l'assuré non éteint de façon déterminée (version déterminée, colonnes et paramètres
+# connus, à charge, non éteint et de limite définie : M187). Lecture existentielle, conditions lues
+# séparément : approximation par excès admise, jamais par défaut (E-12 (d)) ; exacte sans inconnue.
+.non_defini_d07c <- function(ctx, t, la, g, cle, ig) {
+  v <- function(t1, c1) .valeurs(ctx, t1, c1)
+  a <- g$a
+  rentes <- t == "rentes"
+  ig1 <- ifelse(is.na(ig), 1L, ig)
+  cu <- !is.na(ig) & g$u("garanties_souscrites.code_garantie")[ig1]
+  code <- v("garanties_souscrites", "code_garantie")[ig]
+  phu <- !is.na(ig) & g$u("garanties_souscrites.prolongation_handicap")[ig1]
+  ph <- v("garanties_souscrites", "prolongation_handicap")[ig]
+  pop <- if (rentes) ctx$retenu[[t]] & (cu | code %in% "rente_education") else
+    (ctx$retenu[[t]] | .nd_vue(ctx, t)) & (cu | code %in% "double_effet")
+  if (!any(pop)) return(invisible(FALSE))
+  lien <- g$val("famille.lien")
+  nais <- g$val("famille.date_naissance")
+  sit <- g$val("famille.situation")
+  dd <- g$val("famille.date_deces")
+  age <- calculer_age(structure(nais, class = "Date"), rep(ctx$arrete, length(nais)), la$age)
+  uf <- lapply(c(lien = "lien", date_deces = "date_deces", date_naissance = "date_naissance", situation = "situation"),
+               function(c1) g$u(paste0("famille.", c1)))
+  s1 <- g$statuts("age_limite", cle)
+  s2 <- g$statuts("age_limite_etudes", cle)
+  par_u <- g$par_inconnu(cle)
+  # limite possiblement non définie pour la version `j` sous la garantie de la ligne `l` : situations
+  # et prolongations possibles hors handicap certain, statut absent ou ambigu
+  nd_possible <- function(j, l) {
+    if (!(uf$lien[j] || lien[j] %in% "enfant")) return(FALSE)
+    if (!(uf$date_deces[j] || is.na(dd[j]) || dd[j] > a)) return(FALSE)
+    if (!(uf$date_naissance[j] || !is.na(age[j]))) return(FALSE)
+    sts <- if (uf$situation[j]) c("scolarise", "autre", "handicape") else sit[j]
+    for (st in sts) {
+      if (st %in% "handicape" && !phu[l] && ph[l] %in% TRUE) next
+      if (st %in% c("scolarise", "apprenti")) {
+        if (s2[l] == "ambigu" || (s2[l] == "absent" && s1[l] %in% c("absent", "ambigu"))) return(TRUE)
+      } else if (s1[l] %in% c("absent", "ambigu")) return(TRUE)
+    }
+    FALSE
+  }
+  # enfant non éteint de façon déterminée (version déterminée, colonnes connues) : bloque le dossier
+  bloque <- function(j, l) {
+    if (uf$lien[j] || uf$date_deces[j] || uf$date_naissance[j] || uf$situation[j] || phu[l] || par_u[l]) return(FALSE)
+    if (!(lien[j] %in% "enfant" && (is.na(dd[j]) || dd[j] > a))) return(FALSE)
+    e <- .enfant_eteint(ctx, la, j, cle[l], ctx$arrete, function(t1, c1) {
+      x <- g$val(paste0(t1, ".", c1))
+      if (c1 == "date_naissance") structure(x, class = "Date") else x
+    })
+    !e$eteint && !e$non_defini
+  }
+  emis <- FALSE
+  if (rentes) {
+    possible <- .service_possible3(ctx, .service_k3(ctx, "rentes"), .NON_ETEINT)
+    p <- .versions_membre(ctx, v("rentes", "id_membre"))
+    for (q in which(pop[p$i] & possible[p$i] & !is.na(p$j))) {
+      if (nd_possible(p$j[q], p$i[q])) { emis <- TRUE; break }
+    }
+  } else {
+    tu <- g$u("evenements.type_evenement")
+    eu <- g$u("evenements.date_effet")
+    certain <- ctx$retenu$evenements & !tu & !eu & g$val("evenements.type_evenement") %in% c("cloture_dossier", "second_deces") &
+      (g$val("evenements.date_effet") <= a) %in% TRUE
+    clos <- !is.na(apparier_cles(v("dossiers", "id_dossier"), v("evenements", "id_dossier")[certain]))
+    assure <- .cle_manquante(as.character(.joindre(ctx, "sinistres", "id_sinistre", "id_assure", v("dossiers", "id_sinistre"))))
+    fa <- .cle_manquante(as.character(v("famille", "id_assure")))
+    fm <- .cle_manquante(as.character(v("famille", "id_membre")))
+    pf <- .paires(ifelse(pop & !clos, assure, NA), ifelse(.enfants_possibles_d07c(ctx, g), fa, NA))
+    membres <- unique(fm[pf$j])
+    membres <- membres[!is.na(membres)]
+    pm <- .versions_membre(ctx, membres)
+    rows_m <- split(seq_len(nrow(pm)), factor(pm$i, levels = seq_along(membres)))
+    n_ver <- lengths(rows_m)
+    grp <- split(apparier_cles(fm[pf$j], membres), pf$i)
+    # par dossier (parcours sans indexation des listes complètes, coût linéaire)
+    emis <- any(unlist(Map(function(l, mi) {
+      rows <- unlist(rows_m[unique(mi)], use.names = FALSE)
+      rows <- rows[!is.na(pm$j[rows])]
+      rows <- rows[!is.na(apparier_cles(fa[pm$j[rows]], assure[l]))]
+      if (!any(vapply(rows, function(q) nd_possible(pm$j[q], l), NA))) return(FALSE)
+      # enfant de version déterminée (seule version possible, retenue) non éteint de façon déterminée
+      determinee <- n_ver[pm$i[rows]] == 1L & is.na(pm$nd[rows])
+      !any(vapply(rows[determinee], function(q) bloque(pm$j[q], l), NA))
+    }, as.integer(names(grp)), grp), use.names = FALSE))
+  }
+  if (emis) .ajouter_non_execute(ctx, "D07c", t, NA_character_, .CAUSE_PARAMETRE_NON_DEFINI)
+  invisible(emis)
+}
+
 # D08, rechute enregistrée comme nouveau sinistre (dictionnaire, § 9 ; spécification `donnees`
 # v1.6, § 8.3), sur la vue, constat sur sinistres (le nouveau sinistre S2), colonne NA :
 # sinistre arret_travail S2 et sortie de motif reprise_travail d'un autre sinistre
@@ -7993,67 +8437,276 @@ table_refusee_vue <- function(vue, table) {
 # jours, « de moins de », strict). Délai : paramètre delai_rechute_jours de la garantie
 # incapacite des dossiers de S1 dans la vue (version du dossier ; parametres dans la vue,
 # comme D07 (c)) ; absent, ou à plusieurs valeurs, pour une paire candidate (écart positif ou
-# nul) d'un S2 non détecté par une autre paire : la valeur peut décider, la table va dans
-# controles_non_executes (.CAUSE_PARAMETRE_NON_DEFINI). Traitement H ou S, détection
-# présomptive. Verdict à trois valeurs : sortie non déterminée (effet au plus l'arrêté ou
-# inconnu) qui peut former une paire détectée (index : ces sorties).
+# nul) d'un S2 non détecté : la valeur peut décider, la table va dans controles_non_executes
+# (.CAUSE_PARAMETRE_NON_DEFINI ; lecture existentielle, .verdict_d08()). Traitement H ou S,
+# détection présomptive. Règle V en mode Kleene (#105, lot V, G3c, M808 ; erratum E-15 (a), (b),
+# (e), (h)) : chemin rapide en lecture brute (.verdict_d08_brut()), arbre de .arbre3() sur les
+# autres sinistres (.verdict_d08()).
 .regle_v_rechutes <- function(ctx) {
+  lit <- c("sinistres.id_sinistre", "sinistres.id_assure", "sinistres.nature_sinistre", "sinistres.date_survenance",
+           paste0("evenements.", c("id_evenement", "id_sinistre", "type_evenement", "motif", "date_effet")),
+           "dossiers.id_sinistre", "dossiers.id_garantie_souscrite", "garanties_souscrites.id_garantie_souscrite",
+           "garanties_souscrites.code_garantie", "parametres.id_garantie_souscrite", "parametres.parametre",
+           "parametres.valeur")
+  .regle_vue(ctx, "D08", "sinistres", NA_character_, lit, "H;S", "presomptive", function() .verdict_d08(ctx, lit),
+             vue = c(ctx$lit_vue$evenements, ctx$lit_vue$dossiers, ctx$lit_vue$parametres), mode = "kleene")
+  invisible(NULL)
+}
+
+# Lecture brute de D08 (règle du mode bloquee, inchangée ; chemin rapide de la règle V en mode
+# Kleene, exact sur les sinistres qui ne lisent aucune cellule inconnue ni ligne de visibilité non
+# déterminée ; #105, lot V, G3c) : délai par sinistre S1 sur les dossiers retenus de garantie
+# incapacite ; verdict à trois valeurs : sortie non déterminée (effet au plus l'arrêté ou
+# inconnu) qui peut former une paire détectée (index : ces sorties). Le délai non déterminable
+# n'est pas noté ici (.verdict_d08()).
+.verdict_d08_brut <- function(ctx) {
   v <- function(t, c1) .valeurs(ctx, t, c1)
   vv <- function(t, c1) .valeurs_vue(ctx, t, c1)
   a <- as.numeric(ctx$arrete)
-  .regle_vue(ctx, "D08", "sinistres", NA_character_,
-             c("sinistres.id_sinistre", "sinistres.id_assure", "sinistres.nature_sinistre", "sinistres.date_survenance",
-               paste0("evenements.", c("id_evenement", "id_sinistre", "type_evenement", "motif", "date_effet")),
-               "dossiers.id_sinistre", "dossiers.id_garantie_souscrite", "garanties_souscrites.id_garantie_souscrite",
-               "garanties_souscrites.code_garantie", "parametres.id_garantie_souscrite", "parametres.parametre",
-               "parametres.valeur"),
-             "H;S", "presomptive", function() {
-    ns <- nrow(ctx$base$sinistres)
-    id_s <- as.character(v("sinistres", "id_sinistre"))
-    arret <- v("sinistres", "nature_sinistre") %in% "arret_travail"
-    assure <- as.character(v("sinistres", "id_assure"))
-    survenance <- as.numeric(v("sinistres", "date_survenance"))
-    # délai de chaque sinistre S1 : valeurs distinctes du paramètre sur les garanties incapacite
-    # de ses dossiers retenus
-    gs <- v("dossiers", "id_garantie_souscrite")
-    incap <- ctx$retenu$dossiers & .joindre(ctx, "garanties_souscrites", "id_garantie_souscrite", "code_garantie", gs) %in%
-      "incapacite"
-    q <- .paires(id_s, ifelse(incap, as.character(v("dossiers", "id_sinistre")), NA))
-    k <- which(vv("parametres", "parametre") %in% "delai_rechute_jours")
-    w <- .paires(as.character(gs)[q$j], as.character(v("parametres", "id_garantie_souscrite"))[k])
-    valeurs <- split(v("parametres", "valeur")[k][w$j], factor(q$i[w$i], levels = seq_len(ns)))
-    valeurs <- lapply(valeurs, unique)
-    delai <- vapply(valeurs, function(x) if (length(x) == 1L) x else NA_real_, 0, USE.NAMES = FALSE)
-    # sorties reprise_travail d'un sinistre arret_travail (S1), retenues ou non déterminées
-    type <- v("evenements", "type_evenement")
-    i1 <- apparier_cles(v("evenements", "id_sinistre"), id_s)
-    sortie <- type %in% "sortie" & v("evenements", "motif") %in% "reprise_travail" & !is.na(i1) &
-      arret[ifelse(is.na(i1), 1L, i1)]
-    effet <- .date_connue(ctx, "evenements", "date_effet")
-    # S2 : sinistre arret_travail retenu dans la vue (une ligne non déterminée n'a pas de verdict
-    # propre, ni de ligne parametre_non_defini, .regle_vue())
-    paires_de <- function(lignes) {
-      p <- .paires(ifelse(arret & ctx$retenu$sinistres, assure, NA), ifelse(lignes, assure[i1], NA))
-      p[id_s[p$i] != id_s[i1[p$j]], , drop = FALSE]
+  ns <- nrow(ctx$base$sinistres)
+  id_s <- as.character(v("sinistres", "id_sinistre"))
+  arret <- v("sinistres", "nature_sinistre") %in% "arret_travail"
+  assure <- as.character(v("sinistres", "id_assure"))
+  survenance <- as.numeric(v("sinistres", "date_survenance"))
+  # délai de chaque sinistre S1 : valeurs distinctes du paramètre sur les garanties incapacite
+  # de ses dossiers retenus
+  gs <- v("dossiers", "id_garantie_souscrite")
+  incap <- ctx$retenu$dossiers & .joindre(ctx, "garanties_souscrites", "id_garantie_souscrite", "code_garantie", gs) %in%
+    "incapacite"
+  q <- .paires(id_s, ifelse(incap, as.character(v("dossiers", "id_sinistre")), NA))
+  k <- which(vv("parametres", "parametre") %in% "delai_rechute_jours")
+  w <- .paires(as.character(gs)[q$j], as.character(v("parametres", "id_garantie_souscrite"))[k])
+  valeurs <- split(v("parametres", "valeur")[k][w$j], factor(q$i[w$i], levels = seq_len(ns)))
+  valeurs <- lapply(valeurs, unique)
+  delai <- vapply(valeurs, function(x) if (length(x) == 1L) x else NA_real_, 0, USE.NAMES = FALSE)
+  # sorties reprise_travail d'un sinistre arret_travail (S1), retenues ou non déterminées
+  type <- v("evenements", "type_evenement")
+  i1 <- apparier_cles(v("evenements", "id_sinistre"), id_s)
+  sortie <- type %in% "sortie" & v("evenements", "motif") %in% "reprise_travail" & !is.na(i1) &
+    arret[ifelse(is.na(i1), 1L, i1)]
+  effet <- .date_connue(ctx, "evenements", "date_effet")
+  # S2 : sinistre arret_travail retenu dans la vue (une ligne non déterminée n'a pas de verdict
+  # propre, ni de ligne parametre_non_defini, .regle_vue())
+  paires_de <- function(lignes) {
+    p <- .paires(ifelse(arret & ctx$retenu$sinistres, assure, NA), ifelse(lignes, assure[i1], NA))
+    p[id_s[p$i] != id_s[i1[p$j]], , drop = FALSE]
+  }
+  p <- paires_de(sortie & ctx$retenu$evenements)
+  ecart <- survenance[p$i] - as.numeric(effet)[p$j]
+  candidate <- ecart >= 0
+  dl <- delai[i1[p$j]]
+  r <- seq_len(ns) %in% p$i[candidate & !is.na(dl) & ecart < dl]
+  pn <- paires_de(sortie & .nd_vue(ctx, "evenements") & !((effet > a) %in% TRUE))
+  ecart_n <- survenance[pn$i] - as.numeric(effet)[pn$j]
+  dl_n <- delai[i1[pn$j]]
+  possible <- !r[pn$i] & (is.na(ecart_n) | (ecart_n >= 0 & (is.na(dl_n) | ecart_n < dl_n)))
+  if (!any(possible)) return(r)
+  r3 <- .k3(r, list(evenements = vector("list", ns)))
+  r3$v[unique(pn$i[possible])] <- NA
+  g <- split(pn$j[possible], pn$i[possible])
+  r3$index$evenements[as.integer(names(g))] <- unname(g)
+  .k3_resultat(r3)
+}
+
+# Ordre du conditionnement des arbres de D08 (E-14 (c), E-15 (h), jugement d'expert ; constant,
+# indépendant de l'ordre des lignes) : dates, présences, type et motif des événements, natures, codes
+# de garantie, `parametres.valeur` en dernier (les représentants d'un délai inconnu dépendent des
+# dates fixées).
+.ORDRE_D08 <- c("sinistres.date_survenance", "evenements.date_effet", "evenements", "evenements.type_evenement", "evenements.motif",
+                "sinistres.nature_sinistre", "garanties_souscrites.code_garantie", "parametres.valeur")
+
+# Verdict à trois valeurs de D08 (#105, lot V, G3c ; erratum E-15 (a), (b), (e), (h)) : lecture brute
+# (.verdict_d08_brut()) sur les sinistres retenus qui ne lisent aucune cellule inconnue ni ligne de
+# visibilité non déterminée (nature et survenance ; sorties possibles d'un autre sinistre de
+# l'assuré, dans la vue, non déterminées ou de type, motif ou date d'effet inconnus ; nature de S1,
+# codes de ses dossiers retenus, valeurs de K) ; un arbre par autre sinistre retenu S2, évalué par
+# .arbre3() : « S2 arret_travail ET OU, sur les sorties possibles e d'un autre sinistre S1 de
+# l'assuré, de : présente ET de type sortie ET de motif reprise_travail ET S1 arret_travail ET (non
+# déterminée : effet au plus l'arrêté) ET 0 <= survenance de S2 - effet de e < délai de S1 ». Délai
+# de S1 (E-6 étendu, E-15 (e)) : K, lignes retenues de delai_rechute_jours des garanties des
+# dossiers retenus de S1 de code incapacite (code inconnu : la ligne compte selon sa valeur), valeur
+# refusée énumérée ; valeur unique, NA sinon (.valeur_parametre3()). Représentants : survenance et
+# effet aux points de rupture de l'écart (0 et chaque délai connu ou fixé ; bornes de la plage et
+# arrêté pour une date libre), délai aux écarts possibles et à leur successeur, valeurs connues et
+# une valeur distincte de toutes. Cellules partagées conditionnées sous le budget d'E-14
+# (.ORDRE_D08). Délai non déterminable qui peut décider (lecture existentielle, conditions lues
+# séparément, E-15 (e) ; approximation par excès admise, jamais par défaut) : sinistre retenu
+# possiblement arret_travail, de verdict non vrai, et sortie possible d'écart possiblement positif
+# ou nul dont le délai de S1 est possiblement non défini (K possiblement vide, ou deux valeurs
+# connues distinctes possibles ; une valeur refusée n'est pas une valeur distincte) :
+# .CAUSE_PARAMETRE_NON_DEFINI, une seule évaluation pour les deux chemins. Attributs et `forcer` :
+# comme .verdict_d07c().
+.verdict_d08 <- function(ctx, lues, forcer = FALSE) {
+  v <- function(t, c1) .valeurs(ctx, t, c1)
+  gs <- "garanties_souscrites"
+  a <- as.numeric(ctx$arrete)
+  ns <- NROW(ctx$base$sinistres)
+  u <- function(t, c1) .inconnu(ctx, t, c1)
+  brut <- as.vector(.verdict_d08_brut(ctx))
+  r <- brut %in% TRUE
+  id_s <- as.character(v("sinistres", "id_sinistre"))
+  assure <- as.character(v("sinistres", "id_assure"))
+  nat <- v("sinistres", "nature_sinistre")
+  nat_u <- u("sinistres", "nature_sinistre")
+  surv <- as.numeric(v("sinistres", "date_survenance"))
+  surv_u <- u("sinistres", "date_survenance")
+  # sorties possibles de reprise_travail d'un sinistre possiblement arret_travail (S1), dans la vue
+  i1 <- apparier_cles(v("evenements", "id_sinistre"), id_s)
+  type <- v("evenements", "type_evenement")
+  tu <- u("evenements", "type_evenement")
+  motif <- v("evenements", "motif")
+  mu <- u("evenements", "motif")
+  eff <- as.numeric(v("evenements", "date_effet"))
+  eu <- u("evenements", "date_effet")
+  eff[eu] <- NA_real_
+  ret_e <- ctx$retenu$evenements
+  nde <- .nd_vue(ctx, "evenements") & !ret_e
+  i1x <- ifelse(is.na(i1), 1L, i1)
+  cand_e <- (ret_e | nde) & !is.na(i1) & (tu | type %in% "sortie") & (mu | motif %in% "reprise_travail") &
+    (nat_u[i1x] | nat[i1x] %in% "arret_travail") & (!nde | !((eff > a) %in% TRUE))
+  pe <- .paires(ifelse(ctx$retenu$sinistres, assure, NA), ifelse(cand_e, assure[i1x], NA))
+  pe <- pe[(id_s[pe$i] != id_s[i1[pe$j]]) %in% TRUE, , drop = FALSE]
+  # délai de S1 : dossiers retenus de S1 de code incapacite ou inconnu, lignes de K de chacun
+  gs_d <- v("dossiers", "id_garantie_souscrite")
+  igd <- .index_jointure(ctx, gs, "id_garantie_souscrite", gs_d)
+  igd1 <- ifelse(is.na(igd), 1L, igd)
+  code_d <- v(gs, "code_garantie")[igd]
+  cu_d <- !is.na(igd) & u(gs, "code_garantie")[igd1]
+  qd <- .paires(id_s, ifelse(ctx$retenu$dossiers & (cu_d | code_d %in% "incapacite"), as.character(v("dossiers", "id_sinistre")), NA))
+  dos_s <- split(qd$j, factor(qd$i, levels = seq_len(ns)))
+  kp <- which(.valeurs_vue(ctx, "parametres", "parametre") %in% "delai_rechute_jours")
+  gp <- as.character(v("parametres", "id_garantie_souscrite"))[kp]
+  pval <- as.numeric(v("parametres", "valeur"))
+  pu <- u("parametres", "valeur")
+  pk <- .paires(as.character(gs_d), gp)
+  k_dossier <- split(kp[pk$j], factor(pk$i, levels = seq_along(gs_d)))
+  k_de <- function(d) k_dossier[[d]]
+  # lignes de K par sinistre S1 (paires sinistre, ligne de parametres, par ses dossiers possibles) :
+  # S1 à inconnue (nature, code d'un dossier, valeur de K), K certain vide, deux valeurs connues
+  # distinctes possibles (dossiers de code inconnu compris)
+  qk <- .paires(as.character(gs_d)[qd$j], gp)
+  s_k <- qd$i[qk$i]
+  k_k <- kp[qk$j]
+  certain_k <- !cu_d[qd$j[qk$i]]
+  s1_inc <- nat_u | tabulate(qd$i[cu_d[qd$j]], ns) > 0L | tabulate(s_k[pu[k_k]], ns) > 0L
+  kmin_vide <- tabulate(s_k[certain_k], ns) == 0L
+  conn <- !pu[k_k]
+  deux_valeurs <- rep(FALSE, ns)
+  if (any(conn)) {
+    n_val <- tapply(pval[k_k][conn], s_k[conn], function(x) length(unique(x)))
+    deux_valeurs[as.integer(names(n_val))] <- n_val >= 2L
+  }
+  complexe <- nat_u | surv_u | tabulate(pe$i[nde[pe$j] | tu[pe$j] | mu[pe$j] | eu[pe$j] | s1_inc[i1[pe$j]]], ns) > 0L
+  complexe <- ctx$retenu$sinistres & (forcer | complexe)
+  # garde du chemin rapide : hors des lignes complexes, la lecture brute est déterminée
+  if (any(ctx$retenu$sinistres & !complexe & is.na(brut))) {
+    stop("erreur interne de provie : D08 : lecture brute ind\u00e9termin\u00e9e hors du chemin \u00e0 trois valeurs", call. = FALSE)
+  }
+  r[complexe] <- FALSE
+  ip <- list()
+  pe_l <- split(pe$j, factor(pe$i, levels = seq_len(ns)))
+  L <- which(complexe)
+  if (length(L) > 0L) {
+    reps_u <- function(t, c1, x) .reps_utiles3(ctx, paste(t, c1, sep = "."), x)
+    plage_s <- .plage_date3(ctx, "sinistres", "date_survenance")
+    abs_s <- !.obligatoire3(ctx, "sinistres", "date_survenance")
+    plage_e <- .plage_date3(ctx, "evenements", "date_effet")
+    abs_e <- !.obligatoire3(ctx, "evenements", "date_effet")
+    id_cel <- function(tc, l, inc) if (inc) paste0(tc, "\r", l) else NA_character_
+    # feuille de la paire (S2 l, sortie e)
+    terme <- function(l, e) {
+      force(l)
+      force(e)
+      s <- i1[e]
+      dl <- dos_s[[s]]
+      cid <- ifelse(cu_d[dl], paste0("garanties_souscrites.code_garantie\r", igd[dl]), NA_character_)
+      kl <- lapply(dl, k_de)
+      kall <- sort(unique(unlist(kl)))
+      vid <- ifelse(pu[kall], paste0("parametres.valeur\r", kall), NA_character_)
+      ids <- c(p = if (nde[e]) paste0("evenements\r", e) else NA_character_, ty = id_cel("evenements.type_evenement", e, tu[e]),
+               mo = id_cel("evenements.motif", e, mu[e]), ns1 = id_cel("sinistres.nature_sinistre", s, nat_u[s]),
+               ef = id_cel("evenements.date_effet", e, eu[e]), sv = id_cel("sinistres.date_survenance", l, surv_u[l]))
+      dk <- unique(pval[kall][!pu[kall]])
+      dom <- function(sigs) {
+        out <- list()
+        dv <- c(dk, unlist(lapply(vid[!is.na(vid)], function(z) .fixees3(sigs, z, numeric(0))), use.names = FALSE))
+        dv <- unique(dv[!is.na(dv)])
+        efx <- .fixees3(sigs, ids[["ef"]], eff[e])
+        svx <- .fixees3(sigs, ids[["sv"]], surv[l])
+        if (!is.na(ids[["sv"]])) {
+          ep <- if (!is.na(ids[["ef"]]) && is.null(sigs[[1L]][[ids[["ef"]]]])) c(plage_e, a) else efx
+          out[[ids[["sv"]]]] <- .reps_date3(plage_s, abs_s, c(ep, outer(ep, dv, "+")))
+          if (is.null(sigs[[1L]][[ids[["sv"]]]])) svx <- out[[ids[["sv"]]]]
+        }
+        if (!is.na(ids[["ef"]])) {
+          out[[ids[["ef"]]]] <- .reps_date3(plage_e, abs_e, c(svx, outer(svx, dv, "-"), a))
+          if (is.null(sigs[[1L]][[ids[["ef"]]]])) efx <- out[[ids[["ef"]]]]
+        }
+        if (any(!is.na(vid))) {
+          ec <- outer(svx, efx, "-")
+          ec <- ec[!is.na(ec)]
+          rp <- pmax(0, unique(c(dk, ec, ec + 1)))
+          rp <- unique(c(rp, max(c(rp, 0)) + 1))
+          for (z in vid[!is.na(vid)]) out[[z]] <- rp
+        }
+        if (!is.na(ids[["p"]])) out[[ids[["p"]]]] <- c(TRUE, FALSE)
+        if (!is.na(ids[["ty"]])) out[[ids[["ty"]]]] <- reps_u("evenements", "type_evenement", "sortie")
+        if (!is.na(ids[["mo"]])) out[[ids[["mo"]]]] <- reps_u("evenements", "motif", "reprise_travail")
+        if (!is.na(ids[["ns1"]])) out[[ids[["ns1"]]]] <- reps_u("sinistres", "nature_sinistre", "arret_travail")
+        for (z in cid[!is.na(cid)]) out[[z]] <- reps_u(gs, "code_garantie", "incapacite")
+        out
+      }
+      # délai par affectation : lignes de K des dossiers de code incapacite (connu, ou inconnu
+      # affecté), valeur unique, NA sinon
+      delai <- function(a_, n) {
+        if (all(is.na(cid))) return(.valeur_parametre3(a_, kall, pval, pu, n)$val)
+        if (length(kall) == 0L) return(rep(NA_real_, n))
+        m <- matrix(vapply(seq_along(kall), function(q) .val3(a_, vid[q], pval[kall[q]], n), numeric(n)), nrow = n)
+        actif <- matrix(FALSE, n, length(kall))
+        for (q in seq_along(dl)) {
+          if (length(kl[[q]]) == 0L) next
+          x <- if (is.na(cid[q])) rep(TRUE, n) else a_[[cid[q]]] %in% "incapacite"
+          actif[, match(kl[[q]], kall)] <- actif[, match(kl[[q]], kall)] | x
+        }
+        vapply(seq_len(n), function(i) {
+          y <- m[i, actif[i, ]]
+          if (length(y) > 0L && all(y == y[1L]) %in% TRUE) y[1L] else NA_real_
+        }, 0)
+      }
+      f <- function(a_, n) {
+        pr <- if (is.na(ids[["p"]])) rep(TRUE, n) else a_[[ids[["p"]]]]
+        ef <- .val3(a_, ids[["ef"]], eff[e], n)
+        ec <- .val3(a_, ids[["sv"]], surv[l], n) - ef
+        x <- pr & .val3(a_, ids[["ty"]], type[e], n) %in% "sortie" & .val3(a_, ids[["mo"]], motif[e], n) %in% "reprise_travail" &
+          .val3(a_, ids[["ns1"]], nat[s], n) %in% "arret_travail" & (ec >= 0) %in% TRUE & (ec < delai(a_, n)) %in% TRUE
+        if (nde[e]) x <- x & (ef <= a) %in% TRUE
+        x
+      }
+      .feuille3(c(ids, cid, vid), dom, f)
     }
-    p <- paires_de(sortie & ctx$retenu$evenements)
-    ecart <- survenance[p$i] - as.numeric(effet)[p$j]
-    candidate <- ecart >= 0
-    dl <- delai[i1[p$j]]
-    r <- seq_len(ns) %in% p$i[candidate & !is.na(dl) & ecart < dl]
-    if (any(candidate & is.na(dl) & !r[p$i])) .ajouter_non_execute(ctx, "D08", "sinistres", NA_character_, .CAUSE_PARAMETRE_NON_DEFINI)
-    pn <- paires_de(sortie & .nd_vue(ctx, "evenements") & !((effet > a) %in% TRUE))
-    ecart_n <- survenance[pn$i] - as.numeric(effet)[pn$j]
-    dl_n <- delai[i1[pn$j]]
-    possible <- !r[pn$i] & (is.na(ecart_n) | (ecart_n >= 0 & (is.na(dl_n) | ecart_n < dl_n)))
-    if (!any(possible)) return(r)
-    r3 <- .k3(r, list(evenements = vector("list", ns)))
-    r3$v[unique(pn$i[possible])] <- NA
-    g <- split(pn$j[possible], pn$i[possible])
-    r3$index$evenements[as.integer(names(g))] <- unname(g)
-    .k3_resultat(r3)
-  }, vue = c(ctx$lit_vue$evenements, ctx$lit_vue$dossiers, ctx$lit_vue$parametres))
-  invisible(NULL)
+    for (l in L) {
+      termes <- lapply(pe_l[[l]], function(e) terme(l, e))
+      arret <- .feuille_valeurs3(list(.cel3(id_cel("sinistres.nature_sinistre", l, nat_u[l]), nat[l],
+                                            if (nat_u[l]) reps_u("sinistres", "nature_sinistre", "arret_travail"))),
+                                 function(z, n) z[[1L]] %in% "arret_travail")
+      x <- .arbre3(.et_arbre3(list(arret, .ou_arbre3(termes))), .ORDRE_D08)
+      r[l] <- x$v
+      ip <- .issue3(x, l, ns, ip, new.env(parent = emptyenv()))
+    }
+  }
+  # délai non déterminable qui peut décider (lecture existentielle, une seule évaluation) : paire
+  # d'un S2 de verdict non vrai, possiblement arret_travail, d'écart possiblement positif ou nul,
+  # dont le délai de S1 est possiblement non défini
+  l <- pe$i
+  e <- pe$j
+  ecart <- (surv_u[l] | !is.na(surv[l])) & (eu[e] | !is.na(eff[e])) & (surv_u[l] | eu[e] | (surv[l] - eff[e] >= 0) %in% TRUE)
+  if (any(!(r[l] %in% TRUE) & (nat_u[l] | nat[l] %in% "arret_travail") & ecart & (kmin_vide | deux_valeurs)[i1[e]])) {
+    .ajouter_non_execute(ctx, "D08", "sinistres", NA_character_, .CAUSE_PARAMETRE_NON_DEFINI)
+  }
+  attr(r, "index_pertinent") <- ip
+  attr(r, "index") <- ip
+  attr(r, "lues") <- lues
+  r
 }
 
 # D10 (e), qualité du bénéficiaire incompatible avec la garantie (dictionnaire, § 9 ;
@@ -10288,14 +10941,7 @@ table_refusee_vue <- function(vue, table) {
   en_date <- function(x) structure(as.numeric(x), class = "Date")
   age_de <- function(b, s) calculer_age(en_date(b), en_date(s), la$age)
   # valeur d'un paramètre sur n affectations : unique valeur (NA sinon), plusieurs valeurs
-  valeur_par <- function(a, ks, n) {
-    if (length(ks) == 0L) return(list(val = rep(NA_real_, n), ambigu = rep(FALSE, n)))
-    m <- vapply(ks, function(k) .val3(a, if (par_u[k]) paste0("parametres.valeur\r", k) else NA_character_, val_par[k], n), numeric(n))
-    m <- matrix(m, nrow = n)
-    egal <- rowSums(m == m[, 1L]) == ncol(m)
-    egal[is.na(egal)] <- FALSE
-    list(val = ifelse(egal, m[, 1L], NA_real_), ambigu = !egal)
-  }
+  valeur_par <- function(a, ks, n) .valeur_parametre3(a, ks, val_par, par_u, n)
   enfant_feuille <- function(i, l, w) {
     ids <- c(s = s_id[i], p = if (!fam_r[l]) paste0("famille\r", l) else NA_character_, lien = lien_id[l], n = naiss_id[l],
              sit = sit_id[l], dd = dd_id[l], ph = cel(gs, "prolongation_handicap", w))
@@ -10475,6 +11121,20 @@ table_refusee_vue <- function(vue, table) {
     }
   }
   list(v = res_v, pert = pert, cellules = cellules, non_defini = non_defini)
+}
+
+# Valeur d'un paramètre de garantie souscrite sur `n` affectations `a` de .arbre3() (une seule
+# implémentation, lue par D14, .verdict_d14_3(), et par D07 (c) et D08 ; #105, lot V, G3c) : lignes
+# `ks` de parametres, valeurs `val`, inconnues `u` (cellule « parametres.valeur\rk ») ; `val`, la
+# valeur commune des lignes (NA sans ligne ou si elles diffèrent), `ambigu` (au moins une ligne et
+# des valeurs qui diffèrent).
+.valeur_parametre3 <- function(a, ks, val, u, n) {
+  if (length(ks) == 0L) return(list(val = rep(NA_real_, n), ambigu = rep(FALSE, n)))
+  m <- vapply(ks, function(k) .val3(a, if (u[k]) paste0("parametres.valeur\r", k) else NA_character_, val[k], n), numeric(n))
+  m <- matrix(m, nrow = n)
+  egal <- rowSums(m == m[, 1L]) == ncol(m)
+  egal[is.na(egal)] <- FALSE
+  list(val = ifelse(egal, m[, 1L], NA_real_), ambigu = !egal)
 }
 
 # Limite d'âge possiblement non déterminable (.verdict_d14_3(), `parametre_non_defini` lu de façon

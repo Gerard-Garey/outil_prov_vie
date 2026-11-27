@@ -391,18 +391,22 @@ LISTE_BLANCHE <- c(
     "code",
   "R/donnees.R | .age_assure3 | match ( b , ordre_issue )" =
     "code",
-  "R/donnees.R | .regle_v_limite_age | v ( \"evenements\" , \"type_evenement\" ) %in% types" =
+  "R/donnees.R | .verdict_d07c_brut | v ( \"evenements\" , \"type_evenement\" ) %in% types" =
     "code",
-  "R/donnees.R | .regle_v_limite_age | \"famille\" %in% names ( ctx $ base )" =
+  "R/donnees.R | .verdict_d07c_brut | \"famille\" %in% names ( ctx $ base )" =
     "metadonnee",
-  "R/donnees.R | .regle_v_limite_age | cat %in% z" =
+  "R/donnees.R | .verdict_d07c_brut | cat %in% z" =
     "code",
-  "R/donnees.R | .regle_v_limite_age | p $ i %in% incertain" =
+  "R/donnees.R | .verdict_d07c_brut | p $ i %in% incertain" =
     "indice",
-  "R/donnees.R | .candidats_d07c | .joindre ( ctx , \"garanties_souscrites\" , \"id_garantie_souscrite\" , \"code_garantie\" , gs ) %in% code" =
+  "R/donnees.R | .candidats_d07c | .valeurs ( ctx , \"garanties_souscrites\" , \"code_garantie\" ) [ ig ] %in% code" =
     "code",
   "R/donnees.R | .parametre_garantie | .valeurs_vue ( ctx , \"parametres\" , \"parametre\" ) %in% nom" =
     "code",
+  "R/donnees.R | .lectures_d07c3 | nom_p %in% nom" =
+    "code",
+  "R/donnees.R | .verdict_d08 | match ( kl [[ q ] ] , kall )" =
+    "indice",
   "R/donnees.R | .famille_en_jeu | \"famille\" %in% names ( ctx $ base )" =
     "metadonnee",
   "R/donnees.R | .famille_en_jeu | vis $ membre %in% vis $ membre [ st %in% TRUE ]" =
@@ -443,7 +447,7 @@ LISTE_BLANCHE <- c(
     "code",
   "R/donnees.R | .verdict_d07a_brut | seq_len ( nr ) %in% q1 $ i" =
     "indice",
-  "R/donnees.R | .regle_v_rechutes | seq_len ( ns ) %in% p $ i [ candidate & ! is.na ( dl ) & ecart < dl ]" =
+  "R/donnees.R | .verdict_d08_brut | seq_len ( ns ) %in% p $ i [ candidate & ! is.na ( dl ) & ecart < dl ]" =
     "indice",
   "R/donnees.R | .regle_v_qualites | code %in% codes" =
     "code",
