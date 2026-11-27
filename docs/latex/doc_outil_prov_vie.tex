@@ -3055,7 +3055,7 @@ D10f sur \code{evenements} & Dossier \code{double\_effet} et rente de conjoint d
 D11a sur \code{sinistres.date\_survenance} & Dossiers, affiliations et contrats de l'assuré\fsp; pour le sous-cas du maintien, sinistres d'arrêt de travail, versions de la garantie \code{deces}, sorties et rechutes & Non-couverture inconnue si une couverture possible (affiliation ou contrat non déterminé) ou un dossier non déterminé peut couvrir la survenance\fsp; sous-cas inconnu si un sinistre, une version ou un événement non déterminé peut l'ouvrir. \\
 D11b sur \code{dossiers}, colonne \code{id\_garantie\_souscrite} & Affiliations de l'assuré au contrat, dans le collège du dossier et dans les autres\fsp; contrat de la garantie\fsp; sous-cas du maintien restreint au collège & Inconnu si une affiliation, une partie de fin ou une ligne de contrat non déterminée peut changer l'existence d'une couverture, ou si le sous-cas l'est. \\
 D11c sur \code{affiliations.college} & Autres affiliations de l'assuré au même contrat & Inconnu si une affiliation ou une partie de fin non déterminée peut former ou défaire un chevauchement. \\
-D12 sur \code{evenements.type\_evenement} & Autres événements de l'automate du sinistre & Verdict commun sur chaque sous-ensemble des événements non déterminés placés avant le dernier retenu, inconnu s'il varie\fsp; au-delà de dix, chaque événement retenu du sinistre est inconnu (limite de calcul). \\
+D12 sur \code{evenements.type\_evenement} & Autres événements de l'automate du sinistre & Ensemble des configurations de l'automate propagé en un passage, chaque événement non déterminé étant facultatif\fsp; vrai si l'événement est le premier échec de toute suite possible, faux s'il ne l'est d'aucune, inconnu sinon\fsp; exact et sans plafond, hors date d'effet inconnue (point D12 ci-dessous). \\
 D14 sur \code{sinistres} & Dossiers du sinistre, versions de la garantie \code{double\_effet}, membres de la famille rattachée & Inconnu si un dossier, une version ou un membre de visibilité non déterminée peut changer le verdict. \\
 \end{longtable}
 }
@@ -3923,14 +3923,54 @@ simulés est renvoyée à l'issue~117.
   sinistres\fsp; signalement pour \code{triangle},
   \code{risque\_en\_cours} et \code{regle\_comptable}, qui ne lisent pas
   les états, une exclusion déclarée pour l'une d'elles étant refusée
-  (\code{plan\_invalide}). Verdict à trois valeurs~: chaque sous-ensemble
-  des événements non déterminés du sinistre placés avant son dernier
-  événement retenu est essayé (les suivants sont sans effet~: élagage
-  exact), au plus dix (constante interne
-  \code{.MAX\_EVENEMENTS\_ND\_D12})\fsp; au-delà, chaque événement retenu
-  du sinistre est inconnu. Ce plafond est une limite de calcul, non un
-  jugement d'expert~; le verdict exact sans plafond est renvoyé à
-  l'issue~129.
+  (\code{plan\_invalide}). La date de saisie n'est pas lue par le
+  verdict, seulement par la vue\fsp; l'identifiant, clé primaire, départage
+  les événements de même date d'effet et de même type, et désigne donc
+  lequel est le premier échec.
+
+  \emph{Verdict à trois valeurs, exact et sans plafond} (spécification,
+  erratum~1.9.7, E-5\fsp; décisions du mainteneur du 25~novembre~2026,
+  M813, M816, M817 et M819\fsp; issue~129). Les événements de l'automate
+  du sinistre, retenus et non déterminés, sont pris dans l'ordre
+  ci-dessus, et l'ensemble des configurations possibles de l'automate
+  (état, et état antérieur à la dernière sortie, que rend une
+  \code{rechute}) est propagé en un seul passage dans cet ordre. À chaque
+  position, les transitions possibles forment une liste (critère C129-5)~:
+  celle de l'événement retenu\fsp; pour un événement non déterminé,
+  facultatif, la sienne et «~sauter~»\fsp; pour un motif inconnu, une
+  transition par motif du domaine de son type
+  (\code{types\_evenements.csv})\fsp; pour un type inconnu, une transition
+  par chacun des six types de l'automate et «~sauter~», l'événement
+  pouvant être hors de l'automate (lecture existentielle de la
+  population). Un événement retenu est détecté s'il est le premier échec
+  de toute suite possible, non détecté s'il ne l'est d'aucune, inconnu
+  sinon. Des événements de même date d'effet dont l'un est de type
+  inconnu forment un groupe, parcouru type par type dans l'ordre de
+  l'automate, puis par identifiant, avec l'ensemble des événements de
+  type inconnu déjà placés~: le parcours est exact (identique à
+  l'énumération des sous-ensembles et des valeurs du domaine) et porte
+  sur $2^j$ ensembles pour $j$ événements de type inconnu dans le groupe,
+  au lieu des $7^j$ suites de l'énumération (M819, sans seuil). Les
+  événements non déterminés placés après le dernier retenu sont sans
+  effet et sont retirés (élagage exact), sauf si le sinistre porte une
+  date d'effet ou un type inconnus. Une date d'effet inconnue n'est jamais
+  une clé de tri~: l'événement est facultatif à chaque intervalle de la
+  suite des dates connues, entre les événements d'un même groupe
+  compris\fsp; une date absente sans refus reste une clé, triée en
+  dernier.
+
+  \emph{Statuts.} Le verdict est un résultat exact hors date d'effet
+  inconnue. Sous une date inconnue, c'est une approximation sûre~: elle
+  peut rendre inconnu un verdict déterminé, jamais l'inverse (M813, gardée
+  telle quelle par M817, sans marqueur «~déjà placé~», dont l'affinage est
+  renvoyé à l'issue~221). Hors groupes, le coût est proportionnel au
+  nombre de positions, intervalles compris, l'ensemble des configurations
+  étant fini\fsp; un groupe compte au plus six étapes par
+  événement, chacune appliquée à chaque configuration et à chacun des
+  $2^j$ ensembles, d'où un coût exponentiel en~$j$, accepté sans seuil
+  (M819) et suivi par l'issue~221. Le plafond de dix événements non
+  déterminés (constante interne \code{.MAX\_EVENEMENTS\_ND\_D12}), au-delà
+  duquel chaque événement retenu du sinistre était inconnu, est retiré.
 \item \textbf{D14}, dossier double effet non ouvert. Sinistre
   \code{deces} instruit à l'arrêté, dont un dossier \code{deces} a une
   garantie \code{double\_effet} en vigueur à la survenance pour son
