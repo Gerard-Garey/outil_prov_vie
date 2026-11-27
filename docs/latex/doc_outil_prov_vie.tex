@@ -2192,7 +2192,17 @@ règle~P.
   règles de cette colonne portent sur la même cellule. Une règle de portée
   \code{table} lit la colonne qu'elle contrôle comme toute colonne lue,
   sans quoi le refus d'une cellule deviendrait celui d'une table\fsp; le
-  seul cas est D10a sur \code{prestations.type\_prestation}.
+  seul cas est D10a sur \code{prestations.type\_prestation}. La chaîne
+  vide relève de ce mécanisme comme toute valeur refusée (point suivant\fsp;
+  spécification, erratum~1.9.7, E-2 et E-16\fsp; décision du mainteneur
+  du 25~novembre~2026, M809\fsp; issue~147). Ce cas unique est un résultat
+  exact du registre de la règle~B~: parmi ses entrées de portée effective
+  \code{table}, seule D10a sur \code{prestations.type\_prestation} porte
+  sur une colonne non clé refusable pour sa valeur, les autres portant sur
+  une clé, une référence, \code{evaluations\_gestion} ou aucune colonne.
+  La batterie unitaire dérive ces sites du registre et les compare à la
+  liste classée~: un site non classé, ou un site classé non atteint, la
+  fait échouer (critères C147-1 et C147-5).
 \item \textbf{Chaîne vide} (spécification, §~2.2, B.4, version~1.7, et
   erratum du 15~novembre~2026\fsp; issue~123\fsp; jugement d'expert sur la
   lecture du dictionnaire de la base, §~1.6, 1.7 et~1.10). Une chaîne vide
@@ -2223,7 +2233,44 @@ règle~P.
   valeur présente, comportement antérieur, qui donnait deux codes à une
   anomalie\fsp; (b)~la tenir pour un manquant, qui ajouterait
   \code{manquant\_obligatoire} sous la condition et contredirait le §~1.6
-  du dictionnaire. Depuis le dictionnaire de la base en version~1.6, une
+  du dictionnaire. «~Sa propre colonne~» s'entend d'une règle de portée
+  \code{colonne} ou \code{ligne}, qui la lit telle quelle (point
+  «~Auto-lecture~»). Une règle de portée \code{table} qui lit sa propre
+  colonne, et une règle~V qui lit la sienne, la lisent dans le mécanisme
+  des valeurs refusées~: une chaîne vide y est une valeur inconnue dans le
+  domaine de la colonne, comme toute valeur refusée, et seule la cause
+  change (\code{chaine\_vide}). La ligne n'est écartée que si le verdict
+  prend deux valeurs sur ce domaine (spécification, erratum~1.9.7,
+  E-16\fsp; M809, statu quo écrit, M602 inchangée). Ainsi, une prestation
+  de type vide dont le verdict de D10a varie sur le domaine est écartée,
+  avec la ligne (D10a, \code{prestations}, \code{type\_prestation}) de
+  \code{controles\_non\_executes} de cause \code{chaine\_vide}, sans constat
+  D10a ni refus de la table\fsp; D03b (défaut «~manquant~») sur un
+  \code{sexe} vide rend un verdict faux déterminé, sans ligne écartée, le
+  domaine ne contenant pas le manquant\fsp; D12 sur un
+  \code{type\_evenement} vide dont le type décide est écarté, de cause
+  \code{chaine\_vide}. Une colonne propre clé ou référence n'est pas
+  refusable pour sa valeur~: sa chaîne vide est un refus de portée table,
+  qui bloque la règle~V (D10b, D11b, D11c\fsp; point «~Clé vide~»
+  ci-dessous). Cette lecture de Kleene stricte (M809) ne dit rien de la
+  valeur réelle~: la ligne écartée signale une détection minorante\fsp;
+  l'asymétrie avec les règles de domaine de portée \code{colonne}
+  (issue~123) est assumée, les options~(b) et~(c) de l'issue~147 étant
+  écartées. Recensement (mesuré par la batterie unitaire, qui trace la
+  règle commune des règles~V sur la base de référence des tests, à deux
+  arrêtés, sous les déclarations qui exécutent D02c, D07b, D07c et
+  D14)~: 31 des 52~clés du registre des règles~V ont pour colonne propre
+  une colonne refusable pour sa valeur, toutes en logique de Kleene, dont
+  7 de type \code{character}~: D03b sur \code{assures} et sur
+  \code{famille}, D03e, D05, D06, D10e et D12 (critère C147-3\fsp;
+  décompte exact sur le registre des règles~V, dont les 52~clés sont
+  atteintes par cette trace\fsp; le registre est lui-même relevé sur la
+  base de référence des tests, et sa complétude n'est contrôlée que pour
+  les sites à clé littérale). Pour
+  chacune de ces cellules de la base de référence des tests, et pour
+  \code{prestations.type\_prestation}, les bilans sous une chaîne vide et
+  sous une valeur hors domaine sont identiques, hors de la cause et du
+  refus de la cellule (critère C147-4). Depuis le dictionnaire de la base en version~1.6, une
   chaîne faite seulement de blancs est une chaîne vide (décision du
   mainteneur du 18~novembre~2026, M655\fsp; spécification, version~1.9,
   §~9.6)~: elle reçoit le seul code \code{chaine\_vide}, et, dans une
