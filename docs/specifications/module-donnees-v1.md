@@ -1374,6 +1374,67 @@ Spécification `donnees` v1.6, visée par le mainteneur le 13 novembre 2026 (M33
     - (c) *Recensement* (résultat exact, mesuré à `45f1ec0` et à `7995f83`, décomptes identiques). Règles B : sur le registre `.regles_b()` (436 entrées), portée effective `table` (`.portee_effective()`), colonne non manquante et colonne propre refusable pour sa valeur (contrôlée par une règle R de portée autre que `table`, comme `.lectures_regle_b()`) : D10a sur `prestations.type_prestation` seule ; les 176 autres entrées de portée `table` portent sur une clé, une référence, `evaluations_gestion` ou une colonne manquante. Règles V : clés dont la colonne propre est une colonne refusable lue comme valeur, relevées par la trace de `.regle_vue()` sur `base_ref` aux arrêtés A0 et A, sans puis avec les déclarations qui exécutent D02c (âge), D07b, D07c et D14 (seuils d'âge de D02c, seuil de D07b, conventions d'âge) : 31 sur 52, toutes en mode kleene. Sans les déclarations, 27 seulement : les quatre de plus sont D02c sur `date_naissance` dans `assures`, `ayants_droit_sante`, `designations` et `famille`, que seuls les seuils d'âge déclarés exécutent. La conversion G3c (D07c, D08) n'ajoute aucune clé : leur colonne propre est manquante. Des 31, 7 sont de type `character` (D03b sur `assures` et `famille`, D03e, D05, D06, D10e, D12).
     - (d) *Statut.* Statu quo : aucun code de `R/` ne change ; aucun bilan, aucune provision, aucun verdict ne change ; la batterie gagne les tests de (e). Lecture de Kleene stricte (décision du mainteneur, M809) : `""` ne dit rien de la valeur réelle ; la ligne écartée signale une détection minorante. Asymétrie assumée avec les règles de portée `colonne` de #123. Alternative écartée : options (b) et (c) de #147. Mesures sur mutant : exclure `""` du test de D10a (`!.chaine_vide(x$type)`) est sans effet, la cellule inconnue étant énumérée sur le domaine ; lire la colonne telle quelle fait d'une cellule refusée le refus de la table (`"zz"` en PR2 : constat D10a de portée `table`), ce que B.1 exclut.
     - (e) *Critères.* C147-1 : sites B dérivés du registre selon (c), égaux à la liste classée {D10a `prestations.type_prestation`} ; un site non classé ou un site classé non atteint fait échouer le test. C147-2 : `base_ref`, PR2 de type `""` : ligne (D10a, `prestations`, `type_prestation`, `chaine_vide`), seul refus du bilan, `chaine_vide` de portée `ligne` sur PR2, aucun constat D10a ; témoins `"zz"` (cause et refus `hors_domaine`) et `NA` (`manquant_obligatoire`) ; `controles_non_executes` identique hors cause sous les trois valeurs ; `base_ref` intacte : ni ligne ni constat D10a. C147-3 : sites V dérivés de la trace de `.regle_vue()` selon (c), sans et avec les déclarations : 31 clés figées, aucune en mode bloquee, à l'appel comme au registre, dont les 7 de type `character` de (c). C147-4 : pour chaque cellule de `base_ref` d'une colonne propre `character` d'une clé de C147-3, et de `prestations.type_prestation` (31 cellules) : bilans complets sous `""` et sous `"zz"` identiques, hors cause et hors le refus de la cellule. « Hors cause » s'entend de toute colonne qui porte le motif du refus de la cellule comme cause : la colonne `cause` de `controles_non_executes` et la cause d'une composante empêchée de l'enjeu (`enjeu$cause`, #122 ; spécification v1.7, § 3.1, « Cause d'une composante de l'enjeu »), qui vaut `chaine_vide` ou `hors_domaine` quand la composante lit la cellule comme valeur (ainsi `montant_evenement` sous une cellule de `type_evenement`). « Hors le refus de la cellule » s'entend de sa ligne dans `controles` et dans `refus_tables` et du motif des lignes d'enjeu de ce refus. Tout le reste du bilan, montants et nombres de l'enjeu compris, est comparé. La neutralisation porte sur les motifs `chaine_vide` et `hors_domaine` du bilan entier ; elle n'équivaut à une neutralisation de la seule cellule que parce que `base_ref` ne porte aucun refus. D03b sur `""` : ni ligne ni constat. C147-5 : le contrôle de C147-1 échoue sur un site ajouté au registre. C147-6 : dix couples inchangés (aucun code modifié).
+  - **E-17, § 8.3, « Paramètre », § 5.3 et E-15 (e) : lignes de visibilité non déterminée du paramètre (P), D07c et D08** (#125, M814 ; E-6, E-15 (e) ; *ajouté le 27/11/2026 au rang 5 de Bdr-b5 ; rédigé par l'agent actuary (IA) sur `6b45c84` ; lecture (A) décidée par le mainteneur le 27/11/2026, M829*). Complète E-6 et E-15 (e). La dernière phrase d'E-15 (e) (« Jusqu'à #125, P est vide (lignes retenues seules, inchangé) ») ne vaut plus.
+    - (a) *K et P.*
+      - D08, pour un sinistre S1 :
+        - K : lignes retenues de `parametres` de nom `delai_rechute_jours`, des garanties souscrites des dossiers retenus de S1 de code `incapacite` ;
+        - P : lignes de même nom (i) des garanties des dossiers de S1 de visibilité non déterminée, de code `incapacite` ; (ii) des garanties de visibilité non déterminée des dossiers retenus de S1, de code `incapacite` ;
+        - un code inconnu fait compter la ligne selon sa valeur (E-15 (e)).
+      - D07c, pour une rente ou un dossier :
+        - K : lignes retenues de `age_limite` et de `age_limite_etudes` de sa garantie souscrite ;
+        - P : les mêmes lignes, quand cette garantie est de visibilité non déterminée.
+      - `parametres` n'a pas de visibilité propre (dictionnaire, § 6). Pour une même garantie, K et P ne coexistent donc jamais (résultat exact).
+      - Une rente ou un dossier non déterminés relèvent de la population, non de P (inchangé).
+      - Une ligne invisible de façon déterminée (dossier, garantie, ligne de `parametres`) n'est ni dans K ni dans P.
+    - (b) *Présence.*
+      - Une ligne de P est lue dans l'arbre de la ligne (E-15 (a)) sous la présence de l'élément non déterminé qui la porte :
+        - un dossier : cellule `dossiers` ;
+        - une garantie : cellule `garanties_souscrites`, une seule par garantie, car ses lignes de `parametres` sont présentes ensemble (exact).
+      - Dans chaque affectation, la valeur est la valeur commune des lignes actives de K ∪ P : présentes et, pour D08, de code `incapacite`. Une valeur refusée y est énumérée (E-15 (e)).
+      - Sans ligne active, ou si les valeurs actives diffèrent, la valeur n'est pas définie. Le verdict de la paire (D08) ou de l'enfant (D07c) est alors faux dans cette affectation, comme sous E-15 (e).
+      - Une seule implémentation : `.valeur_parametre3()`, argument `actif`.
+      - Une ligne qui lit une ligne de P passe par l'arbre, jamais par le chemin rapide.
+    - (c) *Statut et `parametre_non_defini`.*
+      - `parametre_non_defini` n'est émis que si la valeur peut décider (§ 5.3, § 8.3 ; lecture existentielle d'E-15 (e), inchangée), et dans deux cas seulement :
+        - K et P sont vides, les lignes de P comptant comme présentes ; un code inconnu garde la lecture existentielle d'E-15 (e) ;
+        - K porte deux valeurs connues distinctes ou plus ; P n'entre pas dans ce compte.
+      - Si K = {d} et P ⊆ {d}, la valeur est d dans toute affectation.
+      - Dans tous les autres cas, la valeur n'est pas déterminée et aucune ligne `parametre_non_defini` n'est émise de ce fait : K vide et P non vide ; K = {d} et une valeur de P différente de d ; valeur de K inconnue.
+      - Une ligne au verdict inconnu est écartée par le mécanisme commun (E-1, E-3). Sa cause est la cause (γ) de l'élément non déterminé (`.cause_nd()`, index `dossiers` ou `garanties_souscrites`), départagée avec les autres causes de la même clé (§ 3.1).
+    - (d) *« Sinistre écarté » (M814).*
+      - Se lit : « écarté si son verdict en dépend » (E-15 (e)).
+      - Une ligne dont le verdict est faux dans toute affectation n'est ni écartée ni portée en ligne. Exemples : une paire hors de tout délai possible ; un enfant non éteint, que les lignes de P soient présentes ou non.
+      - Statut : jugement d'expert.
+        - Motif : la règle qu'E-15 (e) applique aux valeurs refusées (« comme une ligne de P ») est étendue aux lignes de P. Mesuré sur `6b45c84` : K = {30, u}, écart 44 → aucune ligne ; K = {60, u} → écartée, D09.
+        - Alternative écartée, renvoyée à l'issue d'harmonisation : lire comme inconnue une affectation où le paramètre n'est pas défini, valeurs refusées comprises. Effet sur les témoins de #125 : une paire hors délai et un enfant jeune seraient écartés au lieu de ne rien recevoir ; des résultats de G3c changeraient.
+      - Écart à la lettre de M814 et aux critères de la fiche (§ 1.23, rang 4), déclaré. La cause (γ) ne remplace `parametre_non_defini`, et le verdict ne devient inconnu, que si la présence des lignes de P peut changer le verdict.
+    - (e) *Garantie invisible de façon déterminée* (commentaire 6991620742 ; E-6) : `parametre_non_defini`, inchangé, libellé exact ; K et P y sont vides. Même règle pour un dossier invisible de façon déterminée.
+    - (f) *Approximation sûre.*
+      - Les présences de deux éléments non déterminés par une même ascendante sont tenues pour indépendantes (par exemple, le dossier et la sortie d'un S1 non déterminé).
+      - L'approximation ajoute des affectations impossibles. Elle peut rendre inconnu un verdict déterminé, jamais l'inverse (comme E-12 (c)).
+      - La liste des dérogations d'E-15 (i) s'étend à E-17 (f).
+    - (g) *Hors du présent point*, renvoyés à l'issue d'harmonisation : populations (rentes et S2 de D08 retenus ; D07c dossiers) ; sortie non déterminée d'effet postérieur à l'arrêté (D08) ; D14 (E-12 (d)), lignes de P de D14 comprises.
+    - (h) *Statuts.*
+      - (a) et (e) : résultats exacts (dictionnaire, § 6 ; clés connues).
+      - (b) et (c) : méthode exacte, hors (f).
+      - (d) : jugement d'expert.
+      - (f) : approximation sûre, dont la sûreté est un résultat exact.
+      - « Peut décider » (E-15 (e)) : approximation par excès, inchangée.
+    - (i) *Critères.*
+      - C125-1 à C125-8 : témoins.
+        - D08 : dossier non déterminé seul (T1) ; garantie non déterminée (C3) ; délai différent, problème 2 (T2, T2d) ; P ⊆ {d} (T2c) ; avis (T1b, T1c, T2b, T2e).
+        - D07c : rentes (T3, T3b, T5) ; dossiers (T4).
+        - Lignes invisibles de façon déterminée (C1, C2, C4).
+      - C125-9 : oracles par énumération exhaustive des présences et des valeurs refusées.
+      - C125-10 : chemin rapide contre chemin forcé.
+      - C125-11 : invariance à l'ordre, en mode exact et au budget 40.
+      - C125-12 : D14 identique ; dix couples `identical()` ; tableau avant / après des appels des tests.
+    - (j) *Effet* (prévision).
+      - Dix couples : aucun. Mesuré sur `6b45c84` : aucune ligne non déterminée de `dossiers`, `garanties_souscrites` ni `parametres` à leurs arrêtés, et aucune rangée D07c ni D08.
+      - Bases des tests :
+        - rangées D07c et D08 de `controles_non_executes` : `parametre_non_defini` devient la cause (γ), ou la rangée disparaît ;
+        - des détections de D08 ou de D07c deviennent écartées, ainsi que leurs `hypotheses_defaut`, `signalements` et `declarations_requises`.
+      - Aucune famille ne lit D07c ni D08. Une provision totale ou un verdict ne peut donc changer que par `declarations_requises` (refus `declaration_manquante`) ; le cas revient alors au mainteneur (M815).
 
 ### 9.3 #83 : D10b à l'arrêté, `parente_posterieure`, D02b sur `prestations` (commit de #83)
 
