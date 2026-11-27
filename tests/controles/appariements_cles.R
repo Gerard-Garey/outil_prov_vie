@@ -417,13 +417,31 @@ LISTE_BLANCHE <- c(
     "code",
   "R/donnees.R | .service3 | .classe_service ( type [ e ] ) %in% classes" =
     "code",
+  "R/donnees.R | .service_k3 | type %in% c ( .TYPES_PORTEURS , \"cloture_dossier\" )" =
+    "code",
+  "R/donnees.R | .service_k3 | paste ( p2 $ i , p2 $ j ) %in% paste ( p1 $ i , p1 $ j )" =
+    "indice",
+  "R/donnees.R | .service_k3 | match ( type [ pd $ i ] , te $ type_evenement )" =
+    "code",
+  "R/donnees.R | .feuille_service3 | sk $ classe [ j ] %in% classes" =
+    "code",
+  "R/donnees.R | .feuille_service3 | .classe_service ( d [ ! is.na ( d ) ] ) %in% classes" =
+    "code",
+  "R/donnees.R | .feuille_service3 | ( if ( is.na ( d ) ) \"non_ouvert\" else .classe_service ( type [ d ] ) ) %in% classes" =
+    "code",
+  "R/donnees.R | .feuille_service3 | .classe_service ( x ) %in% classes" =
+    "code",
+  "R/donnees.R | .service_possible3 | sk $ classe %in% classes" =
+    "code",
+  "R/donnees.R | .lectures_g3b | tc %in% dates" =
+    "metadonnee",
   "R/donnees.R | .versions_membre | p2 $ i %in% p1 $ i" =
     "indice",
   "R/donnees.R | .versions_membre | seq_along ( ids ) %in% c ( p1 $ i , p2 $ i )" =
     "indice",
-  "R/donnees.R | .regle_v_extinctions | v ( \"famille\" , \"lien\" ) [ j ] %in% conjoints" =
+  "R/donnees.R | .verdict_d07a_brut | v ( \"famille\" , \"lien\" ) [ j ] %in% conjoints" =
     "code",
-  "R/donnees.R | .regle_v_extinctions | seq_len ( nr ) %in% q1 $ i" =
+  "R/donnees.R | .verdict_d07a_brut | seq_len ( nr ) %in% q1 $ i" =
     "indice",
   "R/donnees.R | .regle_v_rechutes | seq_len ( ns ) %in% p $ i [ candidate & ! is.na ( dl ) & ecart < dl ]" =
     "indice",
@@ -443,7 +461,7 @@ LISTE_BLANCHE <- c(
     "indice",
   "R/donnees.R | .ecarter_maintien_d11 | cause %in% z" =
     "code",
-  "R/donnees.R | .arret_feuille3 | match ( type [ D ] , te $ type_evenement )" =
+  "R/donnees.R | .dernier_feuille3 | match ( type [ D ] , te $ type_evenement )" =
     "code",
   "R/donnees.R | .assures_inconnus_d11 | c1 %in% names ( ctx $ base [[ t ] ] )" =
     "metadonnee",
@@ -489,17 +507,17 @@ LISTE_BLANCHE <- c(
     "metadonnee",
   "R/donnees.R | .arbre3 | c1 %in% C" =
     "metadonnee",
-  "R/donnees.R | .arret_feuille3 | t_id %in% names ( sigs [[ 1L ] ] )" =
+  "R/donnees.R | .dernier_feuille3 | t_id %in% names ( sigs [[ 1L ] ] )" =
     "metadonnee",
-  "R/donnees.R | .arret_feuille3 | ids [ q ] %in% names ( sigs [[ 1L ] ] )" =
+  "R/donnees.R | .dernier_feuille3 | ids [ q ] %in% names ( sigs [[ 1L ] ] )" =
     "metadonnee",
-  "R/donnees.R | .arret_feuille3 | t_id %in% names ( s1 )" =
+  "R/donnees.R | .dernier_feuille3 | t_id %in% names ( s1 )" =
     "metadonnee",
-  "R/donnees.R | .arret_feuille3 | ids %in% names ( s1 )" =
+  "R/donnees.R | .dernier_feuille3 | ids %in% names ( s1 )" =
     "metadonnee",
-  "R/donnees.R | .arret_feuille3 | t_id %in% pv" =
+  "R/donnees.R | .dernier_feuille3 | t_id %in% pv" =
     "metadonnee",
-  "R/donnees.R | .arret_feuille3 | ids %in% pv" =
+  "R/donnees.R | .dernier_feuille3 | ids %in% pv" =
     "metadonnee",
   "R/donnees.R | .verdict_d10c | code_g %in% rentes" =
     "code",
