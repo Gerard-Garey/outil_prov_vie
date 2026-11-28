@@ -167,6 +167,9 @@ verifier("declarations_requises vide et aucune action non_declaree dans le bilan
          }, NA)))
 
 section("segments (segments_vue(), module donnees) et cellules par segment")
+# types d'unités des postes du plan de C1, comme les passe calculer_provisions() (colonne `unite`
+# du catalogue, #85)
+unites_c1 <- ns$.postes_plan(canoniser_plan(p_c1), catalogue_garanties())[c("garantie", "famille", "unite")]
 s <- r_c1$donnees$segments
 verifier_egal("C1 : segments nature_contrat : cinq dossiers (CTC1) et trois contrats",
               list(names(s), s$id_contrat, s$id_dossier, s$segment),
@@ -199,16 +202,154 @@ verifier_egal("annee_survenance (C1) : P1 et P2 au segment 2024 (survenances 202
                      q_en$montant[q_en$poste == "provision_mathematique_temporaire_deces"])))
 b_an <- base
 b_an$sinistres$date_survenance[b_an$sinistres$id_sinistre == "SIR1"] <- D("2023-12-31")
-s_an <- ns$segments_vue(b2_vue(b_an, A1, p_c1$donnees, p_c1$conventions), list(an = list(regle = "annee_survenance")), "deces")
+s_an <- ns$segments_vue(b2_vue(b_an, A1, p_c1$donnees, p_c1$conventions), list(an = list(regle = "annee_survenance")), unites_c1)
 verifier_egal("segments_vue(), annee_survenance : année civile de sinistres.date_survenance (SIR1 au 2023-12-31 : 2023), hors_survenance pour chaque contrat",
               list(s_an$id_dossier, s_an$segment),
               list(c(NA, "DOR1", "DOR3", "DOR4", "DOR5A", "DOR5B", NA, NA),
                    c("hors_survenance", "2023", "2024", "2024", "2024", "2024", "hors_survenance", "hors_survenance")))
 verifier("segments_vue() : une règle hors de REGLES_SEGMENTATION_B2 (plan non validé) est une erreur interne, non un refus",
          grepl("^autre : erreur interne de provie", motif_de(ns$segments_vue(b2_vue(base, A1, p_c1$donnees, p_c1$conventions),
-                                                                             list(a = list(regle = "adherent")), "deces"))))
+                                                                             list(a = list(regle = "adherent")), unites_c1))))
 verifier("jeux sans segmentation : segments vides, cellules ensemble seules",
          nrow(v1$r$donnees$segments) == 0L && all(v1$r$provisions$segmentation == "ensemble"))
+
+section("#85 : unité de calcul déclarée par le catalogue (spécification de B2, § 4.1 et § 6.4, point 1, erratum v1.0.26)")
+# Sorties des familles du plan de C1, assemblées comme dans calculer_provisions() ; le
+# « catalogue fictif » est une copie des postes du plan où la famille de P3 est changée, son
+# unité gardée (la cellule rendue par la famille est inchangée).
+cp85 <- canoniser_plan(p_c1)
+cat85 <- catalogue_garanties()
+pp85 <- ns$.postes_plan(cp85, cat85)
+rt85 <- ns$resoudre_tables(cp85$tables, tid, ns$.usages_exiges(pp85, cp85, cat85))
+vue85 <- ns$vue_a_date(base, cp85$arrete, cp85$donnees, cp85$conventions)
+sorties85 <- lapply(seq_len(nrow(pp85)), function(i) {
+  if (pp85$famille[i] == "engagement") ns$calculer_engagement(vue85, cp85, rt85$tables, cat85, pp85$garantie[i], pp85$poste[i])
+  else ns$calculer_risque_en_cours(vue85, cp85, rt85$tables, cat85, pp85$garantie[i], pp85$poste[i])
+})
+p3 <- "provision_mathematique_temporaire_deces"
+verifier_egal("#85 : postes du plan de C1 : unité du catalogue (dossiers, dossiers, contrats)", pp85$unite,
+              c("dossiers", "dossiers", "contrats"))
+agreger85 <- function(pp, segments = ns$segments_vue(vue85, cp85$perimetre$segmentations, pp[c("garantie", "famille", "unite")]),
+                      sorties = sorties85) {
+  ns$.agreger(pp, sorties, segments, names(cp85$perimetre$segmentations), cp85, cat85)
+}
+verifier("#85 : .agreger() sur les sorties assemblées : cellules identiques à celles de calculer_provisions() (C1)",
+         identical(agreger85(pp85), r_c1$provisions))
+# C85-2 : P3 en famille engagement, unité contrats. Avant (#85, unité déduite de la famille) :
+# .unites() lisait l'élément `dossiers` (vide) de la sortie de P3, 0 unité, sans erreur, aucune
+# cellule de segment de P3 (avis 0b-1, m7.R, (1)).
+pp_f <- pp85
+pp_f$famille[pp_f$poste == p3] <- "engagement"
+q_f <- agreger85(pp_f)
+c3 <- q_f[q_f$poste == p3, , drop = FALSE]
+verifier("C85-2 : P3 en famille engagement, unité contrats : segments nature_contrat déterminés (collectif_obligatoire, individuel), somme des cellules de segment = cellule ensemble ; cellules identiques à celles de C1",
+         identical(c3$segment[c3$segmentation != "ensemble"], c("collectif_obligatoire", "individuel")) &&
+           egal_mixte(sum(c3$montant[c3$segmentation != "ensemble"]), c3$montant[c3$segmentation == "ensemble"]) &&
+           identical(q_f, r_c1$provisions))
+# C85-3 : CTI1 exclu (D02a, date_debut_gestion avant date_effet) pour une famille ; population
+# d'un type d'unité = réunion sur les familles qui le valorisent. Avant (#85) : un poste
+# d'engagement qui valorise CTI1, exclu pour risque_en_cours seulement, finissait en erreur
+# interne « segment indéterminé » (avis 0b-1, m7.R, (2)).
+b85 <- base
+b85$contrats$date_debut_gestion[b85$contrats$id_contrat == "CTI1"] <- D("2023-01-01")
+vue_excl85 <- function(famille) {
+  q <- p_c1
+  q$donnees$exclusions <- data.frame(motif = "D02a", famille = ns$FAMILLES_CALCUL,
+                                     action = ifelse(ns$FAMILLES_CALCUL == famille, "exclure", "conserver"),
+                                     stringsAsFactors = FALSE)
+  cq <- canoniser_plan(q)
+  ns$vue_a_date(b85, cq$arrete, cq$donnees, cq$conventions)
+}
+v_rec85 <- vue_excl85("risque_en_cours")
+v_eng85 <- vue_excl85("engagement")
+contrats85 <- function(v, unites) {
+  s <- ns$segments_vue(v, list(ct = list(regle = "contrat")), unites)
+  s$id_contrat[is.na(s$id_dossier)]
+}
+u_double <- rbind(pp85[c("garantie", "famille", "unite")],
+                  data.frame(garantie = "deces", famille = "engagement", unite = "contrats", stringsAsFactors = FALSE))
+verifier_egal("C85-3 : CTI1 exclu pour risque_en_cours, seule famille qui valorise les contrats : hors de la population ; exclu pour engagement seulement : gardé ; contrats valorisés aussi par engagement (réunion) : gardé",
+              list(contrats85(v_rec85, pp85[c("garantie", "famille", "unite")]),
+                   contrats85(v_eng85, pp85[c("garantie", "famille", "unite")]),
+                   contrats85(v_rec85, u_double)),
+              list(c("CTC1", "CTI3"), c("CTC1", "CTI1", "CTI3"), c("CTC1", "CTI1", "CTI3")))
+sortie_cti1 <- list(dossiers = sorties85[[1L]]$dossiers[0L, ],
+                    contrats = data.frame(id_contrat = "CTI1", champ = "individuel", montant = 100, statut_resultat = "exact",
+                                          stringsAsFactors = FALSE))
+s_double <- ns$segments_vue(v_rec85, list(ct = list(regle = "contrat")), u_double)
+verifier_egal("C85-3 : poste d'engagement qui valorise CTI1 (exclu pour risque_en_cours seulement) : segment déterminé, CTI1",
+              ns$.segment_unites(ns$.unites(sortie_cti1, "contrats", s_double), s_double, "ct"), "CTI1")
+verifier_egal("C85-3 : segments des dossiers inchangés par l'exclusion de CTI1 pour risque_en_cours (unités d'un autre type)",
+              {
+                s <- ns$segments_vue(v_rec85, list(ct = list(regle = "contrat")), pp85[c("garantie", "famille", "unite")])
+                s$id_dossier[!is.na(s$id_dossier)]
+              }, c("DOR1", "DOR3", "DOR4", "DOR5A", "DOR5B"))
+# Unité lue dans le catalogue, non déduite de la famille : catalogue fictif où P3 passe en
+# famille engagement, son unité gardée (tue le mutant « unite <- famille == engagement ? dossiers :
+# contrats » de .postes_plan(), constat 2 de l'audit léger, m4.R)
+cat_fictif <- cat85
+cat_fictif$postes$famille[cat_fictif$postes$poste == p3] <- "engagement"
+verifier_egal("#85 : .postes_plan() sur un catalogue fictif (P3 en famille engagement) : unité du catalogue (dossiers, dossiers, contrats)",
+              ns$.postes_plan(cp85, cat_fictif)$unite, c("dossiers", "dossiers", "contrats"))
+# C85-4 : contrôles des unités d'un poste calculé dans .agreger(), une fois par poste, par
+# sorties construites (avant #85 : contrôles absents). Les lettres accentuées des messages
+# d'erreur sont lues par « .{1,8} » : sous une locale C, stop() les rend en <U+00E9>.
+sorties_dup <- sorties85
+sorties_dup[[1L]]$dossiers <- sorties_dup[[1L]]$dossiers[c(1L, seq_len(nrow(sorties_dup[[1L]]$dossiers))), , drop = FALSE]
+verifier("C85-4 : dossier valorisé deux fois par P1 (sortie construite) : erreur interne, unité en double",
+         grepl("^autre : erreur interne de provie : unit.{1,8} en double dans la sortie du poste sinistres_declares_non_regles$",
+               motif_de(agreger85(pp85, sorties = sorties_dup))))
+# (a) P3 déclaré en unité dossiers : sa sortie porte un élément `dossiers` vide et ses contrats.
+# Avant le contrôle d'exclusivité (audit léger, m6.R) : 0 unité restituée, sans erreur, et les
+# cellules de segment de P3 disparaissaient.
+pp_d <- pp85
+pp_d$unite[pp_d$poste == p3] <- "dossiers"
+motif_excl <- paste0("^autre : erreur interne de provie : 3 ligne\\(s\\) de type contrats dans la sortie du poste ", p3,
+                     " d'unit.{1,8} dossiers$")
+verifier("C85-4 (a) : P3 déclaré en unité dossiers (sortie de C1) : erreur interne d'exclusivité, non 0 unité restituée",
+         grepl(motif_excl, motif_de(agreger85(pp_d))))
+verifier("C85-4 (a) : de même sans segmentation déclarée (contrôle une fois par poste)",
+         grepl(motif_excl, motif_de(ns$.agreger(pp_d, sorties85, ns$segments_vue(vue85, list(), pp_d[c("garantie", "famille", "unite")]),
+                                                character(0), cp85, cat85))))
+# (b) le même cas, montants de P3 tous nuls (cellule ensemble à 0) : l'identité du montant
+# tiendrait (somme de 0 dossier = 0) ; seule l'exclusivité l'attrape
+sorties_nul <- sorties85
+i3 <- which(pp85$poste == p3)
+sorties_nul[[i3]]$contrats$montant <- rep(0, nrow(sorties_nul[[i3]]$contrats))
+sorties_nul[[i3]]$cellules$montant <- 0
+verifier("C85-4 (b) : P3 déclaré en unité dossiers, montants de P3 tous nuls : erreur interne d'exclusivité",
+         grepl(motif_excl, motif_de(agreger85(pp_d, sorties = sorties_nul))))
+verifier("C85-4 (b) : témoin, P3 en unité contrats et montants nuls : aucune erreur, P3 ensemble 0",
+         {
+           q <- agreger85(pp85, sorties = sorties_nul)
+           identical(q$montant[q$poste == p3 & q$segmentation == "ensemble"], 0)
+         })
+# (c) identité du montant violée : un dossier de P1 augmenté de 1 sans changer la cellule
+sorties_id <- sorties85
+sorties_id[[1L]]$dossiers$montant[1L] <- sorties_id[[1L]]$dossiers$montant[1L] + 1
+verifier("C85-4 (c) : somme des unités de P1 différente de sa cellule ensemble (sortie construite) : erreur interne",
+         grepl(paste0("^autre : erreur interne de provie : somme des unit.{1,8}s diff.{1,8}rente du montant de la cellule ensemble ",
+                      "\\(poste sinistres_declares_non_regles\\)$"),
+               motif_de(agreger85(pp85, sorties = sorties_id))))
+pp_c <- pp85
+pp_c$unite[pp_c$poste == "sinistres_declares_non_regles"] <- "contrats"
+verifier("C85-4 : P1 déclaré en unité contrats, sortie sans élément contrats : erreur interne, non 0 unité restituée",
+         grepl("^autre : erreur interne de provie : sortie sans .{1,8}l.{1,8}ment contrats", motif_de(agreger85(pp_c))))
+pp_x <- pp85
+pp_x$unite[pp_x$poste == p3] <- "lignes"
+verifier("C85-4 : type d'unité hors de la liste du catalogue : erreur interne de segments_vue()",
+         grepl("^autre : erreur interne de provie : type d'unit.{1,8} inconnu de segments_vue\\(\\) \\(lignes\\)",
+               motif_de(agreger85(pp_x))))
+# C85-6 : test de suppression : plus aucun nom de famille dans le code de segments_vue(),
+# .unites() ni .segment_unites() (avant #85 : .unites() testait famille == "engagement")
+familles85 <- sort(unique(c(ns$FAMILLES_CALCUL, ns$.FAMILLES_POSTE)), method = "radix")
+corps85 <- function(f) paste(deparse(body(f), width.cutoff = 500L), collapse = "\n")
+verifier_egal("C85-6 : aucun nom de famille dans segments_vue(), .unites() ni .segment_unites()",
+              lapply(list(ns$segments_vue, ns$.unites, ns$.segment_unites), function(f) {
+                familles85[vapply(familles85, function(x) grepl(paste0("\\b", x, "\\b"), corps85(f)), NA)]
+              }), list(character(0), character(0), character(0)))
+verifier("C85-6 : témoin du test de suppression : le nom engagement est trouvé dans le corps de calculer_provisions()",
+         grepl("\\bengagement\\b", corps85(calculer_provisions)))
 
 section("enjeu par poste (spécification donnees, § 4.5, point 3)")
 en <- j3$r$donnees$enjeu
@@ -655,10 +796,10 @@ for (k in names(cles154)) {
                      gce154(b2_vue(b154, AX154, d154, p_c1$conventions), "risque_en_cours")),
                 list(character(0), "GSC1"))
 }
-# segments_vue() (exclue_eng, exclue_rec ; règle (ii)) : une garantie souscrite d'identifiant
+# segments_vue() (exclue_d, exclue_c ; règle (ii)) : une garantie souscrite d'identifiant
 # manquant ou vide ne porte aucune unité contrat, exclue ou non
 unites154 <- function(v) {
-  s <- ns$segments_vue(v, list(ct = list(regle = "contrat")), "deces")
+  s <- ns$segments_vue(v, list(ct = list(regle = "contrat")), unites_c1)
   sort(unique(s$id_contrat[is.na(s$id_dossier)]), method = "radix")
 }
 mut_seg <- function(v, cle) {
@@ -684,7 +825,7 @@ mut_seg_ct <- function(v, cle) {
 }
 la154 <- function(cle) {
   s <- ns$segments_vue(v154(mut_seg_ct, cle), list(la = list(regle = "ligne_activite", correspondance = list(deces = "ldec"))),
-                       "deces")
+                       unites_c1)
   s <- s[is.na(s$id_dossier), , drop = FALSE]
   list(s$id_contrat, s$segment)
 }

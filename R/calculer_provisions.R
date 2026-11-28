@@ -78,7 +78,6 @@ calculer_provisions <- function(donnees, plan, tables = list(), provenance = NUL
   catalogue <- catalogue_garanties()
   # plan
   cp <- canoniser_plan(plan)
-  garanties <- cp$perimetre$garanties
   postes_plan <- .postes_plan(cp, catalogue)
   # tables
   rt <- resoudre_tables(cp$tables, tables, .usages_exiges(postes_plan, cp, catalogue))
@@ -98,7 +97,7 @@ calculer_provisions <- function(donnees, plan, tables = list(), provenance = NUL
                                              postes_plan$poste[i])
   }
   # segments
-  segments <- segments_vue(vue, cp$perimetre$segmentations, garanties)
+  segments <- segments_vue(vue, cp$perimetre$segmentations, postes_plan[c("garantie", "famille", "unite")])
   # agregats
   provisions <- .agreger(postes_plan, sorties, segments, names(cp$perimetre$segmentations), cp, catalogue)
   # postes exposés par leur famille à une ligne de portée ligne de refus_tables (attribut
@@ -173,21 +172,22 @@ print.resultat_provie <- function(x, ...) {
 # --- Étapes de l'orchestration ---------------------------------------------------
 
 # Postes du plan canonique, dans l'ordre du catalogue : data.frame (garantie, referentiel,
-# poste, famille, provision, cle) ; un poste par garantie du périmètre, par référentiel du
-# périmètre et par ligne de postes.csv de la garantie.
+# poste, famille, unite, provision) ; un poste par garantie du périmètre, par référentiel du
+# périmètre et par ligne de postes.csv de la garantie ; `unite` : type des unités de calcul du
+# poste (colonne `unite` du catalogue, spécification de B2, § 4.1, erratum v1.0.26).
 .postes_plan <- function(cp, catalogue) {
   lignes <- list()
   for (g in cp$perimetre$garanties) for (r in cp$perimetre$referentiels) {
     cat_g <- catalogue$postes[catalogue$postes$code_garantie == g, , drop = FALSE]
     if (nrow(cat_g) == 0L) next
     lignes[[length(lignes) + 1L]] <- data.frame(
-      garantie = g, referentiel = r, poste = cat_g$poste, famille = cat_g$famille,
+      garantie = g, referentiel = r, poste = cat_g$poste, famille = cat_g$famille, unite = cat_g$unite,
       provision = if (r == "comptes_sociaux") cat_g$provision_comptes_sociaux else rep("meilleure_estimation", nrow(cat_g)),
       stringsAsFactors = FALSE)
   }
   if (length(lignes) == 0L) {
     return(data.frame(garantie = character(0), referentiel = character(0), poste = character(0), famille = character(0),
-                      provision = character(0), stringsAsFactors = FALSE))
+                      unite = character(0), provision = character(0), stringsAsFactors = FALSE))
   }
   res <- do.call(rbind, lignes)
   rownames(res) <- NULL
@@ -256,27 +256,34 @@ print.resultat_provie <- function(x, ...) {
              valeur_retenue = numeric(0), depassement = logical(0), detail = character(0), stringsAsFactors = FALSE)
 }
 
-# Unités de calcul d'une sortie de famille : data.frame (id_dossier, id_contrat, champ,
-# montant, statut_resultat) ; dossiers de la famille engagement (id_contrat lu dans les
-# segments), contrats de la famille risque_en_cours (élément `contrats`).
-.unites <- function(sortie, famille, segments) {
-  if (famille == "engagement") {
-    d <- sortie$dossiers
-    lignes_d <- segments[!is.na(segments$id_dossier), , drop = FALSE]
-    return(data.frame(id_dossier = d$id_dossier,
-                      id_contrat = lignes_d$id_contrat[match(d$id_dossier, lignes_d$id_dossier)],
-                      champ = rep("", nrow(d)), montant = d$montant, statut_resultat = d$statut_resultat,
-                      stringsAsFactors = FALSE))
+# Unités de calcul d'une sortie de famille, du type `unite` déclaré par le catalogue (colonne
+# `unite` de postes.csv, spécification de B2, § 4.1 et § 6.4, point 1, erratum v1.0.26) :
+# data.frame (id_dossier, id_contrat, champ, montant, statut_resultat), une ligne par ligne de
+# l'élément de même nom de la sortie ; `dossiers` : id_contrat lu dans les segments ;
+# `contrats` : id_dossier NA. Un élément absent de la sortie ou un type hors de la liste du
+# catalogue est une erreur de programmation (le catalogue est validé à la lecture).
+.unites <- function(sortie, unite, segments) {
+  x <- sortie[[unite]]
+  if (is.null(x)) {
+    stop("erreur interne de provie : sortie sans \u00e9l\u00e9ment ", unite, " (unit\u00e9 du poste)", call. = FALSE)
   }
-  ct <- sortie$contrats
-  data.frame(id_dossier = rep(NA_character_, nrow(ct)), id_contrat = ct$id_contrat, champ = ct$champ,
-             montant = ct$montant, statut_resultat = ct$statut_resultat, stringsAsFactors = FALSE)
+  switch(unite,
+    dossiers = {
+      lignes_d <- segments[!is.na(segments$id_dossier), , drop = FALSE]
+      data.frame(id_dossier = x$id_dossier, id_contrat = lignes_d$id_contrat[match(x$id_dossier, lignes_d$id_dossier)],
+                 champ = rep("", nrow(x)), montant = x$montant, statut_resultat = x$statut_resultat,
+                 stringsAsFactors = FALSE)
+    },
+    contrats = data.frame(id_dossier = rep(NA_character_, nrow(x)), id_contrat = x$id_contrat, champ = x$champ,
+                          montant = x$montant, statut_resultat = x$statut_resultat, stringsAsFactors = FALSE),
+    stop("erreur interne de provie : type d'unit\u00e9 inconnu (", unite, ")", call. = FALSE))
 }
 
 # Segment de chaque unité pour la segmentation `nom` : dossier par id_dossier, contrat par
 # id_contrat (lignes de contrat des segments, id_dossier NA). Un segment indéterminé d'une
 # unité valorisée est une erreur de programmation (les postes de B2 lisent la clé : un refus
-# l'aurait arrêté).
+# l'aurait arrêté ; la population des segments est la réunion sur les familles qui valorisent
+# le type d'unité, segments_vue()).
 .segment_unites <- function(unites, segments, nom) {
   s <- segments[segments$segmentation == nom, , drop = FALSE]
   sd <- s[!is.na(s$id_dossier), , drop = FALSE]
@@ -292,12 +299,15 @@ print.resultat_provie <- function(x, ...) {
 
 # Cellules restituées (ADR 0010, points 6 et 7 ; spécification de B2, § 6.1 et § 7.7) :
 #   - par poste du plan, la cellule `ensemble` de la famille (niveau `calcul`) ;
-#   - par segmentation déclarée et par segment où le poste a au moins une unité (dossier ou
-#     contrat) : cellule de niveau `calcul`, somme des unités du segment (sum(sort())),
-#     nombre de dossiers du segment, statut le plus faible de ses unités ; pour un poste à
+#   - par segmentation déclarée et par segment où le poste a au moins une unité (du type de la
+#     colonne `unite` du catalogue, .unites()) : cellule de niveau `calcul`, somme des unités du
+#     segment (sum(sort())), nombre de dossiers du segment, statut le plus faible de ses unités ; pour un poste à
 #     champs (P3), méthode et statut de méthode des seuls champs présents dans le segment ; un
 #     poste arrêté a une cellule `arrete` (montant et nombre NA, motif du poste) par segment
-#     restitué pour un autre poste de la garantie et du référentiel ;
+#     restitué pour un autre poste de la garantie et du référentiel ; les unités d'un poste
+#     calculé sont contrôlées une fois (exclusivité du type, aucune unité en double, somme des
+#     unités identique à la cellule `ensemble`), sinon erreur interne (§ 6.4, point 1, erratum
+#     v1.0.26) ;
 #   - par garantie, référentiel, segmentation (`ensemble` comprise) et segment : la cellule
 #     `total` de niveau `agregat` (invariant (f)), somme des cellules `calcul` des postes
 #     (sum(sort())), nombre de dossiers sommé, statut le plus faible ; arrêtée dès qu'un poste
@@ -333,13 +343,46 @@ print.resultat_provie <- function(x, ...) {
     idx <- which(postes_plan$garantie == g & postes_plan$referentiel == r)
     ens <- lapply(idx, function(i) cellules[[i]])
     arretes <- vapply(ens, function(x) x$statut_calcul == "arrete", NA)
+    # unités de chaque poste calculé, contrôlées une fois par poste, segmentations déclarées ou
+    # non (spécification de B2, § 6.4, point 1, erratum v1.0.26) ; un écart est une erreur de
+    # programmation :
+    #   (i) exclusivité : la sortie ne porte aucune ligne sous un autre type d'unité du catalogue
+    #       que celui du poste (élément absent toléré) ;
+    #   (iii) aucune unité en double (dossier ; contrat et champ) : chaque unité valorisée est
+    #       restituée une fois par segmentation ;
+    #   (ii) identité du montant : la somme commune des montants des unités (.somme_montants())
+    #       est identique, sans tolérance, au montant de la cellule `ensemble` rendue par la
+    #       famille ; résultat exact par construction sous l'hypothèse que le total d'un poste
+    #       est la somme commune de ses unités (ADR 0010, invariant 7 (a)).
+    types_unite <- unique(catalogue$postes$unite)
+    unites_poste <- vector("list", length(idx))
+    for (j in seq_along(idx)) {
+      if (arretes[j]) next
+      i <- idx[j]
+      u <- .unites(sorties[[i]], postes_plan$unite[i], segments)
+      for (autre in setdiff(types_unite, postes_plan$unite[i])) {
+        if (NROW(sorties[[i]][[autre]]) != 0L) {
+          stop("erreur interne de provie : ", NROW(sorties[[i]][[autre]]), " ligne(s) de type ", autre,
+               " dans la sortie du poste ", postes_plan$poste[i], " d'unit\u00e9 ", postes_plan$unite[i], call. = FALSE)
+        }
+      }
+      if (anyDuplicated(paste(u$id_dossier, u$id_contrat, u$champ, sep = "\r"))) {
+        stop("erreur interne de provie : unit\u00e9 en double dans la sortie du poste ", postes_plan$poste[i],
+             call. = FALSE)
+      }
+      if (!identical(.somme_montants(u$montant), ens[[j]]$montant)) {
+        stop("erreur interne de provie : somme des unit\u00e9s diff\u00e9rente du montant de la cellule ensemble (poste ",
+             postes_plan$poste[i], ")", call. = FALSE)
+      }
+      unites_poste[[j]] <- u
+    }
     for (nom in noms_segmentations) {
       vus <- character(0)
       par_poste <- list()
       for (j in seq_along(idx)) {
         if (arretes[j]) next
         i <- idx[j]
-        u <- .unites(sorties[[i]], postes_plan$famille[i], segments)
+        u <- unites_poste[[j]]
         if (nrow(u) == 0L) next
         seg <- .segment_unites(u, segments, nom)
         par_poste[[j]] <- list(u = u, seg = seg)

@@ -17,7 +17,7 @@ COLONNES_CATALOGUE <- list(
   transitions.csv = c("depuis", "vers", "usage", "pas", "axes", "decomposition"),
   flux.csv = c("code_garantie", "flux", "type_flux", "etat_payeur", "parametres"),
   usages_tables.csv = c("code_garantie", "usage", "nature", "axes"),
-  postes.csv = c("code_garantie", "poste", "famille", "composantes", "regle_combinaison",
+  postes.csv = c("code_garantie", "poste", "famille", "unite", "composantes", "regle_combinaison",
                  "provision_comptes_sociaux", "meilleure_estimation", "methodes", "temoins"),
   liens.csv = c("garantie", "garantie_liee", "lien"),
   lectures.csv = c("code_garantie", "poste", "table", "colonne")
@@ -44,6 +44,11 @@ USAGE_SERIE_TME <- "serie_tme"
 .AXES_TABLE <- c("age", "anciennete", "generation", "date", "maturite")
 .FAMILLES_POSTE <- c("engagement", "triangle", "risque_en_cours", "projection", "regle_comptable",
                      "combinaison")
+# Types d'unités de calcul qu'un poste valorise et restitue par segment (colonne `unite` de
+# postes.csv ; spécification de B2, § 4.1, erratum v1.0.26 ; M843) : liste fermée, étendue par
+# la branche qui valorise un type nouveau ; chaque type est l'élément de même nom de la sortie
+# d'une famille.
+.UNITES_POSTE <- c("dossiers", "contrats")
 .LIENS <- c("maintien_garantie_deces", "passage", "double_effet")
 
 # --- Lecture du catalogue ----------------------------------------------------------
@@ -164,6 +169,9 @@ catalogue_garanties <- function() {
   exiger(jeton(p$poste) & !duplicated(p[, c("code_garantie", "poste")]), "postes.csv : poste mal form\u00e9 ou en double")
   exiger(p$famille %in% .FAMILLES_POSTE,
          paste0("postes.csv : famille hors liste (", paste(.FAMILLES_POSTE, collapse = ", "), ")"))
+  exiger(p$unite %in% .UNITES_POSTE,
+         paste0("postes.csv : unit\u00e9 manquante ou hors liste (", paste(.UNITES_POSTE, collapse = ", "), ")"),
+         colonne = "unite")
   exiger(jeton(p$provision_comptes_sociaux), "postes.csv : provision_comptes_sociaux mal form\u00e9e")
   exiger(p$famille != "combinaison" | (nzchar(p$composantes) & nzchar(p$regle_combinaison)),
          "postes.csv : un poste de la famille combinaison porte composantes et regle_combinaison")
