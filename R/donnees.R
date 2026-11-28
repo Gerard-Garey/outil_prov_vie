@@ -687,13 +687,18 @@ REGLES_SEGMENTATION_B2 <- c("contrat", "nature_contrat", "annee_survenance", "li
 
 # Segments des unités de calcul de la vue `vue` (objet vue_a_date()) pour les segmentations
 # déclarées `segmentations` (plan$perimetre$segmentations canonique : nom -> list(regle,
-# correspondance)) et les garanties `garanties` (codes) (ADR 0010, points 9 et 17 ; spécification
-# de B2, § 2.2, § 5.5 et § 7.7). Unités : chaque dossier retenu dont la garantie souscrite retenue a un
-# code de `garanties` et n'est pas dans garanties_couverture_exclue(vue, "engagement")
-# (id_dossier, id_sinistre, id_contrat de la garantie souscrite) ; chaque contrat retenu qui
-# porte une garantie souscrite retenue de ces codes hors de garanties_couverture_exclue(vue,
-# "risque_en_cours") (id_dossier et id_sinistre NA) (erratum v1.0.13 : aucune colonne d'une
-# ligne exclue n'est lue pour une unité). Clé : `contrat` : id_contrat ; `nature_contrat` : contrats.nature_contrat ;
+# correspondance)) et les types d'unités des postes du plan `unites` (data.frame (garantie,
+# famille, unite) : code de garantie, famille et colonne `unite` du catalogue de chaque poste)
+# (ADR 0010, points 9 et 17 ; spécification de B2, § 2.2, § 5.5, § 6.4, point 1, erratum
+# v1.0.26, et § 7.7). Population d'un type d'unité pour une garantie : réunion, sur les familles
+# des postes qui valorisent ce type pour la garantie, des unités hors de
+# garanties_couverture_exclue(vue, famille) (erratum v1.0.13 : aucune colonne d'une ligne exclue
+# pour toutes ces familles n'est lue pour une unité ; le segment d'une unité ne dépend pas de la
+# famille). Unités `dossiers` : chaque dossier retenu dont la garantie souscrite retenue est de
+# la population (id_dossier, id_sinistre, id_contrat de la garantie souscrite) ; unités
+# `contrats` : chaque contrat retenu qui porte une garantie souscrite retenue de la population
+# (id_dossier et id_sinistre NA). Un type hors de ces deux est une erreur de programmation (le
+# catalogue est validé à la lecture). Clé : `contrat` : id_contrat ; `nature_contrat` : contrats.nature_contrat ;
 # `ligne_activite` : correspondance[code_garantie] (pour un contrat, une valeur par code
 # porté, réunies par « ; » triées) ; `annee_survenance` : année de sinistres.date_survenance du
 # sinistre du dossier, `hors_survenance` pour un contrat (erratum v1.0.12). Les règles sont
@@ -702,7 +707,7 @@ REGLES_SEGMENTATION_B2 <- c("contrat", "nature_contrat", "annee_survenance", "li
 # data.frame `segments` du bilan (id_dossier, id_sinistre, id_contrat, segmentation, segment),
 # trié par segmentation, id_contrat, id_dossier (sort radix, NA en tête) ; segment NA si la clé
 # est hors de la vue. Sans point : appelée par l'orchestration, non exportée.
-segments_vue <- function(vue, segmentations, garanties) {
+segments_vue <- function(vue, segmentations, unites) {
   if (!inherits(vue, "vue_provie")) stop("segments_vue() : `vue` doit \u00eatre un objet vue_provie", call. = FALSE)
   vide <- data.frame(id_dossier = character(0), id_sinistre = character(0), id_contrat = character(0),
                      segmentation = character(0), segment = character(0), stringsAsFactors = FALSE)
@@ -712,11 +717,15 @@ segments_vue <- function(vue, segmentations, garanties) {
     stop("erreur interne de provie : r\u00e8gle de segmentation hors de REGLES_SEGMENTATION_B2 (",
          paste(setdiff(regles, REGLES_SEGMENTATION_B2), collapse = ", "), ")", call. = FALSE)
   }
+  if (!all(unites$unite %in% c("dossiers", "contrats"))) {
+    stop("erreur interne de provie : type d'unit\u00e9 inconnu de segments_vue() (",
+         paste(setdiff(unites$unite, c("dossiers", "contrats")), collapse = ", "), ")", call. = FALSE)
+  }
   ctx <- vue$ctx
   vv <- function(t, c1) .valeurs_vue(ctx, t, c1)
   # une garantie souscrite d'identifiant manquant ou vide ne porte aucune unité (#154, règle (ii)) :
   # gs_id renseigné, comparé exactement aux identifiants rendus par garanties_couverture_exclue()
-  r_gs <- which(ctx$retenu$garanties_souscrites & vv("garanties_souscrites", "code_garantie") %in% garanties &
+  r_gs <- which(ctx$retenu$garanties_souscrites & vv("garanties_souscrites", "code_garantie") %in% unites$garantie &
                   cle_renseignee(vv("garanties_souscrites", "id_garantie_souscrite")))
   gs_id <- as.character(vv("garanties_souscrites", "id_garantie_souscrite"))[r_gs]
   gs_contrat <- as.character(vv("garanties_souscrites", "id_contrat"))[r_gs]
@@ -725,17 +734,26 @@ segments_vue <- function(vue, segmentations, garanties) {
   ct_nature <- vv("contrats", "nature_contrat")
   # clés appariées : une chaîne vide vaut clé manquante, aucun appariement (apparier_cles(), #123, #154)
   # unités : dossiers, puis contrats
-  # couverture exclue (erratum v1.0.13) : un dossier d'une garantie souscrite exclue pour engagement
-  # (unités de P1 et P2) et un contrat dont les garanties souscrites sont exclues pour
-  # risque_en_cours (unités de P3) ne sont pas des unités : aucune colonne de la ligne exclue n'est lue
-  exclue_eng <- !is.na(apparier_cles(gs_id, garanties_couverture_exclue(vue, "engagement")))
-  exclue_rec <- !is.na(apparier_cles(gs_id, garanties_couverture_exclue(vue, "risque_en_cours")))
+  # couverture exclue (erratum v1.0.13 ; erratum v1.0.26) : une garantie souscrite hors de la
+  # population d'un type (exclue pour chaque famille qui valorise ce type pour son code) ne porte
+  # aucune unité de ce type : aucune colonne de la ligne exclue n'est lue
+  exclue_type <- function(type) {
+    u <- unique(unites[unites$unite == type, c("garantie", "famille"), drop = FALSE])
+    gardee <- rep(FALSE, length(gs_id))
+    for (j in seq_len(nrow(u))) {
+      gardee <- gardee | (gs_code == u$garantie[j] &
+                            is.na(apparier_cles(gs_id, garanties_couverture_exclue(vue, u$famille[j]))))
+    }
+    !gardee
+  }
+  exclue_d <- exclue_type("dossiers")
+  exclue_c <- exclue_type("contrats")
   k <- which(ctx$retenu$dossiers)
   i_gs <- apparier_cles(vv("dossiers", "id_garantie_souscrite")[k], gs_id)
-  i_gs[!is.na(i_gs)][exclue_eng[i_gs[!is.na(i_gs)]]] <- NA_integer_
+  i_gs[!is.na(i_gs)][exclue_d[i_gs[!is.na(i_gs)]]] <- NA_integer_
   k <- k[!is.na(i_gs)]
   i_gs <- i_gs[!is.na(i_gs)]
-  contrats_u <- sort(unique(gs_contrat[!exclue_rec & !is.na(apparier_cles(gs_contrat, ct_id[ctx$retenu$contrats]))]),
+  contrats_u <- sort(unique(gs_contrat[!exclue_c & !is.na(apparier_cles(gs_contrat, ct_id[ctx$retenu$contrats]))]),
                      method = "radix")
   u_dossier <- c(as.character(vv("dossiers", "id_dossier"))[k], rep(NA_character_, length(contrats_u)))
   u_sinistre <- c(as.character(vv("dossiers", "id_sinistre"))[k], rep(NA_character_, length(contrats_u)))
@@ -743,7 +761,7 @@ segments_vue <- function(vue, segmentations, garanties) {
   # codes de garantie par contrat : un seul appariement de gs_contrat aux contrats d'unité (rang dans
   # contrats_u, NA hors unité), puis regroupement par rang ; un contrat sans garantie retenue rend ""
   j_contrat <- apparier_cles(gs_contrat, contrats_u)
-  retenue <- !exclue_rec & !is.na(j_contrat)
+  retenue <- !exclue_c & !is.na(j_contrat)
   codes_contrat <- vapply(split(gs_code[retenue], factor(j_contrat[retenue], levels = seq_along(contrats_u))),
                           function(g) paste(sort(unique(g), method = "radix"), collapse = ";"), "", USE.NAMES = FALSE)
   u_codes <- c(gs_code[i_gs], codes_contrat)

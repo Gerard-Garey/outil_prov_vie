@@ -131,7 +131,7 @@ LISTE_BLANCHE <- c(
     "code",
   "R/donnees.R | etats_a_date | match ( type [ i ] , te $ type_evenement )" =
     "code",
-  "R/donnees.R | segments_vue | vv ( \"garanties_souscrites\" , \"code_garantie\" ) %in% garanties" =
+  "R/donnees.R | segments_vue | vv ( \"garanties_souscrites\" , \"code_garantie\" ) %in% unites $ garantie" =
     "code",
   "R/donnees.R | .controler_extraction_base | x %in% modalites" =
     "code",

@@ -89,6 +89,26 @@ verifier_egal("méthode inconnue (non implémentée : jamais au catalogue)",
               motif_de(lire_catalogue(copie_alteree("postes.csv", "capital_dossier;capital_dossier_reglement",
                                                     "capital_dossier;chain_ladder_paiements"), d)),
               "catalogue_invalide")
+# C85-1 (#85 ; spécification de B2, § 4.1, erratum v1.0.26 ; M843) : colonne `unite` de postes.csv,
+# liste fermée du module ; avant #85, la colonne n'existait pas : une copie du catalogue qui
+# l'ajoutait (valeur « lignes », vide ou valide) était refusée pour colonne en trop
+# (« colonnes de postes.csv différentes de celles attendues »)
+verifier("#85 : types d'unité du catalogue embarqué = liste fermée .UNITES_POSTE (complétude de la liste du contrôle (i) d'exclusivité de .agreger(), lue dans le catalogue)",
+         setequal(unique(k$postes$unite), ns$.UNITES_POSTE))
+verifier_egal("C85-1 : unite lue après famille : dossiers pour P1 et P2, contrats pour P3",
+              list(names(k$postes)[3:4], k$postes$unite), list(c("famille", "unite"), c("dossiers", "dossiers", "contrats")))
+r_lignes <- refus_de(lire_catalogue(copie_alteree("postes.csv", "deces,sinistres_declares_non_regles,engagement,dossiers,",
+                                                  "deces,sinistres_declares_non_regles,engagement,lignes,"), d))
+r_vide <- refus_de(lire_catalogue(copie_alteree("postes.csv", "deces,sinistres_declares_non_regles,engagement,dossiers,",
+                                                "deces,sinistres_declares_non_regles,engagement,,"), d))
+verifier("C85-1 : unite hors liste (lignes) sur P1, puis cellule vide : catalogue_invalide, sur la colonne unite, dans les deux cas",
+         !is.null(r_lignes) && !is.null(r_vide) && r_lignes$motif == "catalogue_invalide" && r_vide$motif == "catalogue_invalide" &&
+           identical(r_lignes$colonne, "unite") && identical(r_vide$colonne, "unite") &&
+           grepl("unit\u00e9 manquante ou hors liste", conditionMessage(r_vide), fixed = TRUE))
+verifier_egal("C85-1 : colonne unite retirée de postes.csv : catalogue_invalide (colonnes différentes)",
+              motif_de(lire_catalogue(copie_alteree("postes.csv", "code_garantie,poste,famille,unite,",
+                                                    "code_garantie,poste,famille,"), d)),
+              "catalogue_invalide")
 r <- refus_de(lire_catalogue(copie_alteree("lectures.csv", "sinistres,canal_declaration", "sinistres,canal_inconnu"), d))
 verifier("lectures.csv qui cite une colonne absente du dictionnaire : refus nommant la colonne",
          !is.null(r) && r$motif == "catalogue_invalide" && identical(r$identifiants, "sinistres.canal_inconnu"))

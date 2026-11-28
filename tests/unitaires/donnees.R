@@ -4497,7 +4497,9 @@ vue_123 <- function(f, z) {
   v <- ns$vue_a_date(avec(function(b) f(b, z)), A, NULL, NULL)
   list(etats = ns$etats_a_date(v, "deces", "engagement"),
        segments = ns$segments_vue(v, list(c = list(regle = "contrat"), n = list(regle = "nature_contrat"),
-                                          a = list(regle = "annee_survenance")), "deces"))
+                                          a = list(regle = "annee_survenance")),
+                                 data.frame(garantie = "deces", famille = c("engagement", "risque_en_cours"),
+                                            unite = c("dossiers", "contrats"), stringsAsFactors = FALSE)))
 }
 seg_123 <- function(s, regle, dossier) s$segment[s$segmentation == regle & s$id_dossier %in% dossier]
 v_gs <- lapply(list("", NA_character_), function(z) vue_123(function(b, z) {
