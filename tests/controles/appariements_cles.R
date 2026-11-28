@@ -321,10 +321,24 @@ LISTE_BLANCHE <- c(
     "metadonnee",
   "R/donnees.R | .cause_nd | liens $ table_cible %in% ctx $ tables" =
     "metadonnee",
-  "R/donnees.R | .regle_v | match ( dossier , rownames ( somme ) )" =
+  "R/donnees.R | .verdict_vue | r0 [ c1 ] %in% r0 [ i ]" =
+    "code",
+  "R/donnees.R | .somme_parts3 | match ( dossier , rownames ( somme ) )" =
     "a_instruire : somme_parts : beneficiaires.id_dossier \"\" regroupe par rowsum() (ok <- !is.na(dossier) seul) ; releve, #164",
-  "R/donnees.R | .regle_v | dossier %in% brut [ nd ]" =
+  "R/donnees.R | .somme_parts3 | dossier %in% brut [ nd ]" =
     "a_instruire : somme_parts : id_dossier \"\" des beneficiaires non determines apparie a \"\" ; releve, #164",
+  "R/donnees.R | .somme_parts3 | dossier %in% k" =
+    "a_instruire : somme_parts, parts refusees (#105, G1) : meme appariement des dossiers que la regle v1.5.4 ; releve, #164",
+  "R/donnees.R | .somme_parts3 | k %in% dossier [ refusees ]" =
+    "a_instruire : somme_parts, parts refusees (#105, G1) : idem ; releve, #164",
+  "R/donnees.R | .somme_parts3 | brut [ nd ] %in% k" =
+    "a_instruire : somme_parts, parts refusees (#105, G1) : idem, beneficiaires non determines ; releve, #164",
+  "R/donnees.R | .somme_parts3 | dossier [ refusees ] %in% k" =
+    "a_instruire : somme_parts, parts refusees (#105, G1) : idem ; releve, #164",
+  "R/donnees.R | .somme_parts3 | brut [ nd_inconnu ] %in% k" =
+    "a_instruire : somme_parts, parts refusees (#105, G1) : idem, beneficiaires non determines ; releve, #164",
+  "R/donnees.R | .somme_parts3 | dossier %in% dossiers_inconnus" =
+    "a_instruire : somme_parts, parts refusees (#105, G1) : idem ; releve, #164",
   "R/donnees.R | .regle_v_parente_posterieure | liens $ table %in% ctx $ tables" =
     "metadonnee",
   "R/donnees.R | .regle_v_parente_posterieure | liens $ table_cible %in% ctx $ tables" =
@@ -333,42 +347,66 @@ LISTE_BLANCHE <- c(
     "indice",
   "R/donnees.R | .regle_v_parente_posterieure | fx %in% couvertes" =
     "indice",
-  "R/donnees.R | .regle_v_manquants | match ( vv ( \"evenements\" , \"type_evenement\" ) , te $ type_evenement )" =
+  "R/donnees.R | .regle_v_manquants | match ( x $ type , te $ type_evenement )" =
     "code",
+  "R/donnees.R | .regle_v_ordre_dates | y %in% p $ colonnes" =
+    "metadonnee",
+  "R/donnees.R | .copies3 | match ( seq_len ( n ) , order ( as.numeric ( .valeurs ( ctx , table , date ) ) , cles , method = \"radix\" , na.last = TRUE ) )" =
+    "indice",
   "R/donnees.R | .regle_v_doublons | match ( groupe , groupe )" =
     "indice",
   "R/donnees.R | .regle_v_doublons | match ( seq_along ( retenu ) , o2 )" =
     "indice",
   "R/donnees.R | .regle_v_doublons | match ( groupe [ rang [ l ] ] , as.integer ( names ( nd_groupe ) ) )" =
     "indice",
-  "R/donnees.R | .regle_v_clotures | dossier %in% payes [ ! is.na ( payes ) ]" =
-    "a_instruire : D06 : evenements.id_dossier \"\" apparie a prestations.id_dossier \"\" ; releve, #164",
-  "R/donnees.R | .regle_v_clotures | dossier %in% capital [ ! is.na ( capital ) ]" =
-    "a_instruire : D06 : idem, prestations de type capital ; releve, #164",
-  "R/donnees.R | .regle_v_garanties | sinistre %in% avec_deces [ ! is.na ( avec_deces ) ]" =
-    "a_instruire : D10 : id_sinistre \"\" (valeur brute de .joindre()) apparie a \"\" ; releve, #164",
+  "R/donnees.R | .ou3 | ligne [ garde ] %in% vrai" =
+    "indice",
+  "R/donnees.R | .ou3 | t [[ b ] ] %in% t [[ a ] ]" =
+    "indice",
+  "R/donnees.R | .age_assure3 | refs $ p %in% lignes_c" =
+    "indice",
+  "R/donnees.R | .age_assure3 | \"vrai\" %in% s1" =
+    "code",
+  "R/donnees.R | .age_assure3 | \"faux\" %in% s1" =
+    "code",
+  "R/donnees.R | .age_assure3 | c ( \"faux\" , \"indefini\" ) %in% s1" =
+    "code",
+  "R/donnees.R | .age_assure3 | \"indefini\" %in% s1" =
+    "code",
+  "R/donnees.R | .age_assure3 | match ( c ( o , y ) , ordre_issue )" =
+    "code",
+  "R/donnees.R | .verdict_d11c | groupe3 %in% groupe3 [ porteuses ]" =
+    "indice",
+  "R/donnees.R | .verdict_d11c | groupe3 %in% groupe3 [ l ]" =
+    "indice",
   "R/donnees.R | .regle_v_garanties | sub ( \"\\\\..*$\" , \"\" , lit_c ) %in% names ( ctx $ base )" =
     "metadonnee",
-  "R/donnees.R | .garantie_en_vigueur3 | .valeurs_vue ( ctx , \"garanties_souscrites\" , \"code_garantie\" ) %in% code" =
+  "R/donnees.R | .gev_brut | .valeurs_vue ( ctx , \"garanties_souscrites\" , \"code_garantie\" ) %in% code" =
     "code",
-  "R/donnees.R | .garantie_en_vigueur3 | v ( \"code_garantie\" ) %in% code" =
+  "R/donnees.R | .gev_brut | v ( \"code_garantie\" ) %in% code" =
     "code",
   "R/donnees.R | .colonne_partie | x %in% k $ lignes" =
     "indice",
-  "R/donnees.R | .regle_v_ages | seq_len ( nrow ( ctx $ base [[ t ] ] ) ) %in% r $ p [ ! is.na ( age ) & ( age < mini | age > maxi ) ]" =
-    "indice",
-  "R/donnees.R | .regle_v_limite_age | v ( \"evenements\" , \"type_evenement\" ) %in% types" =
+  "R/donnees.R | .age_assure3 | match ( a , ordre_issue )" =
     "code",
-  "R/donnees.R | .regle_v_limite_age | \"famille\" %in% names ( ctx $ base )" =
+  "R/donnees.R | .age_assure3 | match ( b , ordre_issue )" =
+    "code",
+  "R/donnees.R | .verdict_d07c_brut | v ( \"evenements\" , \"type_evenement\" ) %in% types" =
+    "code",
+  "R/donnees.R | .verdict_d07c_brut | \"famille\" %in% names ( ctx $ base )" =
     "metadonnee",
-  "R/donnees.R | .regle_v_limite_age | cat %in% z" =
+  "R/donnees.R | .verdict_d07c_brut | cat %in% z" =
     "code",
-  "R/donnees.R | .regle_v_limite_age | p $ i %in% incertain" =
+  "R/donnees.R | .verdict_d07c_brut | p $ i %in% incertain" =
     "indice",
-  "R/donnees.R | .candidats_d07c | .joindre ( ctx , \"garanties_souscrites\" , \"id_garantie_souscrite\" , \"code_garantie\" , gs ) %in% code" =
+  "R/donnees.R | .candidats_d07c | .valeurs ( ctx , \"garanties_souscrites\" , \"code_garantie\" ) [ ig ] %in% code" =
     "code",
   "R/donnees.R | .parametre_garantie | .valeurs_vue ( ctx , \"parametres\" , \"parametre\" ) %in% nom" =
     "code",
+  "R/donnees.R | .lectures_d07c3 | nom_p %in% nom" =
+    "code",
+  "R/donnees.R | .verdict_d08 | match ( kl [[ q ] ] , kall )" =
+    "indice",
   "R/donnees.R | .famille_en_jeu | \"famille\" %in% names ( ctx $ base )" =
     "metadonnee",
   "R/donnees.R | .famille_en_jeu | vis $ membre %in% vis $ membre [ st %in% TRUE ]" =
@@ -383,50 +421,160 @@ LISTE_BLANCHE <- c(
     "code",
   "R/donnees.R | .service3 | .classe_service ( type [ e ] ) %in% classes" =
     "code",
+  "R/donnees.R | .service_k3 | type %in% c ( .TYPES_PORTEURS , \"cloture_dossier\" )" =
+    "code",
+  "R/donnees.R | .service_k3 | paste ( p2 $ i , p2 $ j ) %in% paste ( p1 $ i , p1 $ j )" =
+    "indice",
+  "R/donnees.R | .service_k3 | match ( type [ pd $ i ] , te $ type_evenement )" =
+    "code",
+  "R/donnees.R | .feuille_service3 | sk $ classe [ j ] %in% classes" =
+    "code",
+  "R/donnees.R | .feuille_service3 | .classe_service ( d [ ! is.na ( d ) ] ) %in% classes" =
+    "code",
+  "R/donnees.R | .feuille_service3 | ( if ( is.na ( d ) ) \"non_ouvert\" else .classe_service ( type [ d ] ) ) %in% classes" =
+    "code",
+  "R/donnees.R | .feuille_service3 | .classe_service ( x ) %in% classes" =
+    "code",
+  "R/donnees.R | .service_possible3 | sk $ classe %in% classes" =
+    "code",
+  "R/donnees.R | .lectures_g3b | tc %in% dates" =
+    "metadonnee",
   "R/donnees.R | .versions_membre | p2 $ i %in% p1 $ i" =
     "indice",
   "R/donnees.R | .versions_membre | seq_along ( ids ) %in% c ( p1 $ i , p2 $ i )" =
     "indice",
-  "R/donnees.R | .regle_v_extinctions | v ( \"famille\" , \"lien\" ) [ j ] %in% conjoints" =
+  "R/donnees.R | .verdict_d07a_brut | v ( \"famille\" , \"lien\" ) [ j ] %in% conjoints" =
     "code",
-  "R/donnees.R | .regle_v_extinctions | seq_len ( nr ) %in% q1 $ i" =
+  "R/donnees.R | .verdict_d07a_brut | seq_len ( nr ) %in% q1 $ i" =
     "indice",
-  "R/donnees.R | .regle_v_rechutes | seq_len ( ns ) %in% p $ i [ candidate & ! is.na ( dl ) & ecart < dl ]" =
+  "R/donnees.R | .verdict_d08_brut | seq_len ( ns ) %in% p $ i [ candidate & ! is.na ( dl ) & ecart < dl ]" =
     "indice",
   "R/donnees.R | .regle_v_qualites | code %in% codes" =
     "code",
-  "R/donnees.R | .regle_v_qualites | paste ( code , qualite ) %in% compatibles" =
+  "R/donnees.R | .regle_v_qualites | paste ( code , x $ qualite ) %in% compatibles" =
     "code",
   "R/donnees.R | .regle_v_couverture | sub ( \"\\\\..*$\" , \"\" , lit_c ) %in% names ( ctx $ base )" =
     "metadonnee",
-  "R/donnees.R | .verdict_d11 | kd %in% kc [ cv $ certain ]" =
+  "R/donnees.R | .verdict_d11_brut | kd %in% kc [ cv $ certain ]" =
     "indice",
-  "R/donnees.R | .verdict_d11 | kd %in% kc [ ! cv $ certain ]" =
+  "R/donnees.R | .verdict_d11_brut | kd %in% kc [ ! cv $ certain ]" =
     "indice",
-  "R/donnees.R | .verdict_d11 | seq_len ( ns ) %in% cv $ i [ cv $ certain ]" =
+  "R/donnees.R | .verdict_d11_brut | seq_len ( ns ) %in% cv $ i [ cv $ certain ]" =
     "indice",
-  "R/donnees.R | .verdict_d11 | seq_len ( ns ) %in% cv $ i [ ! cv $ certain ]" =
+  "R/donnees.R | .verdict_d11_brut | seq_len ( ns ) %in% cv $ i [ ! cv $ certain ]" =
     "indice",
-  "R/donnees.R | .ecarter_maintien_d11 | tc %in% lit_m" =
-    "metadonnee",
   "R/donnees.R | .ecarter_maintien_d11 | cause %in% z" =
     "code",
-  "R/donnees.R | .echec_d12 | match ( types [ k ] , te $ type_evenement )" =
+  "R/donnees.R | .dernier_feuille3 | match ( type [ D ] , te $ type_evenement )" =
     "code",
-  "R/donnees.R | .echec_d12 | etat %in% eclater_champ ( te $ etat_depuis [ i ] )" =
+  "R/donnees.R | .assures_inconnus_d11 | c1 %in% names ( ctx $ base [[ t ] ] )" =
+    "metadonnee",
+  "R/donnees.R | .verdict_d11 | seq_len ( ns ) %in% p $ i [ ! ret | diverge ]" =
+    "indice",
+  "R/donnees.R | .pas_d12 | match ( type , te $ type_evenement )" =
     "code",
-  "R/donnees.R | .echec_d12 | motifs [ k ] %in% strsplit ( sub ( \"^[^:]*:\" , \"\" , bloc ) , \",\" , fixed = TRUE ) [[ 1L ] ]" =
+  "R/donnees.R | .pas_d12 | etat %in% eclater_champ ( te $ etat_depuis [ i ] )" =
     "code",
-  "R/donnees.R | .verdict_d12 | type %in% te $ type_evenement [ ! is.na ( te $ etat_depuis ) & nzchar ( te $ etat_depuis ) ]" =
+  "R/donnees.R | .pas_d12 | motif %in% strsplit ( sub ( \"^[^:]*:\" , \"\" , bloc ) , \",\" , fixed = TRUE ) [[ 1L ] ]" =
+    "code",
+  "R/donnees.R | .verdict_d12 | type %in% auto" =
+    "code",
+  "R/donnees.R | .verdict_d12 | match ( t , te $ type_evenement )" =
+    "code",
+  "R/donnees.R | .verdict_d12 | match ( auto , te $ type_evenement )" =
+    "code",
+  "R/donnees.R | .verdict_d12 | type [ g ] %in% t" =
+    "code",
+  "R/donnees.R | .verdict_d12 | match ( x , u )" =
+    "indice",
+  "R/donnees.R | .verdict_d12 | type %in% te $ type_evenement [ nzchar ( te $ motifs ) & ! is.na ( te $ motifs ) ]" =
     "code",
   "R/donnees.R | .verdict_d12 | match ( type , te $ type_evenement )" =
     "code",
-  "R/donnees.R | .verdict_d12 | match ( tous , tous [ order ( effet [ tous ] , rang_type [ tous ] , id [ tous ] , method = \"radix\" ) ] )" =
+  "R/donnees.R | .verdict_d12 | match ( tous , ordonner ( tous ) )" =
     "indice",
-  "R/donnees.R | .verdict_d12 | lr %in% e" =
+  "R/donnees.R | .verdict_d12 | lr %in% o $ echecs" =
     "indice",
+  "R/donnees.R | .arbre3 | c1 %in% z" =
+    "metadonnee",
+  "R/donnees.R | .arbre3 | match ( tc , ordre )" =
+    "metadonnee",
+  "R/donnees.R | .arbre3 | match ( groupes , tc )" =
+    "metadonnee",
+  "R/donnees.R | .arbre3 | names ( dp ) %in% partagees [ rang < rang [ match ( g , tc ) ] ]" =
+    "metadonnee",
+  "R/donnees.R | .arbre3 | partagees %in% C" =
+    "metadonnee",
+  "R/donnees.R | .arbre3 | match ( g , tc )" =
+    "metadonnee",
+  "R/donnees.R | .arbre3 | c1 %in% libres" =
+    "metadonnee",
+  "R/donnees.R | .arbre3 | c1 %in% C" =
+    "metadonnee",
+  "R/donnees.R | .dernier_feuille3 | t_id %in% names ( sigs [[ 1L ] ] )" =
+    "metadonnee",
+  "R/donnees.R | .dernier_feuille3 | ids [ q ] %in% names ( sigs [[ 1L ] ] )" =
+    "metadonnee",
+  "R/donnees.R | .dernier_feuille3 | t_id %in% names ( s1 )" =
+    "metadonnee",
+  "R/donnees.R | .dernier_feuille3 | ids %in% names ( s1 )" =
+    "metadonnee",
+  "R/donnees.R | .dernier_feuille3 | t_id %in% pv" =
+    "metadonnee",
+  "R/donnees.R | .dernier_feuille3 | ids %in% pv" =
+    "metadonnee",
+  "R/donnees.R | .verdict_d10c | code_g %in% rentes" =
+    "code",
+  "R/donnees.R | .verdict_d10c | .val3 ( a , c_id , code_g [ l ] , n ) %in% codes" =
+    "code",
+  "R/donnees.R | .verdict_d10c | sin_k %in% sin_k [ l ]" =
+    "cle_garantie : sin_k normalise par .cle_manquante(), garde !is.na(sin_k) a la meme ligne (`autres <- which(dans & !is.na(sin_k) & ...)`) : NA et \"\" hors appariement",
+  "R/donnees.R | .verdict_d10d | e %in% sans" =
+    "indice",
+  "R/donnees.R | .versions3 | .val3 ( a , c_id , code_v [ j ] , n ) %in% code" =
+    "code",
+  "R/donnees.R | .versions3 | code_v %in% code" =
+    "code",
+  "R/donnees.R | .verdict_d14_3 | x %in% code" =
+    "code",
+  "R/donnees.R | .verdict_d14_3 | nom_par %in% nom" =
+    "code",
+  "R/donnees.R | .verdict_d14_3 | gs_par %in% gs_id [ w ]" =
+    "cle_garantie : garde cle_renseignee(gs_par) a la meme ligne (`which(nom_par %in% nom & cle_renseignee(gs_par) & ...)`) : NA et \"\" hors appariement",
+  "R/donnees.R | .verdict_d14_3 | li [ k ] %in% vise [[ k ] ]" =
+    "code",
+  "R/donnees.R | .verdict_d14_3 | sin_f %in% id_s [ i ]" =
+    "cle_garantie : sin_f normalise par .cle_manquante(), garde !is.na(sin_f) a la meme ligne : NA et \"\" hors appariement",
+  "R/donnees.R | .verdict_d14_3 | sin_d %in% id_s [ i ]" =
+    "cle_garantie : sin_d normalise par .cle_manquante(), garde !is.na(sin_d) a la meme ligne : NA et \"\" hors appariement",
+  "R/donnees.R | .inconnues_versions3 | c1 %in% names ( ctx $ base [[ t ] ] )" =
+    "metadonnee",
+  "R/donnees.R | .verdict_d10c | code_b %in% rentes" =
+    "code",
+  "R/donnees.R | .verdict_d10c | sinistre %in% avec_deces [ ! is.na ( avec_deces ) ]" =
+    "a_instruire : D10 (c), lecture brute du chemin rapide (regle du mode bloquee, inchangee) : id_sinistre \"\" (valeur brute de .valeurs_vue()) apparie a \"\" ; releve, #164",
+  "R/donnees.R | .verdict_d10c | .cle_manquante ( as.character ( .valeurs ( ctx , t , \"id_contrat\" ) [ ig ] ) ) %in% inc_v $ contrats" =
+    "cle_garantie : operande de gauche normalise par .cle_manquante() (NA pour \"\"), table de droite sans NA (filtre !is.na ou unique(...[!is.na])) : NA et \"\" hors appariement",
+  "R/donnees.R | .verdict_d10c | sin_k %in% sin_inc [ ! is.na ( sin_inc ) ]" =
+    "cle_garantie : operande de gauche normalise par .cle_manquante() (NA pour \"\"), table de droite sans NA (filtre !is.na ou unique(...[!is.na])) : NA et \"\" hors appariement",
+  "R/donnees.R | .verdict_d10d | .cle_manquante ( as.character ( .valeurs ( ctx , t , \"id_contrat\" ) [ igd ] ) ) %in% inc_v $ contrats" =
+    "cle_garantie : operande de gauche normalise par .cle_manquante() (NA pour \"\"), table de droite sans NA (filtre !is.na ou unique(...[!is.na])) : NA et \"\" hors appariement",
+  "R/donnees.R | .verdict_d10d | c1 %in% names ( ctx $ base [[ tc ] ] )" =
+    "metadonnee",
+  "R/donnees.R | .verdict_d10d | .cle_manquante ( as.character ( .valeurs ( ctx , tc , \"id_contrat\" ) ) ) %in% inc_v $ contrats" =
+    "cle_garantie : operande de gauche normalise par .cle_manquante() (NA pour \"\"), table de droite sans NA (filtre !is.na ou unique(...[!is.na])) : NA et \"\" hors appariement",
+  "R/donnees.R | .verdict_d10d | sin_e %in% sin_inc [ ! is.na ( sin_inc ) ]" =
+    "cle_garantie : operande de gauche normalise par .cle_manquante() (NA pour \"\"), table de droite sans NA (filtre !is.na ou unique(...[!is.na])) : NA et \"\" hors appariement",
+  "R/donnees.R | .verdict_d10d | sin_e %in% sin_ret [ ! is.na ( sin_ret ) ]" =
+    "cle_garantie : operande de gauche normalise par .cle_manquante() (NA pour \"\"), table de droite sans NA (filtre !is.na ou unique(...[!is.na])) : NA et \"\" hors appariement",
+  "R/donnees.R | .verdict_d10d | assure_e %in% assures_inc [ ! is.na ( assures_inc ) ]" =
+    "cle_garantie : operande de gauche normalise par .cle_manquante() (NA pour \"\"), table de droite sans NA (filtre !is.na ou unique(...[!is.na])) : NA et \"\" hors appariement",
   "R/donnees.R | .verdict_d14 | lien [ k ] %in% vise [[ k ] ]" =
     "code",
+  "R/donnees.R | .verdict_d14_k | .cle_manquante ( as.character ( .valeurs ( ctx , gs , \"id_contrat\" ) [ ig ] ) ) %in% inc_v $ contrats" =
+    "cle_garantie : operande de gauche normalise par .cle_manquante() (NA pour \"\"), table de droite sans NA (filtre !is.na ou unique(...[!is.na])) : NA et \"\" hors appariement",
+  "R/donnees.R | .verdict_d14_k | id_s %in% sin_inc [ ! is.na ( sin_inc ) ]" =
+    "cle_garantie : operande de gauche normalise par .cle_manquante() (NA pour \"\"), table de droite sans NA (filtre !is.na ou unique(...[!is.na])) : NA et \"\" hors appariement",
   "R/donnees.R | .visibilite_a | liens $ table %in% tables" =
     "metadonnee",
   "R/donnees.R | .visibilite_a | liens $ table_cible %in% tables" =

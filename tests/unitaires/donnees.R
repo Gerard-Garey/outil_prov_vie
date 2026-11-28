@@ -677,14 +677,17 @@ verifier_egal("limite_age conditionnée (§ 6.3) : sans ligne candidate (RE1 d'u
               list(list(character(0), character(0)), list(character(0), character(0)), exige_d07))
 # dossier double_effet (GS1) : exigée ; GS1 et GS3 changés de code portent des refus de colonnes
 # que D07c lit (prolongation_handicap manquante sur GS1, présente sur GS3 : manquant_obligatoire
-# et hors_domaine ; parametres refusée en portée table) : la cause directe la plus petite,
-# manquant_obligatoire, l'emporte sur declaration_absente (v1.9.1, point (3))
-verifier_egal("limite_age conditionnée (§ 6.3) : candidate de visibilité non déterminée (RE1 sans date de saisie, A0) : exigée ; dossier double_effet : exigée, cause directe manquant_obligatoire avant declaration_absente",
+# et hors_domaine, refus de valeur ; parametres refusée en portée table, parametres.parametre
+# hors_domaine) : depuis G3c (#105, lot V ; erratum E-15 (f)), le site sans `f` est en mode kleene
+# et ne reçoit plus que les causes de forme ou de portée table : hors_domaine (parametres, portée
+# table) l'emporte sur declaration_absente (v1.9.1, point (3)) ; avant (mode bloquee) : la cause
+# directe la plus petite, manquant_obligatoire, refus de valeur
+verifier_egal("limite_age conditionnée (§ 6.3) : candidate de visibilité non déterminée (RE1 sans date de saisie, A0) : exigée ; dossier double_effet : exigée, cause de portée table hors_domaine avant declaration_absente (refus de valeur sans effet, E-15 (f))",
               list(d07_exige(controler_base(rente_nd, A0, s07)),
                    d07_exige(controler_base(avec(function(b) {
                      b$garanties_souscrites$code_garantie[3L] <- "rente_conjoint"
                      b$garanties_souscrites$code_garantie[1L] <- "double_effet"; b }), A, s07))),
-              list(exige_d07, list(c("dossiers manquant_obligatoire", "rentes manquant_obligatoire"), exige_d07[[2L]])))
+              list(exige_d07, list(c("dossiers hors_domaine", "rentes hors_domaine"), exige_d07[[2L]])))
 # jointure illisible (rentes.id_dossier en entier) : candidate (déclaration exigée) ; sans
 # déclaration, D07b et D07c reçoivent aussi les causes candidates de la règle bloquée de leur
 # branche déclarée, et la cause directe (rang 3) l'emporte sur declaration_absente (rang 6)
@@ -1345,17 +1348,23 @@ verifier("D1 : date_saisie_fin manquante d'un contrat : partie recensée, le con
            ligne(r$controles, "D03h", "garanties_souscrites")$identifiants == "GS3" &&
            ligne(r$controles, "D03c", "affiliations")$identifiants == "AF1")
 r <- cb(avec(function(b) { b$assures$sexe <- c("X", NA); b }))
-verifier("D3 : une colonne refusée pour une valeur (hors_domaine, portée colonne) n'est pas lue par la règle V (D03b non exécuté)",
-         nrow(ligne(r$controles, "D03b", "assures")) == 0L &&
-           identical(ligne(r$controles_non_executes, "D03b", "assures", "sexe")$cause, "hors_domaine"))
+# #105, lot V, G1 (M808) : D03b s'exécute en logique de Kleene ; le sexe refusé de AS1 (colonne
+# obligatoire) est présent, AS1 n'est ni détecté ni écarté ; AS2 (sexe manquant) est détecté
+# (avant G1 : D03b non exécuté, cause hors_domaine, M169)
+verifier("D3 : une colonne refusée pour une valeur (hors_domaine, portée ligne) est lue en logique de Kleene par la règle V (#105, G1) : D03b exécuté, AS2 détecté, aucune ligne non exécutée",
+         identical(ligne(r$controles, "D03b", "assures")$identifiants, "AS2") &&
+           nrow(ligne(r$controles_non_executes, "D03b", "assures", "sexe")) == 0L)
 r <- cb(avec(function(b) { b$assures <- rbind(b$assures, transform(b$assures[1L, ], sexe = NA_character_)); b }))
 verifier("A9 : une table refusée (D01a) n'est pas lue par la règle V (D03b non exécuté, cause D01a)",
          nrow(ligne(r$controles, "D03b", "assures")) == 0L &&
            identical(ligne(r$controles_non_executes, "D03b", "assures", "sexe")$cause, "D01a"))
 r <- cb(avec(function(b) { b$sinistres$date_saisie[2L] <- D("2027-01-05"); b$sinistres$date_declaration[2L] <- D("2027-01-02"); b }), A0)
-verifier("D3 : une date de visibilité refusée (D02c, SI2) rend la ligne de visibilité non déterminée à un arrêté antérieur ; la règle P s'exécute sur les autres lignes (détection partielle, cause D02c) ; les règles V de sinistres qui lisent date_saisie ou date_declaration comme valeur restent bloquées, cause D02c (D01b, D02a ; M169) (#33, M199, M200)",
+# #105, lot V, G1 (M808) : D01b et D02a sur sinistres s'exécutent en logique de Kleene ; SI2,
+# de visibilité non déterminée, est hors de leur population, SI1 n'est pas écarté (avant G1 :
+# trois lignes non exécutées, cause D02c, M169)
+verifier("D3 : une date de visibilité refusée (D02c, SI2) rend la ligne de visibilité non déterminée à un arrêté antérieur ; la règle P s'exécute sur les autres lignes (détection partielle, cause D02c) ; les règles V de sinistres qui lisent date_saisie ou date_declaration comme valeur s'exécutent (D01b, D02a ; #105, G1), sans ligne non exécutée (#33, M199, M200)",
          identical(ligne(r$controles_non_executes, "D02b", "sinistres", "date_saisie")$cause, "D02c") &&
-           identical(ligne(r$controles_non_executes, c("D01b", "D02a"), "sinistres")$cause, rep("D02c", 3L)) &&
+           nrow(ligne(r$controles_non_executes, c("D01b", "D02a"), "sinistres")) == 0L &&
            isTRUE(r$vue$provisoire))
 verifier_egal("D3, ordre (ADR 0010, quatorzième série, (b)) : les deux lignes D02c de SI2 dans visibilite_non_determinee, triées par origine (sinistres.date_declaration, puis sinistres.date_saisie)",
               r$vue$visibilite_non_determinee$origine[r$vue$visibilite_non_determinee$motif == "D02c"],
@@ -2398,11 +2407,14 @@ verifier_egal("#33, clé exclue : dossiers.id_sinistre manquante (clé étrangè
 # une règle V qui ne lit la colonne refusée que pour la vue n'est pas bloquée : D10b s'exécute
 # (aucune ligne) ; D10c s'exécute, mais DO1, dossier décès de SI1, est de visibilité non
 # déterminée : DO2 est écarté (verdict inconnu), cause = motif du refus de DO1 (#40, W1, M209)
-verifier_egal("#33, M169 : une règle V qui lit la colonne refusée comme valeur reste bloquée, cause = motif (D01b lit dossiers.date_ouverture ; D10b et D10c lisent garanties_souscrites.date_effet) ; une règle V qui ne la lit que pour la vue n'est pas bloquée (D10b exécuté ; D10c exécuté, DO2 écarté sous le refus de DO1, #40, W1)",
+# #105, lot V, G1 : D01b s'exécute en logique de Kleene (DO1, non déterminé, hors de sa population ;
+# avant G1 : bloquée, cause D02c) ; D10b (G2a) écarte DO1 (D02c) ; D10c (G2b, avant : bloquée,
+# cause D02c) s'exécute : DO2 faux déterminé, DO1, dossier décès retenu de SI1, en tient lieu
+verifier_egal("#33, M169 : une règle V qui lit la colonne refusée comme valeur : D10b écarte DO1, cause = motif ; D10c (garanties_souscrites.date_effet, G2b) exécutée, DO2 déterminé ; D01b (dossiers.date_ouverture, G1) s'exécute, sans ligne non exécutée (#105) ; une règle V qui ne la lit que pour la vue n'est pas bloquée (D10b exécuté ; D10c exécuté, DO2 écarté sous le refus de DO1, #40, W1)",
               list(ligne(r33$date_ouverture$controles_non_executes, "D01b", "dossiers")$cause,
                    ligne(r33$gs_effet$controles_non_executes, c("D10b", "D10c"), "dossiers")$cause,
                    with(ligne(r33$date_ouverture$controles_non_executes, c("D10b", "D10c"), "dossiers"), paste(code, cause))),
-              list("D02c", c("D02c", "D02c"), "D10c D02c"))
+              list(character(0), "D02c", "D10c D02c"))
 r <- cb(avec(function(b) { b$dossiers$date_ouverture[1L] <- NA; b$sinistres$canal_declaration[1L] <- "zzz"; b }), A0)
 x <- r$enjeu[r$enjeu$motif == "hors_domaine" & r$enjeu$famille == "ensemble" & r$enjeu$composante == "paiements_cumules", ]
 verifier_egal("#33, M201 : enjeu d'un écart du sinistre SI1 (canal hors domaine) : le porteur DO1, de visibilité non déterminée, sans valeur, cause visibilite_non_determinee ; DO2 chiffré (750) ; aucune composante empêchée par dossiers.date_ouverture",
@@ -3133,11 +3145,13 @@ verifier_egal("B1 : EV6 de type zzz, à A0 et à A : plus de D02c induit, seul h
               list("evenements type_evenement hors_domaine ligne EV6", "evenements type_evenement hors_domaine ligne EV6",
                    b1_lignes, b1_lignes))
 x <- r42_a0$B1$vue$visibilite_non_determinee
-verifier_egal("B1 : à A0, une seule rangée non déterminée (hors_domaine, origine evenements.type_evenement) ; causes de D02a (règle bloquée) et de D02b (règle P partielle) : hors_domaine",
+# #105, lot V, G1 : D02a sur evenements s'exécute en logique de Kleene ; EV6, non déterminée, est
+# hors de sa population (avant G1 : règle bloquée, cause hors_domaine)
+verifier_egal("B1 : à A0, une seule rangée non déterminée (hors_domaine, origine evenements.type_evenement) ; D02a exécutée sans ligne non exécutée (#105, G1) ; cause de D02b (règle P partielle) : hors_domaine",
               list(paste(x$table, x$motif, x$origine, x$identifiants),
                    ligne(r42_a0$B1$controles_non_executes, "D02a", "evenements", "date_effet")$cause,
                    ligne(r42_a0$B1$controles_non_executes, "D02b", "evenements", "date_saisie")$cause),
-              list("evenements hors_domaine evenements.type_evenement EV6", hd, hd))
+              list("evenements hors_domaine evenements.type_evenement EV6", character(0), hd))
 verifier_egal("B2 : EV5 de type fixation_capital (incompatible avec la rente d'éducation) : le type reste refusé (auto-lecture), plus de refus de id_rente ni de portée table de evenements ; cinq lignes partielles, cause hors_domaine",
               list(refus_de_b(r42$B2), lignes_b(r42$B2)),
               list("evenements type_evenement hors_domaine ligne EV5",
@@ -3539,7 +3553,9 @@ r2 <- copies56(avec(function(b) {
   b$sinistres <- rbind(b$sinistres, copie_si1(b, "SI1", "2025-01-25"), copie_si1(b, "SI3", "2025-01-01")); b
 }), c(TRUE, FALSE, TRUE, FALSE), c(FALSE, TRUE, FALSE, TRUE))
 verifier_egal("#56, point 2 : D01b, copie retenue de même identifiant que la ligne retenue qui la précède, sans ligne non déterminée de même contenu : non détectée, sans index (avant #56 : NA d'index vide) ; témoin : SI3 non déterminée de même contenu, saisie avant : SI1 et sa copie écartées, index SI3 (ligne 4)",
-              list(as.vector(r1), attr(r1, "index"), as.vector(r2), attr(r2, "index")),
+              # attr(, exact = TRUE) : depuis #105 (G1), le verdict porte aussi index_pertinent, que
+              # attr(r, "index") rendrait par appariement partiel en l'absence d'index
+              list(as.vector(r1), attr(r1, "index", exact = TRUE), as.vector(r2), attr(r2, "index", exact = TRUE)),
               list(c(FALSE, FALSE, FALSE), NULL, c(NA, FALSE, NA, FALSE), list(sinistres = list(4L, NULL, 4L, NULL))))
 # point 3 : .verdict_vue() sur famille, copie de l'espace de noms dont .visibilite_a() rend trois
 # versions (1 : candidate visible de ME1 ; 2 : candidate non déterminée de ME1 ; 3 : autre
@@ -3853,7 +3869,12 @@ verifier_egal("#40, D10c : version décès invisible de façon déterminée, auc
 # D03i (rang 3), sans ligne de refus_tables : GS1 sans date d'effet, à A0 et à A, D02a, D10b,
 # D10c et D10d rendent leurs lignes de a72a40e (avant : cause manquant_obligatoire) ; deux
 # versions de GS1 (GS5 sans date d'effet) : chevauchement détecté (refus R) ; CT2 sans date
-# d'effet à A : trois lignes D02a non exécutées
+# d'effet à A : trois lignes D02a non exécutées. #105, lot V, G1 : D02a s'exécute en logique de
+# Kleene, la cellule de D03i étant inconnue dans la plage de sa colonne : GS1 (date de fin absente)
+# et CT2 (terme 2035-12-31, fin absente) déterminés, plus de ligne ; CT2, début de gestion
+# 2016-01-01, inconnu, cause D03i (avant G1 : quatre et trois lignes). #105, lot V, G2b : D10d en
+# logique de Kleene ne lit plus la date d'effet de GS1 faute de passage_invalidite (avant : bloquée,
+# cause D03i) ; D10c écarte DO2 (date d'effet de GS1 inconnue dans la plage), cause D03i
 x40_gs_na <- within(x40$gs, garanties_souscrites$date_effet[1L] <- D(NA))
 ne_m701 <- function(r) {
   x <- r$controles_non_executes[r$controles_non_executes$code %in% c("D02a", "D10b", "D10c", "D10d"), ]
@@ -3863,14 +3884,13 @@ r_m701 <- lapply(list(A0, A), function(a) cb(x40_gs_na, a))
 b_gs5 <- avec(function(b) { g <- b$garanties_souscrites[1L, ]; g$id_garantie_souscrite <- "GS5"; g$date_effet <- D(NA)
   b$garanties_souscrites <- rbind(b$garanties_souscrites, g); b })
 r_ct2 <- cb(avec(function(b) { b$contrats$date_effet[2L] <- D(NA); b }), A)
-verifier_egal("M701 : GS1 sans date d'effet, à A0 et à A : D02a (garanties_souscrites.date_fin), D10b, D10c, D10d non exécutés, cause D03i, aucun refus ; GS5 sans date d'effet : chevauchement GS1;GS5 à A0 et à A ; CT2 sans date d'effet à A : D02a sur date_terme, date_fin, date_debut_gestion, cause D03i ; détection de D03i inchangée",
+verifier_egal("M701 : GS1 sans date d'effet, à A0 et à A : D10c non exécuté, cause D03i (D10d exécutée, sans passage_invalidite : rien ; #105, G2b), D02a (garanties_souscrites.date_fin) exécutée, déterminée (#105, G1), D10b exécutée, déterminée (aucun dossier de la vue sur GS1 ; #105, G2a), aucun refus ; GS5 sans date d'effet : chevauchement GS1;GS5 à A0 et à A ; CT2 sans date d'effet à A : D02a sur date_debut_gestion non exécutée, cause D03i, sur date_terme et date_fin déterminée (#105, G1) ; détection de D03i inchangée",
               list(lapply(r_m701, ne_m701), vapply(r_m701, function(r) nrow(r$refus_tables), 0L),
                    vapply(list(A0, A), function(a) ligne(cb(b_gs5, a)$controles, "chevauchement", "garanties_souscrites")$identifiants, ""),
                    ne_m701(r_ct2), lapply(r_m701, function(r) ligne(r$controles, "D03i")$identifiants)),
-              list(rep(list(c("D02a garanties_souscrites date_fin D03i", "D10b dossiers id_garantie_souscrite D03i",
-                              "D10c dossiers NA D03i", "D10d evenements NA D03i")), 2L),
+              list(rep(list("D10c dossiers NA D03i"), 2L),
                    c(0L, 0L), c("GS1;GS5", "GS1;GS5"),
-                   c("D02a contrats date_debut_gestion D03i", "D02a contrats date_fin D03i", "D02a contrats date_terme D03i"),
+                   "D02a contrats date_debut_gestion D03i",
                    list("GS1", "GS1")))
 # M701, recensement mécanique (comme B8) : tous les appels de .regle() dont la lecture (colonne
 # contrôlée et `lit`) contient une colonne de D03i, hors la détection de D03i, sur base_ref
@@ -4677,8 +4697,10 @@ verifier_egal("#122, C122-2 : appel 51, composantes cotisations_* de cause le mo
                    unique(ligne(r57$controles_non_executes, c("D01b", "D03f"), "prestations")$cause),
                    unique(r57$enjeu$cause[r57$enjeu$composante == "paiements_cumules" & r57$enjeu$motif %in% c("D10a", "ensemble") &
                                             r57$enjeu$table %in% c("prestations", NA)])),
+              # #105, lot V, G1 : D01b et D03f sur cotisations s'exécutent en logique de Kleene (CO1 et
+              # CO2 de natures différentes, jamais égales) : plus de ligne non exécutée (avant G1 : hors_domaine)
               list(c("cotisations_emises_nettes cotisations montant D09", "cotisations_encaissees cotisations montant hors_domaine"),
-                   hd, "paiements_cumules prestations id_dossier hors_domaine", hd, hd))
+                   character(0), "paiements_cumules prestations id_dossier hors_domaine", hd, hd))
 
 # C122-3 : même code sur deux colonnes lues : CO1 de montant nul et CO2 de nature zzz
 # (hors_domaine sur cotisations.montant et cotisations.nature_mouvement) ; colonne publiée des
@@ -5824,8 +5846,11 @@ verifier_egal("D10 (e), C10e-2 : héritiers sur le dossier incapacite DO3 : cons
               list("beneficiaires exacte BE2", "qualite", paste("exclusions", ns$FAMILLES_CALCUL, "X 1"), 0L,
                    paste(ns$FAMILLES_CALCUL, 1L)))
 r <- controler_base(within(be34(base_ref, "DO3", "heritiers"), beneficiaires$qualite[2L] <- "ami"), A, s34(1000), cv34)
-verifier_egal("D10 (e), C10e-3 : qualite hors domaine (« ami ») : règle bloquée, cause directe hors_domaine (M169), aucune détection",
-              list(ne34(r, "D10e"), co34(r, "D10e")), list("beneficiaires qualite hors_domaine", character(0)))
+# #105, lot V, G1 : D10e en logique de Kleene ; aucune qualité n'est compatible avec incapacite : la
+# qualité refusée de BE2 (colonne obligatoire, présente) est incompatible quelle que soit sa valeur,
+# BE2 détecté (avant G1 : règle bloquée, cause hors_domaine, M169, aucune détection)
+verifier_egal("D10 (e), C10e-3 : qualite hors domaine (« ami ») sur le dossier incapacite DO3 : vrai déterminé, BE2 détecté, aucune ligne non exécutée (#105, G1)",
+              list(ne34(r, "D10e"), co34(r, "D10e")), list(character(0), "beneficiaires exacte BE2"))
 
 # --- D10 (f) : décès du conjoint saisi sur un dossier et pas sur l'autre (§ 8.6 ; C10f-1 à C10f-4)
 # de34("DO6") : rente de conjoint RE3 (DO6, SI1, ouverte le 2025-02-03) et dossier double_effet DO5
@@ -5994,7 +6019,9 @@ verifier_egal("#158 (8d) D07 (c) double effet (appel interne) : id_dossier de DO
 # rente ne vaut pas le NA du membre normalisé) ni après : enfant FALSE, RE1 non détectée. NA des deux
 # côtés : seul cas où la conversion change le résultat (avant : NA %in% NA, RE1 dans sans_m, enfant NA,
 # inconnu ; après : enfant FALSE). Témoin ME1, ligne de famille hors de la vue : passe par sans_m
-# (enfant de la candidate), RE1 détectée
+# (enfant de la candidate), RE1 détectée. Depuis G3c (#105, lot V), la branche sans_m est dans la lecture
+# brute de D07c (.verdict_d07c_brut(), déplacée telle quelle, chemin rapide de la règle en mode
+# kleene) : le test l'appelle (verdict de la ligne 1 au lieu du constat de .regle_vue())
 sm158 <- function(z, hors_vue = FALSE) {
   ctx <- ctx158(nais("2000-03-01"), A, NULL, cv("atteinte"), function(ctx) {
     ctx$base$rentes$id_membre[1L] <- z
@@ -6002,7 +6029,7 @@ sm158 <- function(z, hors_vue = FALSE) {
     if (hors_vue) ctx$retenu$famille[1L] <- FALSE
     ctx$visibilite_vue <- NULL
   })
-  e <- env158(ns$.regle_v_limite_age,
+  e <- env158(ns$.verdict_d07c_brut,
               .visibilite_a = function(ctx, mode = "vue") {
                 v <- ns$.visibilite_a(ctx, mode)
                 v$candidate <- rep(FALSE, nrow(ctx$base$famille)); v$candidate[1L] <- TRUE
@@ -6010,7 +6037,8 @@ sm158 <- function(z, hors_vue = FALSE) {
                 v
               })
   e$env$.verdict3 <- local({ cible <- e$env; function(entrees, g, ...) { assign("enfant", entrees$e$valeurs[1L], envir = cible); ns$.verdict3(entrees, g, ...) } })
-  list(constats158(ctx, e$fn, "D07c"), e$env$enfant)
+  r <- e$fn(ctx, "rentes", ctx$conventions$limite_age)
+  list(which(as.vector(r) %in% TRUE), e$env$enfant)
 }
 verifier_egal("#158 (8d) D07 (c) sans_m (appel interne) : id_membre de RE1 \"\" et de la candidate (normalisée NA) : non apparié, enfant FALSE, RE1 non détectée (déjà avant) ; NA des deux côtés : enfant FALSE, RE1 non détectée (avant, sous la vue masquée : NA apparié à NA, enfant NA ; sans effet sur la vue réelle) ; témoin ME1, ligne hors vue : enfant TRUE, RE1 détectée",
               list(sm158(""), sm158(NA_character_), sm158("ME1", TRUE)),
@@ -6112,7 +6140,9 @@ maint34 <- function(sortie = NULL, maintien = FALSE) {
 # décès : SI1 non détecté, aucune ligne (T10 levé, C81-6 ; avant #81 : non détecté, ligne
 # non_lisible) ; FALSE : hors sous-cas, détecté (avant #81 : non détecté, non_lisible) ;
 # maintien_deces manquant (refusé manquant_obligatoire, colonne lue par le sous-cas) : SI1 écarté,
-# (D11a, sinistres, NA) de cause directe ; contrat individuel CT2 (décès SI3 de AS2 après le terme,
+# (D11a, sinistres, NA) de cause directe (depuis la conversion G2c, #105, M811, E-13 (a) : refus
+# de valeur lu ligne par ligne, SI1 écarté par le mécanisme commun, (D11a, sinistres,
+# date_survenance) de cause le motif du refus) ; contrat individuel CT2 (décès SI3 de AS2 après le terme,
 # arrêt de travail SI4 de AS2 survenu pendant le contrat, en cours) : hors sous-cas, détecté
 # (avant #81 : non détecté, non_lisible)
 r_c81 <- lapply(list(vrai = maint34(maintien = TRUE), faux = maint34(), refuse = maint34(maintien = NA)),
@@ -6121,11 +6151,11 @@ ind_m34 <- within(ind34, sinistres <- rbind(sinistres, tab("sinistres", id_sinis
   nature_sinistre = "arret_travail", date_survenance = D("2025-06-01"), date_declaration = D("2025-06-02"), canal_declaration = "assure",
   gestionnaire = "interne", date_saisie = D("2025-06-03"))))
 r_ind_m <- controler_base(ind_m34, A, s34(1000), cv34)
-verifier_egal("D11a, C81-1 : maintien_deces TRUE (GS1), SI2 en cours à la fin de AF1 et au décès : SI1 non détecté, aucune ligne ; FALSE : détecté ; manquant (refusé) : écarté, (D11a, sinistres, NA) manquant_obligatoire ; contrat individuel CT2, arrêt SI4 en cours : SI3 détecté, aucune ligne",
+verifier_egal("D11a, C81-1 : maintien_deces TRUE (GS1), SI2 en cours à la fin de AF1 et au décès : SI1 non détecté, aucune ligne ; FALSE : détecté ; manquant (refusé) : écarté, (D11a, sinistres, date_survenance) manquant_obligatoire (G2c, E-13) ; contrat individuel CT2, arrêt SI4 en cours : SI3 détecté, aucune ligne",
               list(co34(r_c81$vrai, "D11a"), ne34(r_c81$vrai, "D11a"), co34(r_c81$faux, "D11a"), ne34(r_c81$faux, "D11a"),
                    co34(r_c81$refuse, "D11a"), ne34(r_c81$refuse, "D11a"), co34(r_ind_m, "D11a"), ne34(r_ind_m, "D11a")),
               list(character(0), character(0), rep("sinistres exacte SI1", 2L), character(0),
-                   character(0), "sinistres NA manquant_obligatoire", rep("sinistres exacte SI3", 2L), character(0)))
+                   character(0), "sinistres date_survenance manquant_obligatoire", rep("sinistres exacte SI3", 2L), character(0)))
 verifier("D11a, C81-1 : aucune ligne non_lisible dans les quatre bilans (la cause n'a plus de producteur, § 9.5)",
          !any(vapply(c(r_c81, list(r_ind_m)), function(r) "non_lisible" %in% r$controles_non_executes$cause, NA)))
 # C81-2 (M658, #128, point 1) : arrêt en cours à la fin de la couverture et au décès ; maintien_deces
@@ -6355,11 +6385,14 @@ verifier_egal(".arret_en_cours3() (R4) : sortie EV3 retenue de date d'effet refu
 # sous-cas du maintien, est refusée : lecture grossière (Q-22, M659), le sous-cas n'est pas lu,
 # SI1 écarté, (D11a, sinistres, NA) de cause directe D02c ; .arret_en_cours3() n'est pas
 # atteint par controler_base() (le chemin de .cause_nd() reste celui de l'appel interne
-# ci-dessus) ; aucune erreur interne
+# ci-dessus) ; aucune erreur interne. Depuis la conversion G2c (#105, M811, E-13 (a) et (c)) : le
+# refus de valeur ne déclenche plus la lecture grossière, la sortie EV3 de date inconnue est
+# facultative (.arret_feuille3()), SI1 écarté par le mécanisme commun, (D11a, sinistres,
+# date_survenance) de cause le motif D02c
 r_r4 <- controler_base(within(mm34("2024-09-01"), evenements$date_effet[3L] <- D("2027-06-01")), A, s34(1000), cv34)
-verifier_egal("R4 de bout en bout : date d'effet de EV3 hors bornes (D02c, portée ligne) : SI1 écarté, (D11a, sinistres, NA) D02c, aucune détection ; refus de portée ligne dans refus_tables",
+verifier_egal("R4 de bout en bout : date d'effet de EV3 hors bornes (D02c, portée ligne) : SI1 écarté, (D11a, sinistres, date_survenance) D02c (G2c, E-13), aucune détection ; refus de portée ligne dans refus_tables",
               list(co34(r_r4, "D11a"), ne34(r_r4, "D11a"), refus(r_r4, "D02c", "evenements", "date_effet")$portee),
-              list(character(0), "sinistres NA D02c", "ligne"))
+              list(character(0), "sinistres date_survenance D02c", "ligne"))
 # D11b, contrat individuel lu sur la vue (R5, § 8.0 bis, point 1) : appel interne à A0 sur
 # cadres34(base_ref) (DO1 sur GS5, CT1 au collège cadres, AF1 ensemble : DO1 détecté) ; CT1 rendu
 # de nature individuel après la vue : retenu, hors champ (faux) ; non déterminé : inconnu, index
@@ -6526,26 +6559,649 @@ verifier_egal("D12, C12-7 : sortie EV7 (fin_droits, 2024-06-01) sans date de sai
               list(character(0), "evenements type_evenement declaration_absente", "evenements exacte EV3"))
 # deux entrées retenues (EV1 entree_incapacite et EV7 entree_invalidite du 2024-03-01 : échec en
 # EV7 quel que soit le reste), et n changement_categorie sans date de saisie (A0) : placés avant
-# la sortie EV3 (2024-04-02 à 2024-04-12), ils sont énumérés jusqu'au plafond
-# (.MAX_EVENEMENTS_ND_D12, 10) et EV7 est détecté ; au-delà (11), chaque événement retenu de SI2
-# est inconnu, cause (γ) ; placés après le dernier retenu (2024-10-02 à 2024-10-12), ils sont
-# élagués (sans effet) : EV7 détecté à 11, exclusion attendue (constat m1 de l'audit léger)
+# la sortie EV3 (2024-04-02 et suivants), ils sont facultatifs ; placés après le dernier retenu
+# (2024-10-02 à 2024-10-12), ils sont élagués (sans effet) : EV7 détecté, exclusion attendue
+# (constat m1 de l'audit léger)
 plaf12_34 <- function(n, debut) {
   b <- etat34(base_ref, id_evenement = "EV7", type_evenement = "entree_invalidite", date_effet = D("2024-03-01"),
               date_saisie = D("2024-03-06"), categorie_invalidite = "cat2")
   etat34(b, id_evenement = paste0("EX", seq_len(n)), type_evenement = "changement_categorie", date_effet = D(debut) + seq_len(n),
          date_saisie = D(NA), categorie_invalidite = "cat2")
 }
-verifier_egal("D12, plafond de l'énumération (réserve R2 d'`actuary`) : 10 événements non déterminés avant le dernier retenu, EV7 détecté ; 11, SI2 écarté, cause (γ) declaration_absente (D03g) ; .MAX_EVENEMENTS_ND_D12 = 10",
+# #129 (verdict exact sans plafond ; erratum `1.9.7`, E-5 ; M813) : au commit 8847597, l'énumération
+# était plafonnée à 10 événements non déterminés (.MAX_EVENEMENTS_ND_D12) ; à 11, chaque événement
+# retenu de SI2 était inconnu : aucune détection, (D12, evenements, type_evenement)
+# declaration_absente (D03g). Mesure « avant » sur 8847597 : list("evenements exacte EV7",
+# character(0), character(0), "evenements type_evenement declaration_absente", TRUE)
+verifier_egal("D12, #129 : verdict exact sans plafond : 10 et 11 événements non déterminés avant le dernier retenu : EV7 détecté, aucune ligne non exécutée ; .MAX_EVENEMENTS_ND_D12 retiré",
               list(unique(co34(controler_base(plaf12_34(10L, "2024-04-01"), A0, s34(1000), cv34), "D12")),
                    ne34(controler_base(plaf12_34(10L, "2024-04-01"), A0, s34(1000), cv34), "D12"),
-                   co34(controler_base(plaf12_34(11L, "2024-04-01"), A0, s34(1000), cv34), "D12"),
-                   ne34(controler_base(plaf12_34(11L, "2024-04-01"), A0, s34(1000), cv34), "D12"), ns$.MAX_EVENEMENTS_ND_D12),
-              list("evenements exacte EV7", character(0), character(0), "evenements type_evenement declaration_absente", 10L))
+                   unique(co34(controler_base(plaf12_34(11L, "2024-04-01"), A0, s34(1000), cv34), "D12")),
+                   ne34(controler_base(plaf12_34(11L, "2024-04-01"), A0, s34(1000), cv34), "D12"),
+                   exists(".MAX_EVENEMENTS_ND_D12", envir = ns, inherits = FALSE)),
+              list("evenements exacte EV7", character(0), "evenements exacte EV7", character(0), FALSE))
 r <- controler_base(plaf12_34(11L, "2024-10-01"), A0, s34(1000), cv34)
-verifier_egal("D12, élagage exact avant le plafond (constat m1 de l'audit léger) : 11 événements non déterminés tous placés après le dernier retenu (EV3) : sans effet, EV7 détecté (deux constats), aucune ligne non exécutée, exclusion attendue pour engagement",
+verifier_egal("D12, élagage exact (constat m1 de l'audit léger) : 11 événements non déterminés tous placés après le dernier retenu (EV3) : sans effet, EV7 détecté (deux constats), aucune ligne non exécutée, exclusion attendue pour engagement",
               list(co34(r, "D12"), ne34(r, "D12"), rq34(r, "D12")),
               list(rep("evenements exacte EV7", 2L), character(0), "exclusions engagement X 1"))
+
+# #129, C129-1 : la propagation des configurations (.verdict_d12(), .propager_d12()) rend les
+# verdicts et l'index de l'énumération des 2^k sous-ensembles d'événements non déterminés, pour
+# k ≤ 10. Oracle : code de .verdict_d12() et de .echec_d12() au commit 8847597, sans le plafond,
+# gardé ici seulement (une méthode, une implémentation dans R/). Ce test passe aussi sur 8847597
+# (l'oracle y est l'algorithme du moteur, k ≤ 10) : test de non-régression du noyau.
+echec_oracle_d12 <- function(te, types, motifs) {
+  etat <- "depart"
+  ante <- NA_character_
+  for (k in seq_along(types)) {
+    i <- match(types[k], te$type_evenement)
+    if (!(etat %in% ns$eclater_champ(te$etat_depuis[i]))) return(k)
+    vers <- te$etat_vers[i]
+    if (vers == "anterieur") {
+      etat <- ante
+    } else if (grepl(":", vers, fixed = TRUE)) {
+      ante <- etat
+      etat <- "inconnu"
+      for (bloc in ns$eclater_champ(vers)) {
+        cible <- sub(":.*$", "", bloc)
+        if (!is.na(motifs[k]) && motifs[k] %in% strsplit(sub("^[^:]*:", "", bloc), ",", fixed = TRUE)[[1L]]) {
+          etat <- paste0(cible, ":", motifs[k])
+        }
+      }
+    } else {
+      etat <- vers
+    }
+  }
+  NA_integer_
+}
+oracle_d12 <- local({
+  function(ctx) {
+    v <- function(t, c1) ns$.valeurs(ctx, t, c1)
+    te <- ctx$dico$types_evenements
+    n <- nrow(ctx$base$evenements)
+    type <- v("evenements", "type_evenement")
+    sin <- ns$.cle_manquante(as.character(v("evenements", "id_sinistre")))
+    k <- ns$apparier_cles(sin, v("sinistres", "id_sinistre"))
+    arret <- !is.na(k) & v("sinistres", "nature_sinistre")[ifelse(is.na(k), 1L, k)] %in% "arret_travail"
+    etat <- arret & type %in% te$type_evenement[!is.na(te$etat_depuis) & nzchar(te$etat_depuis)]
+    ret <- which(ctx$retenu$evenements & etat)
+    nd <- which(ns$.nd_vue(ctx, "evenements") & etat)
+    effet <- as.numeric(v("evenements", "date_effet"))
+    rang_type <- te$ordre[match(type, te$type_evenement)]
+    id <- as.character(v("evenements", "id_evenement"))
+    motif <- v("evenements", "motif")
+    echec <- function(l) {
+      l <- l[order(effet[l], rang_type[l], id[l], method = "radix")]
+      l[echec_oracle_d12(te, type[l], motif[l])]
+    }
+    r <- rep(FALSE, n)
+    index <- vector("list", n)
+    groupes_n <- split(nd, sin[nd])
+    for (lr in split(ret, sin[ret])) {
+      ln <- groupes_n[[sin[lr[1L]]]]
+      if (length(ln) > 0L) {
+        tous <- c(lr, ln)
+        rang <- match(tous, tous[order(effet[tous], rang_type[tous], id[tous], method = "radix")])
+        ln <- ln[rang[-seq_along(lr)] < max(rang[seq_along(lr)])]
+      }
+      if (length(ln) == 0L) {
+        e <- echec(lr)
+        if (!is.na(e)) r[e] <- TRUE
+        next
+      }
+      vrai <- integer(length(lr))
+      nb <- 2L^length(ln)
+      for (m in seq_len(nb) - 1L) {
+        sous <- ln[bitwAnd(m, 2L^(seq_along(ln) - 1L)) > 0L]
+        e <- echec(c(lr, sous))
+        vrai <- vrai + (lr %in% e)
+      }
+      r[lr] <- ifelse(vrai == nb, TRUE, ifelse(vrai == 0L, FALSE, NA))
+      index[lr[is.na(r[lr])]] <- list(ln)
+    }
+    if (anyNA(r)) attr(r, "index") <- list(evenements = index)
+    r
+  }
+})
+# base tirée : `m` sinistres arret_travail (SA0001…) de 1 à 4 événements de l'automate retenus
+# (saisis le 2024-06-01), de 0 à 10 non déterminés (sans date de saisie, A0) et de 0 à 1
+# invisibles (saisis après A0) ; types tirés parmi les six de l'automate, motif de sortie tiré
+# (absent compris), dates d'effet sur 21 jours (ex aequo : ordre du type, puis de l'identifiant),
+# identifiants tirés. Graine locale, générateur fixé ; l'état du générateur est rendu.
+tirer_d12 <- function(m, graine) {
+  graine_avant <- if (exists(".Random.seed", envir = globalenv())) get(".Random.seed", envir = globalenv())
+  on.exit(if (is.null(graine_avant)) rm(".Random.seed", envir = globalenv()) else assign(".Random.seed", graine_avant, envir = globalenv()))
+  set.seed(graine, kind = "Mersenne-Twister", normal.kind = "Inversion", sample.kind = "Rejection")
+  types <- c("entree_incapacite", "entree_invalidite", "passage_invalidite", "changement_categorie", "sortie", "rechute")
+  motifs <- c("reprise_travail", "fin_droits", "sans_suite", "deces", "retraite", NA)
+  ids <- sprintf("SA%04d", seq_len(m))
+  b <- base_ref
+  b$sinistres <- rbind(b$sinistres, tab("sinistres", id_sinistre = ids, id_assure = "AS1", nature_sinistre = "arret_travail",
+                                        date_survenance = D("2024-03-01"), date_declaration = D("2024-03-05"),
+                                        canal_declaration = "assure", gestionnaire = "interne", date_saisie = D("2024-03-06")))
+  kr <- sample.int(4L, m, replace = TRUE)
+  kn <- sample(0:10, m, replace = TRUE)
+  ki <- sample(0:1, m, replace = TRUE)
+  nb <- kr + kn + ki
+  tot <- sum(nb)
+  ty <- sample(types, tot, replace = TRUE, prob = c(3, 2, 2, 2, 3, 2))
+  mo <- ifelse(ty == "sortie", sample(motifs, tot, replace = TRUE, prob = c(3, 1, 1, 1, 1, 1)), NA_character_)
+  vis <- unlist(lapply(seq_len(m), function(i) c(rep("r", kr[i]), rep("n", kn[i]), rep("i", ki[i]))))
+  saisie <- ifelse(vis == "r", as.numeric(D("2024-06-01")), ifelse(vis == "i", as.numeric(D("2025-12-01")), NA_real_))
+  b$evenements <- rbind(b$evenements, tab("evenements", id_evenement = sprintf("EZ%05d", sample.int(99999L, tot)),
+                                          id_sinistre = rep(ids, nb), type_evenement = ty,
+                                          date_effet = D("2024-03-01") + sample(0:20, tot, replace = TRUE),
+                                          date_saisie = structure(saisie, class = "Date"), motif = mo))
+  b
+}
+ctx129 <- ctx_vue(tirer_d12(3000L, 20261125L), A0)
+v129 <- oracle_d12(ctx129)
+# (depuis G3a, #105, lot V : attributs index_pertinent, le même que index, et lues en plus)
+x129 <- ns$.verdict_d12(ctx129)
+verifier_egal("D12, #129, C129-1 : 3 000 sinistres tirés (graine 20261125), k ≤ 10 : verdicts et index identical() à l'énumération (index_pertinent identique à index) ; diversité : événements non déterminés, verdicts vrais, verdicts inconnus",
+              list(identical(structure(x129, index_pertinent = NULL, lues = NULL), v129),
+                   identical(attr(x129, "index_pertinent"), attr(x129, "index", exact = TRUE)),
+                   sum(ns$.nd_vue(ctx129, "evenements")), sum(v129 %in% TRUE), sum(is.na(v129))),
+              list(TRUE, TRUE, 15107L, 985L, 2410L))
+
+# #129, C129-2 : k = 30. (a) EV1 entree_incapacite et EV7 passage_invalidite (2024-03-15) retenus,
+# 30 changement_categorie non déterminés (2024-04-02 et suivants), EV8 entree_invalidite retenu
+# (2024-08-01) : échec certain en EV8, détecté. Mesure « avant » sur 8847597 : plafond, aucune
+# détection, (D12, evenements, type_evenement) declaration_absente.
+k30_34 <- function(n) {
+  b <- etat34(base_ref, id_evenement = c("EV7", "EV8"), type_evenement = c("passage_invalidite", "entree_invalidite"),
+              date_effet = D(c("2024-03-15", "2024-08-01")), date_saisie = D(c("2024-03-16", "2024-08-02")), categorie_invalidite = "cat2")
+  etat34(b, id_evenement = paste0("EX", seq_len(n)), type_evenement = "changement_categorie", date_effet = D("2024-04-01") + seq_len(n),
+         date_saisie = D(NA), categorie_invalidite = "cat2")
+}
+r <- controler_base(k30_34(30L), A0, s34(1000), cv34)
+verifier_egal("D12, #129, C129-2 (a) : k = 30, échec certain en EV8 : détecté, aucune ligne non exécutée",
+              list(unique(co34(r, "D12")), ne34(r, "D12")), list("evenements exacte EV8", character(0)))
+# (b) alternance de n sortie reprise_travail et rechute non déterminées (2024-04-02 et suivants)
+# entre EV1 (entree_incapacite) et EV3 (sortie reprise_travail), EV8 passage_invalidite retenu
+# (2024-10-01) : configurations multiples ; EV1 faux, EV3 inconnu (une sortie non déterminée peut
+# le précéder sans rechute), EV8 inconnu (échec si tout est sauté, non si EV3 échoue), index :
+# les n événements non déterminés. Mesure « avant » sur 8847597, n = 30 : EV1, EV3 et EV8 inconnus
+# (plafond). Travail sans horloge (#35, #45) : appels de .pas_d12() de .verdict_d12(), linéaires en
+# n (30 : 92 ; 60 : 182 ; énumération : 2^n suites).
+alt30_34 <- function(n) {
+  b <- etat34(base_ref, id_evenement = "EV8", type_evenement = "passage_invalidite", date_effet = D("2024-10-01"),
+              date_saisie = D("2024-10-02"), categorie_invalidite = "cat2")
+  etat34(b, id_evenement = sprintf("EX%02d", seq_len(n)), type_evenement = rep(c("sortie", "rechute"), length.out = n),
+         date_effet = D("2024-04-01") + seq_len(n), date_saisie = D(NA),
+         motif = rep(c("reprise_travail", NA), length.out = n))
+}
+appels_pas_d12 <- function(ctx) {
+  nb <- 0L
+  env <- new.env(parent = ns)
+  env$.pas_d12 <- function(...) { nb <<- nb + 1L; ns$.pas_d12(...) }
+  for (g in c(".propager_d12", ".propager_groupe_d12")) {
+    h <- get(g, envir = ns)
+    environment(h) <- env
+    assign(g, h, envir = env)
+  }
+  f <- ns$.verdict_d12
+  environment(f) <- env
+  f(ctx)
+  nb
+}
+ctx <- ctx_vue(alt30_34(30L), A0)
+duree <- system.time(v <- ns$.verdict_d12(ctx))[["elapsed"]]
+informer("D12, #129, C129-2 (b) : durée de .verdict_d12() pour k = 30 (mesure, hors décompte)", sprintf("%.3f s", duree))
+verifier_egal("D12, #129, C129-2 (b) : k = 30, alternance sortie et rechute non déterminées : EV1 faux, EV3 et EV8 inconnus, index : les 30 non déterminés ; appels de .pas_d12() pour k = 30 et 60",
+              list(as.vector(v)[c(1L, 3L, 7L)], attr(v, "index")$evenements[c(3L, 7L)], names(attr(v, "index")),
+                   appels_pas_d12(ctx), appels_pas_d12(ctx_vue(alt30_34(60L), A0))),
+              list(c(FALSE, NA, NA), rep(list(8:37), 2L), "evenements", 92L, 182L))
+
+# #129, C129-5 et M813 : date d'effet refusée (D02c, 1850-01-01) d'un événement retenu EV7 de SI2 :
+# jamais clé de tri, facultatif à chaque intervalle (approximation sûre). rechute : avant la
+# première entrée ou entre EV1 et EV3, échec ; après la reprise_travail EV3, possible : inconnu ;
+# passage_invalidite : avant EV1 ou après EV3, échec ; entre les deux, possible : inconnu. Index
+# « evenements.date_effet », cause du refus (.cause_nd()) : D02c. Mesure « avant » sur 8847597 :
+# EV7 trié en tête par sa date refusée, échec certain (TRUE) dans les deux cas, sans index. Bilan
+# : depuis G3a (#105, lot V, mode kleene), D12 s'exécute et EV7 est écartée, cause D02c (avant :
+# D12 bloquée, M169, même ligne de controles_non_executes, aucun constat de D12 dans les deux cas).
+d12_date <- function(type, ...) {
+  b <- un34(base_ref, type, "1850-01-01", ...)
+  vue <- ns$vue_a_date(b, A, ns$lire_declarations(s34(1000), d), ns$.lire_conventions(cv34))
+  v <- ns$.verdict_d12(vue$ctx)
+  list(as.vector(v), attr(v, "index")$evenements.date_effet[[7L]],
+       ns$.cause_nd(vue$ctx, attr(v, "index"), 7L, "D12", "evenements"), ne34(vue$bilan, "D12"))
+}
+verifier_egal("D12, #129, C129-5 (M813) : date d'effet refusée d'un événement retenu (rechute, puis passage_invalidite) : EV7 inconnu, les autres faux, index evenements.date_effet (EV7), cause D02c ; bilan : EV7 écartée, D02c (mode kleene, G3a)",
+              list(d12_date("rechute"), d12_date("passage_invalidite", categorie_invalidite = "cat2")),
+              rep(list(list(c(rep(FALSE, 6L), NA), 7L, "D02c", "evenements type_evenement D02c")), 2L))
+
+# #129, reprise (m1 de l'audit léger) : date d'effet absente sans refus de valeur (contexte de la
+# vue seule, aucun refus inscrit) : une clé, triée en dernier, comme au commit 8847597 (même
+# mesure : rechute après la reprise_travail EV3, aucun échec ; passage_invalidite, échec certain
+# en EV7) ; aucune erreur interne, aucun index (avant la reprise : verdict inconnu, index
+# evenements.date_effet sans refus, erreur interne de .cause_nd()).
+d12_absente <- function(type, ...) {
+  v <- ns$.verdict_d12(ctx_vue(un34(base_ref, type, NA, ...), A))
+  # (exact : depuis G3a, l'attribut index_pertinent, liste vide, existe toujours)
+  list(as.vector(v), attr(v, "index", exact = TRUE))
+}
+verifier_egal("D12, #129 (m1) : date d'effet absente non refusée : clé triée en dernier, verdict de 8847597 (rechute : aucun échec ; passage_invalidite : EV7 détecté), sans index",
+              list(d12_absente("rechute"), d12_absente("passage_invalidite", categorie_invalidite = "cat2")),
+              list(list(rep(FALSE, 7L), NULL), list(c(rep(FALSE, 6L), TRUE), NULL)))
+
+# #129, R3 (décision du mainteneur du 25/11/2026 ; E-5) : type ou motif refusés pour leur valeur
+# (.inconnu(), jamais la valeur brute) : transitions multiples. Appel direct de .verdict_d12() sur
+# la vue ; bilan : depuis G3a (#105, lot V, mode kleene), la ligne au verdict inconnu est écartée,
+# cause hors_domaine (avant : D12 bloquée, M169, même ligne de controles_non_executes).
+# (a) cas de l'audit : motif « xyz » de la sortie EV3, rechute EV7 (2024-10-01) : la rechute
+# suit une reprise_travail possible : EV7 inconnu, index evenements.motif (EV3), cause
+# hors_domaine. Mesure « avant » sur 8847597 : EV7 vrai (la sortie de motif brut « xyz » mène
+# à un état qu'aucun type n'admet), sans index. (b) type « xyz » de EV7 (2024-10-01, après EV3) :
+# rechute ou hors automate possibles, autre type : échec : EV7 inconnu. Avant : EV7 hors de la
+# population, faux. (c) type « xyz » de EV1 : une entrée ou hors automate : EV1 et EV3
+# inconnus, index evenements.type_evenement (EV1). Avant : EV3 vrai (suite commencée par la
+# sortie).
+d12_refus <- function(b) {
+  vue <- ns$vue_a_date(b, A, ns$lire_declarations(s34(1000), d), ns$.lire_conventions(cv34))
+  v <- ns$.verdict_d12(vue$ctx)
+  i <- attr(v, "index")
+  list(as.vector(v), lapply(i[names(i) != "evenements"], function(x) unlist(x)),
+       ns$.cause_nd(vue$ctx, i, which(is.na(v)), "D12", "evenements"), ne34(vue$bilan, "D12"))
+}
+verifier_egal("D12, #129, R3 : motif refusé de la sortie EV3 (cas de l'audit), type refusé de EV7, type refusé de EV1 : verdicts inconnus, index par colonne, cause hors_domaine ; bilan : lignes écartées, hors_domaine (mode kleene, G3a)",
+              list(d12_refus(within(un34(base_ref, "rechute", "2024-10-01"), evenements$motif[3L] <- "xyz")),
+                   d12_refus(un34(base_ref, "xyz", "2024-10-01")),
+                   d12_refus(within(base_ref, evenements$type_evenement[1L] <- "xyz"))),
+              list(list(c(rep(FALSE, 6L), NA), list(evenements.motif = 3L), "hors_domaine", "evenements type_evenement hors_domaine"),
+                   list(c(rep(FALSE, 6L), NA), list(evenements.type_evenement = 7L), "hors_domaine", "evenements type_evenement hors_domaine"),
+                   list(c(NA, FALSE, NA, FALSE, FALSE, FALSE), list(evenements.type_evenement = c(1L, 1L)), "hors_domaine",
+                        "evenements type_evenement hors_domaine")))
+
+# #129 (R3, décision du mainteneur du 25/11/2026 ; E-5) : force brute contre l'énumération des
+# valeurs du domaine. Base tirée de `m` sinistres arret_travail (SB0001…), de 1 à 4 événements
+# retenus et de 0 à 2 non déterminés, dates d'effet sur 6 jours (ex aequo fréquents) ; refus de
+# valeur inscrits dans le contexte (comme la règle B les inscrit) : type (valeur brute « xyz »,
+# probabilité 0,15), motif (« xyz », 0,15), et, sur un sinistre sur trois, date d'effet d'un
+# événement (1850-01-01). Vérité : toutes les valeurs du domaine de chaque inconnue (type : les
+# six de l'automate et « hors automate » ; motif : le domaine de son type ; date : toute place
+# dans la suite), tous les sous-ensembles des non déterminés, verdict de l'automate
+# (echec_oracle_d12()) sur chaque suite. Attendu : identique hors date d'effet inconnue (exact),
+# aucune contradiction sous une date inconnue (approximation sûre, M813).
+force_d12 <- function(m, graine) {
+  graine_avant <- if (exists(".Random.seed", envir = globalenv())) get(".Random.seed", envir = globalenv())
+  on.exit(if (is.null(graine_avant)) rm(".Random.seed", envir = globalenv()) else assign(".Random.seed", graine_avant, envir = globalenv()))
+  set.seed(graine, kind = "Mersenne-Twister", normal.kind = "Inversion", sample.kind = "Rejection")
+  te <- d$types_evenements
+  auto <- te$type_evenement[!is.na(te$etat_depuis) & nzchar(te$etat_depuis)]
+  motifs <- c("reprise_travail", "fin_droits", "sans_suite", "refus", "deces", "retraite")
+  ids <- sprintf("SB%04d", seq_len(m))
+  b <- base_ref
+  b$sinistres <- rbind(b$sinistres, tab("sinistres", id_sinistre = ids, id_assure = "AS1", nature_sinistre = "arret_travail",
+                                        date_survenance = D("2024-03-01"), date_declaration = D("2024-03-05"),
+                                        canal_declaration = "assure", gestionnaire = "interne", date_saisie = D("2024-03-06")))
+  kr <- sample.int(4L, m, replace = TRUE)
+  kn <- sample(0:2, m, replace = TRUE)
+  nb <- kr + kn
+  tot <- sum(nb)
+  ty <- sample(auto, tot, replace = TRUE, prob = c(3, 2, 2, 2, 3, 2))
+  mo <- ifelse(ty == "sortie", sample(motifs, tot, replace = TRUE, prob = c(4, 1, 1, 1, 1, 1)), NA_character_)
+  vis <- unlist(lapply(seq_len(m), function(i) c(rep(TRUE, kr[i]), rep(FALSE, kn[i]))))
+  t_inc <- runif(tot) < 0.15
+  m_inc <- runif(tot) < 0.15
+  premier <- cumsum(nb) - nb + 1L
+  d_inc <- seq_len(tot) %in% (premier + vapply(nb, function(x) sample.int(x, 1L), 1L) - 1L)[runif(m) < 1 / 3]
+  n0 <- nrow(b$evenements)
+  b$evenements <- rbind(b$evenements, tab("evenements", id_evenement = sprintf("EY%05d", sample.int(99999L, tot)),
+                                          id_sinistre = rep(ids, nb), type_evenement = ifelse(t_inc, "xyz", ty),
+                                          date_effet = ifelse(d_inc, D("1850-01-01"), D("2024-03-01") + sample(0:5, tot, replace = TRUE)),
+                                          date_saisie = ifelse(vis, D("2024-06-01"), D(NA)), motif = ifelse(m_inc, "xyz", mo)))
+  b$evenements$date_effet <- as.Date(b$evenements$date_effet, origin = "1970-01-01")
+  b$evenements$date_saisie <- as.Date(b$evenements$date_saisie, origin = "1970-01-01")
+  ctx <- ctx_vue(b, A0)
+  ctx$refus_valeur$evenements <- list(type_evenement = list(list(code = "hors_domaine", lignes = n0 + which(t_inc))),
+                                      motif = list(list(code = "hors_domaine", lignes = n0 + which(m_inc))),
+                                      date_effet = list(list(code = "D02c", lignes = n0 + which(d_inc))))
+  v <- as.vector(ns$.verdict_d12(ctx))
+  ev <- b$evenements
+  nd <- ns$.nd_vue(ctx, "evenements")
+  ti <- c(rep(FALSE, n0), t_inc)
+  mi <- c(rep(FALSE, n0), m_inc)
+  di <- c(rep(FALSE, n0), d_inc)
+  exact <- 0L
+  sur <- 0L
+  contradictions <- 0L
+  determines <- 0L
+  for (s in ids) {
+    l <- which(ev$id_sinistre == s)
+    options <- lapply(l, function(x) {
+      types <- if (ti[x]) c(auto, NA) else ev$type_evenement[x]
+      o <- list()
+      for (t in types) {
+        dom <- if (is.na(t)) NA_character_
+               else if (mi[x]) { z <- ns$eclater_champ(te$motifs[match(t, te$type_evenement)]); if (length(z)) z else NA_character_ }
+               else ev$motif[x]
+        for (mm in dom) o[[length(o) + 1L]] <- c(t, mm)
+      }
+      if (nd[x]) o[[length(o) + 1L]] <- c(NA_character_, NA_character_)
+      o
+    })
+    issues <- integer(0)
+    combi <- as.matrix(expand.grid(lapply(options, seq_along)))
+    dinc <- l[di[l]]
+    for (a in seq_len(nrow(combi))) {
+      choix <- lapply(seq_along(l), function(z) options[[z]][[combi[a, z]]])
+      t_a <- vapply(choix, `[`, "", 1L)
+      m_a <- vapply(choix, `[`, "", 2L)
+      pres <- !is.na(t_a)
+      connus <- which(pres & !(l %in% dinc))
+      connus <- connus[order(as.numeric(ev$date_effet[l[connus]]), te$ordre[match(t_a[connus], te$type_evenement)],
+                             ev$id_evenement[l[connus]], method = "radix")]
+      inc <- which(pres & l %in% dinc)
+      suites <- if (length(inc) == 0L) list(connus) else lapply(0:length(connus), function(p) append(connus, inc, after = p))
+      for (q in suites) {
+        e <- echec_oracle_d12(te, t_a[q], m_a[q])
+        issues <- union(issues, if (is.na(e)) 0L else l[q[e]])
+      }
+    }
+    for (x in l[!nd[l]]) {
+      vt <- if (!(x %in% issues)) FALSE else if (all(issues == x)) TRUE else NA
+      if (length(dinc) == 0L) {
+        exact <- exact + identical(v[x], vt)
+      } else {
+        sur <- sur + 1L
+        if (!is.na(v[x])) {
+          determines <- determines + 1L
+          contradictions <- contradictions + !identical(v[x], vt)
+        }
+      }
+    }
+  }
+  list(retenus_exacts = exact, retenus_sous_date = sur, determines_sous_date = determines, contradictions = contradictions,
+       retenus = sum(!nd[(n0 + 1L):nrow(ev)]), types_inconnus = sum(t_inc), motifs_inconnus = sum(m_inc), dates_inconnues = sum(d_inc),
+       inconnus = sum(is.na(v)))
+}
+# #129, groupe des ex aequo de type refusé (décision du mainteneur du 25/11/2026, option (a) ; M1 de
+# l'audit) : j = 10 événements de type et de motif refusés (EJ01 à EJ10) le même jour (2024-04-01)
+# que EK1 passage_invalidite et EK2 changement_categorie, entre EV1 et EV3 de SI2, et une sortie
+# EL1 de date refusée : parcours type par type avec l'ensemble des événements placés (2^10
+# masques), au lieu de 7^10 suites. Appels de .pas_d12() (mis en cache par état) : 90 ; verdicts
+# inconnus : 14 (EV3, EJ01 à EJ10, EK1, EK2, EL1). Mesures : 0,085 s à j = 10, 0,021 s à j = 8,
+# 0,010 s à j = 6 ; version à 7^j suites (arbre de travail avant cette reprise) : 13,1 s à j = 6
+# (sans date refusée). Avant (8847597) : .propager_groupe_d12() n'existe pas.
+j10_34 <- function(j) {
+  b <- etat34(base_ref, id_evenement = c(sprintf("EJ%02d", seq_len(j)), "EK1", "EK2"),
+              type_evenement = c(rep("xyz", j), "passage_invalidite", "changement_categorie"), date_effet = D("2024-04-01"),
+              date_saisie = D("2024-04-02"), categorie_invalidite = "cat2", motif = c(rep("xyz", j), NA, NA))
+  b <- etat34(b, id_evenement = "EL1", type_evenement = "sortie", date_effet = D("1850-01-01"), date_saisie = D("2024-04-02"),
+              motif = "reprise_travail")
+  ctx <- ctx_vue(b, A)
+  ctx$refus_valeur$evenements <- list(type_evenement = list(list(code = "hors_domaine", lignes = 6L + seq_len(j))),
+                                      motif = list(list(code = "hors_domaine", lignes = 6L + seq_len(j))),
+                                      date_effet = list(list(code = "D02c", lignes = 9L + j)))
+  ctx
+}
+ctx <- j10_34(10L)
+duree <- system.time(v <- ns$.verdict_d12(ctx))[["elapsed"]]
+informer("D12, #129 : durée de .verdict_d12() pour j = 10 types refusés de même date (mesure, hors décompte)", sprintf("%.3f s", duree))
+verifier_egal("D12, #129 : groupe des ex aequo de type refusé, j = 10 : verdicts inconnus (EV3, EJ01 à EJ10, EK1, EK2, EL1), EV1 faux ; appels de .pas_d12()",
+              list(which(is.na(v)), v[1L], appels_pas_d12(ctx)), list(c(3L, 7:19), FALSE, 90L))
+
+# Mesure « avant » sur 8847597 (valeurs brutes lues) : 2 046 retenus exacts sur 2 484, 738
+# contradictions sur 1 131 verdicts déterminés sous une date inconnue.
+verifier_egal("D12, #129, R3 : force brute (1 500 sinistres, graine 20261125) : exact hors date d'effet inconnue (2 484 retenus sur 2 484), aucune contradiction sous une date inconnue (326 verdicts déterminés sur 1 273) ; inconnues tirées",
+              force_d12(1500L, 20261125L),
+              list(retenus_exacts = 2484L, retenus_sous_date = 1273L, determines_sous_date = 326L, contradictions = 0L,
+                   retenus = 3757L, types_inconnus = 777L, motifs_inconnus = 852L, dates_inconnues = 507L, inconnus = 1638L))
+
+# #105, lot V, G3a (erratum E-15 (g), C-G3-2, C-G3-7) : D12 en mode Kleene. Nature du sinistre
+# refusée pour sa valeur : les événements du sinistre sont propagés comme pour un arrêt de travail
+# ; verdict « nature arret_travail » ET « premier échec » ; cellule de nature pertinente quand le
+# second terme n'est pas faux. Oracle par énumération exhaustive (constat de simulation, graine
+# locale 20261126 sous le générateur de outils::avec_graine(), état global rétabli) : `m`
+# sinistres SB, nature refusée (« xyz », probabilité 0,4), arret_travail (0,45) ou deces (0,15) ;
+# de 1 à 3 événements retenus et de 0 à 1 non déterminé ; type et motif refusés (« xyz », 0,15
+# chacun ; aucun sur un sinistre dont l'énumération dépasserait 4 000 mondes) ; `dates` : date
+# d'effet refusée (1850-01-01) d'un événement d'un sinistre sur trois. Mondes : nature (arret_travail
+# ou autre) x présence de chaque non déterminé x (type, motif) de chaque événement (domaines de
+# force_d12()) x place de chaque date inconnue. Attendu, hors date inconnue : verdict identique,
+# pertinence de la nature identique (exacte), cellules d'automate pertinentes de l'oracle comprises
+# dans index_pertinent (sur-ensemble, D-G3-3 ; événement non déterminé, présence, type ou motif :
+# « evenements », l'événement entier, comme E-13 (c) ; événement retenu, type ou motif :
+# « evenements.type_evenement » ou « evenements.motif ») ; sous une date inconnue : aucun verdict déterminé
+# contraire, pertinence de la nature sur-ensemble ; tout verdict inconnu à pertinence non vide.
+force_d12_nature <- function(m, dates) ns$avec_graine(20261126L, {
+  te <- d$types_evenements
+  auto <- te$type_evenement[!is.na(te$etat_depuis) & nzchar(te$etat_depuis)]
+  motifs <- c("reprise_travail", "fin_droits", "sans_suite", "refus", "deces", "retraite")
+  ids <- sprintf("SB%04d", seq_len(m))
+  nat <- sample(c("xyz", "arret_travail", "deces"), m, replace = TRUE, prob = c(0.4, 0.45, 0.15))
+  b <- base_ref
+  n_s0 <- nrow(b$sinistres)
+  b$sinistres <- rbind(b$sinistres, tab("sinistres", id_sinistre = ids, id_assure = "AS1", nature_sinistre = nat,
+                                        date_survenance = D("2024-03-01"), date_declaration = D("2024-03-05"),
+                                        canal_declaration = "assure", gestionnaire = "interne", date_saisie = D("2024-03-06")))
+  kr <- sample.int(3L, m, replace = TRUE)
+  kn <- sample(0:1, m, replace = TRUE)
+  nb <- kr + kn
+  tot <- sum(nb)
+  sin <- rep(ids, nb)
+  ty <- sample(auto, tot, replace = TRUE, prob = c(3, 2, 2, 2, 3, 2))
+  mo <- ifelse(ty == "sortie", sample(motifs, tot, replace = TRUE, prob = c(4, 1, 1, 1, 1, 1)), NA_character_)
+  vis <- unlist(lapply(seq_len(m), function(i) c(rep(TRUE, kr[i]), rep(FALSE, kn[i]))))
+  t_inc <- runif(tot) < 0.15
+  m_inc <- runif(tot) < 0.15
+  premier <- cumsum(nb) - nb + 1L
+  d_inc <- dates & seq_len(tot) %in% (premier + vapply(nb, function(x) sample.int(x, 1L), 1L) - 1L)[runif(m) < 1 / 3]
+  effet <- D("2024-03-01") + sample(0:3, tot, replace = TRUE)
+  # nombre de valeurs (type, motif) d'un événement, borne de l'énumération
+  nval <- function(x) {
+    types <- if (t_inc[x]) c(auto, NA) else ty[x]
+    sum(vapply(types, function(t) if (!is.na(t) && m_inc[x]) max(1L, length(ns$eclater_champ(te$motifs[match(t, te$type_evenement)]))) else 1L, 1L))
+  }
+  for (s in ids) {
+    l <- which(sin == s)
+    if (prod(vapply(l, nval, 1L) * (1L + !vis[l])) * (1L + sum(d_inc[l]) * length(l)) > 4000) {
+      t_inc[l] <- FALSE
+      m_inc[l] <- FALSE
+    }
+  }
+  n0 <- nrow(b$evenements)
+  b$evenements <- rbind(b$evenements, tab("evenements", id_evenement = sprintf("EN%05d", seq_len(tot)), id_sinistre = sin,
+                                          type_evenement = ifelse(t_inc, "xyz", ty), date_effet = ifelse(d_inc, D("1850-01-01"), effet),
+                                          date_saisie = ifelse(vis, D("2024-06-01"), D(NA)), motif = ifelse(m_inc, "xyz", mo)))
+  b$evenements$date_effet <- as.Date(b$evenements$date_effet, origin = "1970-01-01")
+  b$evenements$date_saisie <- as.Date(b$evenements$date_saisie, origin = "1970-01-01")
+  ctx <- ctx_vue(b, A0)
+  ctx$refus_valeur$evenements <- list(type_evenement = list(list(code = "hors_domaine", lignes = n0 + which(t_inc))),
+                                      motif = list(list(code = "hors_domaine", lignes = n0 + which(m_inc))),
+                                      date_effet = list(list(code = "D02c", lignes = n0 + which(d_inc))))
+  ctx$refus_valeur$sinistres <- list(nature_sinistre = list(list(code = "hors_domaine", lignes = n_s0 + which(nat == "xyz"))))
+  v0 <- ns$.verdict_d12(ctx)
+  v <- as.vector(v0)
+  ip <- attr(v0, "index_pertinent")
+  dans <- function(cle, x) unlist(ip[[cle]][x])
+  ev <- b$evenements
+  nd <- ns$.nd_vue(ctx, "evenements")
+  ti <- c(rep(FALSE, n0), t_inc)
+  mi <- c(rep(FALSE, n0), m_inc)
+  di <- c(rep(FALSE, n0), d_inc)
+  cpt <- c(retenus_deces = 0L, retenus_exacts = 0L, nature_exacte = 0L, sur_ensemble = 0L, retenus_sous_date = 0L, determines_sous_date = 0L,
+           contraires = 0L, nature_sur_ensemble = 0L, inconnus = 0L, inconnus_sans_pertinence = 0L)
+  for (i in seq_len(m)) {
+    s <- ids[i]
+    l <- which(ev$id_sinistre == s)
+    ks <- n_s0 + i
+    if (nat[i] == "deces") {
+      cpt[["retenus_exacts"]] <- cpt[["retenus_exacts"]] + sum(v[l[!nd[l]]] %in% FALSE)
+      cpt[["retenus_deces"]] <- cpt[["retenus_deces"]] + sum(!nd[l])
+      next
+    }
+    vals <- lapply(l, function(x) {
+      types <- if (ti[x]) c(auto, NA) else ev$type_evenement[x]
+      o <- list()
+      for (t in types) {
+        dom <- if (is.na(t)) NA_character_
+               else if (mi[x]) { z <- ns$eclater_champ(te$motifs[match(t, te$type_evenement)]); if (length(z)) z else NA_character_ }
+               else ev$motif[x]
+        for (mm in dom) o[[length(o) + 1L]] <- c(t, mm)
+      }
+      o
+    })
+    # colonnes : présence (1 : présent) puis valeur, par événement
+    grille <- c(lapply(l, function(x) if (nd[x]) 1:2 else 1L), lapply(vals, seq_along))
+    combi <- as.matrix(expand.grid(grille, KEEP.OUT.ATTRS = FALSE))
+    k <- length(l)
+    dinc <- which(di[l])
+    issue <- lapply(seq_len(nrow(combi)), function(a) {
+      pres <- combi[a, seq_len(k)] == 1L
+      ch <- lapply(seq_len(k), function(z) vals[[z]][[combi[a, k + z]]])
+      t_a <- vapply(ch, `[`, "", 1L)
+      m_a <- vapply(ch, `[`, "", 2L)
+      pres <- pres & !is.na(t_a)
+      connus <- which(pres & !(seq_len(k) %in% dinc))
+      connus <- connus[order(as.numeric(ev$date_effet[l[connus]]), te$ordre[match(t_a[connus], te$type_evenement)],
+                             ev$id_evenement[l[connus]], method = "radix")]
+      inc <- which(pres & seq_len(k) %in% dinc)
+      suites <- if (length(inc) == 0L) list(connus) else lapply(0:length(connus), function(p) append(connus, inc, after = p))
+      vapply(suites, function(q) { e <- echec_oracle_d12(te, t_a[q], m_a[q]); if (is.na(e)) 0L else l[q[e]] }, 0L)
+    })
+    for (x in l[!nd[l]]) {
+      sous_arret <- unique(unlist(lapply(issue, function(z) z == x)))
+      vt <- if (nat[i] == "xyz") c(sous_arret, FALSE) else sous_arret
+      vt <- if (all(vt)) TRUE else if (!any(vt)) FALSE else NA
+      nature_p <- nat[i] == "xyz" && any(sous_arret)
+      cpt[["inconnus"]] <- cpt[["inconnus"]] + is.na(v[x])
+      cpt[["inconnus_sans_pertinence"]] <- cpt[["inconnus_sans_pertinence"]] + (is.na(v[x]) && length(unlist(lapply(ip, `[[`, x))) == 0L)
+      if (length(dinc) > 0L) {
+        cpt[["nature_sur_ensemble"]] <- cpt[["nature_sur_ensemble"]] + (!nature_p || ks %in% dans("sinistres.nature_sinistre", x))
+        cpt[["retenus_sous_date"]] <- cpt[["retenus_sous_date"]] + 1L
+        if (!is.na(v[x])) {
+          cpt[["determines_sous_date"]] <- cpt[["determines_sous_date"]] + 1L
+          cpt[["contraires"]] <- cpt[["contraires"]] + !identical(v[x], vt)
+        }
+        next
+      }
+      cpt[["retenus_exacts"]] <- cpt[["retenus_exacts"]] + identical(v[x], vt)
+      cpt[["nature_exacte"]] <- cpt[["nature_exacte"]] + identical(nature_p, ks %in% dans("sinistres.nature_sinistre", x))
+      # cellules d'automate pertinentes de l'oracle (sous la nature arret_travail)
+      f <- vapply(issue, function(z) z[1L] == x, NA)
+      pertinente <- function(j) {
+        autres <- if (ncol(combi) > 1L) do.call(paste, as.data.frame(combi[, -j, drop = FALSE])) else rep("", nrow(combi))
+        any(tapply(f, autres, function(u) length(unique(u)) > 1L))
+      }
+      ok <- TRUE
+      for (z in seq_len(k)) {
+        if (nd[l[z]]) {
+          if (pertinente(z) || ((ti[l[z]] || mi[l[z]]) && pertinente(k + z))) ok <- ok && l[z] %in% dans("evenements", x)
+        } else if ((ti[l[z]] || mi[l[z]]) && pertinente(k + z)) {
+          ok <- ok && l[z] %in% c(dans("evenements.type_evenement", x), dans("evenements.motif", x))
+        }
+      }
+      cpt[["sur_ensemble"]] <- cpt[["sur_ensemble"]] + ok
+    }
+  }
+  c(cpt, retenus = sum(!nd[(n0 + 1L):nrow(ev)]), natures_inconnues = sum(nat == "xyz"), types_inconnus = sum(t_inc),
+    motifs_inconnus = sum(m_inc), dates_inconnues = sum(d_inc))
+})
+# Mesure « avant » sur d25887a (nature lue brute, sans index_pertinent) : 1 579 verdicts exacts sur
+# 2 024 sans date refusée ; 216 verdicts contraires sur 350 déterminés sous une date inconnue.
+x_nat <- force_d12_nature(1000L, FALSE)
+x_nat_d <- force_d12_nature(1000L, TRUE)
+verifier_egal("D12, #105, G3a, C-G3-2 (E-15 (g)) : oracle par énumération, 1 000 sinistres (graine 20261126), sans date refusée : 2 024 retenus, verdict exact (2 024), pertinence de la nature exacte et cellules d'automate de l'oracle comprises (1 669 hors deces) ; avec dates refusées : aucun verdict contraire (121 déterminés sur 593 sous une date inconnue), nature sur-ensemble ; aucun verdict inconnu à pertinence vide",
+              list(x_nat, x_nat_d),
+              list(c(retenus_deces = 355L, retenus_exacts = 2024L, nature_exacte = 1669L, sur_ensemble = 1669L, retenus_sous_date = 0L,
+                     determines_sous_date = 0L, contraires = 0L, nature_sur_ensemble = 0L, inconnus = 647L, inconnus_sans_pertinence = 0L,
+                     retenus = 2024L, natures_inconnues = 423L, types_inconnus = 365L, motifs_inconnus = 365L, dates_inconnues = 0L),
+                   c(retenus_deces = 355L, retenus_exacts = 1431L, nature_exacte = 1076L, sur_ensemble = 1076L, retenus_sous_date = 593L,
+                     determines_sous_date = 121L, contraires = 0L, nature_sur_ensemble = 593L, inconnus = 888L, inconnus_sans_pertinence = 0L,
+                     retenus = 2024L, natures_inconnues = 423L, types_inconnus = 365L, motifs_inconnus = 365L, dates_inconnues = 343L)))
+# (C-G3-7) défaut corrigé : nature de SI2 refusée pour sa valeur (« xyz », hors_domaine ; absente,
+# manquant_obligatoire), rechute EV7 (2024-05-01) avant la reprise : verdict « nature
+# arret_travail » ET « premier échec » inconnu (EV7 premier échec certain sous un arrêt de travail),
+# seule la nature pertinente (cellule de SI2), cause = motif du refus ; D12 s'exécute (mode
+# kleene), EV7 écartée. Mesure « avant » sur d25887a : nature lue brute, SI2 hors de la
+# population, EV7 faux, sans index (appel direct) ; bilan : D12 bloquée, même ligne de
+# controles_non_executes, aucun constat. Sans échec possible (base_ref), la nature refusée ne
+# change rien : aucune ligne écartée
+d12_nature <- function(b) {
+  vue <- ns$vue_a_date(b, A, ns$lire_declarations(s34(1000), d), ns$.lire_conventions(cv34))
+  v <- ns$.verdict_d12(vue$ctx)
+  ip <- attr(v, "index_pertinent")
+  list(as.vector(v), lapply(ip, function(x) unlist(x)), if (anyNA(v)) ns$.cause_nd(vue$ctx, ip, which(is.na(v)), "D12", "evenements"),
+       ne34(vue$bilan, "D12"), co34(vue$bilan, "D12"))
+}
+b_nat <- un34(base_ref, "rechute", "2024-05-01")
+verifier_egal("D12, #105, G3a, C-G3-7 : nature de SI2 refusée (xyz ; absente) sous une rechute EV7 premier échec : EV7 inconnu, index_pertinent sinistres.nature_sinistre (SI2) seul, cause hors_domaine ; manquant_obligatoire ; D12 exécutée, EV7 écartée ; sans échec possible, rien",
+              list(d12_nature(within(b_nat, sinistres$nature_sinistre[2L] <- "xyz")),
+                   d12_nature(within(b_nat, sinistres$nature_sinistre[2L] <- NA))[c(1L, 3L, 4L)],
+                   d12_nature(within(base_ref, sinistres$nature_sinistre[2L] <- "xyz"))[c(1L, 2L, 4L, 5L)]),
+              list(list(c(rep(FALSE, 6L), NA), list(evenements = NULL, sinistres.nature_sinistre = 2L), "hors_domaine",
+                        "evenements type_evenement hors_domaine", character(0)),
+                   list(c(rep(FALSE, 6L), NA), "manquant_obligatoire", "evenements type_evenement manquant_obligatoire"),
+                   list(rep(FALSE, 6L), list(), character(0), character(0))))
+# démasquage : SI3 arret_travail (nature connue), rechute EV8 premier échec certain, à côté de SI2
+# de nature refusée : EV8 détectée, EV7 écartée (hors_domaine) ; avant (d25887a) : D12 bloquée,
+# EV8 non détectée ; à A0 et à A
+b_nat3 <- within(b_nat, sinistres$nature_sinistre[2L] <- "xyz")
+b_nat3$sinistres <- rbind(b_nat3$sinistres, transform(b_nat3$sinistres[2L, ], id_sinistre = "SI3", nature_sinistre = "arret_travail"))
+b_nat3 <- ev34(b_nat3, id_evenement = "EV8", id_sinistre = "SI3", type_evenement = "rechute", date_effet = D("2024-05-01"),
+               date_saisie = D("2024-05-02"))
+verifier_egal("D12, #105, G3a : démasquage : SI3 arret_travail, rechute EV8 premier échec, à côté de SI2 de nature refusée : EV8 détectée (S et X), EV7 écartée (hors_domaine), à A0 et à A",
+              lapply(list(A0, A), function(a) { r <- controler_base(b_nat3, a, s34(1000), cv34); list(ne34(r, "D12"), co34(r, "D12")) }),
+              rep(list(list("evenements type_evenement hors_domaine", rep("evenements exacte EV8", 2L))), 2L))
+# (C-G3-5) invariance à l'ordre des lignes : base du démasquage, avec un type refusé (EV1) et une
+# date d'effet refusée (EV3) en plus ; bilan identique après inversion des lignes de chaque table et
+# après une permutation tirée (graine 131), à A0 et à A
+b_nat4 <- within(b_nat3, { evenements$type_evenement[1L] <- "xyz"; evenements$date_effet[3L] <- D("1850-01-01") })
+verifier_egal("D12, #105, G3a, C-G3-5 : nature, type et date refusés : bilan identique après inversion et après une permutation tirée (graine 131), à A0 et à A",
+              lapply(list(A0, A), function(a) {
+                f <- function(x) controler_base(x, a, s34(1000), cv34)
+                r <- f(b_nat4)
+                c(inversion = identical(f(inverser_lignes(b_nat4)), r), permutation = identical(f(melanger_lignes(b_nat4, 131L)), r))
+              }),
+              rep(list(c(inversion = TRUE, permutation = TRUE)), 2L))
+# (C-G3-6) invariance à la valeur brute, colonnes lues par D12 sur la base du démasquage : nature de
+# SI2, type de EV7 (zz1, zz2), motif de la sortie EV3 (zz1, zz2), date d'effet de EV7 (1850-01-01,
+# 2090-01-01) : constats, lignes non exécutées, déclarations requises, visibilité non déterminée et
+# refus identiques sous les deux valeurs, à A0 et à A (à A0, la date refusée rend aussi EV7 de
+# visibilité non déterminée, D02c)
+inv_d12 <- function(modifier, valeurs) vapply(list(A0, A), function(a) {
+  rs <- lapply(valeurs, function(x) cb(modifier(b_nat3, x), a, s34(1000), cv34))
+  extraire <- function(r) list(r$controles, r$controles_non_executes, r$declarations_requises, r$vue$visibilite_non_determinee, r$refus_tables)
+  identical(extraire(rs[[1L]]), extraire(rs[[2L]]))
+}, NA)
+verifier_egal("D12, #105, G3a, C-G3-6 : invariance à la valeur brute (nature de SI2, type de EV7, motif de EV3, date d'effet de EV7), à A0 et à A",
+              list(inv_d12(function(b, x) { b$sinistres$nature_sinistre[2L] <- x; b }, list("zz1", "zz2")),
+                   inv_d12(function(b, x) { b$evenements$type_evenement[7L] <- x; b }, list("zz1", "zz2")),
+                   inv_d12(function(b, x) { b$evenements$motif[3L] <- x; b }, list("zz1", "zz2")),
+                   inv_d12(function(b, x) { b$evenements$date_effet[7L] <- x; b }, list(D("1850-01-01"), D("2090-01-01")))),
+              rep(list(c(TRUE, TRUE)), 4L))
+# (C-G3-6, cas discriminant ; réserve M-2 de l'audit de G3a, levée en G3b) : les valeurs zz1 et zz2
+# ci-dessus ne distinguent pas une lecture brute de la nature (toutes deux hors de arret_travail). Refus
+# injecté dans ctx$refus_valeur (nature de SI2, hors_domaine) sous les valeurs brutes arret_travail et
+# deces (base b_nat, rechute EV7 premier échec sous un arrêt de travail), à A : verdict et
+# index_pertinent de .verdict_d12() identiques (EV7 inconnu) ; témoin, une copie de .verdict_d12() qui
+# lit la nature brute (mutant « nature lue brute », .inconnu() aveugle sur la nature) : verdicts
+# différents (EV7 vrai sous arret_travail, faux sous deces), le mutant est détecté
+d12_brut_g3b <- function(f, nature) {
+  vue <- ns$vue_a_date(within(b_nat, sinistres$nature_sinistre[2L] <- nature), A, ns$lire_declarations(s34(1000), d),
+                       ns$.lire_conventions(cv34))
+  ctx <- vue$ctx
+  ctx$refus_valeur$sinistres$nature_sinistre <- list(list(code = "hors_domaine", lignes = 2L))
+  v <- f(ctx)
+  list(as.vector(v), attr(v, "index_pertinent"))
+}
+mutant_d12_g3b <- local({
+  env <- new.env(parent = ns)
+  env$.inconnu <- function(ctx, table, colonne) {
+    if (table == "sinistres" && colonne == "nature_sinistre") rep(FALSE, NROW(ctx$base$sinistres)) else ns$.inconnu(ctx, table, colonne)
+  }
+  f <- ns$.verdict_d12
+  environment(f) <- env
+  f
+})
+verifier_egal("D12, #105, G3a, C-G3-6, cas discriminant (M-2) : nature de SI2 refusée par injection sous les valeurs brutes arret_travail et deces : verdict et index_pertinent identiques (EV7 inconnu) ; mutant « nature lue brute » : différents (EV7 vrai, puis faux)",
+              list(identical(d12_brut_g3b(ns$.verdict_d12, "arret_travail"), d12_brut_g3b(ns$.verdict_d12, "deces")),
+                   d12_brut_g3b(ns$.verdict_d12, "deces")[[1L]][7L],
+                   vapply(c("arret_travail", "deces"), function(x) d12_brut_g3b(mutant_d12_g3b, x)[[1L]][7L], NA, USE.NAMES = FALSE)),
+              list(TRUE, NA, c(TRUE, FALSE)))
 
 # --- D14 : dossier double effet non ouvert (§ 8.9 ; C14-1 à C14-5) ; GS6 double_effet (CT1,
 # ensemble), conjoint ME2 rattaché à SI1, enfant ME1 (né le 2010-03-01, 14 ans à la survenance)
@@ -7209,3 +7865,4306 @@ verifier_egal("#175 table_refusee_vue() : vrai si et seulement si refus_tables p
                                            "evenements", "prestations", "cotisations")),
                               list(TRUE, character(0)))), 2L),
                 list("autre")))
+
+section("donnees : règles V, mode à trois valeurs sous un refus de valeur, mécanisme (#105, lot V ; spécification `donnees`, erratum `1.9.7`, E-1, E-3 et E-4, M808)")
+# Noyau par appel direct de .regle_vue() sur un contexte complet jusqu'à la vue (règle factice
+# V_factice sur assures, verdicts par .entree3(), .verdict3() et .existe_vue3()). Base : sexe
+# de AS1 hors domaine (refus de valeur, portée ligne ; AS1 reste dans la vue), AS2 de sexe M né
+# en 1960 (défaut planté). En mode "bloquee" (défaut, M169), la règle est bloquée ; en mode
+# "kleene", elle s'exécute sur les lignes au verdict déterminé. Avant (d839e42) : argument
+# `mode` absent : les cas (1) à (4) échouent (« unused argument (mode = "kleene") »), le cas (5)
+# aussi (condition non vraie), comme (4 bis) et (6) à (9) ; mesure sur une bibliothèque installée
+# depuis `git archive d839e42`.
+ctx_v105 <- function(b, arrete) {
+  ctx <- ns$.contexte(b, d, list(date_extraction = A), arrete)
+  ctx$declarations <- ns$lire_declarations(NULL, d)
+  ctx$conventions <- ns$.lire_conventions(NULL)
+  for (f in c(".regle_forme", ".regle_domaine", ".regle_cles", ".refus_induits", ".refus_regle_b", ".regle_p",
+              ".construire_vue")) ns[[f]](ctx)
+  ctx
+}
+b_v105 <- avec(function(b) { b$assures$sexe[1L] <- "X"; b })
+# exécute la règle factice ; rend (lignes détectées, constats de la règle, causes de ses lignes
+# de controles_non_executes)
+v105 <- function(b, lit, g, mode = NULL, famille = FALSE) {
+  ctx <- ctx_v105(b, A0)
+  f <- function() {
+    e <- list(s = ns$.entree3(ctx, "assures.sexe"), n = ns$.entree3(ctx, "assures.date_naissance"))
+    if (famille) e$f <- ns$.existe_vue3(ctx, "famille", ns$.valeurs(ctx, "assures", "id_assure"),
+                                        ns$.valeurs(ctx, "famille", "id_assure"), rep(TRUE, nrow(ctx$base$famille)))
+    ns$.verdict3(e, g)
+  }
+  args <- list(ctx, "V_factice", "assures", "sexe", lit, "H", "exacte", f)
+  if (!is.null(mode)) args$mode <- mode
+  res <- do.call(ns$.regle_vue, args)
+  co <- Filter(function(k) k$code == "V_factice", ctx$constats)
+  ne <- Filter(function(k) k$code == "V_factice", ctx$non_executes)
+  list(detectees = if (is.null(res)) "bloquee" else as.integer(res), constats = lapply(co, `[[`, "lignes"),
+       causes = vapply(ne, `[[`, "", "cause"))
+}
+n1965 <- D("1965-01-01")
+verifier_egal("#105, lot V, mécanisme (1) : valeur refusée lue par le verdict (sexe de AS1) et défaut planté sur AS2 : en mode Kleene, AS2 détectée, AS1 écartée, cause = motif du refus (hors_domaine, rang 3) ; en mode bloquee (défaut, M169), règle bloquée, cause hors_domaine, aucun constat",
+              list(v105(b_v105, character(0), function(v) v$s == "M", mode = "kleene"),
+                   v105(b_v105, character(0), function(v) v$s == "M")),
+              list(list(detectees = 2L, constats = list(2L), causes = "hors_domaine"),
+                   list(detectees = "bloquee", constats = list(), causes = "hors_domaine")))
+verifier_egal("#105, lot V, mécanisme (2), contre-témoin : valeur refusée lue par la règle (sexe, colonne contrôlée) que le verdict ne lit pas (né avant 1965) : en mode Kleene, AS2 détectée, aucune ligne écartée, aucune ligne de controles_non_executes ; en mode bloquee, règle bloquée",
+              list(v105(b_v105, character(0), function(v) v$n < n1965, mode = "kleene"),
+                   v105(b_v105, character(0), function(v) v$n < n1965)),
+              list(list(detectees = 2L, constats = list(2L), causes = character(0)),
+                   list(detectees = "bloquee", constats = list(), causes = "hors_domaine")))
+verifier_egal("#105, lot V, mécanisme (3), lecture existentielle : sexe M et né avant 1965 : AS1 (sexe refusé, née en 1970) fausse quel que soit son sexe, verdict déterminé : AS2 seule détectée, aucune ligne écartée",
+              v105(b_v105, character(0), function(v) v$s == "M" & v$n < n1965, mode = "kleene"),
+              list(detectees = 2L, constats = list(2L), causes = character(0)))
+# Départage avec une cause (γ) de la même clé (§ 3.1, un seul calcul de cause, .cause_nd()) :
+# ME1 (famille de AS1) sans date de saisie, de visibilité non déterminée (D03g, cause
+# declaration_absente, rang 6) ; verdict « sexe M et un membre de famille dans la vue » : AS1
+# écartée par les deux éléments, cause hors_domaine (rang 3) ; sans le refus du sexe, cause
+# declaration_absente ; sans l'un ni l'autre, rien n'est écarté.
+b_v105_f <- avec(function(b) { b$assures$sexe[1L] <- "X"; b$famille$date_saisie[1L] <- NA; b })
+b_v105_g <- avec(function(b) { b$famille$date_saisie[1L] <- NA; b })
+g_f <- function(v) v$s == "M" & v$f
+verifier_egal("#105, lot V, mécanisme (4), départage : valeur refusée (hors_domaine, rang 3) et ligne de famille non déterminée (declaration_absente, rang 6) sur la même ligne écartée : cause hors_domaine ; famille seule : declaration_absente ; ni l'une ni l'autre : aucune ligne écartée",
+              list(v105(b_v105_f, "famille.id_assure", g_f, mode = "kleene", famille = TRUE),
+                   v105(b_v105_g, "famille.id_assure", function(v) v$s == "F" & v$f, mode = "kleene", famille = TRUE),
+                   v105(base_ref, "famille.id_assure", g_f, mode = "kleene", famille = TRUE)),
+              list(list(detectees = integer(0), constats = list(), causes = "hors_domaine"),
+                   list(detectees = integer(0), constats = list(), causes = "declaration_absente"),
+                   list(detectees = integer(0), constats = list(), causes = character(0))))
+# Gardes : un mode inconnu, et un verdict sans attribut `index` en mode Kleene (règle non
+# convertie au noyau à trois valeurs), sont des erreurs internes.
+erreur_v105 <- function(expr) tryCatch({ expr; "aucune erreur" }, error = function(e) conditionMessage(e))
+ctx <- ctx_v105(b_v105, A0)
+# Un verdict qui porte `index` sans `index_pertinent` (noyau autre que .verdict3(), non encore
+# converti) est aussi refusé en mode Kleene : pas de repli sur `index` (R4).
+verifier("#105, lot V, mécanisme (5) : mode inconnu, verdict sans attribut index, et verdict avec index sans index_pertinent, en mode Kleene : erreurs internes de provie",
+         startsWith(erreur_v105(ns$.regle_vue(ctx, "V_factice", "assures", "sexe", character(0), "H", "exacte",
+                                              function() rep(FALSE, 2L), mode = "partiel")), "erreur interne de provie") &&
+           startsWith(erreur_v105(ns$.regle_vue(ctx, "V_factice", "assures", "sexe", character(0), "H", "exacte",
+                                                function() rep(FALSE, 2L), mode = "kleene")), "erreur interne de provie") &&
+           grepl("^erreur interne de provie.*pertinence exacte",
+                 erreur_v105(ns$.regle_vue(ctx_v105(b_v105, A0), "V_factice", "assures", "sexe", character(0), "H", "exacte",
+                                           function() structure(c(NA, TRUE), index = list(assures.sexe = list(1L, NULL))),
+                                           mode = "kleene"))))
+# Pertinence exacte (§ 3.1, E-3 ; .verdict3(), attribut index_pertinent) : une valeur refusée
+# que le verdict ne lit pas, ou dont il ne dépend pas, n'est pas un élément de la cause. Même base
+# que le cas (4) (sexe de AS1 refusé, ME1 non déterminée) : verdict « un membre dans la vue »
+# seul, puis « (M ou non M) et un membre dans la vue » : AS1 écartée par ME1 seule, cause
+# declaration_absente (avant la reprise : hors_domaine, la ligne s'indexait elle-même pour sa
+# valeur refusée).
+verifier_egal("#105, lot V, mécanisme (4 bis), pertinence exacte : valeur refusée sans effet sur le verdict (non lue, ou tautologie) à côté d'une ligne de famille non déterminée : cause declaration_absente, non hors_domaine",
+              list(v105(b_v105_f, "famille.id_assure", function(v) v$f, mode = "kleene", famille = TRUE),
+                   v105(b_v105_f, "famille.id_assure", function(v) (v$s == "M" | v$s != "M") & v$f, mode = "kleene", famille = TRUE)),
+              rep(list(list(detectees = integer(0), constats = list(), causes = "declaration_absente")), 2L))
+# Garde (audit, constat majeur 1) : une colonne lue comme valeur et refusée pour sa valeur qui
+# n'est pas une entrée du verdict (lue brute) est une erreur interne en mode Kleene, au lieu
+# d'une détection sur une valeur refusée. Survenance de SI1 en 2090 (refus de valeur), règle
+# factice sur assures qui la lit brute ; en mode bloquee, la règle est bloquée.
+b_v105_s <- avec(function(b) { b$sinistres$date_survenance[1L] <- D("2090-01-01"); b })
+brute_v105 <- function(ctx) function() {
+  brut <- ns$.valeurs(ctx, "sinistres", "date_survenance")
+  ns$.verdict3(list(n = ns$.entree3(ctx, "assures.date_naissance")), function(v) v$n < n1965 & any(brut > D("2080-01-01")))
+}
+ctx_s <- ctx_v105(b_v105_s, A0)
+ctx_s2 <- ctx_v105(b_v105_s, A0)
+verifier_egal("#105, lot V, mécanisme (6), garde : valeur refusée d'une colonne lue (sinistres.date_survenance) hors des entrées du verdict : erreur interne en mode Kleene ; règle bloquée en mode bloquee",
+              list(ns$.lignes_refusees(ctx_s, "sinistres", "date_survenance"),
+                   startsWith(erreur_v105(ns$.regle_vue(ctx_s, "V_factice", "assures", "sexe", "sinistres.date_survenance", "H",
+                                                        "exacte", brute_v105(ctx_s), mode = "kleene")), "erreur interne de provie"),
+                   is.null(ns$.regle_vue(ctx_s2, "V_factice", "assures", "sexe", "sinistres.date_survenance", "H", "exacte",
+                                         brute_v105(ctx_s2)))),
+              list(1L, TRUE, TRUE))
+# D01a (cause candidate d'une clé jointe en double aux occurrences divergentes, E-3) : branchée
+# dans .cause_nd() par l'argument `d01a` (attribut d01a_pertinent de .verdict3(), mode Kleene),
+# constatée par appel direct ; le chemin par une règle V n'est pas atteint : GS1 en double
+# (codes divergents) est un refus de portée table de garanties_souscrites, qui bloque la règle
+# factice sur dossiers avant son verdict (aucun constat, une ligne de controles_non_executes).
+b_v105_d <- avec(function(b) { g <- b$garanties_souscrites; g <- rbind(g, g[1L, ]); g$code_garantie[5L] <- "incapacite"
+                               b$garanties_souscrites <- g; b })
+ctx_d <- ctx_v105(b_v105_d, A0)
+f_d <- function() {
+  ix <- match(ns$.valeurs(ctx_d, "dossiers", "id_garantie_souscrite"), ns$.valeurs(ctx_d, "garanties_souscrites", "id_garantie_souscrite"))
+  ns$.verdict3(list(c = ns$.entree3(ctx_d, "garanties_souscrites.code_garantie", index = ix)), function(v) v$c == "deces")
+}
+res_d <- ns$.regle_vue(ctx_d, "V_factice", "dossiers", NA_character_, "garanties_souscrites.code_garantie", "S", "exacte", f_d,
+                       mode = "kleene")
+ctx <- ctx_v105(base_ref, A0)
+verifier_egal("#105, lot V, mécanisme (7), D01a : .cause_nd() retient D01a pour une ligne écartée dont l'entrée pertinente est une clé jointe divergente ; chemin non atteint par une règle V (GS1 en double : règle bloquée avant le verdict)",
+              list(ns$.cause_nd(ctx, list(), 1L, "V_factice", "dossiers", list(garanties_souscrites.code_garantie = c(TRUE, FALSE, FALSE))),
+                   is.null(res_d), length(Filter(function(k) k$code == "V_factice", ctx_d$constats)),
+                   length(Filter(function(k) k$code == "V_factice", ctx_d$non_executes))),
+              list("D01a", TRUE, 0L, 1L))
+# Colonne de vue à l'arrêté égal à l'extraction (§ 2.2 (g), E-1 ; décision d'actuary, lecture
+# (a)) : en mode Kleene, le refus de valeur d'une colonne lue pour la vue ne bloque pas la règle
+# et n'est pas une entrée obligée du verdict (garde) ; en mode bloquee, la colonne est lue comme
+# valeur et bloque (M169). Saisie de SI1 en 2030 (refus de valeur D02c), règle factice sur
+# famille (sexe) qui lit sinistres.date_saisie pour la vue seulement, à A (extraction).
+b_v105_v <- avec(function(b) { b$sinistres$date_saisie[1L] <- D("2030-01-01"); b })
+vue_v105 <- function(mode) {
+  ctx <- ctx_v105(b_v105_v, A)
+  f <- function() ns$.verdict3(list(s = ns$.entree3(ctx, "famille.sexe")), function(v) v$s == "M")
+  res <- ns$.regle_vue(ctx, "V_factice", "famille", "sexe", character(0), "H", "exacte", f, vue = "sinistres.date_saisie",
+                       mode = mode)
+  list(refus = ns$.lignes_refusees(ctx, "sinistres", "date_saisie"), detectees = if (is.null(res)) "bloquee" else as.integer(res),
+       causes = vapply(Filter(function(k) k$code == "V_factice", ctx$non_executes), `[[`, "", "cause"))
+}
+verifier_egal("#105, lot V, mécanisme (8), colonne de vue refusée à l'extraction : mode Kleene, règle exécutée (ME1, sexe M, détectée), aucune ligne de controles_non_executes ; mode bloquee, règle bloquée, cause D02c",
+              list(vue_v105("kleene"), vue_v105("bloquee")),
+              list(list(refus = 1L, detectees = 1L, causes = character(0)), list(refus = 1L, detectees = "bloquee", causes = "D02c")))
+# Propagation par .verdict_vue() des attributs du noyau (index_pertinent, d01a_pertinent, lues ;
+# mineur m4 de l'audit) : copie de l'espace de noms dont .visibilite_a() rend quatre versions de
+# famille (1 : candidate visible de ME1 ; 2 et 3 : candidates non déterminées de ME1 ; 4 : autre
+# membre, retenu), à A0 ; f() rend les verdicts (TRUE, NA, FALSE, FALSE) et les attributs. La
+# version 1 prend le verdict inconnu ; ses entrées pertinentes sont celles des candidates au
+# verdict inconnu (2), non celles de 3 (verdict déterminé), réunies aux candidates non
+# déterminées sous « famille » ; les candidates sont vidées ; `lues` est transmis.
+env_v105 <- new.env(parent = ns)
+for (nom in ls(ns, all.names = TRUE)) {
+  g <- get(nom, envir = ns)
+  if (is.function(g) && identical(environment(g), ns)) environment(g) <- env_v105
+  assign(nom, g, envir = env_v105)
+}
+env_v105$.visibilite_a <- function(ctx, mode) list(candidate = c(TRUE, TRUE, TRUE, FALSE),
+                                                  statut = list(famille = c(TRUE, NA, NA, TRUE)),
+                                                  membre = c("ME1", "ME1", "ME1", "ME2"))
+ctx_vv <- env_v105$.contexte(avec(function(b) { b$famille <- b$famille[c(1L, 1L, 1L, 1L), ]; b }), d, list(date_extraction = A), A0)
+ctx_vv$retenu <- list(famille = c(FALSE, FALSE, FALSE, TRUE))
+r_vv <- env_v105$.verdict_vue(ctx_vv, "famille", function() {
+  structure(c(TRUE, NA, FALSE, FALSE), index = list(),
+            index_pertinent = list(famille.sexe = list(NULL, 2L, 3L, NULL)),
+            d01a_pertinent = list(famille.lien = c(FALSE, TRUE, FALSE, FALSE), famille.situation = c(FALSE, FALSE, TRUE, FALSE)),
+            lues = "famille.sexe")
+})
+verifier_egal("#105, lot V, mécanisme (9), .verdict_vue() : index_pertinent, d01a_pertinent et lues transmis ; version visible au verdict inconnu, entrées (index et D01a) de la seule candidate au verdict inconnu (2), non de 3, et candidates non déterminées (2, 3) sous « famille » ; candidates vidées",
+              list(as.vector(r_vv), attr(r_vv, "index_pertinent"), attr(r_vv, "d01a_pertinent"), attr(r_vv, "lues"),
+                   attr(r_vv, "population")),
+              list(c(NA, FALSE, FALSE, FALSE),
+                   list(famille.sexe = list(2L, NULL, NULL, NULL), famille = list(2:3, NULL, NULL, NULL)),
+                   list(famille.lien = c(TRUE, FALSE, FALSE, FALSE), famille.situation = c(FALSE, FALSE, FALSE, FALSE)),
+                   "famille.sexe", c(TRUE, FALSE, FALSE, TRUE)))
+# Registre des règles V (#105, lot V ; pendant du critère B8) : chaque clé (code, table, colonne)
+# d'une règle V qui lit comme valeur une colonne refusable pour sa valeur (colonne contrôlée par
+# une règle R de portée colonne ou ligne, comme au critère B8 (ii), et colonnes de D03i, M701)
+# figure au recensement ci-dessous avec son mode ("bloquee", M169, ou "kleene", M808), son
+# groupe de conversion (G1 : propre à la ligne et copie, avec D01b ; G2 : jointure, existence,
+# couverture ; G3 : automate et ordre ; feuille de route, § 1.23, M808) et ses colonnes
+# refusables lues comme valeur à tout arrêté (colonne contrôlée et `lit`), puis, après « | »,
+# celles lues comme valeur à l'arrêté égal à l'extraction seulement (colonnes lues pour la vue,
+# argument `vue` et ctx$lit_vue de la table, hors les précédentes). Le
+# recensement est ici, non dans R/ : le code ne lit que l'argument `mode` de chaque appel de
+# .regle_vue(), seule source du comportement ; le registre est un contrôle, qui disparaît avec
+# l'argument en fin de lot (plan de Bdr-b5, P2). Contrôle : (i) statique, chaque appel de
+# .regle_vue() de R/donnees.R (47 sites depuis G1 : le site de D02c est dédoublé, assures en
+# mode bloquee, les trois autres emplois en mode kleene) a un code littéral et un mode absent ou littéral, et
+# chaque site de table et de colonne littérales (37 clés) a sa clé au registre ou dans la liste
+# explicite des clés sans colonne refusable (`sans_refusable_v105`, vide aujourd'hui) ; (ii) trace de .regle_vue() pendant controler_base() sur la base de référence, à A0 et à A, sans
+# et avec les déclarations qui exécutent D02c (âge), D07b, D07c et D14 : clés concernées =
+# registre, mêmes colonnes (des deux champs), un seul mode par clé, celui du registre ; tout code d'un site est
+# atteint. Une clé non classée, ou un site dont le mode diffère du registre, fait échouer le test.
+registre_v105 <- c(
+  "D01b cotisations NA kleene G1 cotisations.date_mouvement cotisations.debut_periode cotisations.fin_periode cotisations.montant cotisations.nature_mouvement | contrats.date_effet garanties_souscrites.date_effet",
+  "D01b dossiers NA kleene G1 dossiers.date_ouverture | sinistres.date_saisie",
+  "D01b evenements NA kleene G1 evenements.date_effet evenements.date_saisie evenements.type_evenement | dossiers.date_ouverture rentes.date_saisie sinistres.date_saisie",
+  "D01b prestations NA kleene G1 prestations.date_reglement prestations.date_saisie prestations.debut_periode prestations.fin_periode prestations.montant prestations.nature_mouvement prestations.type_prestation | dossiers.date_ouverture rentes.date_saisie sinistres.date_saisie",
+  "D01b sinistres NA kleene G1 sinistres.date_saisie sinistres.date_survenance sinistres.nature_sinistre |",
+  "D02a affiliations date_fin kleene G1 affiliations.date_debut affiliations.date_fin | affiliations.date_saisie contrats.date_effet",
+  "D02a ayants_droit_sante fin_couverture kleene G1 ayants_droit_sante.debut_couverture ayants_droit_sante.fin_couverture | affiliations.date_saisie ayants_droit_sante.date_saisie contrats.date_effet",
+  "D02a contrats date_debut_gestion kleene G1 contrats.date_debut_gestion contrats.date_effet |",
+  "D02a contrats date_fin kleene G1 contrats.date_effet contrats.date_fin |",
+  "D02a contrats date_terme kleene G1 contrats.date_effet contrats.date_terme |",
+  "D02a cotisations fin_periode kleene G1 cotisations.debut_periode cotisations.fin_periode | contrats.date_effet cotisations.date_mouvement garanties_souscrites.date_effet",
+  "D02a evenements date_effet kleene G1 evenements.date_effet evenements.type_evenement sinistres.date_survenance | dossiers.date_ouverture evenements.date_saisie rentes.date_saisie sinistres.date_saisie",
+  "D02a famille date_naissance kleene G1 famille.date_naissance famille.lien famille.situation sinistres.date_survenance | sinistres.date_saisie",
+  "D02a garanties_souscrites date_fin kleene G1 garanties_souscrites.date_effet garanties_souscrites.date_fin | contrats.date_effet",
+  "D02a prestations fin_periode kleene G1 prestations.debut_periode prestations.fin_periode | dossiers.date_ouverture prestations.date_reglement prestations.date_saisie rentes.date_saisie sinistres.date_saisie",
+  "D02a sinistres date_declaration kleene G1 sinistres.date_declaration sinistres.date_survenance | sinistres.date_saisie",
+  "D02a sinistres date_instruction kleene G1 sinistres.date_declaration sinistres.date_instruction | sinistres.date_saisie",
+  "D02a sinistres date_survenance kleene G1 assures.date_naissance sinistres.date_survenance | sinistres.date_saisie",
+  "D02c assures date_naissance kleene G2 affiliations.date_debut assures.date_naissance contrats.date_effet contrats.nature_contrat sinistres.date_survenance | affiliations.date_saisie sinistres.date_saisie",
+  "D02c ayants_droit_sante date_naissance kleene G1 ayants_droit_sante.date_naissance ayants_droit_sante.date_saisie | affiliations.date_saisie contrats.date_effet",
+  "D02c designations date_naissance kleene G1 designations.date_naissance designations.date_saisie | affiliations.date_saisie contrats.date_effet",
+  "D02c famille date_naissance kleene G1 famille.date_naissance famille.situation sinistres.date_survenance | sinistres.date_saisie",
+  "D03a assures date_naissance kleene G1 assures.date_naissance |",
+  "D03a famille date_naissance kleene G1 famille.date_naissance famille.situation | sinistres.date_saisie",
+  "D03b assures sexe kleene G1 assures.sexe |",
+  "D03b famille sexe kleene G1 famille.sexe | sinistres.date_saisie",
+  "D03c affiliations salaire_reference kleene G1 affiliations.salaire_reference | affiliations.date_saisie contrats.date_effet",
+  "D03e evenements categorie_invalidite kleene G1 evenements.categorie_invalidite evenements.type_evenement | dossiers.date_ouverture evenements.date_saisie rentes.date_saisie sinistres.date_saisie",
+  "D03f cotisations NA kleene G1 cotisations.debut_periode cotisations.fin_periode | contrats.date_effet cotisations.date_mouvement garanties_souscrites.date_effet",
+  "D03f prestations NA kleene G1 prestations.debut_periode prestations.fin_periode prestations.type_prestation | dossiers.date_ouverture prestations.date_reglement prestations.date_saisie rentes.date_saisie sinistres.date_saisie",
+  "D03h garanties_souscrites taux_technique_tarif kleene G1 contrats.nature_contrat garanties_souscrites.code_garantie garanties_souscrites.maintien_deces garanties_souscrites.taux_technique_tarif | contrats.date_effet garanties_souscrites.date_effet",
+  "D05 evenements motif kleene G1 evenements.motif evenements.type_evenement | dossiers.date_ouverture evenements.date_saisie rentes.date_saisie sinistres.date_saisie",
+  "D06 evenements justificatif kleene G2 evenements.justificatif evenements.motif evenements.type_evenement prestations.type_prestation | dossiers.date_ouverture evenements.date_saisie prestations.date_reglement prestations.date_saisie rentes.date_saisie sinistres.date_saisie",
+  "D07a dossiers NA kleene G3 evenements.date_effet evenements.date_saisie evenements.type_evenement garanties_souscrites.code_garantie sinistres.date_survenance sinistres.nature_sinistre | dossiers.date_ouverture rentes.date_saisie sinistres.date_saisie",
+  "D07a rentes NA kleene G3 evenements.date_effet evenements.date_saisie evenements.motif evenements.type_evenement famille.lien garanties_souscrites.code_garantie sinistres.date_survenance sinistres.nature_sinistre | dossiers.date_ouverture rentes.date_saisie sinistres.date_saisie",
+  "D07b dossiers NA kleene G3 evenements.date_effet evenements.date_saisie evenements.type_evenement garanties_souscrites.code_garantie prestations.date_reglement prestations.nature_mouvement prestations.type_prestation | dossiers.date_ouverture prestations.date_saisie rentes.date_saisie sinistres.date_saisie",
+  "D07b rentes NA kleene G3 evenements.date_effet evenements.date_saisie evenements.type_evenement garanties_souscrites.code_garantie prestations.date_reglement prestations.nature_mouvement | dossiers.date_ouverture prestations.date_saisie rentes.date_saisie sinistres.date_saisie",
+  "D07c dossiers NA kleene G3 evenements.date_effet evenements.date_saisie evenements.type_evenement famille.date_deces famille.date_naissance famille.lien famille.situation garanties_souscrites.code_garantie garanties_souscrites.prolongation_handicap parametres.valeur | contrats.date_effet dossiers.date_ouverture garanties_souscrites.date_effet rentes.date_saisie sinistres.date_saisie",
+  "D07c rentes NA kleene G3 evenements.date_effet evenements.date_saisie evenements.type_evenement famille.date_deces famille.date_naissance famille.lien famille.situation garanties_souscrites.code_garantie garanties_souscrites.prolongation_handicap parametres.valeur | contrats.date_effet dossiers.date_ouverture garanties_souscrites.date_effet rentes.date_saisie sinistres.date_saisie",
+  "D08 sinistres NA kleene G3 evenements.date_effet evenements.motif evenements.type_evenement garanties_souscrites.code_garantie parametres.valeur sinistres.date_survenance sinistres.nature_sinistre | contrats.date_effet dossiers.date_ouverture evenements.date_saisie garanties_souscrites.date_effet rentes.date_saisie sinistres.date_saisie",
+  "D10b dossiers id_garantie_souscrite kleene G2 garanties_souscrites.date_effet garanties_souscrites.date_fin sinistres.date_survenance | dossiers.date_ouverture sinistres.date_saisie",
+  "D10c dossiers NA kleene G2 garanties_souscrites.code_garantie garanties_souscrites.college garanties_souscrites.date_effet garanties_souscrites.date_fin sinistres.date_survenance | contrats.date_effet dossiers.date_ouverture sinistres.date_saisie",
+  "D10d evenements NA kleene G2 evenements.type_evenement garanties_souscrites.code_garantie garanties_souscrites.college garanties_souscrites.date_effet garanties_souscrites.date_fin sinistres.date_survenance | contrats.date_effet dossiers.date_ouverture evenements.date_saisie rentes.date_saisie sinistres.date_saisie",
+  "D10e beneficiaires qualite kleene G1 beneficiaires.qualite garanties_souscrites.code_garantie | beneficiaires.date_saisie dossiers.date_ouverture sinistres.date_saisie",
+  "D10f evenements NA kleene G3 evenements.date_effet evenements.date_saisie evenements.motif evenements.type_evenement garanties_souscrites.code_garantie | dossiers.date_ouverture rentes.date_saisie sinistres.date_saisie",
+  "D11a sinistres date_survenance kleene G2 affiliations.date_debut affiliations.date_fin contrats.date_effet contrats.date_fin contrats.date_terme contrats.nature_contrat sinistres.date_survenance | affiliations.date_saisie dossiers.date_ouverture sinistres.date_saisie",
+  "D11b dossiers id_garantie_souscrite kleene G2 affiliations.date_debut affiliations.date_fin contrats.date_effet contrats.date_fin contrats.date_terme contrats.nature_contrat garanties_souscrites.college sinistres.date_survenance | affiliations.date_saisie dossiers.date_ouverture sinistres.date_saisie",
+  "D11c affiliations college kleene G2 affiliations.date_debut affiliations.date_fin | affiliations.date_saisie contrats.date_effet",
+  "D12 evenements type_evenement kleene G3 evenements.date_effet evenements.motif evenements.type_evenement sinistres.nature_sinistre | dossiers.date_ouverture evenements.date_saisie rentes.date_saisie sinistres.date_saisie",
+  "D13 sinistres date_instruction kleene G2 garanties_souscrites.code_garantie prestations.type_prestation sinistres.date_instruction sinistres.nature_sinistre | dossiers.date_ouverture prestations.date_reglement prestations.date_saisie rentes.date_saisie sinistres.date_saisie",
+  "D14 sinistres NA kleene G2 famille.date_deces famille.date_naissance famille.lien famille.situation garanties_souscrites.code_garantie garanties_souscrites.college garanties_souscrites.conjoint_vise garanties_souscrites.date_effet garanties_souscrites.date_fin garanties_souscrites.prolongation_handicap parametres.valeur sinistres.date_instruction sinistres.date_survenance sinistres.nature_sinistre | contrats.date_effet dossiers.date_ouverture sinistres.date_saisie",
+  "somme_parts beneficiaires part kleene G1 beneficiaires.part | beneficiaires.date_saisie dossiers.date_ouverture sinistres.date_saisie"
+)
+reg_v105 <- local({
+  p <- strsplit(sub(" \\|.*$", "", registre_v105), " ", fixed = TRUE)
+  data.frame(cle = vapply(p, function(z) paste(z[1:3], collapse = "|"), ""), mode = vapply(p, `[`, "", 4L),
+             groupe = vapply(p, `[`, "", 5L), colonnes = vapply(p, function(z) paste(z[-(1:5)], collapse = " "), ""),
+             vue = trimws(sub("^[^|]*\\|", "", registre_v105)), stringsAsFactors = FALSE)
+})
+# clés de sites littéraux sans colonne refusable lue (aucune aujourd'hui)
+sans_refusable_v105 <- character(0)
+# (i) sites de .regle_vue() dans le source
+sites_v105 <- list()
+parcourir_v105 <- function(x) {
+  if (!is.call(x)) return(invisible(NULL))
+  if (identical(x[[1L]], as.name(".regle_vue"))) sites_v105[[length(sites_v105) + 1L]] <<- match.call(ns$.regle_vue, x)
+  for (i in seq_along(x)[-1L]) if (is.call(x[[i]])) parcourir_v105(x[[i]])
+}
+for (x in parse(file.path(racine, "R", "donnees.R"), keep.source = FALSE)) parcourir_v105(x)
+codes_sites_v105 <- vapply(sites_v105, function(m) if (is.character(m$code)) m$code else NA_character_, "")
+modes_sites_v105 <- vapply(sites_v105, function(m) if (is.null(m$mode)) "bloquee" else if (is.character(m$mode)) m$mode else NA_character_, "")
+# clé d'un site de table et de colonne littérales (colonne `NA_character_` comprise), NA sinon
+litteral_v105 <- function(x) if (is.character(x)) x else if (identical(x, quote(NA_character_))) NA_character_ else NULL
+cles_sites_v105 <- unique(unlist(lapply(sites_v105, function(m) {
+  t <- litteral_v105(m$table)
+  c1 <- if (is.null(m$colonne)) NULL else litteral_v105(m$colonne)
+  if (is.null(t) || is.null(c1)) NULL else paste(m$code, t, c1, sep = "|")
+})))
+# (ii) appels exécutés : clé, mode, colonnes refusables lues comme valeur
+dl_v105 <- local({
+  ab <- ns$.regles_b(d)
+  pb <- vapply(ab, function(k) ns$.portee_effective(d, k$code, k$table, k$colonne), "")
+  sb <- vapply(ab, function(k) paste(k$table, k$colonne, sep = "."), "")
+  union(unique(sb[pb %in% c("colonne", "ligne") & vapply(ab, `[[`, "", "traitement") == "R"]),
+        paste(names(ns$.COLONNES_D03I), ns$.COLONNES_D03I, sep = "."))
+})
+emplois_v105 <- names(ns$.EMPLOIS_D02C)
+decl_v105 <- list(seuils = list(d07b_mois = 6, d02c_age_min = as.list(stats::setNames(rep(0, length(emplois_v105)), emplois_v105)),
+                                d02c_age_max = as.list(stats::setNames(rep(120, length(emplois_v105)), emplois_v105))))
+conv_v105 <- list(age = "revolu", limite_age = list(regle = "depassement", age = "revolu"))
+appels_v105 <- function(b, arrete, ...) {
+  .GlobalEnv$.appels_v105 <- list()
+  suppressMessages(trace(".regle_vue", where = ns, print = FALSE, tracer = quote(
+    .GlobalEnv$.appels_v105[[length(.GlobalEnv$.appels_v105) + 1L]] <- list(
+      code = code, table = table, colonne = colonne, mode = mode,
+      valeur = unique(c(if (!is.na(colonne)) paste(table, colonne, sep = "."), lit)),
+      vue = unique(c(vue, ctx$lit_vue[[table]]))))))
+  on.exit({ suppressMessages(untrace(".regle_vue", where = ns)); rm(".appels_v105", envir = .GlobalEnv) })
+  invisible(provie::controler_base(b, arrete, ...))
+  .GlobalEnv$.appels_v105
+}
+executes_v105 <- c(appels_v105(base_ref, A0), appels_v105(base_ref, A), appels_v105(base_ref, A0, decl_v105, conv_v105),
+                   appels_v105(base_ref, A, decl_v105, conv_v105))
+# écarts entre les appels exécutés et un registre : clés non classées, clés du registre non
+# atteintes, colonnes différentes, mode différent (ou plusieurs modes pour une clé)
+ecarts_v105 <- function(appels, reg) {
+  cle <- vapply(appels, function(k) paste(k$code, k$table, k$colonne, sep = "|"), "")
+  lues <- lapply(appels, function(k) intersect(k$valeur, dl_v105))
+  concerne <- lengths(lues) > 0L
+  cles <- unique(cle[concerne])
+  colonnes <- vapply(cles, function(k) paste(sort(unique(unlist(lues[concerne & cle == k])), method = "radix"), collapse = " "), "")
+  vues <- vapply(cles, function(k) {
+    v <- intersect(unique(unlist(lapply(appels[cle == k], `[[`, "vue"))), dl_v105)
+    paste(sort(setdiff(v, unique(unlist(lapply(appels[cle == k], `[[`, "valeur")))), method = "radix"), collapse = " ")
+  }, "")
+  modes <- vapply(cles, function(k) paste(sort(unique(vapply(appels[concerne & cle == k], `[[`, "", "mode")), method = "radix"),
+                                          collapse = ","), "")
+  i <- match(cles, reg$cle)
+  list(non_classees = sort(cles[is.na(i)], method = "radix"),
+       non_atteintes = sort(setdiff(reg$cle, cles), method = "radix"),
+       colonnes = sort(cles[!is.na(i) & (colonnes != reg$colonnes[i] | vues != reg$vue[i])], method = "radix"),
+       modes = sort(cles[!is.na(i) & modes != reg$mode[i]], method = "radix"))
+}
+aucun_v105 <- list(non_classees = character(0), non_atteintes = character(0), colonnes = character(0), modes = character(0))
+verifier_egal("#105, lot V, registre des règles V (i) : 47 sites de .regle_vue() (G1 : site de D02c dédoublé) dans R/donnees.R, code littéral, mode absent ou littéral (bloquee ou kleene) ; 27 codes ; tout code d'un site atteint par la trace ; 37 clés de sites littéraux, toutes au registre ou dans sans_refusable_v105",
+              list(length(sites_v105), sum(is.na(codes_sites_v105)), all(modes_sites_v105 %in% c("bloquee", "kleene")),
+                   length(unique(codes_sites_v105)),
+                   setdiff(codes_sites_v105, vapply(executes_v105, `[[`, "", "code")),
+                   length(cles_sites_v105), setdiff(cles_sites_v105, c(reg_v105$cle, sans_refusable_v105))),
+              list(47L, 0L, TRUE, 27L, character(0), 37L, character(0)))
+verifier_egal("#105, lot V, registre des règles V (ii) : clés exécutées qui lisent comme valeur une colonne refusable = registre (52 clés), mêmes colonnes (à tout arrêté ; à l'extraction seulement), mode unique égal au registre ; état après la conversion G3c (C-G3-1) : 52 clés en mode kleene (G1 33, G2a 5 : D02c assures, D06, D13, D10b, D11c ; G2b 3 : D10c, D10d, D14 ; G2c 2 : D11a, D11b ; G3a 1 : D12 ; G3b 5 : D07a et D07b sur rentes et dossiers, D10f ; G3c 3 : D07c sur rentes et dossiers, D08), aucune en mode bloquee ; les sites de D07b et de D07c, dont ceux sans `f`, en mode kleene",
+              list(ecarts_v105(executes_v105, reg_v105), nrow(reg_v105),
+                   as.vector(table(factor(paste(reg_v105$groupe, reg_v105$mode),
+                                          levels = c("G1 kleene", "G2 kleene", "G2 bloquee", "G3 kleene", "G3 bloquee")))),
+                   sort(unique(modes_sites_v105[codes_sites_v105 == "D07b"])), sort(unique(modes_sites_v105[codes_sites_v105 == "D07c"])),
+                   sort(unique(modes_sites_v105))),
+              list(aucun_v105, 52L, c(33L, 10L, 0L, 9L, 0L), "kleene", "kleene", "kleene"))
+# le contrôle échoue sur un site non classé (registre privé d'une clé) et sur un mode différent
+reg_moins <- reg_v105[reg_v105$cle != "D01b|prestations|NA", , drop = FALSE]
+reg_mode <- reg_v105
+reg_mode$mode[reg_mode$cle == "D12|evenements|type_evenement"] <- "bloquee"
+reg_vue <- reg_v105
+reg_vue$vue[reg_vue$cle == "D03b|assures|sexe"] <- "assures.date_naissance"
+verifier_egal("#105, lot V, registre des règles V (iii) : clé retirée du registre : non classée ; mode du registre différent de celui de l'appel : écart de mode ; colonne lue pour la vue ajoutée à tort : écart de colonnes",
+              list(ecarts_v105(executes_v105, reg_moins)$non_classees, ecarts_v105(executes_v105, reg_mode)$modes,
+                   ecarts_v105(executes_v105, reg_vue)$colonnes),
+              list("D01b|prestations|NA", "D12|evenements|type_evenement", "D03b|assures|sexe"))
+
+section("donnees : auto-lecture d'une colonne refusée dans le mécanisme (#147, M809 ; spécification donnees, erratum 1.9.7, E-2 et E-16)")
+# Option (a) de M809 : statu quo du code. Une règle de portée table, ou une règle V, qui lit sa
+# propre colonne la lit dans le mécanisme : une cellule refusée pour sa valeur (`""` comprise) y
+# est une valeur inconnue dans le domaine de la colonne, seule la cause change (E-16, (a) et (b)).
+# Les tests verrouillent le recensement (E-16, (c)) et ses conséquences (critères C147-1 à C147-5,
+# E-16, (e)).
+# C147-1 : sites B dérivés du registre .regles_b() : portée effective table, colonne non NA, et
+# colonne propre refusable pour sa valeur (contrôlée par une règle R de portée autre que table,
+# comme .lectures_regle_b()). Liste classée : D10a sur prestations.type_prestation (site 23).
+sites_auto_table_147 <- function(reg, por = ns$.portees_registre(d, reg)) {
+  soi <- vapply(reg, function(k) paste(k$table, k$colonne, sep = "."), "")
+  tr <- vapply(reg, `[[`, "", "traitement")
+  refusables <- unique(soi[por != "table" & tr == "R"])
+  cle <- vapply(reg, function(k) paste(k$code, k$table, k$colonne, sep = "|"), "")
+  sort(unique(cle[por == "table" & !vapply(reg, function(k) is.na(k$colonne), NA) & soi %in% refusables]), method = "radix")
+}
+classes_147 <- c("D10a|prestations|type_prestation")
+ecarts_147 <- function(reg, ...) {
+  s <- sites_auto_table_147(reg, ...)
+  list(non_classes = setdiff(s, classes_147), non_atteints = setdiff(classes_147, s))
+}
+liste_147 <- function(x) if (length(x)) paste(x, collapse = ", ") else "aucun"
+e_147 <- ecarts_147(ns$.regles_b(d))
+verifier(sprintf("#147, C147-1 : sites B de portée table qui lisent leur propre colonne, refusable pour sa valeur = {D10a prestations.type_prestation} ; non classés : %s ; non atteints : %s",
+                 liste_147(e_147$non_classes), liste_147(e_147$non_atteints)),
+         !length(e_147$non_classes) && !length(e_147$non_atteints))
+# C147-5 : le contrôle de C147-1 détecte un site ajouté au registre (règle R de portée table sur
+# evenements.motif, colonne refusable pour sa valeur)
+reg_m_147 <- c(ns$.regles_b(d), list(list(code = "D10a", table = "evenements", colonne = "motif", lit = character(0), traitement = "R")))
+verifier_egal("#147, C147-5 : le contrôle de C147-1 échoue sur un site ajouté au registre (D10a evenements.motif, non classé)",
+              ecarts_147(reg_m_147), list(non_classes = "D10a|evenements|motif", non_atteints = character(0)))
+# C147-2 : PR2 (dossier DO1, garantie deces) de type "", "zz" puis NA : la cellule inconnue est
+# énumérée sur le domaine, le verdict de D10a y prend deux valeurs, la ligne est écartée ; refus de
+# portée ligne de la cellule, aucun constat D10a ni refus de la table ; seule la cause change.
+lig_147 <- function(v) {
+  b <- base_ref
+  b$prestations$type_prestation[2] <- v
+  r <- cb(b)
+  x <- r$controles_non_executes
+  list(ne = x$cause[x$code == "D10a" & x$table == "prestations" & x$colonne %in% "type_prestation"],
+       refus = paste(r$refus_tables$table, r$refus_tables$colonne, r$refus_tables$motif, r$refus_tables$portee,
+                     r$refus_tables$identifiants),
+       d10a = sum(r$controles$code == "D10a"), sans_cause = within(x, cause <- NULL))
+}
+w_147 <- lapply(list("", "zz", NA_character_), lig_147)
+verifier_egal("#147, C147-2 : PR2 de type \"\", \"zz\", NA : ligne (D10a, prestations, type_prestation) de cause chaine_vide, hors_domaine, manquant_obligatoire ; seul refus, de portée ligne sur PR2, de même motif ; aucun constat D10a",
+              lapply(w_147, `[`, c("ne", "refus", "d10a")),
+              lapply(c("chaine_vide", "hors_domaine", "manquant_obligatoire"), function(m)
+                list(ne = m, refus = paste("prestations type_prestation", m, "ligne PR2"), d10a = 0L)))
+verifier("#147, C147-2 : controles_non_executes identique hors cause sous \"\", \"zz\" et NA",
+         identical(w_147[[1]]$sans_cause, w_147[[2]]$sans_cause) && identical(w_147[[1]]$sans_cause, w_147[[3]]$sans_cause))
+r_147 <- cb(base_ref)
+verifier("#147, C147-2 : témoin, base de référence intacte sans ligne D10a dans controles_non_executes ni constat D10a",
+         !any(r_147$controles_non_executes$code == "D10a") && !any(r_147$controles$code == "D10a"))
+# C147-3 : sites V dérivés de la trace de .regle_vue() du registre des règles V (executes_v105 :
+# base de référence à A0 et à A, sans et avec les déclarations qui exécutent D02c (âge), D07b,
+# D07c et D14) : clés dont la colonne propre est une colonne refusable (dl_v105) lue comme valeur.
+# 31 clés, dont les quatre de D02c, atteintes seulement sous les déclarations ; toutes en mode
+# kleene, à l'appel comme au registre ; 7 de type character.
+cle_appel_147 <- vapply(executes_v105, function(k) paste(k$code, k$table, k$colonne, sep = "|"), "")
+auto_147 <- vapply(executes_v105, function(k) !is.na(k$colonne) && paste(k$table, k$colonne, sep = ".") %in% intersect(k$valeur, dl_v105), NA)
+auto_v_147 <- sort(unique(cle_appel_147[auto_147]), method = "radix")
+type_147 <- function(cle) {
+  z <- strsplit(cle, "|", fixed = TRUE)[[1]]
+  d$colonnes$type[d$colonnes$table == z[2] & d$colonnes$colonne == z[3]]
+}
+car_v_147 <- Filter(function(k) type_147(k) == "character", auto_v_147)
+verifier_egal("#147, C147-3 : sites V qui lisent leur propre colonne, refusable pour sa valeur, comme valeur : 31 clés figées, aucune en mode bloquee (appels et registre) ; 7 de type character",
+              list(auto_v_147, sort(unique(vapply(executes_v105[auto_147], `[[`, "", "mode")), method = "radix"),
+                   unique(reg_v105$mode[match(auto_v_147, reg_v105$cle)]), car_v_147),
+              list(c("D02a|affiliations|date_fin", "D02a|ayants_droit_sante|fin_couverture", "D02a|contrats|date_debut_gestion",
+                     "D02a|contrats|date_fin", "D02a|contrats|date_terme", "D02a|cotisations|fin_periode",
+                     "D02a|evenements|date_effet", "D02a|famille|date_naissance", "D02a|garanties_souscrites|date_fin",
+                     "D02a|prestations|fin_periode", "D02a|sinistres|date_declaration", "D02a|sinistres|date_instruction",
+                     "D02a|sinistres|date_survenance", "D02c|assures|date_naissance", "D02c|ayants_droit_sante|date_naissance",
+                     "D02c|designations|date_naissance", "D02c|famille|date_naissance", "D03a|assures|date_naissance",
+                     "D03a|famille|date_naissance", "D03b|assures|sexe", "D03b|famille|sexe",
+                     "D03c|affiliations|salaire_reference", "D03e|evenements|categorie_invalidite",
+                     "D03h|garanties_souscrites|taux_technique_tarif", "D05|evenements|motif", "D06|evenements|justificatif",
+                     "D10e|beneficiaires|qualite", "D11a|sinistres|date_survenance", "D12|evenements|type_evenement",
+                     "D13|sinistres|date_instruction", "somme_parts|beneficiaires|part"),
+                   "kleene", "kleene",
+                   c("D03b|assures|sexe", "D03b|famille|sexe", "D03e|evenements|categorie_invalidite", "D05|evenements|motif",
+                     "D06|evenements|justificatif", "D10e|beneficiaires|qualite", "D12|evenements|type_evenement")))
+# C147-4 : pour chaque cellule de la base de référence d'une colonne propre character d'une clé de
+# C147-3, et de prestations.type_prestation : bilans sous "" et sous "zz" identiques, hors la cause
+# (controles_non_executes ; cause d'une composante de l'enjeu empêchée, #122, seule cellule
+# refusée de la base) et hors le refus de la cellule (ligne de controles et de refus_tables, motif
+# des lignes d'enjeu de ce refus).
+norm_147 <- function(r, t, c) {
+  cel <- function(x, champ) x$table == t & x$colonne %in% c & x[[champ]] %in% c("chaine_vide", "hors_domaine")
+  r$controles_non_executes$cause <- NULL
+  r$controles <- r$controles[!cel(r$controles, "code"), , drop = FALSE]
+  r$refus_tables <- r$refus_tables[!cel(r$refus_tables, "motif"), , drop = FALSE]
+  rownames(r$controles) <- rownames(r$refus_tables) <- NULL
+  r$enjeu$motif[cel(r$enjeu, "motif")] <- "refus_cellule"
+  r$enjeu$cause[r$enjeu$cause %in% c("chaine_vide", "hors_domaine")] <- "cause_cellule"
+  r
+}
+cols_147 <- unique(c(sub("^[^|]*\\|", "", car_v_147), "prestations|type_prestation"))
+c4_147 <- local({
+  n <- 0L
+  ecarts <- character(0)
+  for (tc in cols_147) {
+    z <- strsplit(tc, "|", fixed = TRUE)[[1]]
+    for (i in seq_len(nrow(base_ref[[z[1]]]))) {
+      b1 <- base_ref
+      b1[[z[1]]][[z[2]]][i] <- ""
+      b2 <- base_ref
+      b2[[z[1]]][[z[2]]][i] <- "zz"
+      n <- n + 1L
+      if (!identical(norm_147(cb(b1), z[1], z[2]), norm_147(cb(b2), z[1], z[2]))) ecarts <- c(ecarts, paste(tc, i))
+    }
+  }
+  list(n, ecarts)
+})
+verifier_egal("#147, C147-4 : 31 cellules (assures.sexe, famille.sexe, evenements.categorie_invalidite, motif, justificatif et type_evenement, beneficiaires.qualite, prestations.type_prestation) : bilans sous \"\" et \"zz\" identiques hors cause et hors refus de la cellule",
+              c4_147, list(31L, character(0)))
+# D03b (défaut « manquant ») sur un sexe "" : verdict faux déterminé, sans ligne écartée ni
+# constat (E-16, (b) ; le domaine ne contient pas le manquant)
+d03b_147 <- unlist(lapply(list(c("assures", "1"), c("assures", "2"), c("famille", "1")), function(z) {
+  b <- base_ref
+  b[[z[1]]]$sexe[as.integer(z[2])] <- ""
+  r <- cb(b)
+  c(sum(r$controles_non_executes$code == "D03b"), sum(r$controles$code == "D03b"))
+}))
+verifier_egal("#147, C147-4 : D03b sur un sexe \"\" (assures, deux lignes ; famille) : ni ligne écartée ni constat",
+              d03b_147, rep(0L, 6L))
+
+section("donnees : règles V de G1 en logique de Kleene sous un refus de valeur (#105, lot V, G1 ; spécification `donnees`, erratum `1.9.7`, E-1 ; M808)")
+# Conversion G1 : 33 clés (registre_v105, groupe G1) en mode kleene. Chaque cas plante une
+# valeur refusée (hors bornes D02c, hors domaine, D09, manquant obligatoire) et lit la clé
+# convertie : identifiants de sa ligne de controles et causes de ses lignes de
+# controles_non_executes (D02c, âge : la clé de controles est aussi celle du refus de la date,
+# seule la ligne non exécutée, colonne NA, est lue). Avant (ce3b94d) : la règle est bloquée, une
+# ligne de controles_non_executes de cause le motif du refus et aucune détection.
+g1_v105 <- function(b, code, table, arrete = A0, ...) {
+  r <- cb(b, arrete, ...)
+  list(det = unique(ligne(r$controles, code, table)$identifiants), ne = ligne(r$controles_non_executes, code, table)$cause)
+}
+rien_v105 <- list(det = character(0), ne = character(0))
+ecarte_v105 <- function(cause, det = character(0)) list(det = det, ne = cause)
+detecte_v105 <- function(det) list(det = det, ne = character(0))
+emplois_g1 <- names(ns$.EMPLOIS_D02C)
+decl_g1 <- function(maxi) list(seuils = list(d02c_age_min = as.list(stats::setNames(rep(0, length(emplois_g1)), emplois_g1)),
+                                             d02c_age_max = as.list(stats::setNames(rep(maxi, length(emplois_g1)), emplois_g1))))
+conv_g1 <- list(age = "revolu")
+af2_v105 <- function(b) { x <- rbind(b$affiliations, b$affiliations); x$id_affiliation[2L] <- "AF2"; x }
+# (1) présence seule, colonne obligatoire : la valeur refusée non vide est présente, verdict
+# déterminé (ni détectée, ni écartée) ; le défaut planté sur une autre ligne est détecté. D03b sur
+# une chaîne vide : chaine_vide reste dans refus_tables (E-2), D03b ne détecte ni n'écarte rien.
+r_cv <- cb(avec(function(b) { b$assures$sexe[1L] <- ""; b }), A0)
+verifier_egal("#105, G1 (1) : D03a, D03b, D03c, D03f cotisations : valeur refusée non vide d'une colonne obligatoire, ni détectée ni écartée ; défaut planté détecté ; D03b sur sexe \"\" : chaine_vide dans refus_tables, rien pour D03b",
+              list(g1_v105(avec(function(b) { b$assures$date_naissance <- D(c("1850-01-01", NA)); b }), "D03a", "assures"),
+                   g1_v105(avec(function(b) { b$assures$sexe <- c("X", NA); b }), "D03b", "assures"),
+                   g1_v105(avec(function(b) { b$affiliations <- af2_v105(b); b$affiliations$salaire_reference <- c(-5, NA); b }),
+                           "D03c", "affiliations"),
+                   g1_v105(avec(function(b) { b$cotisations$debut_periode[1L] <- D("1850-01-01"); b$cotisations$fin_periode[2L] <- NA; b }),
+                           "D03f", "cotisations", A),
+                   with(r_cv$refus_tables, paste(table, colonne, motif, identifiants)),
+                   list(det = unique(ligne(r_cv$controles, "D03b", "assures")$identifiants),
+                        ne = ligne(r_cv$controles_non_executes, "D03b", "assures")$cause)),
+              list(detecte_v105("AS2"), detecte_v105("AS2"), detecte_v105("AF2"), detecte_v105("CO2"),
+                   "assures sexe chaine_vide AS1", rien_v105))
+# (2) colonne facultative (absence possible) ou modalité qui décide : ligne écartée, cause = motif ;
+# le défaut planté sur une autre ligne est détecté (EV7 : entrée en invalidité sans catégorie ;
+# PR3 : arrérage sans fin de période ; GS4 : décès d'un contrat individuel sans taux)
+ev7_v105 <- function(b, type, effet, ligne = 4L) {
+  x <- b$evenements[ligne, ]
+  x$id_evenement <- "EV7"; x$type_evenement <- type; x$date_effet <- D(effet); x$montant <- NA
+  x$motif <- NA_character_; x$justificatif <- NA_character_
+  rbind(b$evenements, x)
+}
+verifier_egal("#105, G1 (2) : D03e (type d'événement hors domaine, catégorie absente), D03f prestations (début de période D02c), D03h (taux hors domaine d'une rente d'éducation) : ligne écartée, cause = motif du refus ; défaut planté détecté (EV7, PR3, GS4)",
+              list(g1_v105(avec(function(b) { b$evenements <- ev7_v105(b, "entree_invalidite", "2024-08-01", 3L)
+                                              b$evenements$type_evenement[1L] <- "zzz"; b }), "D03e", "evenements"),
+                   g1_v105(avec(function(b) { b$prestations$debut_periode[1L] <- D("1850-01-01"); b$prestations$fin_periode[3L] <- NA; b }),
+                           "D03f", "prestations"),
+                   g1_v105(avec(function(b) { b$garanties_souscrites$taux_technique_tarif[3:4] <- c(-1, NA); b }), "D03h",
+                           "garanties_souscrites")),
+              list(ecarte_v105("hors_domaine", "EV7"), ecarte_v105("D02c", "PR3"), ecarte_v105("hors_domaine", "GS4")))
+# (3) D05 : motif manquant (manquant_obligatoire) d'une sortie d'un sinistre payé : faux
+# déterminé ; motif hors domaine d'une sortie d'un sinistre sans prestation : écartée
+verifier_egal("#105, G1 (3) : D05, motif manquant_obligatoire sur un sinistre payé : faux déterminé ; motif hors_domaine sur une sortie non payée : écartée, cause hors_domaine",
+              list(g1_v105(avec(function(b) { b$evenements$motif[3L] <- NA; b }), "D05", "evenements"),
+                   g1_v105(avec(function(b) { b$prestations <- b$prestations[2:3, ]; b$evenements$motif[3L] <- "zzz"; b }), "D05",
+                           "evenements")),
+              list(rien_v105, ecarte_v105("hors_domaine")))
+# (4) D02a monotone : début de période refusé (D02c) face à une fin connue : ordre possible,
+# inconnu ; fin refusée face à un début au 1901-01-01 (borne basse de la plage) : jamais après,
+# déterminé
+verifier_egal("#105, G1 (4) : D02a prestations, début refusé face à une fin connue : écartée (D02c) ; fin refusée face au début 1901-01-01 : déterminé, rien",
+              list(g1_v105(avec(function(b) { b$prestations$debut_periode[1L] <- D("1850-01-01"); b }), "D02a", "prestations"),
+                   g1_v105(avec(function(b) { b$prestations$debut_periode[1L] <- D("1901-01-01"); b$prestations$fin_periode[1L] <- D("1850-01-01"); b }),
+                           "D02a", "prestations")),
+              list(ecarte_v105("D02c"), rien_v105))
+# (5) D02a evenements, non monotone : survenance de SI2 refusée, EV1 (entrée en incapacité) :
+# égalité possible, inconnu (non vrai) ; EV3 en mise à jour d'effet refusé (à l'extraction) :
+# inconnu. Oracle : énumération dense (chaque jour de la plage) du verdict sur la date inconnue.
+oracle_ev <- function(type, effet, surv, extraction) {
+  premier <- type %in% c("entree_incapacite", "entree_invalidite") & effet != surv
+  maj <- type %in% "mise_a_jour" & (effet < surv | effet > extraction)
+  premier | maj
+}
+plage_dense <- function(fin) seq(as.numeric(D("1901-01-01")), as.numeric(fin))
+o5a <- unique(oracle_ev("entree_incapacite", as.numeric(D("2024-03-01")), plage_dense(A), as.numeric(A)))
+o5b <- unique(oracle_ev("mise_a_jour", plage_dense(A), as.numeric(D("2024-03-01")), as.numeric(A)))
+verifier_egal("#105, G1 (5) : D02a evenements non monotone, survenance refusée (entrée en incapacité) et effet refusé (mise à jour) : écartée, cause D02c, comme l'oracle (verdict non constant sur la plage) ; EV7, mise à jour de SI1 avant sa survenance, détectée",
+              list(g1_v105(avec(function(b) { b$evenements <- ev7_v105(b, "mise_a_jour", "2020-01-01")
+                                              b$sinistres$date_survenance[2L] <- D("1850-01-01"); b }), "D02a", "evenements"),
+                   g1_v105(avec(function(b) { b$evenements$type_evenement[3L] <- "mise_a_jour"; b$evenements$motif[3L] <- NA
+                                              b$evenements$justificatif[3L] <- NA; b$evenements$date_effet[3L] <- D("1850-01-01"); b }),
+                           "D02a", "evenements", A),
+                   sort(o5a), sort(o5b)),
+              list(ecarte_v105("D02c", "EV7"), ecarte_v105("D02c"), c(FALSE, TRUE), c(FALSE, TRUE)))
+# (6) D02c (âge) famille, designations, ayants_droit_sante, borne haute 100 ans : naissance
+# refusée, inconnu ; survenance de référence refusée (naissance 1920), inconnu ; borne haute
+# 120 ans : âge au plus 115 ans, mais une naissance postérieure à la référence (2016-01-01) rend
+# l'âge non défini, troisième issue (R-G1-2 d'`actuary`, option (a), appliquée à titre
+# provisoire) : inconnu, cause D02c (avant l'option (a) : faux déterminé, rien). Issues
+# comparées à l'oracle dense (vrai, faux, indéfini)
+issue_age <- function(n, r, conv, mini, maxi) {
+  a <- ns$calculer_age(structure(as.numeric(n), class = "Date"), structure(as.numeric(r), class = "Date"), conv)
+  ifelse(!is.na(n) & !is.na(r) & is.na(a), "indefini", ifelse(!is.na(a) & (a < mini | a > maxi), "vrai", "faux"))
+}
+verdict_issues <- function(o) {
+  u <- unique(o)
+  if (identical(u, "vrai")) TRUE else if (all(u == "faux") || identical(u, "indefini")) FALSE else NA
+}
+oracle_age <- function(naissance, ref, maxi) sort(unique(issue_age(naissance, ref, "revolu", 0, maxi)))
+# défaut planté sur une seconde ligne (née le 1905-01-01 : plus de 100 ans à la référence),
+# détecté : la règle s'exécute (sur ce3b94d, bloquée, seule la ligne du refus de la date est dans
+# controles)
+deux_v105 <- function(t, id, cle) avec(function(b) {
+  x <- b[[t]][c(1L, 1L), ]
+  x[[cle]][2L] <- id
+  x$date_naissance <- D(c("1850-01-01", "1905-01-01"))
+  b[[t]] <- x
+  b
+})
+verifier_egal("#105, G1 (6) : D02c famille, designations, ayants_droit_sante : naissance refusée, inconnu (cause D02c) sous la borne 100 ; survenance refusée, inconnu ; designations sous la borne 120 : âge non défini possible, inconnu (option (a)) ; oracles denses",
+              list(g1_v105(deux_v105("famille", "ME2", "id_membre"), "D02c", "famille", A0, decl_g1(100), conv_g1),
+                   g1_v105(deux_v105("designations", "DS2", "id_designation"), "D02c", "designations", A0, decl_g1(100), conv_g1),
+                   g1_v105(deux_v105("ayants_droit_sante", "AY2", "id_ayant_droit"), "D02c", "ayants_droit_sante", A0, decl_g1(100),
+                           conv_g1),
+                   g1_v105(avec(function(b) { b$sinistres$date_survenance[1L] <- D("1850-01-01"); b$famille$date_naissance[1L] <- D("1920-01-01"); b }),
+                           "D02c", "famille", A0, decl_g1(100), conv_g1)$ne,
+                   g1_v105(avec(function(b) { b$designations$date_naissance[1L] <- D("1850-01-01"); b }), "D02c", "designations", A0,
+                           decl_g1(120), conv_g1)$ne,
+                   oracle_age(plage_dense(A), as.numeric(D("2016-01-01")), 100),
+                   oracle_age(plage_dense(A), as.numeric(D("2016-01-01")), 120),
+                   oracle_age(as.numeric(D("1920-01-01")), plage_dense(A), 100)),
+              list(ecarte_v105("D02c", c("ME1|2025-02-01", "ME2|2025-02-01")), ecarte_v105("D02c", c("DS1", "DS2")),
+                   ecarte_v105("D02c", c("AY1", "AY2")), "D02c", "D02c",
+                   c("faux", "indefini", "vrai"), c("faux", "indefini"), c("faux", "indefini", "vrai")))
+# (6 bis) issue indéfinie déterminée (Q-a d'`actuary`, à titre provisoire) : par appel direct de
+# .verdict3_indefini(), naissance inconnue de domaine {10, 20} après une référence 5 : toute
+# affectation indéfinie, verdict faux, indefini_certain vrai (chemin non atteint par une base :
+# une date connue est dans sa plage) ; ligne connue d'âge non défini (ME1 née le 2025-06-01,
+# survenance de SI1 au 2025-01-10), cas pendant : rangée age_non_defini, aucune détection, comme
+# sur ce3b94d
+e_qa <- list(n = list(tc = "t.n", valeurs = 0, inconnu = TRUE, index = NULL, domaine = c(10, 20)),
+             r = list(tc = "t.r", valeurs = 5, inconnu = FALSE, index = NULL, domaine = NULL))
+v_qa <- ns$.verdict3_indefini(e_qa, function(v) ifelse(v$n > v$r, "indefini", "faux"))
+verifier_egal("#105, G1 (6 bis) : issue toujours indéfinie sur une ligne qui lit une inconnue : verdict faux, indefini_certain vrai ; ligne connue d'âge non défini : rangée age_non_defini, aucune détection",
+              list(as.vector(v_qa), attr(v_qa, "indefini_certain"),
+                   g1_v105(avec(function(b) { b$famille$date_naissance[1L] <- D("2025-06-01"); b }), "D02c", "famille", A, decl_g1(100),
+                           conv_g1)),
+              list(FALSE, TRUE, ecarte_v105(ns$.CAUSE_AGE_NON_DEFINI)))
+# (7) D01b, cinq cas sur prestations (PR4, PR5 : copies du contenu de PR1, saisies après)
+copie_pr1 <- function(b, id, saisie, montant = NULL) {
+  x <- b$prestations[rep(1L, length(id)), ]
+  x$id_prestation <- id
+  x$date_saisie <- D(saisie)
+  if (!is.null(montant)) x$montant <- montant
+  rbind(b$prestations, x)
+}
+verifier_egal("#105, G1 (7) : D01b, (a) montant D09 de PR4, reste égal à PR1 antérieure : écartée, D09 ; (b) montant D09 de PR1 sans correspondance : déterminé (J3, J4) ; (c) date de saisie refusée entre deux contenus égaux (à l'extraction) : inconnu ; (d) montants refusés sur les deux lignes : inconnu ; (e) deux prédécesseurs possibles (PR1, PR4 copie détectée) de PR5 de montant refusé : PR4 détectée, PR5 écartée",
+              list(g1_v105(avec(function(b) { b$prestations <- copie_pr1(b, "PR4", "2024-07-02", -1240); b }), "D01b", "prestations"),
+                   g1_v105(avec(function(b) { b$prestations$montant[1L] <- -1240; b }), "D01b", "prestations"),
+                   g1_v105(avec(function(b) { b$prestations <- copie_pr1(b, "PR4", "1850-01-01"); b }), "D01b", "prestations", A),
+                   g1_v105(avec(function(b) { b$prestations <- copie_pr1(b, "PR4", "2024-07-02", -7); b$prestations$montant[1L] <- -5; b }),
+                           "D01b", "prestations"),
+                   g1_v105(avec(function(b) { b$prestations <- copie_pr1(b, c("PR4", "PR5"), c("2024-07-02", "2024-07-03"), c(1240, -1240)); b }),
+                           "D01b", "prestations")),
+              list(ecarte_v105("D09"), rien_v105, ecarte_v105("D02c"), ecarte_v105("D09"), ecarte_v105("D09", "PR4")))
+# (8) somme_parts sur DO1 (BE1 à BE3, membre ME1) ; tolérance [a, b] autour de 1
+be_v105 <- function(b, parts, saisie = NULL) {
+  x <- b$beneficiaires[rep(1L, length(parts)), ]
+  x$id_beneficiaire <- paste0("BE", seq_along(parts))
+  x$part <- parts
+  if (!is.null(saisie)) x$date_saisie <- saisie
+  x
+}
+haut_v105 <- 1 + ns$.TOLERANCE_PARTS
+verifier_egal("#105, G1 (8) : somme_parts, part 1,5 hors domaine et V = 1,5 ≥ b : détectée ; V = 0,5 < b : écartée ; V = b exactement : détectée ; part manquant_obligatoire, V = 1 : écartée ; part refusée et bénéficiaire non déterminé (D03g) : écartée, cause hors_domaine (rang 3 avant declaration_absente)",
+              list(g1_v105(avec(function(b) { b$beneficiaires <- be_v105(b, c(1, 1.5, 0.5)); b }), "somme_parts", "beneficiaires"),
+                   g1_v105(avec(function(b) { b$beneficiaires <- be_v105(b, c(0.5, 1.5)); b }), "somme_parts", "beneficiaires"),
+                   0.5 + (0.5 + ns$.TOLERANCE_PARTS) == haut_v105,
+                   g1_v105(avec(function(b) { b$beneficiaires <- be_v105(b, c(0.5, 0.5 + ns$.TOLERANCE_PARTS, 1.5)); b }), "somme_parts",
+                           "beneficiaires"),
+                   g1_v105(avec(function(b) { b$beneficiaires <- be_v105(b, c(1, NA)); b }), "somme_parts", "beneficiaires"),
+                   g1_v105(avec(function(b) { b$beneficiaires <- be_v105(b, c(0.5, 1.5, 0.3), D(c("2025-02-02", "2025-02-02", NA))); b }),
+                           "somme_parts", "beneficiaires")),
+              list(detecte_v105("BE1;BE2;BE3"), ecarte_v105("hors_domaine"), TRUE, detecte_v105("BE1;BE2;BE3"),
+                   ecarte_v105("manquant_obligatoire"), ecarte_v105("hors_domaine")))
+# (9) D10e : qualité refusée sur un dossier incapacité (aucune qualité compatible) : vrai
+# déterminé, détection nouvelle (X) ; sur un dossier de rente d'éducation (une seule qualité
+# compatible) : inconnu ; sur un dossier décès : toute modalité du domaine est compatible, faux
+# déterminé (le domaine de la qualité est la liste de .QUALITES_COMPATIBLES$deces)
+qualite_v105 <- function(dossier) avec(function(b) {
+  b$beneficiaires <- be_v105(b, c(1, 1))
+  b$beneficiaires$id_dossier[2L] <- dossier
+  b$beneficiaires$qualite[2L] <- "zzz"
+  if (dossier == "DO1") b$beneficiaires$part <- c(0.5, 0.5)
+  b
+})
+verifier_egal("#105, G1 (9) : D10e, qualité hors domaine sur un dossier incapacité (DO3) : détectée ; rente d'éducation (DO2) : écartée, hors_domaine ; décès (DO1) : faux déterminé",
+              list(g1_v105(qualite_v105("DO3"), "D10e", "beneficiaires"), g1_v105(qualite_v105("DO2"), "D10e", "beneficiaires"),
+                   g1_v105(qualite_v105("DO1"), "D10e", "beneficiaires"),
+                   ns$.domaine3(ctx_v105(base_ref, A0), "beneficiaires", "qualite")),
+              list(detecte_v105("BE2"), ecarte_v105("hors_domaine"), rien_v105, ns$.QUALITES_COMPATIBLES$deces))
+# (10) D03h : nature du contrat joint refusée (CT1, hors domaine) pour GS1 (décès, maintien
+# FALSE, taux absent) : individuel possible, inconnu ; clé de contrat en double aux natures
+# divergentes : refus de portée table de contrats (D01a), la règle est bloquée avant son verdict
+# (cause de portée table), comme avant (chemin D01a de l'entrée non atteint, #169)
+r_d01a <- cb(avec(function(b) { x <- rbind(b$contrats, b$contrats[1L, ]); x$nature_contrat[3L] <- "individuel"; b$contrats <- x; b }), A0)
+verifier_egal("#105, G1 (10) : D03h, nature refusée dans le contrat joint : écartée, hors_domaine ; GS4 (contrat individuel, taux absent) détectée ; contrat en double : D01a dans refus_tables, D03h bloquée (une ligne de controles_non_executes, aucune détection)",
+              list(g1_v105(avec(function(b) { b$contrats$nature_contrat[1L] <- "zzz"; b$garanties_souscrites$taux_technique_tarif[4L] <- NA; b }),
+                           "D03h", "garanties_souscrites"),
+                   "contrats id_contrat D01a" %in% with(r_d01a$refus_tables, paste(table, colonne, motif)),
+                   nrow(ligne(r_d01a$controles_non_executes, "D03h", "garanties_souscrites")),
+                   nrow(ligne(r_d01a$controles, "D03h", "garanties_souscrites"))),
+              list(ecarte_v105("hors_domaine", "GS4"), TRUE, 1L, 0L))
+# (11) garde R4 : chaque règle de G1 exécutée en mode kleene rend index_pertinent (trace de
+# .regle_vue() et du verdict de .verdict_vue(), base de référence à A0 et à A, avec les
+# déclarations de D02c) ; aucune erreur interne
+.GlobalEnv$.r4_v105 <- character(0)
+suppressMessages(trace(".regle_vue", where = ns, print = FALSE, tracer = quote(
+  if (identical(mode, "kleene") && !is.null(f)) {
+    f0 <- f
+    f <- function() {
+      r <- f0()
+      .GlobalEnv$.r4_v105 <- c(.GlobalEnv$.r4_v105, paste(code, table, colonne, !is.null(attr(r, "index_pertinent")), sep = "|"))
+      r
+    }
+  })))
+invisible(cb(base_ref, A0, decl_g1(120), conv_g1)); invisible(cb(base_ref, A, decl_g1(120), conv_g1))
+suppressMessages(untrace(".regle_vue", where = ns))
+cles_r4 <- unique(.GlobalEnv$.r4_v105)
+rm(".r4_v105", envir = .GlobalEnv)
+# (D14, sans version double_effet dans base_ref ni conventions$limite_age, n'est pas exécutée ici :
+# sa garde R4 est exercée par la section G2b, où une règle en mode kleene sans index_pertinent est
+# une erreur interne ; D07b, sans seuils$d07b_mois, et D07c, sans conventions$limite_age, ne passent
+# ici que par leur site sans `f` : leurs branches déclarées sont exercées par les sections G3b et G3c)
+verifier_egal("#105, G1 (11) : garde R4, les clés exécutées en mode kleene (52 depuis G3c ; D14 et les branches déclarées de D07b et de D07c non exécutées sur base_ref) rendent index_pertinent",
+              list(sort(unique(sub("\\|[^|]*$", "", cles_r4)), method = "radix"), all(endsWith(cles_r4, "|TRUE"))),
+              list(sort(setdiff(reg_v105$cle[reg_v105$mode == "kleene"], c("D14|sinistres|NA", "D07b|rentes|NA", "D07b|dossiers|NA",
+                                                                         "D07c|rentes|NA", "D07c|dossiers|NA")),
+                        method = "radix"), TRUE))
+# (12) arrêté égal à l'extraction : date de saisie de SI1 refusée (date de visibilité de
+# sinistres, lue comme valeur par D01b à tout arrêté) : D01b sur sinistres s'exécute, sans ligne
+# de controles_non_executes (avant : bloquée, D02c) ; D02a sur sinistres ne la lit pas (aucune
+# colonne de vue n'est lue comme valeur à l'extraction par les règles de G1, ctx$lit_vue n'étant
+# rempli qu'à un arrêté antérieur) : inchangée, rien
+verifier_egal("#105, G1 (12) : à l'extraction, date de saisie de SI1 refusée : D01b sinistres exécutée, rien d'écarté ; D02a sinistres, rien",
+              list(g1_v105(avec(function(b) { b$sinistres$date_saisie[1L] <- D("1850-01-01"); b }), "D01b", "sinistres", A),
+                   g1_v105(avec(function(b) { b$sinistres$date_saisie[1L] <- D("1850-01-01"); b }), "D02a", "sinistres", A)),
+              list(rien_v105, rien_v105))
+# (12 bis) partie de ligne non déterminée (constat majeur de l'audit de G1) : à A0, instruction de
+# SI1 refusée (D02c, avant ou après la plage), partie non déterminée : D02a sur
+# sinistres.date_instruction écarte SI1, cause D02c (le masque de la vue la rendait fausse
+# déterminée) ; SI2, instruction connue avant sa déclaration, détectée (avant G1 : règle bloquée)
+instruction_v105 <- function(x) avec(function(b) { b$sinistres$date_instruction <- D(c(x, "2024-03-04")); b })
+verifier_egal("#105, G1 (12 bis) : à A0, instruction de SI1 refusée (1850-01-01, 2090-01-01), partie non déterminée : D02a sinistres écarte SI1 (D02c), détecte SI2",
+              lapply(c("1850-01-01", "2090-01-01"), function(x) g1_v105(instruction_v105(x), "D02a", "sinistres")),
+              rep(list(ecarte_v105("D02c", "SI2")), 2L))
+# (13) famille : (i) deux versions de ME1 (sinistre SI2, lien conjoint), la seconde sans date de
+# saisie (non déterminée, D03g) et de naissance refusée : la version visible prend le verdict
+# inconnu de la candidate ; cause D02c (naissance refusée, rang 3, avant declaration_absente) ;
+# (ii) cas couplé : deux lignes qui lisent la même cellule inconnue (même ligne jointe) et le
+# même verdict : choix de version non pertinent (évaluation jointe) ; lignes jointes distinctes :
+# pertinent
+famille2_v105 <- avec(function(b) {
+  f <- b$famille[c(1L, 1L), ]
+  f$id_sinistre <- "SI2"
+  f$lien <- "conjoint"
+  f$situation <- NA_character_
+  f$date_saisie <- D(c("2024-04-01", NA))
+  f$date_naissance[2L] <- D("1850-01-01")
+  b$famille <- f
+  b
+})
+couple <- function(index_s) {
+  e <- list(s = list(tc = "sinistres.date_survenance", valeurs = c(0, 0), inconnu = c(TRUE, TRUE), index = index_s,
+                     domaine = c(5, 15)))
+  ns$.choix_pertinent3(attr(ns$.verdict3(e, function(v) v$s > 10), "noyau3"), 1L, 2L)
+}
+verifier_egal("#105, G1 (13) : famille, (i) candidate non déterminée de naissance refusée : D02a écartée, cause D02c ; (ii) évaluation jointe : cellule partagée et même verdict, choix non pertinent ; cellules distinctes, NA (règle des lignes indépendantes)",
+              list(g1_v105(famille2_v105, "D02a", "famille"), couple(c(1L, 1L)), couple(c(1L, 2L))),
+              list(ecarte_v105("D02c"), FALSE, NA))
+# (14) invariance à la valeur brute, pilotée par le registre : pour chaque colonne refusable lue
+# comme valeur par une clé de G1 (ligne 1 de sa table), deux valeurs refusées différentes de
+# même motif donnent les mêmes constats, lignes non exécutées, déclarations requises et lignes de
+# visibilité non déterminée, à A0 et à A
+valeurs_refusees <- function(table, colonne) {
+  col <- d$colonnes[d$colonnes$table == table & d$colonnes$colonne == colonne, ]
+  # dates de part et d'autre de la plage (1850, 2090) ; colonne à futur admis (plage jusqu'au
+  # 9999-12-30) : deux dates avant la plage
+  if (col$type == "Date") return(if (col$futur_admis == "TRUE") list(D("1850-01-01"), D("1870-06-15")) else list(D("1850-01-01"), D("2090-01-01")))
+  if (col$type == "character" && nzchar(col$modalites)) return(list("zz1", "zz2"))
+  if (colonne == "part") return(list(1.5, 2.5))
+  if (col$type == "numeric") return(list(-1, -2))
+  NULL
+}
+cols_g1 <- sort(unique(unlist(strsplit(reg_v105$colonnes[reg_v105$mode == "kleene"], " ", fixed = TRUE))), method = "radix")
+inv_v105 <- unlist(lapply(cols_g1, function(tc) {
+  m <- strsplit(tc, ".", fixed = TRUE)[[1L]]
+  v <- valeurs_refusees(m[1L], m[2L])
+  if (is.null(v) || NROW(base_ref[[m[1L]]]) == 0L) return(paste(tc, "non teste"))
+  vapply(list(A0, A), function(a) {
+    rs <- lapply(v, function(x) cb(avec(function(b) { b[[m[1L]]][[m[2L]]][1L] <- x; b }), a))
+    refuse <- all(vapply(rs, function(r) any(r$refus_tables$table == m[1L] & r$refus_tables$colonne %in% m[2L]), NA))
+    extraire <- function(r) list(r$controles, r$controles_non_executes, r$declarations_requises, r$vue$visibilite_non_determinee,
+                                 r$refus_tables)
+    same <- identical(extraire(rs[[1L]]), extraire(rs[[2L]]))
+    paste(tc, if (!refuse) "non refusee" else if (same) "identique" else "DIFFERENT")
+  }, "")
+}))
+# (colonne logique, maintien_deces et prolongation_handicap : deux valeurs refusées distinctes de
+# même type n'existent pas ; collège de garanties_souscrites, code opaque sans modalités : non
+# couvert par valeurs_refusees())
+verifier_egal("#105, G1 (14) : invariance à la valeur brute : chaque colonne refusable des clés en mode kleene (G1, G2a, G2b, G2c et G3a, hors colonne logique et collège opaque) refusée sous les deux valeurs, bilan identique, à A0 et à A",
+              # G2a : colonnes de D02c assures, D06, D13, D10b, D11c ajoutées par le registre (affiliations.date_debut) ;
+              # G2b : D10c, D10d, D14 (famille.date_deces, garanties_souscrites.conjoint_vise, parametres.valeur) ;
+              # G3a : D12, aucune colonne nouvelle (ses colonnes refusables sont déjà lues par G1 ; cas propres à
+              # D12 : section D12, C-G3-6)
+              list(sum(endsWith(inv_v105, " identique")), inv_v105[!endsWith(inv_v105, " identique")]),
+              list(106L, c("garanties_souscrites.college non teste", "garanties_souscrites.maintien_deces non teste",
+                           "garanties_souscrites.prolongation_handicap non teste")))
+# (15) oracles par simulation (constat de simulation : nombre de cas tiré, graine locale
+# 20261125 sous le générateur de outils::avec_graine(), état global rétabli) : verdict du noyau
+# (.verdict3() sur les domaines représentatifs, ou règle exécutée) contre une énumération du
+# domaine entier (dense : chaque valeur ; pour deux dates inconnues de D02c, grille de 61 jours,
+# où l'oracle ne peut qu'ignorer une région étroite : le noyau doit alors contenir son verdict).
+avec_graine_v105 <- function(expr) ns$avec_graine(20261125L, expr)
+verdict_v105 <- function(v) if (all(v)) TRUE else if (!any(v)) FALSE else NA
+# (a) fin_partie (D02a, x > y, partie de ligne) sur une plage abstraite de 1 à 40 jours
+sim_a <- avec_graine_v105({
+  vapply(seq_len(300L), function(k) {
+    deb_u <- runif(1L) < 0.5; fin_u <- runif(1L) < 0.5; con_u <- runif(1L) < 0.3
+    deb <- sample.int(40L, 1L); fin <- if (runif(1L) < 0.2) NA else sample.int(40L, 1L); con <- runif(1L) < 0.7
+    e <- list(debut = list(tc = "t.debut", valeurs = deb, inconnu = deb_u, index = NULL, domaine = c(1, 40)),
+              fin = list(tc = "t.date_fin", valeurs = fin, inconnu = fin_u, index = NULL, domaine = c(1, 40, NA)),
+              connue = list(tc = "t.date_saisie_fin", valeurs = con, inconnu = con_u, index = NULL, domaine = c(TRUE, FALSE)))
+    g <- function(v) !is.na(v$debut) & !is.na(ifelse(v$connue, v$fin, NA)) & v$debut > ifelse(v$connue, v$fin, NA)
+    noyau <- as.vector(ns$.verdict3(e, g))
+    grille <- expand.grid(debut = if (deb_u) 1:40 else deb, fin = if (fin_u) c(1:40, NA) else fin, connue = if (con_u) c(TRUE, FALSE) else con)
+    o <- verdict_v105(g(as.list(grille)) %in% TRUE)
+    identical(noyau, o)
+  }, NA)
+})
+# (b) D02c : âge hors de [mini, maxi] sous une convention tirée, naissance ou référence inconnue,
+# trois issues (vrai, faux, âge non défini ; option (a)). Une date inconnue : oracle quotidien,
+# exact. Deux dates inconnues : oracle exact par l'argument du bord (l'issue est monotone en
+# chaque date, l'âge non défini étant le demi-plan naissance > référence : les issues atteintes
+# sur le rectangle des plages le sont sur ses quatre bords), énumération quotidienne des quatre
+# bords ; inclusion dans la grille de 61 jours gardée. L'argument du bord est vérifié à part,
+# en (b2), par énumération quotidienne complète d'un petit rectangle (constat).
+plage_n <- as.numeric(D(c("1901-01-01", "2026-12-31")))
+noyau_age <- function(conv, mini, maxi, pn_plage, pr_plage, n0, r0, nu, ru) {
+  pn <- if (nu) ns$.points_age3(conv, mini, maxi, pn_plage, if (ru) pr_plage else r0)
+  pr <- if (ru) ns$.points_age3(conv, mini, maxi, pr_plage, if (nu) pn_plage else n0, ref = TRUE)
+  dom <- function(p, plage) unique(c(plage, p[p >= plage[1L] & p <= plage[2L]]))
+  e <- list(n = list(tc = "t.n", valeurs = n0, inconnu = nu, index = NULL, domaine = pn_plage, domaines = if (nu) list(dom(pn, pn_plage))),
+            r = list(tc = "t.r", valeurs = r0, inconnu = ru, index = NULL, domaine = pr_plage, domaines = if (ru) list(dom(pr, pr_plage))))
+  as.vector(ns$.verdict3_indefini(e, function(v) issue_age(v$n, v$r, conv, mini, maxi)))
+}
+bords <- function(pn_plage, pr_plage) {
+  jn <- pn_plage[1L]:pn_plage[2L]; jr <- pr_plage[1L]:pr_plage[2L]
+  list(n = c(jn, jn, rep(pn_plage, each = length(jr))), r = c(rep(pr_plage, each = length(jn)), jr, jr))
+}
+sim_b <- avec_graine_v105({
+  vapply(seq_len(60L), function(k) {
+    conv <- sample(ns$CONVENTIONS_AGE, 1L); mini <- sample(0:30, 1L); maxi <- sample(60:120, 1L)
+    cas <- sample(c("naissance", "ref", "deux"), 1L, prob = c(0.45, 0.45, 0.1))
+    n0 <- sample(plage_n[1L]:plage_n[2L], 1L); r0 <- sample(plage_n[1L]:plage_n[2L], 1L)
+    nu <- cas %in% c("naissance", "deux"); ru <- cas %in% c("ref", "deux")
+    noyau <- noyau_age(conv, mini, maxi, plage_n, plage_n, n0, r0, nu, ru)
+    if (cas == "deux") {
+      b <- bords(plage_n, plage_n)
+      o <- verdict_issues(issue_age(b$n, b$r, conv, mini, maxi))
+      g61 <- expand.grid(n = seq(plage_n[1L], plage_n[2L], by = 61), r = seq(plage_n[1L], plage_n[2L], by = 61))
+      o61 <- verdict_issues(issue_age(g61$n, g61$r, conv, mini, maxi))
+      identical(noyau, o) && (is.na(noyau) || identical(noyau, o61))
+    } else {
+      o <- verdict_issues(issue_age(if (nu) plage_n[1L]:plage_n[2L] else n0, if (ru) plage_n[1L]:plage_n[2L] else r0, conv, mini, maxi))
+      identical(noyau, o)
+    }
+  }, NA)
+})
+# (b2) argument du bord, constat : petit rectangle (naissance du 1999-06-01 au 2002-06-01,
+# référence du 2000-01-01 au 2003-01-01 : un 29 février, âge non défini et seuils 1 et 2 ans
+# atteints), chaque convention : issue sur l'énumération quotidienne complète = issue sur les
+# quatre bords = noyau
+pn_b2 <- as.numeric(D(c("1999-06-01", "2002-06-01"))); pr_b2 <- as.numeric(D(c("2000-01-01", "2003-01-01")))
+sim_b2 <- vapply(ns$CONVENTIONS_AGE, function(conv) {
+  g <- expand.grid(n = pn_b2[1L]:pn_b2[2L], r = pr_b2[1L]:pr_b2[2L])
+  plein <- verdict_issues(issue_age(g$n, g$r, conv, 1, 2))
+  b <- bords(pn_b2, pr_b2)
+  bord <- verdict_issues(issue_age(b$n, b$r, conv, 1, 2))
+  identical(plein, bord) && identical(plein, noyau_age(conv, 1, 2, pn_b2, pr_b2, NA, NA, TRUE, TRUE)) &&
+    setequal(unique(issue_age(g$n, g$r, conv, 1, 2)), unique(issue_age(b$n, b$r, conv, 1, 2)))
+}, NA)
+# capture du verdict d'une règle de G1 (trace de .regle_vue()), par ligne
+verdict_regle <- function(b, code, table, arrete = A0) {
+  .GlobalEnv$.vr_v105 <- NULL
+  .GlobalEnv$.vr_cle <- c(code, table)
+  suppressMessages(trace(".regle_vue", where = ns, print = FALSE, tracer = quote(
+    if (identical(c(code, table), .GlobalEnv$.vr_cle) && !is.null(f)) {
+      f0 <- f
+      f <- function() { r <- f0(); .GlobalEnv$.vr_v105 <- as.vector(r); r }
+    })))
+  on.exit({ suppressMessages(untrace(".regle_vue", where = ns)); rm(".vr_cle", envir = .GlobalEnv) })
+  invisible(cb(b, arrete))
+  .GlobalEnv$.vr_v105
+}
+# (c) somme_parts : parts connues (multiples de 0,05), parts refusées (hors domaine) et
+# bénéficiaires non déterminés (sans date de saisie, D03g) d'un même dossier ; oracle : parts
+# refusées sur la grille de 0,05 à 1 par 0,05 et une part infime (1e-12, sous la tolérance),
+# présence des non déterminés
+sim_c <- avec_graine_v105({
+  vapply(seq_len(40L), function(k) {
+    connues <- round(runif(sample(1:3, 1L), 0.05, 0.6) / 0.05) * 0.05
+    m <- sample(0:2, 1L); nd <- round(runif(sample(0:2, 1L), 0.05, 0.6) / 0.05) * 0.05
+    parts <- c(connues, rep(1.5, m), nd)
+    saisie <- D(c(rep("2025-02-02", length(connues) + m), rep(NA, length(nd))))
+    b <- avec(function(b) { b$beneficiaires <- be_v105(b, parts, saisie); b })
+    noyau <- verdict_regle(b, "somme_parts", "beneficiaires")[1L]
+    grille_p <- c(1e-12, seq(0.05, 1, by = 0.05))
+    sommes <- sum(connues)
+    for (j in seq_len(m)) sommes <- as.vector(outer(sommes, grille_p, `+`))
+    for (x in nd) sommes <- c(sommes, sommes + x)
+    o <- verdict_v105(abs(sommes - 1) > ns$.TOLERANCE_PARTS)
+    identical(noyau, o)
+  }, NA)
+})
+# (d) D01b : PR1 et deux copies de son contenu (PR4, PR5, saisies après, dans un ordre tiré),
+# montants (D09) ou débuts de période (D02c) refusés tirés ; oracle : chaque cellule refusée
+# prend chaque valeur connue de sa colonne, une valeur neuve propre à chaque cellule refusée
+# (celle des autres cellules refusées comprise : égalité possible entre deux inconnues), et
+# l'absence pour le début de période (facultatif) ; copie = une ligne antérieure (date de
+# saisie, puis clé) de même contenu
+sim_d <- avec_graine_v105({
+  vapply(seq_len(40L), function(k) {
+    saisies <- D("2024-07-01") + c(0, sample(1:3, 2L))
+    b <- avec(function(b) { b$prestations <- copie_pr1(b, c("PR4", "PR5"), as.character(saisies[2:3])); b })
+    lignes <- c(1L, 4L, 5L)
+    ref_m <- sample(c(1240, 1240, 999), 3L, replace = TRUE)
+    b$prestations$montant[lignes] <- ref_m
+    ref_d <- b$prestations$debut_periode[lignes]
+    refus_m <- runif(3L) < 0.35; refus_d <- runif(3L) < 0.2
+    b$prestations$montant[lignes[refus_m]] <- -1
+    b$prestations$debut_periode[lignes[refus_d]] <- D("1850-01-01")
+    noyau <- verdict_regle(b, "D01b", "prestations")[lignes]
+    # oracle
+    vm <- lapply(1:3, function(i) if (refus_m[i]) c(unique(ref_m[!refus_m]), -1000 - which(refus_m)) else ref_m[i])
+    vd <- lapply(1:3, function(i) if (refus_d[i]) c(unique(as.numeric(ref_d[!refus_d])), -1000 - which(refus_d), NA) else as.numeric(ref_d[i]))
+    grille <- expand.grid(c(vm, vd))
+    ordre <- order(as.numeric(saisies), c("PR1", "PR4", "PR5"))
+    copie <- apply(grille, 1L, function(z) {
+      cont <- paste(z[1:3], z[4:6])
+      vapply(1:3, function(i) any(vapply(setdiff(1:3, i), function(p) match(p, ordre) < match(i, ordre) && cont[p] == cont[i], NA)), NA)
+    })
+    o <- apply(matrix(copie, nrow = 3L), 1L, verdict_v105)
+    identical(noyau, o)
+  }, NA)
+})
+verifier_egal("#105, G1 (15), constat de simulation (graine 20261125) : fin_partie 300 cas, D02c 60 cas (trois issues ; deux dates inconnues : oracle exact des quatre bords, et contenu dans la grille de 61 jours), argument du bord sur un petit rectangle pour chaque convention, somme_parts 40 cas, D01b 40 cas : verdict du noyau égal à l'oracle",
+              list(sum(sim_a), sum(sim_b), sim_b2, sum(sim_c), sum(sim_d)),
+              list(300L, 60L, stats::setNames(rep(TRUE, length(ns$CONVENTIONS_AGE)), ns$CONVENTIONS_AGE), 40L, 40L))
+
+section("donnees : règles V de G2a en logique de Kleene sous un refus de valeur (#105, lot V, G2a ; D-G2-1, D-G2-2 à titre provisoire)")
+# Conversion G2a : D02c assures, D06, D13, D10b, D11c en mode kleene ; noyaux exacts par
+# conditionnement (D02c assures : naissance ; D11c : cellules de la ligne). Chaque cas plante, en
+# plus de la valeur refusée, un défaut détecté sur une autre ligne : sur da40a3b, la règle est
+# bloquée (aucune détection, une ligne non exécutée de cause le motif du refus).
+g2_v105 <- function(b, code, table, arrete = A, ...) {
+  r <- cb(b, arrete, ...)
+  list(det = unique(ligne(r$controles, code, table)$identifiants), ne = ligne(r$controles_non_executes, code, table)$cause)
+}
+decl_g2 <- function(mini, maxi) list(seuils = list(d02c_age_min = as.list(stats::setNames(rep(mini, length(emplois_g1)), emplois_g1)),
+                                                   d02c_age_max = as.list(stats::setNames(rep(maxi, length(emplois_g1)), emplois_g1))))
+# D10b : survenance de SI1 refusée (D02c), à l'extraction ; DO3 (GS2 d'effet 2024-06-01, après la
+# survenance de SI2) détecté. Versions de DO1 et DO2 d'effet 2015-01-01 : la survenance inconnue
+# peut la précéder ou non, inconnu ; effet au 1901-01-01 (borne basse de la plage) : la survenance
+# ne peut la précéder, faux déterminé. Oracle quotidien.
+d10b_v105 <- function(effet) avec(function(b) {
+  b$sinistres$date_survenance[1L] <- D("1850-01-01")
+  b$garanties_souscrites$date_effet[c(1L, 3L)] <- D(effet)
+  b$garanties_souscrites$date_effet[2L] <- D("2024-06-01")
+  b
+})
+oracle_d10b <- function(effet) sort(unique(plage_dense(A) < as.numeric(D(effet))))
+verifier_egal("#105, G2a, D10b : survenance refusée, versions d'effet 2015 : inconnu (D02c) ; d'effet 1901-01-01 : faux déterminé ; DO3 détecté ; oracle quotidien",
+              list(g2_v105(d10b_v105("2015-01-01"), "D10b", "dossiers"), g2_v105(d10b_v105("1901-01-01"), "D10b", "dossiers"),
+                   oracle_d10b("2015-01-01"), oracle_d10b("1901-01-01")),
+              list(ecarte_v105("D02c", "DO3"), detecte_v105("DO3"), c(FALSE, TRUE), FALSE))
+# D02c assures (emploi assures_sinistre) : AS1 n'a pas d'affiliation (AF1 rattachée à AS2) ;
+# (a) naissance de AS1 refusée, bornes 40 et 50 ans, survenances 2000-01-01 (SI2) et 2026-12-31
+# (SI1, à l'extraction : l'âge y est toujours défini) : pour toute naissance, l'une des deux
+# références est hors bornes (ou l'âge non défini à SI2, inférieur à 40 ans à SI1) : vrai déterminé par conditionnement sur la naissance (Kleene
+# naïf, référence par référence : inconnu) ; (b) survenance de SI2 refusée, bornes 0 et 50 : SI1
+# donne 54 ans, vrai quelle que soit SI2 (non décisive, non pertinente) ; (c) naissance refusée,
+# bornes 0 et 100 : âge hors bornes, dans les bornes ou non défini (trois issues), inconnu ;
+# (d) contrat individuel CT2 de nature refusée (AS2, 56 ans à l'effet, borne 50) : référence
+# possible, AS2 écarté (cause hors_domaine) ; AS1 (54 ans à SI1) détecté
+d02c_v105 <- function(f) avec(function(b) { b$affiliations$id_assure <- "AS2"; f(b) })
+ne_d02c <- function(r) ligne(r$controles_non_executes, "D02c", "assures")$cause
+verifier_egal("#105, G2a, D02c assures : (a) conditionnement sur la naissance, deux survenances complémentaires : AS1 vrai, aucune ligne écartée ; (b) survenance non décisive : AS1 vrai ; (c) trois issues : inconnu ; (d) contrat individuel de nature refusée : inconnu (hors_domaine)",
+              list(g2_v105(d02c_v105(function(b) { b$assures$date_naissance[1L] <- D("1850-01-01")
+                                                   b$sinistres$date_survenance <- D(c("2026-12-31", "2000-01-01")); b }), "D02c", "assures", A,
+                           decl_g2(40, 50), list(age = "revolu")),
+                   g2_v105(d02c_v105(function(b) { b$sinistres$date_survenance[2L] <- D("1850-01-01"); b }), "D02c", "assures", A,
+                           decl_g2(0, 50), list(age = "revolu")),
+                   g2_v105(d02c_v105(function(b) { b$assures$date_naissance[1L] <- D("1850-01-01"); b }), "D02c", "assures", A,
+                           decl_g2(0, 100), list(age = "revolu"))$ne,
+                   g2_v105(avec(function(b) { b$contrats$nature_contrat[2L] <- "zzz"; b }), "D02c", "assures", A,
+                           decl_g2(0, 50), list(age = "revolu"))),
+              list(detecte_v105(c("AS1", "AS1;AS2")), detecte_v105("AS1;AS2"), "D02c", ecarte_v105("hors_domaine", "AS1")))
+# D06 : EV3 (sortie de SI2, justificatif absent) ; EV7, sortie reprise_travail sans justificatif,
+# détectée. Motif refusé, ou type refusé : inconnu (hors_domaine) ; clôture depot_cdc de DO1 (EV8)
+# dont la seule prestation PR2 a un type refusé : capital possible, inconnu
+ev_v105 <- function(b, ligne, id, type, motif, just = NA_character_) {
+  x <- b$evenements[ligne, ]
+  x$id_evenement <- id; x$type_evenement <- type; x$motif <- motif; x$justificatif <- just; x$montant <- NA
+  rbind(b$evenements, x)
+}
+d06_v105 <- function(f) avec(function(b) { b$evenements <- ev_v105(b, 3L, "EV7", "sortie", "reprise_travail"); f(b) })
+verifier_egal("#105, G2a, D06 : motif refusé, type refusé, type_prestation refusé de la seule prestation d'un dossier clos depot_cdc : inconnu (hors_domaine) ; EV7 détectée",
+              list(g2_v105(d06_v105(function(b) { b$evenements$justificatif[3L] <- NA; b$evenements$motif[3L] <- "zzz"; b }), "D06", "evenements"),
+                   g2_v105(d06_v105(function(b) { b$evenements$justificatif[3L] <- NA; b$evenements$type_evenement[3L] <- "zzz"; b }),
+                           "D06", "evenements"),
+                   g2_v105(d06_v105(function(b) { b$evenements <- ev_v105(b, 4L, "EV8", "cloture_dossier", "depot_cdc", "acte_deces")
+                                                  b$prestations$type_prestation[2L] <- "zzz"; b }), "D06", "evenements")),
+              rep(list(ecarte_v105("hors_domaine", "EV7")), 3L))
+# D13 : SI3, décès sans instruction, avec DO4 (garantie GS4, décès) et PR4 (capital), détecté ;
+# SI1 : instruction refusée (2090-01-01) : inconnu (D02c), à l'extraction et à A0 (partie non
+# déterminée) ; nature refusée, ou code de la garantie du dossier du capital refusé, instruction
+# absente : inconnu (hors_domaine)
+d13_v105 <- function(f) avec(function(b) {
+  s3 <- b$sinistres[1L, ]; s3$id_sinistre <- "SI3"; s3$id_assure <- "AS2"; s3$date_instruction <- NA
+  d4 <- b$dossiers[1L, ]; d4$id_dossier <- "DO4"; d4$id_sinistre <- "SI3"; d4$id_garantie_souscrite <- "GS4"
+  p4 <- b$prestations[2L, ]; p4$id_prestation <- "PR4"; p4$id_dossier <- "DO4"
+  b$sinistres <- rbind(b$sinistres, s3); b$dossiers <- rbind(b$dossiers, d4); b$prestations <- rbind(b$prestations, p4)
+  f(b)
+})
+verifier_egal("#105, G2a, D13 : instruction refusée (à l'extraction, à A0), nature refusée, code_garantie refusé : SI1 écarté ; SI3 détecté",
+              list(g2_v105(d13_v105(function(b) { b$sinistres$date_instruction[1L] <- D("2090-01-01"); b }), "D13", "sinistres"),
+                   g2_v105(d13_v105(function(b) { b$sinistres$date_instruction[1L] <- D("2090-01-01"); b }), "D13", "sinistres", A0),
+                   g2_v105(d13_v105(function(b) { b$sinistres$date_instruction[1L] <- NA; b$sinistres$nature_sinistre[1L] <- "zzz"; b }),
+                           "D13", "sinistres"),
+                   g2_v105(d13_v105(function(b) { b$sinistres$date_instruction[1L] <- NA; b$garanties_souscrites$code_garantie[1L] <- "zzz"; b }),
+                           "D13", "sinistres")),
+              list(ecarte_v105("D02c", "SI3"), ecarte_v105("D02c", "SI3"), ecarte_v105("hors_domaine", "SI3"),
+                   ecarte_v105("hors_domaine", "SI3")))
+# D11c : CT1 a deux collèges (GS5 : cadres) ; AF1 (AS1, ensemble, 2015, fin 2016-12-31 connue) et
+# AF2 (AS1, cadres) ; AF3 et AF4 (AS2, ensemble et cadres, ouvertes, 2015 et 2016) détectées.
+# Début de AF2 refusé, AF2 ouverte : chevauchement possible ou non, inconnu (D02c) ; AF2 de fin
+# 1902-01-01 : aucun chevauchement possible, faux déterminé. Le collège d'une affiliation n'est
+# jamais refusé pour sa valeur (D04b, chaine_vide : portée table ; mesuré) : le chemin du collège
+# inconnu de .d11c_ligne3() n'est pas atteint par une base, testé en (oracle) ci-dessous
+d11c_v105 <- function(debut2, fin2 = NA) avec(function(b) {
+  g5 <- b$garanties_souscrites[1L, ]; g5$id_garantie_souscrite <- "GS5"; g5$college <- "cadres"
+  b$garanties_souscrites <- rbind(b$garanties_souscrites, g5)
+  x <- b$affiliations[rep(1L, 4L), ]
+  x$id_affiliation <- paste0("AF", 1:4); x$id_assure <- c("AS1", "AS1", "AS2", "AS2")
+  x$college <- c("ensemble", "cadres", "ensemble", "cadres")
+  x$date_debut <- D(c("2015-01-01", debut2, "2015-01-01", "2016-01-01"))
+  x$date_fin <- D(c("2016-12-31", fin2, NA, NA))
+  x$date_saisie_fin <- D(c("2017-01-05", if (is.na(fin2)) NA else "2017-01-05", NA, NA))
+  x$motif_fin <- c("autre", if (is.na(fin2)) NA else "autre", NA, NA)
+  b$affiliations <- x
+  b
+})
+verifier_egal("#105, G2a, D11c : début refusé, AF2 ouverte : inconnu (D02c) ; AF2 finie en 1902 : faux ; AF3 et AF4 détectées",
+              list(g2_v105(d11c_v105("1850-01-01"), "D11c", "affiliations"), g2_v105(d11c_v105("1850-01-01", "1902-01-01"), "D11c", "affiliations")),
+              list(ecarte_v105("D02c", "AF3;AF4"), detecte_v105("AF3;AF4")))
+# Oracles par simulation (constat de simulation ; graine 20261125 sous outils::avec_graine()) :
+# noyau contre énumération exhaustive sur des plages réduites.
+# (a) D11c, .d11c_ligne3() en appel direct : ligne 1 et deux ou trois affiliations candidates,
+# collèges a ou b (ou inconnus : a, b ou une valeur neuve), débuts et fins sur la plage réduite
+# 0 à 20 (60 cas, fin au moins le début) et 0 à 5 (500 cas, fins libres, partie connue, non
+# connue ou non déterminée ; audit de G2a) (fin : ou absente), partie de fin connue ou non déterminée, candidate retenue ou non
+# déterminée ; grille de l'oracle bornée à 2e5 affectations (inconnues retirées au hasard
+# au-delà) ; oracle : chaque valeur de chaque cellule inconnue, verdict « il existe j présent,
+# de collège différent, qui chevauche »
+ctx_d11c <- list2env(list(lignes_nd = list()))
+# `haut` : borne haute de la plage réduite ; `libre` : fins tirées sans contrainte (fin avant le
+# début possible, configuration de l'audit de G2a) et partie de fin aussi connue non connue
+sim_d11c_de <- function(nb, haut, libre) avec_graine_v105({
+  vapply(seq_len(nb), function(k) {
+    m <- sample(2:3, 1L)
+    col <- sample(c("a", "b"), m, replace = TRUE); deb <- sample(0:haut, m, replace = TRUE)
+    fin <- ifelse(runif(m) < 0.3, NA, if (libre) sample(0:haut, m, replace = TRUE) else pmax(deb, sample(0:haut, m, replace = TRUE)))
+    inc <- list(college = runif(m) < 0.25, debut = runif(m) < 0.35, fin = runif(m) < 0.35)
+    partie <- if (libre) sample(c(TRUE, FALSE, NA), m, replace = TRUE, prob = c(0.6, 0.15, 0.25)) else ifelse(runif(m) < 0.2, NA, TRUE)
+    retenu <- c(TRUE, runif(m - 1L) < 0.7); nd <- !retenu
+    taille <- function() prod(ifelse(inc$college, 3, 1) * ifelse(inc$debut, haut + 1, 1) * ifelse(inc$fin, haut + 2, 1) *
+                                ifelse(is.na(partie), 2, 1) * ifelse(nd, 2, 1))
+    while (taille() > 2e5) {
+      u <- which(inc$debut | inc$fin)
+      y <- u[sample.int(length(u), 1L)]
+      inc$debut[y] <- FALSE; inc$fin[y] <- FALSE
+    }
+    x <- ns$.d11c_ligne3(ctx_d11c, 1L, 2:m, col, deb, fin, partie, retenu, nd, inc, c(0, haut), c(0, haut))
+    doms <- list()
+    for (y in seq_len(m)) {
+      doms[[paste0("c", y)]] <- if (inc$college[y]) c("a", "b", paste0("n", y)) else col[y]
+      doms[[paste0("d", y)]] <- if (inc$debut[y]) 0:haut else deb[y]
+      doms[[paste0("f", y)]] <- if (inc$fin[y]) c(0:haut, NA) else fin[y]
+      doms[[paste0("p", y)]] <- if (is.na(partie[y])) c(TRUE, FALSE) else partie[y]
+      doms[[paste0("e", y)]] <- if (nd[y]) c(TRUE, FALSE) else TRUE
+    }
+    g <- expand.grid(doms, stringsAsFactors = FALSE, KEEP.OUT.ATTRS = FALSE)
+    fv <- function(y) ifelse(g[[paste0("p", y)]] & !is.na(g[[paste0("f", y)]]), g[[paste0("f", y)]], Inf)
+    det <- Reduce(`|`, lapply(2:m, function(j) g[[paste0("e", j)]] & g[[paste0("c", j)]] != g$c1 &
+                                g$d1 <= fv(j) & g[[paste0("d", j)]] <= fv(1L)), FALSE)
+    o <- verdict_v105(det)
+    if (!identical(x$v, o)) return(FALSE)
+    if (!is.na(o)) return(TRUE)
+    # pertinence (R-G2a-1) : une cellule inconnue est pertinente si, toutes les autres fixées, le
+    # verdict varie avec elle seule ; clés du noyau
+    cle_o <- c(c = "affiliations.college", d = "affiliations.date_debut", f = "affiliations.date_fin",
+               p = "affiliations.date_saisie_fin", e = "affiliations")
+    pert_o <- character(0)
+    for (nm in names(doms)) {
+      if (length(doms[[nm]]) < 2L) next
+      autres <- setdiff(names(doms), nm)
+      cle_g <- do.call(paste, c(lapply(g[autres], as.character), sep = "\r"))
+      if (any(tapply(det, cle_g, function(z) length(unique(z)) > 1L))) pert_o <- c(pert_o, paste(cle_o[[substr(nm, 1L, 1L)]], substring(nm, 2L)))
+    }
+    pert_n <- vapply(x$pert, function(z) paste(z[1L], z[2L]), "")
+    setequal(pert_o, pert_n)
+  }, NA)
+})
+sim_d11c <- c(sim_d11c_de(60L, 20L, FALSE), sim_d11c_de(500L, 5L, TRUE))
+# (b) D02c assures, emploi assures_sinistre, .age_assure3() d'une copie de l'espace de noms dont
+# .plage_date3() rend la plage réduite 2000-01-01 à 2001-12-31 : naissance de AS1 et survenances
+# de SI1 et SI2 tirées dans la plage, chacune refusée (1850-01-01) avec probabilité 0,4 (deux au
+# plus : grille de l'oracle de 731² affectations au plus), bornes
+# [mini, maxi] tirées dans 0 à 1 an ; oracle : chaque jour de la plage pour chaque cellule refusée,
+# issues vraie, fausse, indéfinie (verdict_issues())
+env_age <- new.env(parent = ns)
+for (nom in ls(ns, all.names = TRUE)) {
+  g0 <- get(nom, envir = ns)
+  if (is.function(g0) && identical(environment(g0), ns)) environment(g0) <- env_age
+  assign(nom, g0, envir = env_age)
+}
+plage_red <- as.numeric(D(c("2000-01-01", "2001-12-31")))
+env_age$.plage_date3 <- function(ctx, table, colonne) plage_red
+sim_age <- avec_graine_v105({
+  vapply(seq_len(15L), function(k) {
+    vals <- sample(plage_red[1L]:plage_red[2L], 3L, replace = TRUE); ref <- runif(3L) < 0.4
+    if (all(ref)) ref[3L] <- FALSE
+    mini <- sample(0:1, 1L); maxi <- mini + sample(0:1, 1L); conv <- sample(ns$CONVENTIONS_AGE, 1L)
+    b <- avec(function(b) {
+      b$assures$date_naissance[1L] <- as.Date(if (ref[1L]) -43829 else vals[1L], origin = "1970-01-01")
+      b$sinistres$date_survenance <- as.Date(ifelse(ref[2:3], -43829, vals[2:3]), origin = "1970-01-01")
+      b$sinistres$date_declaration <- D("2026-01-01"); b$sinistres$date_saisie <- D("2026-01-02")
+      b$sinistres$date_instruction <- D(c("2026-01-03", NA))
+      b
+    })
+    ctx <- ctx_v105(b, A)
+    rv <- env_age$.age_assure3(ctx, "assures_sinistre", conv, mini, maxi)()
+    noyau <- as.vector(rv)[1L]
+    jours <- plage_red[1L]:plage_red[2L]
+    g <- expand.grid(n = if (ref[1L]) jours else vals[1L], s1 = if (ref[2L]) jours else vals[2L], s2 = if (ref[3L]) jours else vals[3L])
+    o1 <- issue_age(g$n, g$s1, conv, mini, maxi); o2 <- issue_age(g$n, g$s2, conv, mini, maxi)
+    o <- ifelse(o1 == "vrai" | o2 == "vrai", "vrai", ifelse(o1 == "indefini" | o2 == "indefini", "indefini", "faux"))
+    if (!identical(noyau, verdict_issues(o))) return(FALSE)
+    if (!is.na(noyau)) return(TRUE)
+    # pertinence (R-G2a-1) : cellule pertinente si, les autres fixées, l'issue varie avec elle seule
+    pert_o <- character(0)
+    for (nm in c("n", "s1", "s2")[ref]) {
+      autres <- setdiff(c("n", "s1", "s2"), nm)
+      if (any(tapply(o, paste(g[[autres[1L]]], g[[autres[2L]]]), function(z) length(unique(z)) > 1L))) pert_o <- c(pert_o, nm)
+    }
+    ip <- attr(rv, "index_pertinent")
+    pert_n <- c(if (1L %in% ip[["assures.date_naissance"]][[1L]]) "n",
+                c("s1", "s2")[c(1L, 2L) %in% ip[["sinistres.date_survenance"]][[1L]]])
+    setequal(pert_o, pert_n)
+  }, NA)
+})
+verifier_egal("#105, G2a, constat de simulation (graine 20261125) : D11c 560 cas (collège opaque, débuts, fins, partie, ligne non déterminée ; plages 0 à 20 et 0 à 5), D02c assures 15 cas (naissance et deux survenances, plage réduite, quatre conventions) : verdict et, s'il est inconnu, cellules pertinentes (index_pertinent, R-G2a-1) du noyau égaux à l'énumération exhaustive",
+              list(sum(sim_d11c), sum(sim_age)), list(560L, 15L))
+# Garde de .regle_vue() et attribut `lues` statique de .age_assure3() (audit de G2a, majeur 1) :
+# à A0, sinistres de AS1 saisis après l'arrêté (aucune référence retenue ni non déterminée) et
+# survenance de SI1 refusée ; affiliation saisie après l'arrêté et début refusé : D02c assures
+# s'exécute, sans erreur interne, sans ligne non exécutée (avant la correction : erreur interne,
+# colonne lue hors du verdict ; sur da40a3b : règle bloquée, cause D02c)
+essai_lues <- function(f) tryCatch({
+  r <- cb(avec(f), A0, decl_g2(0, 100), list(age = "revolu"))
+  ligne(r$controles_non_executes, "D02c", "assures")$cause
+}, error = function(e) conditionMessage(e))
+verifier_egal("#105, G2a, D02c assures : table de références sans ligne retenue ni non déterminée et valeur refusée (survenance, début d'affiliation), à A0 : exécutée, sans erreur ni ligne non exécutée",
+              list(essai_lues(function(b) { b$sinistres$date_saisie <- D(c("2025-12-01", "2025-12-01"))
+                                            b$sinistres$date_survenance[1L] <- D("1850-01-01"); b }),
+                   essai_lues(function(b) { b$affiliations$date_saisie <- D("2025-12-01"); b$affiliations$date_debut <- D("1850-01-01"); b })),
+              list(character(0), character(0)))
+# Pertinence par propagation de paires (.pertinence_paires3(), R-G2a-1) : verdict c XOR d, c
+# conditionnée (deux représentants), d privée : chaque verdict conditionnel est inconnu (d libre),
+# mais c est pertinente (d fixé, c change le verdict) ; verdict c OU d sous d toujours vrai : non
+# pertinente ; verdict c ET d, d toujours faux : non pertinente
+xor_couples <- function(op, d_dom) function(c1, c2) list(unique(cbind(op(c1, d_dom), op(c2, d_dom))))
+verifier_egal("#105, G2a, .pertinence_paires3() : XOR (verdicts conditionnels tous inconnus) : pertinente ; c OU d, d vrai : non pertinente ; c ET d, d faux : non pertinente",
+              list(ns$.pertinence_paires3(list(TRUE, FALSE), xor_couples(xor, c(TRUE, FALSE)), `|`, FALSE),
+                   ns$.pertinence_paires3(list(TRUE, FALSE), xor_couples(`|`, TRUE), `|`, FALSE),
+                   ns$.pertinence_paires3(list(TRUE, FALSE), xor_couples(`&`, FALSE), `|`, FALSE)),
+              list(TRUE, FALSE, FALSE))
+# Représentants du début et de la fin de la ligne (audit de G2a, reprise ciblée) : ligne 1
+# (collège B, début refusé, plage 0 à 5, fin 5, partie connue), j2 (A, début 4, fin 0, retenue),
+# j3 (A, début 5, fin 4, non déterminée) : verdict « début 0, ou j3 présente et début au plus 4 »
+# inconnu ; pour un début de 1 à 4, la présence de j3 décide : pertinente avec le début (avant :
+# représentants du début réduits aux bornes 0 et 5, la présence de j3 n'était pas vue)
+x_rep <- ns$.d11c_ligne3(list2env(list(lignes_nd = list())), 1L, 2:3, c("B", "A", "A"), c(5, 4, 5), c(5, 0, 4), c(TRUE, TRUE, TRUE),
+                         c(TRUE, TRUE, FALSE), c(FALSE, FALSE, TRUE),
+                         list(college = c(FALSE, FALSE, FALSE), debut = c(TRUE, FALSE, FALSE), fin = c(FALSE, FALSE, FALSE)), c(0, 5), c(0, 5))
+verifier_egal("#105, G2a, D11c : début de la ligne inconnu entre les fins des candidates : verdict inconnu, pertinentes le début de la ligne et la présence de j3",
+              list(x_rep$v, sort(vapply(x_rep$pert, paste, "", collapse = " "))),
+              list(NA, c("affiliations 3", "affiliations.date_debut 1")))
+section("donnees : règles V de G2b en logique de Kleene sous un refus de valeur (#105, lot V, G2b ; M810 ; D-G2-2, R-G2a-1 à titre provisoire)")
+# Conversion G2b : D10c, D10d, D14 en mode kleene ; .garantie_en_vigueur3() et .couverture3() à
+# trois valeurs (argument `inconnues`, NULL par défaut : lecture inchangée pour .maintien_d11(),
+# D11a et D11b, encore en mode bloquee), garde du collège restreinte aux causes de forme ou de
+# portée table (M626) ; formules en arbre, verdict et pertinence exacts (.arbre3() :
+# conditionnement sur les cellules partagées, propagation de couples). Sur 25ee736, chaque cas
+# ci-dessous est une règle bloquée (aucune détection, une ligne non exécutée de cause le motif du
+# refus) ; les oracles (constat de simulation) appellent les noyaux sur un contexte simulé.
+g2b_v105 <- function(b, code, table, arrete = A, ...) {
+  r <- cb(b, arrete, ...)
+  list(det = unique(ligne(r$controles, code, table)$identifiants), ne = ligne(r$controles_non_executes, code, table)$cause)
+}
+# (1) .arbre3() : c XOR d (deux feuilles qui lisent c et d) : inconnu, c et d pertinentes ; c ET NON c
+# (cellule partagée) : faux déterminé (Kleene naïf : inconnu) ; c OU vrai : vrai ; c ET d, d privée
+# toujours fausse : faux
+f_c <- ns$.feuille3("c", function(sigs) list(c = c(TRUE, FALSE)), function(a, n) a$c)
+f_d <- ns$.feuille3("d", function(sigs) list(d = c(TRUE, FALSE)), function(a, n) a$d)
+non3 <- function(x) ns$.noeud3("non", list(x))
+xor3 <- ns$.noeud3("ou", list(ns$.noeud3("et", list(f_c, non3(f_d))), ns$.noeud3("et", list(non3(f_c), f_d))))
+verifier_egal("#105, G2b, .arbre3() : XOR : inconnu, c et d pertinentes ; c ET NON c : faux ; c OU vrai : vrai ; c ET faux : faux",
+              list(ns$.arbre3(xor3)[c("v", "pert")], ns$.arbre3(ns$.noeud3("et", list(f_c, non3(f_c))))$v,
+                   ns$.arbre3(ns$.noeud3("ou", list(f_c, ns$.constante3(TRUE))))$v,
+                   ns$.arbre3(ns$.noeud3("et", list(f_c, ns$.constante3(FALSE))))$v),
+              list(list(v = NA, pert = c("c", "d")), FALSE, TRUE, FALSE))
+# (2) D10c : DO2 (rente_education, GS3) et DO1 (décès, GS1) de SI1 ; sans DO1 : DO2 détecté.
+# (a) code de GS1 refusé, sans DO1 : décès souscrit possible, inconnu (hors_domaine) ; (b) code de
+# GS3 refusé, avec DO1 : faux (DO1 est un dossier décès ; si GS3 était décès, DO2 le serait) ;
+# (c) survenance refusée, sans DO1 : inconnu (D02c) ; (d) GS1 sans date d'effet (D03i, défaut
+# latent (ii)), sans DO1, à l'extraction et à A0 : inconnu (D03i) ; (e) fin de GS1 refusée (défaut
+# latent (i) : lue brute avant), sans DO1 : inconnu (D02c) ; (f) couplage : GS1 d'effet 1901-01-01
+# finie le 2019-12-31 et GS5 décès du 2020-01-01, survenance refusée, sans DO1 : une version couvre
+# toute survenance, DO2 détecté (Kleene naïf, version par version : inconnu)
+sans_do1_g2b <- function(f = identity) avec(function(b) { b$dossiers <- b$dossiers[-1L, ]; f(b) })
+verifier_egal("#105, G2b, D10c : code du décès refusé : inconnu ; code de la garantie du dossier refusé avec DO1 : faux ; survenance refusée : inconnu ; date d'effet manquante (D03i) : inconnu, à A et à A0 ; fin refusée : inconnu ; deux versions complémentaires sous une survenance refusée : détecté",
+              list(g2b_v105(sans_do1_g2b(), "D10c", "dossiers"),
+                   g2b_v105(sans_do1_g2b(function(b) { b$garanties_souscrites$code_garantie[1L] <- "zzz"; b }), "D10c", "dossiers"),
+                   g2b_v105(avec(function(b) { b$garanties_souscrites$code_garantie[3L] <- "zzz"; b }), "D10c", "dossiers"),
+                   g2b_v105(sans_do1_g2b(function(b) { b$sinistres$date_survenance[1L] <- D("1850-01-01"); b }), "D10c", "dossiers"),
+                   g2b_v105(sans_do1_g2b(function(b) { b$garanties_souscrites$date_effet[1L] <- NA; b }), "D10c", "dossiers"),
+                   g2b_v105(sans_do1_g2b(function(b) { b$garanties_souscrites$date_effet[1L] <- NA; b }), "D10c", "dossiers", A0),
+                   g2b_v105(sans_do1_g2b(function(b) { b$garanties_souscrites$date_fin[1L] <- D("1850-01-01"); b }), "D10c", "dossiers"),
+                   g2b_v105(sans_do1_g2b(function(b) {
+                     g5 <- b$garanties_souscrites[1L, ]; g5$id_garantie_souscrite <- "GS5"; g5$date_effet <- D("2020-01-01")
+                     b$garanties_souscrites$date_effet[1L] <- D("1901-01-01"); b$garanties_souscrites$date_fin[1L] <- D("2019-12-31")
+                     b$garanties_souscrites <- rbind(b$garanties_souscrites, g5)
+                     b$sinistres$date_survenance[1L] <- D("1850-01-01"); b }), "D10c", "dossiers")),
+              list(detecte_v105("DO2"), ecarte_v105("hors_domaine"), detecte_v105(character(0)), ecarte_v105("D02c"),
+                   ecarte_v105("D03i"), ecarte_v105("D03i"), ecarte_v105("D02c"), detecte_v105("DO2")))
+# (3) D10d : EV7, passage_invalidite de SI2 (dossier DO3 sur GS2, incapacite) : détecté. (a) code de
+# GS2 refusé : invalidité possible, inconnu ; (b) type de EV1 (SI2) refusé : passage possible non
+# couvert, inconnu, EV7 détecté ; sans dossier : SI3 (AS1), couvert par AF1 (CT1, ensemble) et GS5
+# (invalidite, CT1, ensemble) : non détecté ; (c) survenance de SI3 refusée : inconnu (D02c) ;
+# (d) début de AF1 refusé : inconnu ; (e) GS5 sans date d'effet (D03i), à A et à A0 : inconnu ;
+# (f) contrat individuel CT2 (AS2) de nature refusée et de date d'effet manquante (D03i), SI3 de
+# AS2 : couverture possible, inconnu
+ev7 <- function(b, sinistre = "SI2") {
+  x <- b$evenements[1L, ]; x$id_evenement <- "EV7"; x$id_sinistre <- sinistre; x$type_evenement <- "passage_invalidite"
+  x$date_effet <- D("2024-06-01"); x$date_saisie <- D("2024-06-02"); x$categorie_invalidite <- 1L
+  b$evenements <- rbind(b$evenements, x)
+  b
+}
+sd_v105 <- function(f = identity, assure = "AS1") avec(function(b) {
+  s3 <- b$sinistres[2L, ]; s3$id_sinistre <- "SI3"; s3$id_assure <- assure; b$sinistres <- rbind(b$sinistres, s3)
+  b <- ev7(b, "SI3")
+  g5 <- b$garanties_souscrites[2L, ]; g5$id_garantie_souscrite <- "GS5"; g5$code_garantie <- "invalidite"; g5$type_franchise <- NA
+  g5$regle_complement <- NA
+  b$garanties_souscrites <- rbind(b$garanties_souscrites, g5)
+  f(b)
+})
+verifier_egal("#105, G2b, D10d : code refusé : inconnu ; type refusé : inconnu ; sans dossier, couvert : rien ; survenance refusée, début d'affiliation refusé, date d'effet manquante (D03i, à A et à A0), contrat individuel de nature refusée et sans date d'effet : inconnu",
+              list(g2b_v105(avec(ev7), "D10d", "evenements"),
+                   g2b_v105(avec(function(b) { b <- ev7(b); b$garanties_souscrites$code_garantie[2L] <- "zzz"; b }), "D10d", "evenements"),
+                   g2b_v105(avec(function(b) { b <- ev7(b); b$evenements$type_evenement[1L] <- "zzz"; b }), "D10d", "evenements"),
+                   g2b_v105(sd_v105(), "D10d", "evenements"),
+                   g2b_v105(sd_v105(function(b) { b$sinistres$date_survenance[3L] <- D("1850-01-01"); b }), "D10d", "evenements"),
+                   g2b_v105(sd_v105(function(b) { b$affiliations$date_debut[1L] <- D("1850-01-01"); b }), "D10d", "evenements"),
+                   g2b_v105(sd_v105(function(b) { b$garanties_souscrites$date_effet[5L] <- NA; b }), "D10d", "evenements"),
+                   g2b_v105(sd_v105(function(b) { b$garanties_souscrites$date_effet[5L] <- NA; b }), "D10d", "evenements", A0),
+                   g2b_v105(sd_v105(function(b) { b$contrats$nature_contrat[2L] <- "zzz"; b$contrats$date_effet[2L] <- NA
+                                                  b$garanties_souscrites$id_contrat[5L] <- "CT2"; b }, "AS2"), "D10d", "evenements")),
+              list(detecte_v105("EV7"), ecarte_v105("hors_domaine"), ecarte_v105("hors_domaine", "EV7"), detecte_v105(character(0)),
+                   ecarte_v105("D02c"), ecarte_v105("D02c"), ecarte_v105("D03i"), ecarte_v105("D03i"), ecarte_v105("hors_domaine")))
+# (4) D14 (base de la section D14 : GS6 double_effet, conjoint ME2, enfant ME1 de 14 ans, limite 18) :
+# conjoint_vise refusé, lien du conjoint refusé, naissance de l'enfant refusée (posthume, sous la
+# limite ou atteinte), valeur du paramètre age_limite refusée (cause D09, le motif ; non
+# parametre_non_defini), survenance refusée, nature refusée, code de la garantie du dossier décès
+# refusé : inconnu ; sans conventions$limite_age, lien refusé : candidat (declaration_absente)
+d14_v105 <- function(f, conv = cv34) {
+  r <- controler_base(f(d14_34()), A, s34(1000), conv)
+  list(co = co34(r, "D14"), ne = ne34(r, "D14"))
+}
+verifier_egal("#105, G2b, D14 : conjoint_vise, lien, naissance, age_limite, survenance, nature, code du dossier décès refusés : inconnu, cause le motif ; sans convention, lien refusé : candidat",
+              list(d14_v105(identity),
+                   d14_v105(function(b) { b$garanties_souscrites$conjoint_vise[5L] <- "zzz"; b }),
+                   d14_v105(function(b) { b$famille$lien[2L] <- "zzz"; b }),
+                   d14_v105(function(b) { b$famille$date_naissance[1L] <- D("1850-01-01"); b }),
+                   d14_v105(function(b) { b$parametres$valeur[9L] <- -5; b }),
+                   d14_v105(function(b) { b$sinistres$date_survenance[1L] <- D("1850-01-01"); b }),
+                   d14_v105(function(b) { b$sinistres$nature_sinistre[1L] <- "zzz"; b }),
+                   d14_v105(function(b) { b$garanties_souscrites$code_garantie[1L] <- "zzz"; b }),
+                   d14_v105(function(b) { b$famille$lien[2L] <- "zzz"; b }, list(age = "revolu"))),
+              c(list(list(co = "sinistres exacte SI1", ne = character(0))),
+                lapply(c("hors_domaine", "hors_domaine", "D02c", "D09", "D02c", "hors_domaine", "hors_domaine", "declaration_absente"),
+                       function(x) list(co = character(0), ne = paste("sinistres NA", x)))))
+# (5) collège refusé (M626) : appel interne de .garantie_en_vigueur3() avec `inconnues` : colonne
+# refusée pour sa valeur (collège blanc de GS1, chaine_vide ou hors domaine : valeur inconnue) :
+# lecture existentielle, sans erreur (GS1, seule version décès de CT1, de collège opaque : peut
+# valoir « ensemble » ou non, inconnu) ; cause de forme (colonne en nombre) : erreur interne ; avec
+# `inconnues` NULL (mode bloquee) : erreur interne inchangée sur toute cause
+ctx_col <- function(x) ctx_v105(avec(function(b) { b$garanties_souscrites$college[1L] <- x; b }), A)
+gev_col <- function(ctx, inconnues) tryCatch({
+  g <- ns$.garantie_en_vigueur3(ctx, "deces", list(contrat = "CT1", college = "ensemble"), as.numeric(D("2025-01-10")),
+                                inconnues = inconnues)
+  if (is.null(inconnues)) g$valeurs else ns$.arbre3(g$arbres[[1L]])$v
+}, error = function(e) "erreur interne")
+ctx_forme <- ctx_v105(avec(function(b) { b$garanties_souscrites$college <- seq_len(4L); b }), A)
+inc_col <- list(survenance = NA_character_, college = NA_character_)
+verifier_egal("#105, G2b, M626 : collège refusé pour sa valeur : lecture existentielle (GS1 : inconnu) ; cause de forme : erreur interne ; mode bloquee : erreur interne sur un refus de valeur",
+              list(!is.null(ns$.lignes_refusees(ctx_col("en semble"), "garanties_souscrites", "college")),
+                   gev_col(ctx_col("en semble"), inc_col), gev_col(ctx_forme, inc_col), gev_col(ctx_col("en semble"), NULL)),
+              list(TRUE, NA, "erreur interne", "erreur interne"))
+# (6) oracles par simulation (constat de simulation ; graine 20261125 sous outils::avec_graine()) :
+# noyaux d'une copie de l'espace de noms sur un contexte simulé (valeurs, cellules inconnues,
+# lignes non déterminées, parties de fin données ; plages de dates réduites à 15 jours), contre
+# l'énumération exhaustive de chaque cellule inconnue (dates : chaque jour de la plage, et
+# l'absence d'une colonne facultative ; codes : le domaine ; collège opaque : a, b et deux valeurs
+# neuves ; présence et partie : vrai, faux ; limite d'âge : 0 à 30) : verdict et cellules
+# pertinentes (une cellule est pertinente si, les autres fixées, le verdict varie avec elle seule)
+# égaux, une seule cellule variant, y compris quand la cellule comparée est elle-même inconnue.
+env_g2b <- new.env(parent = ns)
+for (nom in ls(ns, all.names = TRUE)) {
+  g0 <- get(nom, envir = ns)
+  if (is.function(g0) && identical(environment(g0), ns)) environment(g0) <- env_g2b
+  assign(nom, g0, envir = env_g2b)
+}
+jours_g2b <- function(debut) as.numeric(D(debut)) + 0:14
+plages_g2b <- list("famille.date_naissance" = range(jours_g2b("2007-01-01")))
+env_g2b$.plage_date3 <- function(ctx, table, colonne) {
+  p <- plages_g2b[[paste(table, colonne, sep = ".")]]
+  if (is.null(p)) range(jours_g2b("2025-01-01")) else p
+}
+env_g2b$.valeurs <- function(ctx, table, colonne) ctx$base[[table]][[colonne]]
+env_g2b$.lignes_refusees <- function(ctx, table, colonne) ctx$inc[[paste(table, colonne, sep = ".")]]
+env_g2b$.inconnu <- function(ctx, table, colonne) seq_len(NROW(ctx$base[[table]])) %in% ctx$inc[[paste(table, colonne, sep = ".")]]
+env_g2b$.nd_vue <- function(ctx, table) if (is.null(ctx$nd[[table]])) rep(FALSE, NROW(ctx$base[[table]])) else ctx$nd[[table]]
+env_g2b$.vue_totale <- function(ctx) length(ctx$parties) == 0L
+env_g2b$.visibilite_a <- function(ctx, mode = "vue") list(parties = ctx$parties)
+env_g2b$.famille_en_jeu <- function(ctx) env_g2b$.nd_vue(ctx, "famille")
+ctx_g2b <- function(base, inc = list(), nd = list(), parties = list(), arrete = A) {
+  ctx <- new.env()
+  ctx$base <- base; ctx$dico <- d; ctx$arrete <- arrete; ctx$date_extraction <- A; ctx$inc <- inc; ctx$nd <- nd
+  ctx$parties <- parties; ctx$lignes_nd <- list(); ctx$inutilisable <- list(); ctx$ordre_codes <- ns$.ordre_codes(d)
+  ctx$refus_pv <- list(tables = list(), colonnes = list())
+  ctx$retenu <- lapply(base, function(x) rep(TRUE, nrow(x)))
+  for (t in names(nd)) ctx$retenu[[t]] <- !nd[[t]]
+  ctx
+}
+# énumération : `cel` (identifiant .arbre3() -> domaine), `verdict(g)` vectoriel sur la grille
+enum_g2b <- function(cel, verdict) {
+  g <- if (length(cel) > 0L) expand.grid(cel, stringsAsFactors = FALSE, KEEP.OUT.ATTRS = FALSE) else data.frame(x = 1)
+  v <- rep_len(verdict(g) %in% TRUE, nrow(g))
+  o <- verdict_v105(v)
+  if (!is.na(o)) return(list(v = o, pert = character(0)))
+  pert <- names(cel)[vapply(names(cel), function(nm) {
+    autres <- setdiff(names(cel), nm)
+    if (length(autres) == 0L) return(length(unique(v)) > 1L)
+    k <- do.call(paste, c(lapply(g[autres], as.character), sep = "\r"))
+    any(tapply(v, k, function(z) length(unique(z)) > 1L))
+  }, NA)]
+  list(v = o, pert = sort(pert))
+}
+# valeur d'une cellule dans la grille (connue : `x`)
+val_g2b <- function(g, id, x) if (id %in% names(g)) g[[id]] else rep_len(x, nrow(g))
+egal_g2b <- function(x, y) identical(list(x$v, sort(as.character(x$pert))), list(y$v, sort(as.character(y$pert))))
+J <- jours_g2b("2025-01-01")
+dom_code_g2b <- ns$.domaine3(list(dico = d), "garanties_souscrites", "code_garantie")
+# (6a) .garantie_en_vigueur3() (décès, contrat C1, collège a) : une à trois versions (code, collège a
+# ou b, effet, fin ou absente), cellules inconnues tirées parmi la survenance, le collège de
+# l'élément, et le code, le collège, l'effet, la fin et la présence de chaque version (quatre au plus)
+sim_gev <- function(nb) avec_graine_v105(vapply(seq_len(nb), function(k) {
+  m <- sample(1:3, 1L)
+  e <- sample(J, m, replace = TRUE)
+  f <- ifelse(runif(m) < 0.4, NA, pmin(e + sample(0:8, m, replace = TRUE), max(J)))
+  gs <- data.frame(id_garantie_souscrite = paste0("G", 1:m), id_contrat = "C1", stringsAsFactors = FALSE,
+                   code_garantie = sample(c("deces", "incapacite"), m, replace = TRUE, prob = c(0.75, 0.25)),
+                   college = sample(c("a", "b"), m, replace = TRUE, prob = c(0.7, 0.3)), date_effet = e, date_fin = f)
+  s0 <- sample(J, 1L)
+  cand <- c("s", "ce", as.vector(outer(c("code_garantie", "college", "date_effet", "date_fin", "p"), 1:m, paste, sep = "|")))
+  cel <- cand[sample.int(length(cand))][seq_len(sample(0:4, 1L))]
+  inc <- list(); nd <- rep(FALSE, m); doms <- list()
+  for (z in cel) {
+    if (z == "s") { doms[["sinistres.date_survenance\r1"]] <- J; next }
+    if (z == "ce") { doms[["garanties_souscrites.college\r9"]] <- c("a", "b", "x", "y"); next }
+    y <- strsplit(z, "|", fixed = TRUE)[[1L]]; j <- as.integer(y[2L])
+    if (y[1L] == "p") { nd[j] <- TRUE; doms[[paste0("garanties_souscrites\r", j)]] <- c(TRUE, FALSE); next }
+    tc <- paste0("garanties_souscrites.", y[1L])
+    inc[[tc]] <- c(inc[[tc]], j)
+    doms[[paste0(tc, "\r", j)]] <- switch(y[1L], code_garantie = dom_code_g2b, college = c("a", "b", "x", "y"), date_effet = J,
+                                         date_fin = c(J, NA))
+  }
+  ctx <- ctx_g2b(list(garanties_souscrites = gs), inc, list(garanties_souscrites = nd))
+  sid <- if ("s" %in% cel) "sinistres.date_survenance\r1" else NA_character_
+  cid <- if ("ce" %in% cel) "garanties_souscrites.college\r9" else NA_character_
+  x <- env_g2b$.garantie_en_vigueur3(ctx, "deces", list(contrat = "C1", college = "a"), s0, inconnues = list(survenance = sid, college = cid))
+  noyau <- ns$.arbre3(x$arbres[[1L]])
+  o <- enum_g2b(doms, function(g) {
+    s <- val_g2b(g, "sinistres.date_survenance\r1", s0); ce <- val_g2b(g, "garanties_souscrites.college\r9", "a")
+    Reduce(`|`, lapply(1:m, function(j) {
+      v <- function(c1) val_g2b(g, paste0("garanties_souscrites.", c1, "\r", j), gs[[c1]][j])
+      ef <- v("date_effet"); fi <- v("date_fin")
+      val_g2b(g, paste0("garanties_souscrites\r", j), TRUE) & v("code_garantie") == "deces" & v("college") == ce & ef <= s &
+        (is.na(fi) | fi >= s)
+    }), FALSE)
+  })
+  egal_g2b(noyau, o)
+}, NA))
+# (6b) .couverture3() (assuré AS1) : une ou deux affiliations, un contrat individuel ou non, cellules
+# inconnues tirées parmi la date de l'élément, et le début, la fin, le terme, la nature, la présence
+# et la partie de fin (connue, non connue ou non déterminée, vue partielle) de chaque ligne
+sim_cv <- function(nb) avec_graine_v105(vapply(seq_len(nb), function(k) {
+  ma <- sample(1:2, 1L); mc <- sample(0:1, 1L)
+  db <- sample(J, ma, replace = TRUE)
+  af <- data.frame(id_affiliation = paste0("A", 1:ma), id_assure = "AS1", id_contrat = "C1", college = "a", date_debut = db,
+                   date_fin = ifelse(runif(ma) < 0.4, NA, pmin(db + sample(0:8, ma, replace = TRUE), max(J))), stringsAsFactors = FALSE)
+  base <- list(affiliations = af)
+  if (mc == 1L) {
+    de <- sample(J, 1L)
+    base$contrats <- data.frame(id_contrat = "C2", id_assure = "AS1", nature_contrat = sample(c("individuel", "collectif_obligatoire"), 1L),
+                                date_effet = de, date_fin = if (runif(1L) < 0.5) NA else min(de + sample(0:8, 1L), max(J)),
+                                date_terme = if (runif(1L) < 0.5) NA else min(de + sample(0:8, 1L), max(J)), stringsAsFactors = FALSE)
+  }
+  parties <- if (runif(1L) < 0.5) list() else lapply(base, function(x) sample(c(TRUE, FALSE, NA), nrow(x), replace = TRUE, prob = c(0.6, 0.2, 0.2)))
+  d0 <- sample(J, 1L)
+  cand <- c("d", paste0("affiliations|", as.vector(outer(c("date_debut", "date_fin", "p"), 1:ma, paste, sep = "|"))),
+            if (mc == 1L) paste0("contrats|", c("date_effet", "date_fin", "date_terme", "nature_contrat", "p"), "|1"))
+  cel <- cand[sample.int(length(cand))][seq_len(sample(0:3, 1L))]
+  inc <- list(); nd <- lapply(base, function(x) rep(FALSE, nrow(x))); doms <- list()
+  for (z in cel) {
+    if (z == "d") { doms[["sinistres.date_survenance\r1"]] <- J; next }
+    y <- strsplit(z, "|", fixed = TRUE)[[1L]]; t <- y[1L]; l <- as.integer(y[3L])
+    if (y[2L] == "p") { nd[[t]][l] <- TRUE; doms[[paste0(t, "\r", l)]] <- c(TRUE, FALSE); next }
+    tc <- paste(t, y[2L], sep = ".")
+    inc[[tc]] <- c(inc[[tc]], l)
+    doms[[paste0(tc, "\r", l)]] <- if (y[2L] == "nature_contrat") ns$.domaine3(list(dico = d), "contrats", "nature_contrat") else
+      if (y[2L] %in% c("date_fin", "date_terme")) c(J, NA) else J
+  }
+  # partie non déterminée : cellule de la ligne retenue (date de saisie de fin), ou de la ligne non
+  # déterminée (rattachée à la ligne)
+  for (t in names(parties)) for (l in which(is.na(parties[[t]]))) {
+    doms[[if (nd[[t]][l]) paste0(t, "\r", l, "\rp") else paste0(t, ".date_saisie_fin\r", l)]] <- c(TRUE, FALSE)
+  }
+  ctx <- ctx_g2b(base, inc, nd, parties)
+  did <- if ("d" %in% cel) "sinistres.date_survenance\r1" else NA_character_
+  cv <- env_g2b$.couverture3(ctx, "AS1", d0, inconnues = list(date = did))
+  fe <- attr(cv, "feuilles")
+  noyau <- ns$.arbre3(if (length(fe) > 0L) ns$.noeud3("ou", fe) else ns$.constante3(FALSE))
+  o <- enum_g2b(doms, function(g) {
+    dt <- val_g2b(g, "sinistres.date_survenance\r1", d0)
+    Reduce(`|`, lapply(names(base), function(t) Reduce(`|`, lapply(seq_len(nrow(base[[t]])), function(l) {
+      v <- function(c1) val_g2b(g, paste0(t, ".", c1, "\r", l), base[[t]][[c1]][l])
+      deb <- v(if (t == "affiliations") "date_debut" else "date_effet"); fi <- v("date_fin")
+      te <- if (t == "contrats") v("date_terme") else NA
+      pa <- if (length(parties) == 0L) TRUE else if (is.na(parties[[t]][l])) {
+        val_g2b(g, if (nd[[t]][l]) paste0(t, "\r", l, "\rp") else paste0(t, ".date_saisie_fin\r", l), NA)
+      } else parties[[t]][l]
+      r <- val_g2b(g, paste0(t, "\r", l), TRUE) & deb <= dt & (is.na(te) | dt <= te) & (is.na(fi) | dt <= fi | !pa)
+      if (t == "contrats") r <- r & v("nature_contrat") %in% "individuel"
+      r
+    }), FALSE)), FALSE)
+  })
+  egal_g2b(noyau, o)
+}, NA))
+# tirage de 0 à `max` cellules parmi `cand`
+tirer_g2b <- function(cand, max) cand[sample.int(length(cand))][seq_len(sample(0:max, 1L))]
+# cellules pertinentes d'une ligne `l` d'un verdict (index_pertinent), en identifiants .arbre3()
+pert_ip <- function(ip, l) sort(unlist(lapply(names(ip), function(k) if (length(ip[[k]][[l]]) > 0L) paste0(k, "\r", ip[[k]][[l]]))))
+# (6c) D10c (.verdict_d10c()) : DO2 (rente_education, GS3) et, une fois sur deux, DO1 (GS1) de SI1 ;
+# GS1 décès (effet, fin) et GS3 (effet borne basse) du contrat C1 ; cellules tirées parmi la
+# survenance, les codes de GS1 et GS3 (cellule partagée par « vise » et « décès souscrit »),
+# l'effet et la fin de GS1, l'effet de GS3, la présence de DO1 (trois au plus)
+rentes_g2b <- c("rente_conjoint", "rente_education", "double_effet")
+sim_d10c <- function(nb) avec_graine_v105(vapply(seq_len(nb), function(k) {
+  avec_do1 <- runif(1L) < 0.5
+  e1 <- sample(J, 1L)
+  gs <- data.frame(id_garantie_souscrite = c("G1", "G3"), id_contrat = "C1", code_garantie = c("deces", "rente_education"),
+                   college = "a", date_effet = c(e1, min(J)), date_fin = c(if (runif(1L) < 0.5) NA else min(e1 + sample(0:8, 1L), max(J)), NA),
+                   stringsAsFactors = FALSE)
+  dos <- data.frame(id_dossier = c("DO1", "DO2"), id_sinistre = "SI1", id_garantie_souscrite = c("G1", "G3"), stringsAsFactors = FALSE)
+  if (!avec_do1) dos <- dos[2L, ]
+  l <- nrow(dos)
+  s0 <- sample(J, 1L)
+  base <- list(sinistres = data.frame(id_sinistre = "SI1", date_survenance = s0, stringsAsFactors = FALSE), dossiers = dos,
+               garanties_souscrites = gs)
+  cel <- tirer_g2b(c("s", "code1", "code3", "effet1", "fin1", "effet3", if (avec_do1) "p"), 3L)
+  inc <- list(); nd <- list(dossiers = rep(FALSE, l)); doms <- list()
+  ajouter <- function(tc, j, dom) { inc[[tc]] <<- c(inc[[tc]], j); doms[[paste0(tc, "\r", j)]] <<- dom }
+  for (z in cel) switch(z, s = ajouter("sinistres.date_survenance", 1L, J), code1 = ajouter("garanties_souscrites.code_garantie", 1L, dom_code_g2b),
+                        code3 = ajouter("garanties_souscrites.code_garantie", 2L, dom_code_g2b), effet1 = ajouter("garanties_souscrites.date_effet", 1L, J),
+                        fin1 = ajouter("garanties_souscrites.date_fin", 1L, c(J, NA)), effet3 = ajouter("garanties_souscrites.date_effet", 2L, J),
+                        p = { nd$dossiers[1L] <- TRUE; doms[["dossiers\r1"]] <- c(TRUE, FALSE) })
+  ctx <- ctx_g2b(base, inc, nd)
+  r <- env_g2b$.verdict_d10c(ctx, character(0))
+  noyau <- list(v = as.vector(r)[l], pert = pert_ip(attr(r, "index_pertinent"), l))
+  o <- enum_g2b(doms, function(g) {
+    s <- val_g2b(g, "sinistres.date_survenance\r1", s0)
+    code <- function(j) val_g2b(g, paste0("garanties_souscrites.code_garantie\r", j), gs$code_garantie[j])
+    ver <- function(j) {
+      ef <- val_g2b(g, paste0("garanties_souscrites.date_effet\r", j), gs$date_effet[j])
+      fi <- val_g2b(g, paste0("garanties_souscrites.date_fin\r", j), gs$date_fin[j])
+      code(j) == "deces" & ef <= s & (is.na(fi) | fi >= s)
+    }
+    deces <- code(2L) == "deces" | (if (avec_do1) val_g2b(g, "dossiers\r1", TRUE) & code(1L) == "deces" else FALSE)
+    code(2L) %in% rentes_g2b & (ver(1L) | ver(2L)) & !deces
+  })
+  egal_g2b(noyau, o)
+}, NA))
+# (6d) D10d (.verdict_d10d()) : passage EV1 de SI1 (AS1) ; DO1 (GS2) retenu, non déterminé ou
+# absent ; GS2 (C1, invalidite, effet, fin) ; AF1 (AS1, C1, a, début, fin) ; cellules tirées parmi
+# le type de EV1, la survenance, le code, l'effet et la fin de GS2, le début, la fin et la présence
+# de AF1 (trois au plus)
+dom_type_g2b <- ns$.domaine3(list(dico = d), "evenements", "type_evenement")
+sim_d10d <- function(nb) avec_graine_v105(vapply(seq_len(nb), function(k) {
+  etat_do1 <- sample(c("retenu", "nd", "absent"), 1L)
+  e2 <- sample(J, 1L); da <- sample(J, 1L)
+  gs <- data.frame(id_garantie_souscrite = "G2", id_contrat = "C1", code_garantie = sample(c("invalidite", "incapacite"), 1L, prob = c(0.8, 0.2)),
+                   college = "a", date_effet = e2, date_fin = if (runif(1L) < 0.5) NA else min(e2 + sample(0:8, 1L), max(J)),
+                   stringsAsFactors = FALSE)
+  af <- data.frame(id_affiliation = "AF1", id_assure = "AS1", id_contrat = "C1", college = "a", date_debut = da,
+                   date_fin = if (runif(1L) < 0.5) NA else min(da + sample(0:8, 1L), max(J)), stringsAsFactors = FALSE)
+  dos <- data.frame(id_dossier = "DO1", id_sinistre = "SI1", id_garantie_souscrite = "G2", stringsAsFactors = FALSE)[etat_do1 != "absent", , drop = FALSE]
+  s0 <- sample(J, 1L)
+  base <- list(evenements = data.frame(id_evenement = "EV1", id_sinistre = "SI1", type_evenement = "passage_invalidite", stringsAsFactors = FALSE),
+               sinistres = data.frame(id_sinistre = "SI1", id_assure = "AS1", date_survenance = s0, stringsAsFactors = FALSE),
+               dossiers = dos, garanties_souscrites = gs, affiliations = af)
+  cel <- tirer_g2b(c("type", "s", "code2", "effet2", "fin2", "debut", "fina", "pa"), 3L)
+  inc <- list(); nd <- list(dossiers = rep(etat_do1 == "nd", nrow(dos)), affiliations = FALSE); doms <- list()
+  if (etat_do1 == "nd") doms[["dossiers\r1"]] <- c(TRUE, FALSE)
+  ajouter <- function(tc, j, dom) { inc[[tc]] <<- c(inc[[tc]], j); doms[[paste0(tc, "\r", j)]] <<- dom }
+  for (z in cel) switch(z, type = ajouter("evenements.type_evenement", 1L, dom_type_g2b), s = ajouter("sinistres.date_survenance", 1L, J),
+                        code2 = ajouter("garanties_souscrites.code_garantie", 1L, dom_code_g2b), effet2 = ajouter("garanties_souscrites.date_effet", 1L, J),
+                        fin2 = ajouter("garanties_souscrites.date_fin", 1L, c(J, NA)), debut = ajouter("affiliations.date_debut", 1L, J),
+                        fina = ajouter("affiliations.date_fin", 1L, c(J, NA)),
+                        pa = { nd$affiliations <- TRUE; doms[["affiliations\r1"]] <- c(TRUE, FALSE) })
+  ctx <- ctx_g2b(base, inc, nd)
+  r <- env_g2b$.verdict_d10d(ctx, character(0))
+  noyau <- list(v = as.vector(r)[1L], pert = pert_ip(attr(r, "index_pertinent"), 1L))
+  o <- enum_g2b(doms, function(g) {
+    s <- val_g2b(g, "sinistres.date_survenance\r1", s0)
+    v <- function(tc, x) val_g2b(g, paste0(tc, "\r1"), x)
+    fi <- v("garanties_souscrites.date_fin", gs$date_fin)
+    inv <- v("garanties_souscrites.code_garantie", gs$code_garantie) == "invalidite" & v("garanties_souscrites.date_effet", e2) <= s &
+      (is.na(fi) | fi >= s)
+    fa <- v("affiliations.date_fin", af$date_fin)
+    cov <- val_g2b(g, "affiliations\r1", TRUE) & v("affiliations.date_debut", da) <= s & (is.na(fa) | s <= fa)
+    couvert <- switch(etat_do1, retenu = inv, absent = cov & inv, nd = (val_g2b(g, "dossiers\r1", TRUE) & inv) |
+                        (!val_g2b(g, "dossiers\r1", TRUE) & cov & inv))
+    v("evenements.type_evenement", "passage_invalidite") == "passage_invalidite" & !couvert
+  })
+  egal_g2b(noyau, o)
+}, NA))
+# (6e) D14 (.verdict_d14_3(), `ne` faux, limite atteinte, âge révolu) : SI1 décès instruit (survenance
+# du 2025-01-01 au 2025-01-15), DO1 (GS1, décès), GS6 double_effet (C1, effet), conjoint ME2 (lien
+# conjoint, décès absent ou daté), enfant ME1 scolarisé (naissance du 2007-01-01 au 2007-01-15 :
+# 17 ou 18 ans à la survenance), age_limite 18 de GS6 ; cellules tirées parmi la survenance, la
+# naissance et la situation de ME1, le décès, le lien et la présence de ME2, conjoint_vise et
+# l'effet de GS6, la valeur d'age_limite, le code de GS1 (cellule partagée par le dossier décès, la
+# version candidate et le dossier double_effet ; trois au plus)
+la_g2b <- list(regle = "atteinte", age = "revolu")
+J_n <- jours_g2b("2007-01-01")
+sim_d14 <- function(nb) avec_graine_v105(vapply(seq_len(nb), function(k) {
+  s0 <- sample(J, 1L); b0 <- sample(J_n, 1L); e6 <- sample(J, 1L)
+  dd0 <- if (runif(1L) < 0.6) NA else sample(J, 1L)
+  cv0 <- sample(c("marie", "marie_pacs", "marie_pacs_concubin"), 1L)
+  lien0 <- sample(c("conjoint", "concubin"), 1L, prob = c(0.75, 0.25))
+  base <- list(sinistres = data.frame(id_sinistre = "SI1", nature_sinistre = "deces", date_survenance = s0, date_instruction = as.numeric(D("2025-02-01")),
+                                      stringsAsFactors = FALSE),
+               dossiers = data.frame(id_dossier = "DO1", id_sinistre = "SI1", id_garantie_souscrite = "G1", stringsAsFactors = FALSE),
+               garanties_souscrites = data.frame(id_garantie_souscrite = c("G1", "G6"), id_contrat = "C1", code_garantie = c("deces", "double_effet"),
+                                                 college = "a", date_effet = c(min(J), e6), date_fin = NA, conjoint_vise = c(NA, cv0),
+                                                 prolongation_handicap = c(NA, FALSE), stringsAsFactors = FALSE),
+               parametres = data.frame(id_garantie_souscrite = "G6", parametre = "age_limite", valeur = 18, stringsAsFactors = FALSE),
+               famille = data.frame(id_membre = c("ME1", "ME2"), id_sinistre = "SI1", lien = c("enfant", lien0), date_naissance = c(b0, as.numeric(D("1968-01-01"))),
+                                    situation = c("scolarise", NA), date_deces = c(NA, dd0), stringsAsFactors = FALSE))
+  cel <- tirer_g2b(c("s", "b", "sit", "dd", "lien", "p", "cv", "effet6", "valeur", "code1"), 3L)
+  inc <- list(); nd <- list(famille = c(FALSE, FALSE)); doms <- list()
+  ajouter <- function(tc, j, dom) { inc[[tc]] <<- c(inc[[tc]], j); doms[[paste0(tc, "\r", j)]] <<- dom }
+  for (z in cel) switch(z, s = ajouter("sinistres.date_survenance", 1L, J), b = ajouter("famille.date_naissance", 1L, J_n),
+                        sit = ajouter("famille.situation", 1L, ns$.domaine3(list(dico = d), "famille", "situation")),
+                        dd = ajouter("famille.date_deces", 2L, c(J, NA)), lien = ajouter("famille.lien", 2L, ns$.domaine3(list(dico = d), "famille", "lien")),
+                        p = { nd$famille[2L] <- TRUE; doms[["famille\r2"]] <- c(TRUE, FALSE) },
+                        cv = ajouter("garanties_souscrites.conjoint_vise", 2L, ns$.domaine3(list(dico = d), "garanties_souscrites", "conjoint_vise")),
+                        effet6 = ajouter("garanties_souscrites.date_effet", 2L, J), valeur = ajouter("parametres.valeur", 1L, 0:30),
+                        code1 = ajouter("garanties_souscrites.code_garantie", 1L, dom_code_g2b))
+  ctx <- ctx_g2b(base, inc, nd)
+  x <- env_g2b$.verdict_d14_3(ctx, la_g2b, FALSE)
+  noyau <- list(v = x$v[1L], pert = sort(x$pert[[1L]]))
+  vise <- ns$.LIENS_CONJOINT_VISE
+  o <- enum_g2b(doms, function(g) {
+    v <- function(id, x) val_g2b(g, id, x)
+    s <- v("sinistres.date_survenance\r1", s0); b <- v("famille.date_naissance\r1", b0); st <- v("famille.situation\r1", "scolarise")
+    dd <- v("famille.date_deces\r2", dd0); li <- v("famille.lien\r2", lien0); cv <- v("garanties_souscrites.conjoint_vise\r2", cv0)
+    code1 <- v("garanties_souscrites.code_garantie\r1", "deces"); L <- v("parametres.valeur\r1", 18)
+    conj <- v("famille\r2", TRUE) & (is.na(dd) | dd >= s) & vapply(seq_len(nrow(g)), function(i) li[i] %in% vise[[cv[i]]], NA)
+    age <- ns$calculer_age(structure(b, class = "Date"), structure(s, class = "Date"), "revolu")
+    enf <- st %in% "a_naitre" | b > s | (!is.na(age) & age < L)
+    ver6 <- v("garanties_souscrites.date_effet\r2", e6) <= s
+    code1 == "deces" & ver6 & conj & enf & !(code1 == "double_effet")
+  })
+  egal_g2b(noyau, o)
+}, NA))
+verifier_egal("#105, G2b, constat de simulation (graine 20261125) : .garantie_en_vigueur3() 300 cas, .couverture3() 300 cas, D10c 200, D10d 200, D14 200 (cellules partagées, cellule comparée elle-même inconnue) : verdict et cellules pertinentes (index_pertinent) des noyaux égaux à l'énumération exhaustive",
+              list(sum(sim_gev(300L)), sum(sim_cv(300L)), sum(sim_d10c(200L)), sum(sim_d10d(200L)), sum(sim_d14(200L))),
+              list(300L, 300L, 200L, 200L, 200L))
+# --- Reprise de G2b (audit : B1, M1, m1, m2 ; actuary : Q1, Q5, garde de .couverture3()) ---
+# (7) B1 : sans conventions$limite_age, valeur d'age_limite de GS6 refusée (D09) : les paramètres
+# de limite ne sont pas lus (l'enfant né compte comme `ne`) ; deux membres (conjoint ME2 et enfant
+# ME1) : candidat, declaration_absente, à A et à A0 (avant la reprise : erreur interne de
+# .cause_nd() à A0) ; un seul membre (ME1, aucun conjoint) : aucun candidat, D14 exécutée, rien
+# (avant : erreur interne « feuille sans représentant »). M1 : cellule partagée ou privée sans
+# représentant : erreur interne de .arbre3()
+d14_sc <- function(un_membre, arrete) tryCatch({
+  b <- d14_34(); b$parametres$valeur[9L] <- -5
+  if (un_membre) b$famille <- b$famille[b$famille$id_membre != "ME2", ]
+  ne34(controler_base(b, arrete, s34(1000), list(age = "revolu")), "D14")
+}, error = function(e) conditionMessage(e))
+f_vide <- function() ns$.feuille3("c", function(sigs) list(), function(a, n) a$c %in% TRUE)
+err_arbre <- function(x) tryCatch(ns$.arbre3(x)$v, error = function(e) sub(" :.*$", "", sub("^.*\\.arbre3\\(\\) : ", "", conditionMessage(e))))
+verifier_egal("#105, G2b, B1 : sans convention, age_limite refusée : deux membres, candidat (declaration_absente) à A et à A0 ; un membre, rien, sans erreur ; M1 : cellule sans représentant, partagée ou privée : erreur interne",
+              list(d14_sc(FALSE, A), d14_sc(FALSE, A0), d14_sc(TRUE, A), d14_sc(TRUE, A0),
+                   grepl("erreur interne", tryCatch(ns$.arbre3(ns$.noeud3("ou", list(f_vide(), f_vide()))), error = function(e) conditionMessage(e))),
+                   grepl("erreur interne", tryCatch(ns$.arbre3(f_vide()), error = function(e) conditionMessage(e)))),
+              list("sinistres NA declaration_absente", "sinistres NA declaration_absente", character(0), character(0), TRUE, TRUE))
+# (8) garde de .couverture3() : collège et inconnues ensemble : erreur interne jusqu'à G2c ; retirée à la
+# conversion G2c (E-13 (e)) : lecture à trois valeurs dans le collège, AF1 (ensemble) couvre SI1
+# (2025-01-10) dans le collège ensemble (vrai), non dans le collège cadres (faux)
+cv_col_g2c <- function(college) {
+  cv <- ns$.couverture3(ctx_v105(base_ref, A), "AS1", as.numeric(D("2025-01-10")), college = college, inconnues = list(date = NA_character_))
+  fe <- attr(cv, "feuilles")
+  ns$.arbre3(if (length(fe) > 0L) ns$.noeud3("ou", fe) else ns$.constante3(FALSE))$v
+}
+verifier_egal("#105, G2b (8), garde retirée à G2c (E-13 (e)) : .couverture3() avec collège et inconnues : AF1 couvre SI1 dans le collège ensemble, non dans le collège cadres",
+              list(cv_col_g2c("ensemble"), cv_col_g2c("cadres")), list(TRUE, FALSE))
+# (9) Q5 d'`actuary` : parametre_non_defini lu de façon existentielle ; age_limite de GS6 absent,
+# situation du conjoint ME2 refusée (sans rapport avec la limite) : SI1 non détecté, ligne
+# parametre_non_defini (avant la reprise : aucune ligne, faute de lecture des seules présences)
+verifier_egal("#105, G2b, Q5 : age_limite absent, situation du conjoint refusée : parametre_non_defini, aucune détection",
+              d14_v105(function(b) { b$parametres <- b$parametres[b$parametres$id_garantie_souscrite != "GS6", ]
+                                     b$famille$situation[2L] <- "zzz"; b }),
+              list(co = character(0), ne = "sinistres NA parametre_non_defini"))
+# (10) invariance de bout en bout au collège refusé (audit de G2b, m2) : collège de GS1, GS3, GS2,
+# GS5, GS6 refusé sous deux valeurs hors domaine (« en semble », « x y ») : bilan identique ; sous
+# la valeur blanche (chaine_vide) : mêmes lignes, cause chaine_vide au lieu de hors_domaine ; GS2
+# (incapacite) n'est pas candidate pour EV7 (version invalidite attendue) : EV7 reste détecté
+col_cas <- list(
+  d10c_gs1 = function(x) list(sans_do1_g2b(function(b) { b$garanties_souscrites$college[1L] <- x; b }), A, "D10c"),
+  d10c_gs3 = function(x) list(sans_do1_g2b(function(b) { b$garanties_souscrites$college[3L] <- x; b }), A, "D10c"),
+  d10c_gs1_A0 = function(x) list(sans_do1_g2b(function(b) { b$garanties_souscrites$college[1L] <- x; b }), A0, "D10c"),
+  d10d_gs2 = function(x) list(avec(function(b) { b <- ev7(b); b$garanties_souscrites$college[2L] <- x; b }), A, "D10d"),
+  d10d_gs5 = function(x) list(sd_v105(function(b) { b$garanties_souscrites$college[5L] <- x; b }), A, "D10d"),
+  d14_gs6 = function(x) list(within(d14_34(), garanties_souscrites$college[5L] <- x), A, "D14"),
+  d14_gs1 = function(x) list(within(d14_34(), garanties_souscrites$college[1L] <- x), A, "D14"))
+col_inv <- vapply(names(col_cas), function(nm) {
+  rs <- lapply(c("en semble", "x y", " "), function(x) {
+    z <- col_cas[[nm]](x)
+    r <- if (z[[3L]] == "D14") controler_base(z[[1L]], z[[2L]], s34(1000), cv34) else cb(z[[1L]], z[[2L]])
+    list(det = ligne(r$controles, z[[3L]])$identifiants, ne = ligne(r$controles_non_executes, z[[3L]])$cause)
+  })
+  blanc <- rs[[3L]]; blanc$ne <- sub("^chaine_vide$", "hors_domaine", blanc$ne)
+  if (identical(rs[[1L]], rs[[2L]]) && identical(rs[[1L]], blanc)) paste(c(rs[[1L]]$det, rs[[1L]]$ne), collapse = " ") else "DIFFERENT"
+}, "")
+verifier_egal("#105, G2b, collège refusé de bout en bout (D10c, D10d, D14 ; sept cas) : bilan invariant à la valeur refusée, cause chaine_vide sous la valeur blanche",
+              unname(col_inv), c("hors_domaine", "hors_domaine", "hors_domaine", "EV7", "hors_domaine", "hors_domaine", "hors_domaine"))
+# (11) oracles de l'audit de G2b (m2 ; constat de simulation, graines 777 et 4242) : D10d à deux
+# dossiers (retenus, non déterminés ou absents), quatre versions sur deux contrats, collèges
+# refusés (versions, affiliation), nature du contrat individuel ; D14 sans convention à deux dossiers
+# décès et deux versions double_effet, collèges et effets refusés : verdict et cellules pertinentes
+# égaux à l'énumération exhaustive (collège : a, b et deux valeurs neuves)
+COL <- c("a", "b", "x", "y")
+sim_d10d_col <- function(nb) ns$avec_graine(777L, vapply(seq_len(nb), function(k) {
+  etats <- sample(c("retenu", "nd", "absent"), 2L, TRUE)
+  ed <- sample(J, 4L, TRUE)
+  gs <- data.frame(id_garantie_souscrite = c("G1", "G2", "G3", "G4"), id_contrat = c("C1", "C1", "C1", "C2"),
+                   code_garantie = c("incapacite", "invalidite", "invalidite", "invalidite"),
+                   college = c(sample(c("a", "b"), 3L, TRUE), NA), date_effet = ed,
+                   date_fin = ifelse(runif(4) < .5, NA, pmin(ed + sample(0:8, 4, TRUE), max(J))), stringsAsFactors = FALSE)
+  da <- sample(J, 1L); dc <- sample(J, 1L)
+  af <- data.frame(id_affiliation = "AF1", id_assure = "AS1", id_contrat = "C1", college = sample(c("a", "b"), 1L), date_debut = da,
+                   date_fin = if (runif(1) < .5) NA else min(da + sample(0:8, 1), max(J)), stringsAsFactors = FALSE)
+  ct <- data.frame(id_contrat = "C2", id_assure = "AS1", nature_contrat = sample(c("individuel", "collectif_obligatoire"), 1L), date_effet = dc,
+                   date_fin = NA_real_, date_terme = NA_real_, stringsAsFactors = FALSE)
+  dos <- data.frame(id_dossier = c("DO1", "DO2"), id_sinistre = "SI1", id_garantie_souscrite = c("G1", "G2"), stringsAsFactors = FALSE)
+  keep <- etats != "absent"; dos <- dos[keep, , drop = FALSE]; et <- etats[keep]
+  s0 <- sample(J, 1L)
+  base <- list(evenements = data.frame(id_evenement = "EV1", id_sinistre = "SI1", type_evenement = "passage_invalidite", stringsAsFactors = FALSE),
+               sinistres = data.frame(id_sinistre = "SI1", id_assure = "AS1", date_survenance = s0, stringsAsFactors = FALSE),
+               dossiers = dos, garanties_souscrites = gs, affiliations = af, contrats = ct)
+  cand <- c("s", "col1", "col2", "col3", "colaf", "code3", "effet3", "nat")
+  cel <- tirer_g2b(cand, 3L)
+  inc <- list(); nd <- list(dossiers = et == "nd"); doms <- list()
+  for (j in which(et == "nd")) doms[[paste0("dossiers\r", j)]] <- c(TRUE, FALSE)
+  ajouter <- function(tc, j, dom) { inc[[tc]] <<- c(inc[[tc]], j); doms[[paste0(tc, "\r", j)]] <<- dom }
+  for (z in cel) switch(z, s = ajouter("sinistres.date_survenance", 1L, J),
+                        col1 = ajouter("garanties_souscrites.college", 1L, COL), col2 = ajouter("garanties_souscrites.college", 2L, COL),
+                        col3 = ajouter("garanties_souscrites.college", 3L, COL), colaf = ajouter("affiliations.college", 1L, COL),
+                        code3 = ajouter("garanties_souscrites.code_garantie", 3L, dom_code_g2b),
+                        effet3 = ajouter("garanties_souscrites.date_effet", 3L, J),
+                        nat = ajouter("contrats.nature_contrat", 1L, ns$.domaine3(list(dico = d), "contrats", "nature_contrat")))
+  ctx <- ctx_g2b(base, inc, nd)
+  r <- tryCatch(env_g2b$.verdict_d10d(ctx, character(0)), error = function(e) NULL)
+  if (is.null(r)) return(FALSE)
+  noyau <- list(v = as.vector(r)[1L], pert = pert_ip(attr(r, "index_pertinent"), 1L))
+  o <- enum_g2b(doms, function(g) {
+    v <- function(tc, j, x) val_g2b(g, paste0(tc, "\r", j), x)
+    s <- v("sinistres.date_survenance", 1L, s0)
+    colv <- function(j) v("garanties_souscrites.college", j, gs$college[j])
+    ver <- function(j, contrat, college) {
+      fi <- gs$date_fin[j]; ef <- v("garanties_souscrites.date_effet", j, gs$date_effet[j])
+      r <- gs$id_contrat[j] == contrat & v("garanties_souscrites.code_garantie", j, gs$code_garantie[j]) == "invalidite" &
+        ef <= s & (is.na(fi) | fi >= s)
+      if (!is.null(college)) r <- r & !is.na(colv(j)) & colv(j) == college
+      r
+    }
+    inv <- function(contrat, college) Reduce(`|`, lapply(1:4, function(j) ver(j, contrat, college)))
+    pres <- function(q) if (et[q] == "nd") val_g2b(g, paste0("dossiers\r", q), TRUE) else rep(TRUE, nrow(g))
+    jg <- match(dos$id_garantie_souscrite, gs$id_garantie_souscrite)
+    par_dos <- lapply(seq_along(et), function(q) pres(q) & inv(gs$id_contrat[jg[q]], colv(jg[q])))
+    couvert <- Reduce(`|`, par_dos, FALSE)
+    if (!any(et == "retenu")) {
+      absents <- Reduce(`&`, lapply(seq_along(et), function(q) !pres(q)), TRUE)
+      cva <- af$date_debut <= s & (is.na(af$date_fin) | s <= af$date_fin) & inv("C1", v("affiliations.college", 1L, af$college))
+      cvc <- v("contrats.nature_contrat", 1L, ct$nature_contrat) %in% "individuel" & ct$date_effet <= s & inv("C2", NULL)
+      couvert <- couvert | (absents & (cva | cvc))
+    }
+    !couvert
+  })
+  ok <- egal_g2b(noyau, o)
+  ok
+}, NA))
+
+sim_d14_col <- function(nb) ns$avec_graine(4242L, vapply(seq_len(nb), function(k) {
+  s0 <- sample(J, 1L); e <- sample(J, 4L, TRUE)
+  et <- sample(c("retenu", "nd"), 2L, TRUE)
+  gs <- data.frame(id_garantie_souscrite = c("G1", "G2", "G5", "G6"), id_contrat = "C1",
+                   code_garantie = c("deces", "deces", "double_effet", "double_effet"),
+                   college = sample(c("a", "b"), 4L, TRUE), date_effet = e, date_fin = NA,
+                   conjoint_vise = c(NA, NA, "marie", "marie"), prolongation_handicap = c(NA, NA, FALSE, FALSE), stringsAsFactors = FALSE)
+  base <- list(sinistres = data.frame(id_sinistre = "SI1", nature_sinistre = "deces", date_survenance = s0, date_instruction = as.numeric(D("2025-02-01")), stringsAsFactors = FALSE),
+               dossiers = data.frame(id_dossier = c("DO1", "DO2"), id_sinistre = "SI1", id_garantie_souscrite = c("G1", "G2"), stringsAsFactors = FALSE),
+               garanties_souscrites = gs,
+               parametres = data.frame(id_garantie_souscrite = character(0), parametre = character(0), valeur = numeric(0), stringsAsFactors = FALSE),
+               famille = data.frame(id_membre = c("ME1", "ME2"), id_sinistre = "SI1", lien = c("enfant", "conjoint"), date_naissance = c(NA, as.numeric(D("1968-01-01"))),
+                                    situation = c("a_naitre", NA), date_deces = c(NA, NA), stringsAsFactors = FALSE))
+  cel <- tirer_g2b(c("s", "c1", "c2", "c5", "c6", "e5", "e6"), 4L)
+  inc <- list(); nd <- list(dossiers = et == "nd", famille = c(FALSE, FALSE)); doms <- list()
+  for (j in which(et == "nd")) doms[[paste0("dossiers\r", j)]] <- c(TRUE, FALSE)
+  ajouter <- function(tc, j, dom) { inc[[tc]] <<- c(inc[[tc]], j); doms[[paste0(tc, "\r", j)]] <<- dom }
+  for (z in cel) switch(z, s = ajouter("sinistres.date_survenance", 1L, J),
+                        c1 = ajouter("garanties_souscrites.college", 1L, COL), c2 = ajouter("garanties_souscrites.college", 2L, COL),
+                        c5 = ajouter("garanties_souscrites.college", 3L, COL), c6 = ajouter("garanties_souscrites.college", 4L, COL),
+                        e5 = ajouter("garanties_souscrites.date_effet", 3L, J), e6 = ajouter("garanties_souscrites.date_effet", 4L, J))
+  ctx <- ctx_g2b(base, inc, nd)
+  x <- tryCatch(env_g2b$.verdict_d14_3(ctx, NULL, FALSE), error = function(e) NULL)
+  if (is.null(x)) return(FALSE)
+  noyau <- list(v = x$v[1L], pert = sort(x$pert[[1L]]))
+  o <- enum_g2b(doms, function(g) {
+    v <- function(tc, j, x) val_g2b(g, paste0(tc, "\r", j), x)
+    s <- v("sinistres.date_survenance", 1L, s0)
+    col <- function(j) v("garanties_souscrites.college", j, gs$college[j])
+    pres <- function(q) if (et[q] == "nd") val_g2b(g, paste0("dossiers\r", q), TRUE) else rep(TRUE, nrow(g))
+    ver <- function(w, q) v("garanties_souscrites.date_effet", w, gs$date_effet[w]) <= s & col(w) == col(q)
+    Reduce(`|`, lapply(1:2, function(q) pres(q) & (ver(3L, q) | ver(4L, q))), FALSE)
+  })
+  ok <- egal_g2b(noyau, o)
+  ok
+}, NA))
+
+verifier_egal("#105, G2b, constat de simulation (audit, m2) : D10d 400 cas et D14 400 cas à plusieurs dossiers, versions et collèges refusés : verdict et cellules pertinentes égaux à l'énumération exhaustive",
+              list(sum(sim_d10d_col(400L)), sum(sim_d14_col(400L))), list(400L, 400L))
+# (12) chemin rapide contre chemin forcé (actuary Q1, audit m1) : copie de l'espace de noms où
+# .verdict_d10c(), .verdict_d10d() et .verdict_d14_k() (et, depuis G2c, .verdict_d11() et
+# .verdict_d11b()) ont `forcer` vrai (toute ligne par .arbre3()) ;
+# sur les bases de la section (refus planifiés) et sur 40 bases tirées (graine 20261125 : base de
+# référence, base D14, bases D10d avec et sans dossier ; une ou deux valeurs refusées tirées parmi
+# les colonnes lues par D10c, D10d, D14 ; arrêté A ou A0) : controles, controles_non_executes et
+# declarations_requises identiques
+env_force <- new.env(parent = ns)
+for (nom in ls(ns, all.names = TRUE)) {
+  g0 <- get(nom, envir = ns)
+  if (is.function(g0) && identical(environment(g0), ns)) environment(g0) <- env_force
+  assign(nom, g0, envir = env_force)
+}
+for (f in c(".verdict_d10c", ".verdict_d10d", ".verdict_d14_k", ".verdict_d11", ".verdict_d11b")) {
+  g0 <- get(f, envir = env_force); formals(g0)$forcer <- TRUE; assign(f, g0, envir = env_force)
+}
+inj_force <- list(c("garanties_souscrites", "code_garantie", "zzz"), c("garanties_souscrites", "college", "a b"),
+                  c("garanties_souscrites", "date_effet", "1850-01-01"), c("garanties_souscrites", "date_effet", NA),
+                  c("garanties_souscrites", "date_fin", "1850-01-01"), c("garanties_souscrites", "conjoint_vise", "zzz"),
+                  c("sinistres", "date_survenance", "1850-01-01"), c("sinistres", "nature_sinistre", "zzz"),
+                  c("sinistres", "date_instruction", "1850-01-01"), c("evenements", "type_evenement", "zzz"),
+                  c("famille", "lien", "zzz"), c("famille", "date_naissance", "1850-01-01"), c("famille", "situation", "zzz"),
+                  c("famille", "date_deces", "1850-01-01"), c("parametres", "valeur", "-5"), c("contrats", "nature_contrat", "zzz"),
+                  c("contrats", "date_effet", NA), c("affiliations", "date_debut", "1850-01-01"))
+bases_force <- list(base_ref, d14_34(), sd_v105(), avec(ev7))
+tires_force <- avec_graine_v105(lapply(seq_len(40L), function(k) {
+  b <- bases_force[[sample.int(length(bases_force), 1L)]]
+  for (q in seq_len(sample(1:2, 1L))) {
+    z <- inj_force[[sample.int(length(inj_force), 1L)]]
+    x <- b[[z[1L]]][[z[2L]]]; i <- sample.int(length(x), 1L)
+    b[[z[1L]]][[z[2L]]][i] <- if (is.na(z[3L])) NA else if (inherits(x, "Date")) D(z[3L]) else if (is.numeric(x)) as.numeric(z[3L]) else z[3L]
+  }
+  list(b = b, arrete = if (runif(1L) < 0.3) A0 else A)
+}))
+planifies_force <- c(
+  lapply(list(sans_do1_g2b(), sans_do1_g2b(function(b) { b$garanties_souscrites$code_garantie[1L] <- "zzz"; b }),
+              avec(function(b) { b$garanties_souscrites$code_garantie[3L] <- "zzz"; b }),
+              sans_do1_g2b(function(b) { b$garanties_souscrites$date_effet[1L] <- NA; b }),
+              sd_v105(function(b) { b$affiliations$date_debut[1L] <- D("1850-01-01"); b }),
+              sd_v105(function(b) { b$garanties_souscrites$date_effet[5L] <- NA; b }),
+              within(d14_34(), famille$date_naissance[1L] <- D("1850-01-01")), within(d14_34(), parametres$valeur[9L] <- -5)),
+         function(b) list(b = b, arrete = A0)),
+  tires_force)
+bilan_force <- function(f, x) {
+  r <- tryCatch(f(x$b, x$arrete, s34(1000), cv34), error = function(e) conditionMessage(e))
+  if (is.character(r)) r else list(r$controles, r$controles_non_executes, r$declarations_requises)
+}
+rapides_force <- lapply(planifies_force, function(x) bilan_force(ns$controler_base, x))
+ecarts_force <- vapply(seq_along(planifies_force), function(k) !identical(rapides_force[[k]], bilan_force(env_force$controler_base, planifies_force[[k]])), NA)
+verifier_egal("#105, G2b, chemin rapide et chemin forcé : 48 bases (8 planifiées à A0, 40 tirées) : bilans identiques",
+              list(length(planifies_force), sum(ecarts_force)), list(48L, 0L))
+# témoin de diversité (actuary R3, seconde reprise) : nombre de bases où D10c, D10d et D14 ont au
+# moins une détection ou une ligne de controles_non_executes, et où parametre_non_defini est émis
+# (chemin rapide) ; chacun strictement positif
+touche_force <- function(code) sum(vapply(rapides_force, function(r) !is.character(r) &&
+  (any(r[[1L]]$code %in% code) || any(r[[2L]]$code %in% code)), NA))
+div_force <- c(D10c = touche_force("D10c"), D10d = touche_force("D10d"), D14 = touche_force("D14"),
+               parametre_non_defini = sum(vapply(rapides_force, function(r) !is.character(r) &&
+                 any(r[[2L]]$code %in% "D14" & r[[2L]]$cause %in% "parametre_non_defini"), NA)))
+cat("  diversité des 48 bases (chemin rapide) :", paste(names(div_force), div_force, sep = " = ", collapse = ", "), "\n")
+verifier("#105, G2b, chemin rapide et chemin forcé, témoin de diversité : D10c, D10d, D14 touchés (détection ou ligne non exécutée) et parametre_non_defini émis sur au moins une base chacun",
+         all(div_force > 0L))
+# G2c (E-12 (a), E-13) : chemin rapide contre chemin forcé de D11a et D11b, sur les bases du sous-cas du
+# maintien (mm34(), maint34() à sortie, cadres_m34(), cadres34(), D11a sans dossier) et 40 bases
+# tirées (graine 20261126 ; une ou deux valeurs refusées parmi les colonnes lues par le cœur et
+# le sous-cas ; arrêté A ou A0) : bilans identiques ; témoin de diversité : D11a et D11b touchés
+inj_d11 <- list(c("sinistres", "nature_sinistre", "zzz"), c("sinistres", "date_survenance", "1850-01-01"),
+                c("garanties_souscrites", "maintien_deces", NA), c("garanties_souscrites", "college", "a b"),
+                c("garanties_souscrites", "date_effet", "1850-01-01"), c("garanties_souscrites", "code_garantie", "zzz"),
+                c("evenements", "type_evenement", "zzz"), c("evenements", "date_effet", "1850-01-01"), c("evenements", "date_saisie", "1850-01-01"),
+                c("affiliations", "date_debut", "1850-01-01"), c("affiliations", "date_fin", "1850-01-01"), c("contrats", "nature_contrat", "zzz"),
+                c("contrats", "date_terme", "1850-01-01"))
+bases_d11 <- list(mm34(), maint34("2024-09-01", maintien = TRUE), cadres_m34(TRUE), cadres34(base_ref),
+                  within(mm34(), { dossiers <- dossiers[dossiers$id_sinistre != "SI1", ]
+                                   evenements <- evenements[!(evenements$id_sinistre %in% "SI1") | is.na(evenements$id_dossier), ] }))
+tires_d11 <- ns$avec_graine(20261126L, lapply(seq_len(40L), function(k) {
+  b <- bases_d11[[sample.int(length(bases_d11), 1L)]]
+  for (q in seq_len(sample(1:2, 1L))) {
+    z <- inj_d11[[sample.int(length(inj_d11), 1L)]]
+    x <- b[[z[1L]]][[z[2L]]]; i <- sample.int(length(x), 1L)
+    b[[z[1L]]][[z[2L]]][i] <- if (is.na(z[3L])) NA else if (inherits(x, "Date")) D(z[3L]) else if (is.numeric(x)) as.numeric(z[3L]) else z[3L]
+  }
+  list(b = b, arrete = if (runif(1L) < 0.3) A0 else A)
+}))
+planifies_d11 <- c(lapply(bases_d11, function(b) list(b = b, arrete = A)), lapply(bases_d11, function(b) list(b = b, arrete = A0)), tires_d11)
+rapides_d11 <- lapply(planifies_d11, function(x) bilan_force(ns$controler_base, x))
+ecarts_d11 <- vapply(seq_along(planifies_d11), function(k) !identical(rapides_d11[[k]], bilan_force(env_force$controler_base, planifies_d11[[k]])), NA)
+touche_d11 <- function(code) sum(vapply(rapides_d11, function(r) !is.character(r) && (any(r[[1L]]$code %in% code) || any(r[[2L]]$code %in% code)), NA))
+div_d11 <- c(D11a = touche_d11("D11a"), D11b = touche_d11("D11b"))
+cat("  diversité des 50 bases G2c (chemin rapide) :", paste(names(div_d11), div_d11, sep = " = ", collapse = ", "), "\n")
+verifier_egal("#105, G2c, chemin rapide et chemin forcé de D11a et D11b : 50 bases (10 planifiées, 40 tirées) : bilans identiques, aucune erreur ; D11a et D11b touchés",
+              list(length(planifies_d11), sum(ecarts_d11), sum(vapply(rapides_d11, is.character, NA)), all(div_d11 > 0L)), list(50L, 0L, 0L, TRUE))
+# (13) Q5 d'`actuary`, noyau (.verdict_d14_3() sur le contexte simulé) : SI1 décès, DO1 (G1),
+# G6 double_effet, enfant ME1 scolarisé de 17 ans, conjoint ME2, aucun age_limite pour G6 :
+# parametre_non_defini sans cellule inconnue, sous la situation du conjoint refusée et sous le
+# décès de l'enfant refusé (avant la reprise : non émis dès qu'une cellule de valeur est inconnue)
+base_q5 <- list(sinistres = data.frame(id_sinistre = "SI1", nature_sinistre = "deces", date_survenance = as.numeric(D("2025-01-05")),
+                                       date_instruction = as.numeric(D("2025-02-01")), stringsAsFactors = FALSE),
+                dossiers = data.frame(id_dossier = "DO1", id_sinistre = "SI1", id_garantie_souscrite = "G1", stringsAsFactors = FALSE),
+                garanties_souscrites = data.frame(id_garantie_souscrite = c("G1", "G6"), id_contrat = "C1", code_garantie = c("deces", "double_effet"),
+                                                  college = "a", date_effet = as.numeric(D("2025-01-01")), date_fin = NA, conjoint_vise = c(NA, "marie"),
+                                                  prolongation_handicap = c(NA, FALSE), stringsAsFactors = FALSE),
+                parametres = data.frame(id_garantie_souscrite = "G6", parametre = "autre", valeur = 18, stringsAsFactors = FALSE),
+                famille = data.frame(id_membre = c("ME1", "ME2"), id_sinistre = "SI1", lien = c("enfant", "conjoint"),
+                                     date_naissance = as.numeric(c(D("2007-01-10"), D("1968-01-01"))), situation = c("scolarise", NA),
+                                     date_deces = NA, stringsAsFactors = FALSE))
+verifier_egal("#105, G2b, Q5 (noyau) : parametre_non_defini sans inconnue, sous la situation du conjoint refusée, sous le décès de l'enfant refusé",
+              vapply(list(list(), list("famille.situation" = 2L), list("famille.date_deces" = 1L)),
+                     function(inc) env_g2b$.verdict_d14_3(ctx_g2b(base_q5, inc), la_g2b, FALSE)$non_defini, NA),
+              c(TRUE, TRUE, TRUE))
+# (14) seconde reprise de G2b (actuary R1, E-12 (d)) : parametre_non_defini est recherché aussi sur
+# un sinistre de visibilité non déterminée (il entre dans base_possible) ; base_q5, lien du conjoint
+# ME2 refusé : sinistre retenu (témoin) et sinistre non déterminé dans la vue : émis (avant la
+# reprise : non émis pour le sinistre non déterminé). Émission en trop déclarée par E-12 (d) :
+# enfant ME1 posthume (né le 2026-03-01), décès refusé ; survenance connue : non émis ; survenance
+# refusée aussi : émis, sans affectation qui le justifie (l'enfant posthume est tenu pour non
+# certain dès que la survenance est inconnue)
+q5_post <- within(base_q5, famille$date_naissance[1L] <- as.numeric(D("2026-03-01")))
+q5_post$famille$date_deces[1L] <- as.numeric(D("2026-03-02"))
+nd_q5 <- function(b, inc, nd = list()) env_g2b$.verdict_d14_3(ctx_g2b(b, inc, nd), la_g2b, FALSE)$non_defini
+verifier_egal("#105, G2b, R1 : lien du conjoint refusé, sinistre retenu et sinistre non déterminé dans la vue : parametre_non_defini ; enfant posthume, décès refusé : non émis, survenance refusée aussi : émis (signalement en trop, E-12 (d))",
+              list(nd_q5(base_q5, list("famille.lien" = 2L)), nd_q5(base_q5, list("famille.lien" = 2L), list(sinistres = TRUE)),
+                   nd_q5(q5_post, list("famille.date_deces" = 1L)),
+                   nd_q5(q5_post, list("famille.date_deces" = 1L, "sinistres.date_survenance" = 1L))),
+              list(TRUE, TRUE, FALSE, TRUE))
+# (15) seconde reprise de G2b (audit M2, E-12 (d)) : une version candidate certainement hors vigueur
+# à la survenance ne porte pas parametre_non_defini ; d14_34(age_limite = 10) (ME1 de 14 ans,
+# au-delà de la limite de GS6) et GS7 double_effet sans age_limite, (a) d'effet 2026-01-01, GS6
+# finie le 2025-12-31, (b) de 2010-01-01 à 2014-12-31 ; sans refus et sous la situation du conjoint
+# ME2 refusée (sans rapport avec la limite) : ni détection, ni ligne (avant la reprise : ligne
+# parametre_non_defini sous le refus, dans les deux cas) ; témoin : GS7 d'effet 2025-01-01, GS6
+# finie le 2024-12-31 (GS7 seule en vigueur à la survenance du 2025-01-10) : parametre_non_defini
+gs7_14 <- function(effet, fin = NA, fin6 = NA, sit = FALSE) {
+  b <- d14_34(age_limite = 10)
+  k6 <- b$garanties_souscrites$id_garantie_souscrite == "GS6"
+  g <- b$garanties_souscrites[k6, ]
+  b$garanties_souscrites$date_fin[k6] <- D(fin6)
+  g$id_garantie_souscrite <- "GS7"; g$date_effet <- D(effet); g$date_fin <- D(fin)
+  b$garanties_souscrites <- rbind(b$garanties_souscrites, g)
+  if (sit) b$famille$situation[2L] <- "zzz"
+  r <- controler_base(b, A, s34(1000), cv34)
+  c(co34(r, "D14"), ne34(r, "D14"))
+}
+verifier_egal("#105, G2b, M2 : version double_effet sans age_limite certainement hors vigueur à la survenance (postérieure, antérieure), avec ou sans refus de la situation du conjoint : ni détection, ni parametre_non_defini ; témoin en vigueur : parametre_non_defini, avec ou sans refus",
+              list(gs7_14("2026-01-01", NA, "2025-12-31"), gs7_14("2026-01-01", NA, "2025-12-31", TRUE),
+                   gs7_14("2010-01-01", "2014-12-31"), gs7_14("2010-01-01", "2014-12-31", sit = TRUE),
+                   gs7_14("2025-01-01", NA, "2024-12-31"), gs7_14("2025-01-01", NA, "2024-12-31", TRUE)),
+              c(rep(list(character(0)), 4L), rep(list("sinistres NA parametre_non_defini"), 2L)))
+
+section("donnees : #105, lot V, conversion G2c : D11a et D11b en logique de Kleene (M808, M811 ; spécification `donnees`, erratum `1.9.7`, E-13)")
+# (1) refus de valeur sur une colonne lue par le seul sous-cas du maintien (.LIT_MAINTIEN_D11) : la
+# lecture grossière ne s'applique plus (E-13 (a)) ; aucune ligne (D11a, sinistres, NA) ni (D11b,
+# dossiers, NA) ; une ligne au sous-cas inconnu est écartée par le mécanisme commun, cause = motif
+# du refus (ligne (D11a, sinistres, date_survenance) ou (D11b, dossiers, id_garantie_souscrite)).
+# Bases : mm34() (SI1 non détecté, sous-cas vrai), maint34("2024-09-01", maintien = TRUE) (sortie EV3
+# de SI2 avant la fin de AF1 : SI1 détecté), cadres_m34(TRUE) (D11b, DO1 non détecté, sous-cas vrai
+# restreint au collège cadres). Les cas lecture grossière (type_incompatible, C11-9, C81-5) sont
+# rejoués inchangés plus haut. La date de saisie de EV3 refusée ne change pas le verdict (E-13 (b))
+cb_g2c <- function(b, a = A) controler_base(b, a, s34(1000), cv34)
+d11_g2c <- function(b, a = A) { r <- cb_g2c(b, a); list(co34(r, "D11a"), ne34(r, "D11a"), co34(r, "D11b"), ne34(r, "D11b")) }
+mms_g2c <- maint34("2024-09-01", maintien = TRUE)
+refus_g2c <- list(
+  nature_si1 = within(mm34(), sinistres$nature_sinistre[1L] <- "zzz"), nature_si2 = within(mm34(), sinistres$nature_sinistre[2L] <- "zzz"),
+  maintien = within(mm34(), garanties_souscrites$maintien_deces[1L] <- NA),
+  code = within(mm34(), garanties_souscrites$code_garantie[1L] <- "zzz"), college = within(mm34(), garanties_souscrites$college[1L] <- "a b"),
+  effet = within(mm34(), garanties_souscrites$date_effet[1L] <- D("1850-01-01")),
+  fin = within(mm34(), garanties_souscrites$date_fin[1L] <- D("1850-01-01")),
+  type = within(mms_g2c, evenements$type_evenement[3L] <- "zzz"), date = within(mms_g2c, evenements$date_effet[3L] <- D("1850-01-01")))
+motif_g2c <- c(nature_si1 = "hors_domaine", nature_si2 = "hors_domaine", maintien = "manquant_obligatoire", code = "hors_domaine",
+               college = "hors_domaine", effet = "D02c", fin = "D02c", type = "hors_domaine", date = "D02c")
+r_refus_g2c <- lapply(refus_g2c, d11_g2c)
+verifier_egal("#105, G2c (1), E-13 (a) : refus de valeur sur nature_sinistre (décès, arrêt), maintien_deces, code_garantie, college, date_effet, date_fin de la garantie, type_evenement et date_effet de l'événement : aucune ligne (D11a, sinistres, NA), SI1 écarté, (D11a, sinistres, date_survenance) de cause le motif ; D11b inchangé",
+              r_refus_g2c, lapply(motif_g2c, function(m) list(character(0), paste("sinistres date_survenance", m), character(0), character(0))))
+verifier_egal("#105, G2c (1), E-13 (b) : date de saisie de EV3 refusée (D02c) : même verdict que sans refus (SI1 détecté, aucune ligne)",
+              d11_g2c(within(mms_g2c, evenements$date_saisie[3L] <- D("1850-01-01"))), d11_g2c(mms_g2c))
+cm_g2c <- cadres_m34(TRUE)
+refus_b_g2c <- list(maintien = within(cm_g2c, garanties_souscrites$maintien_deces[5L] <- NA),
+                    nature_si1 = within(cm_g2c, sinistres$nature_sinistre[1L] <- "zzz"), nature_si2 = within(cm_g2c, sinistres$nature_sinistre[2L] <- "zzz"),
+                    college_gs5 = within(cm_g2c, garanties_souscrites$college[5L] <- "a b"))
+verifier_egal("#105, G2c (1), D11b : maintien_deces de GS5, nature de SI1 et de SI2, collège de GS5 refusés : aucune ligne (D11b, dossiers, NA), DO1 écarté, (D11b, dossiers, id_garantie_souscrite) de cause le motif ; DO3 détecté",
+              lapply(refus_b_g2c, d11_g2c),
+              lapply(c(maintien = "manquant_obligatoire", nature_si1 = "hors_domaine", nature_si2 = "hors_domaine", college_gs5 = "hors_domaine"),
+                     function(m) list(character(0), character(0), rep("dossiers exacte DO3", 2L), paste("dossiers id_garantie_souscrite", m))))
+# (2) sous-cas inconnu par une seule valeur refusée, pour D11a avec dossier, D11a sans dossier (SI1
+# sans dossier : la couverture par tout contrat) et D11b : maintien_deces refusé, nature du décès
+# refusée, nature de l'arrêt refusée, type de la sortie EV3 refusé (SI2 fini à la fin de AF1 si
+# c'est une sortie), date d'effet de la rechute EV7 refusée (sortie EV3 puis rechute EV7 : en cours
+# si la rechute précède la fin) ; témoins sans refus : sous-cas vrai (non détecté) ou faux (détecté)
+sans_g2c <- function(b) within(b, {
+  dossiers <- dossiers[dossiers$id_sinistre != "SI1", ]
+  evenements <- evenements[!(evenements$id_sinistre %in% "SI1") | is.na(evenements$id_dossier), ]
+})
+rech_g2c <- function(b) ev34(b, id_evenement = "EV7", id_sinistre = "SI2", type_evenement = "rechute", date_effet = D("2024-10-01"),
+                             date_saisie = D("2024-10-02"))
+sortie_g2c <- function(b) ev34(b, id_evenement = "EV3", id_sinistre = "SI2", type_evenement = "sortie", date_effet = D("2024-09-01"),
+                               date_saisie = D("2024-09-02"), motif = "reprise_travail")
+cas_g2c <- function(b0, avec_ev3) list(
+  temoin = b0, maintien = within(b0, garanties_souscrites$maintien_deces[garanties_souscrites$maintien_deces %in% TRUE] <- NA),
+  nature_deces = within(b0, sinistres$nature_sinistre[1L] <- "zzz"), nature_arret = within(b0, sinistres$nature_sinistre[2L] <- "zzz"),
+  type_sortie = { b <- if (avec_ev3) b0 else sortie_g2c(b0); b$evenements$type_evenement[b$evenements$id_evenement == "EV3"] <- "zzz"; b },
+  date_rechute = { b <- rech_g2c(if (avec_ev3) within(b0, evenements$date_effet[3L] <- D("2024-09-01")) else sortie_g2c(b0))
+    b$evenements$date_effet[b$evenements$id_evenement == "EV7"] <- D("1850-01-01"); b })
+sous_g2c <- list(d11a = lapply(cas_g2c(mm34(), FALSE), function(b) d11_g2c(b)[1:2]),
+                 d11a_sans = lapply(cas_g2c(sans_g2c(mm34()), FALSE), function(b) d11_g2c(b)[1:2]),
+                 d11b = lapply(cas_g2c(cm_g2c, FALSE), function(b) d11_g2c(b)[3:4]))
+attendu_a <- function(m) list(character(0), paste("sinistres date_survenance", m))
+attendu_b <- function(m) list(rep("dossiers exacte DO3", 2L), paste("dossiers id_garantie_souscrite", m))
+motifs_sous <- c(maintien = "manquant_obligatoire", nature_deces = "hors_domaine", nature_arret = "hors_domaine", type_sortie = "hors_domaine",
+                 date_rechute = "D02c")
+verifier_egal("#105, G2c (2), E-13 (b) et (c) : D11a avec dossier, D11a sans dossier, D11b : maintien_deces, nature du décès, nature de l'arrêt, type de la sortie, date de la rechute refusés : sous-cas inconnu, ligne écartée, cause = motif ; témoins : sous-cas vrai, non détecté",
+              sous_g2c,
+              list(d11a = c(list(temoin = list(character(0), character(0))), lapply(motifs_sous, attendu_a)),
+                   d11a_sans = c(list(temoin = list(character(0), character(0))), lapply(motifs_sous, attendu_a)),
+                   d11b = c(list(temoin = list(rep("dossiers exacte DO3", 2L), character(0))), lapply(motifs_sous, attendu_b))))
+# déterminé malgré le refus (E-13 (c)) : sortie EV3 (2024-09-01) puis rechute EV7 (2024-10-01) ; EV8 de
+# type refusé daté du 2024-08-01, qui ne peut pas suivre le dernier retenu EV7 : SI1 non détecté,
+# aucune ligne ; daté du 2024-11-01 (peut suivre, avant la fin de AF1) : écarté, hors_domaine
+ev8_g2c <- function(effet) ev34(rech_g2c(mms_g2c), id_evenement = "EV8", id_sinistre = "SI2", type_evenement = "zzz", date_effet = D(effet),
+                                date_saisie = D(effet) + 1)
+verifier_egal("#105, G2c (2), E-13 (c) : événement de type refusé qui ne peut pas suivre le dernier retenu : verdict déterminé (SI1 non détecté, aucune ligne) ; qui peut le suivre : SI1 écarté, hors_domaine",
+              list(d11_g2c(ev8_g2c("2024-08-01"))[1:2], d11_g2c(ev8_g2c("2024-11-01"))[1:2]),
+              list(list(character(0), character(0)), list(character(0), "sinistres date_survenance hors_domaine")))
+# (3) constat de simulation (graine 20261126) : D11a (.verdict_d11(), chemin forcé, contexte simulé de
+# la section G2b) contre l'énumération exhaustive (dates quotidiennes sur 15 jours, types du
+# domaine, natures du domaine, collège opaque a, b et deux valeurs neuves, maintien vrai ou faux,
+# présence) : SI1 décès (DO1 sur G1, C1, collège a), SI2 arrêt, AF1 (début, fin), G1 (effet,
+# maintien), zéro à trois événements de SI2 (sortie, rechute, passage_invalidite) ; zéro à trois
+# cellules inconnues tirées. Aucun verdict déterminé contraire à l'oracle ; sans cellule d'événement
+# (fin, décès, survenance de l'arrêt, maintien, natures, collège inconnus ; événements de date
+# connue), verdict et cellules pertinentes égaux à l'oracle (E-13 (d), exact) ; nombre de cas
+# inconnus d'oracle déterminé (approximation E-13 (c)) rapporté
+env_g2c <- env_g2b
+sim_d11a <- function(nb, graine = 20261126L) ns$avec_graine(graine, lapply(seq_len(nb), function(k) {
+  dom_type <- ns$.domaine3(list(dico = d), "evenements", "type_evenement")
+  dom_nat <- ns$.domaine3(list(dico = d), "sinistres", "nature_sinistre")
+  deb <- sample(J[1:5], 1L); fin <- sample(J[3:11], 1L); s1 <- sample(J[6:15], 1L); s2 <- sample(J[1:12], 1L)
+  ne <- sample(0:3, 1L)
+  ev <- data.frame(id_evenement = sprintf("E%d", seq_len(ne)), id_sinistre = rep("SI2", ne),
+                   type_evenement = sample(c("sortie", "rechute", "passage_invalidite"), ne, replace = TRUE, prob = c(0.45, 0.4, 0.15)),
+                   date_effet = J[sample.int(length(J), ne, replace = TRUE)], date_saisie = max(J) + seq_len(ne), stringsAsFactors = FALSE)
+  base <- list(sinistres = data.frame(id_sinistre = c("SI1", "SI2"), id_assure = "AS1", nature_sinistre = c("deces", "arret_travail"),
+                                      date_survenance = c(s1, s2), stringsAsFactors = FALSE),
+               dossiers = data.frame(id_dossier = "DO1", id_sinistre = "SI1", id_garantie_souscrite = "G1", stringsAsFactors = FALSE),
+               garanties_souscrites = data.frame(id_garantie_souscrite = "G1", id_contrat = "C1", code_garantie = "deces", college = "a",
+                                                 date_effet = sample(J[1:4], 1L), date_fin = NA_real_, maintien_deces = runif(1L) < 0.7,
+                                                 stringsAsFactors = FALSE),
+               affiliations = data.frame(id_affiliation = "AF1", id_assure = "AS1", id_contrat = "C1", college = "a", date_debut = deb,
+                                         date_fin = fin, stringsAsFactors = FALSE),
+               evenements = ev)
+  cel <- tirer_g2b(c("s1", "s2", "deb", "fin", "mt", "eg", "n1", "n2", "col",
+                     if (ne > 0L) as.vector(outer(c("type", "date", "p"), seq_len(ne), paste, sep = "|"))), 3L)
+  inc <- list(); nd <- list(evenements = rep(FALSE, ne)); doms <- list()
+  ajouter <- function(tc, j, dom) { inc[[tc]] <<- c(inc[[tc]], j); doms[[paste0(tc, "\r", j)]] <<- dom }
+  for (z in cel) {
+    y <- strsplit(z, "|", fixed = TRUE)[[1L]]
+    switch(y[1L], s1 = ajouter("sinistres.date_survenance", 1L, J), s2 = ajouter("sinistres.date_survenance", 2L, J),
+           deb = ajouter("affiliations.date_debut", 1L, J), fin = ajouter("affiliations.date_fin", 1L, c(J, NA)),
+           mt = ajouter("garanties_souscrites.maintien_deces", 1L, c(TRUE, FALSE)), eg = ajouter("garanties_souscrites.date_effet", 1L, J),
+           n1 = ajouter("sinistres.nature_sinistre", 1L, dom_nat), n2 = ajouter("sinistres.nature_sinistre", 2L, dom_nat),
+           col = ajouter("affiliations.college", 1L, c("a", "b", "x", "y")),
+           type = ajouter("evenements.type_evenement", as.integer(y[2L]), dom_type), date = ajouter("evenements.date_effet", as.integer(y[2L]), J),
+           p = { nd$evenements[as.integer(y[2L])] <- TRUE; doms[[paste0("evenements\r", y[2L])]] <- c(TRUE, FALSE) })
+  }
+  r <- env_g2c$.verdict_d11(ctx_g2b(base, inc, nd), character(0), forcer = TRUE)
+  noyau <- list(v = as.vector(r)[1L], pert = pert_ip(attr(r, "index_pertinent"), 1L))
+  te <- d$types_evenements
+  o <- enum_g2b(doms, function(g) vapply(seq_len(nrow(g)), function(i) {
+    gi <- g[i, , drop = FALSE]
+    v <- function(t, c1, l) val_g2b(gi, paste0(t, ".", c1, "\r", l), base[[t]][[c1]][l])
+    s1 <- v("sinistres", "date_survenance", 1L); de <- v("affiliations", "date_debut", 1L); fi <- v("affiliations", "date_fin", 1L)
+    if (de <= s1 & (is.na(fi) | s1 <= fi)) return(FALSE)
+    if (!(v("sinistres", "nature_sinistre", 1L) %in% "deces") || is.na(fi) || !(fi < s1)) return(TRUE)
+    en_cours <- function(s, t, strict) {
+      if (s != 2L || ne == 0L) return(TRUE)
+      typ <- vapply(seq_len(ne), function(e) v("evenements", "type_evenement", e), "")
+      dt <- vapply(seq_len(ne), function(e) v("evenements", "date_effet", e), 0)
+      pr <- vapply(seq_len(ne), function(e) val_g2b(gi, paste0("evenements\r", e), TRUE), NA)
+      k <- which(pr & typ %in% c("sortie", "rechute") & (if (strict) dt < t else dt <= t))
+      if (length(k) == 0L) return(TRUE)
+      k <- k[order(dt[k], te$ordre[match(typ[k], te$type_evenement)], ev$date_saisie[k], method = "radix")]
+      typ[k[length(k)]] != "sortie"
+    }
+    !any(vapply(1:2, function(s) {
+      sv <- v("sinistres", "date_survenance", s)
+      v("sinistres", "nature_sinistre", s) %in% "arret_travail" && de <= sv && sv <= fi && v("affiliations", "college", 1L) == "a" &&
+        v("garanties_souscrites", "date_effet", 1L) <= sv && isTRUE(v("garanties_souscrites", "maintien_deces", 1L)) &&
+        en_cours(s, fi, FALSE) && en_cours(s, s1, TRUE)
+    }, NA))
+  }, NA))
+  list(exact = !any(grepl("^evenements", names(doms))), egal = egal_g2b(noyau, o), noyau = noyau$v, oracle = o$v)
+}))
+x_d11a <- sim_d11a(400L)
+ex_d11a <- vapply(x_d11a, `[[`, NA, "exact")
+contraire_d11a <- vapply(x_d11a, function(z) !is.na(z$noyau) && !identical(z$noyau, z$oracle), NA)
+approx_d11a <- vapply(x_d11a, function(z) is.na(z$noyau) && !is.na(z$oracle), NA)
+cat("  G2c, oracle D11a : 400 cas,", sum(ex_d11a), "sans cellule d'événement ;", sum(approx_d11a),
+    "inconnus d'oracle déterminé (approximation E-13 (c))\n")
+verifier_egal("#105, G2c (3), constat de simulation (graine 20261126) : D11a 400 cas : aucun verdict déterminé contraire à l'oracle ; sans cellule d'événement, verdict et cellules pertinentes égaux à l'oracle (exact, E-13 (d))",
+              list(sum(contraire_d11a), all(vapply(x_d11a[ex_d11a], `[[`, NA, "egal"))), list(0L, TRUE))
+# (4) .couverture3() avec `college` et `inconnues` (E-13 (e)) contre l'énumération exhaustive
+# (graine 20261126) : une ou deux affiliations de AS1 (collège a ou b), date, début, fin, collège
+# de chaque affiliation, collège de l'élément (a) et présence tirés inconnus (trois au plus) ;
+# verdict « il existe une couverture dans ce collège » et cellules pertinentes
+sim_cvc <- function(nb) ns$avec_graine(20261126L, vapply(seq_len(nb), function(k) {
+  ma <- sample(1:2, 1L)
+  db <- sample(J, ma, replace = TRUE)
+  af <- data.frame(id_affiliation = paste0("A", 1:ma), id_assure = "AS1", id_contrat = "C1", college = sample(c("a", "b"), ma, replace = TRUE),
+                   date_debut = db, date_fin = ifelse(runif(ma) < 0.4, NA, pmin(db + sample(0:8, ma, replace = TRUE), max(J))),
+                   stringsAsFactors = FALSE)
+  d0 <- sample(J, 1L)
+  cel <- tirer_g2b(c("d", "ce", as.vector(outer(c("date_debut", "date_fin", "college", "p"), 1:ma, paste, sep = "|"))), 3L)
+  inc <- list(); nd <- list(affiliations = rep(FALSE, ma)); doms <- list()
+  for (z in cel) {
+    if (z == "d") { doms[["sinistres.date_survenance\r1"]] <- J; next }
+    if (z == "ce") { doms[["garanties_souscrites.college\r9"]] <- c("a", "b", "x", "y"); next }
+    y <- strsplit(z, "|", fixed = TRUE)[[1L]]; l <- as.integer(y[2L])
+    if (y[1L] == "p") { nd$affiliations[l] <- TRUE; doms[[paste0("affiliations\r", l)]] <- c(TRUE, FALSE); next }
+    tc <- paste0("affiliations.", y[1L])
+    inc[[tc]] <- c(inc[[tc]], l)
+    doms[[paste0(tc, "\r", l)]] <- switch(y[1L], date_debut = J, date_fin = c(J, NA), college = c("a", "b", "x", "y"))
+  }
+  ctx <- ctx_g2b(list(affiliations = af), inc, nd)
+  did <- if ("d" %in% cel) "sinistres.date_survenance\r1" else NA_character_
+  cid <- if ("ce" %in% cel) "garanties_souscrites.college\r9" else NA_character_
+  cv <- env_g2c$.couverture3(ctx, "AS1", d0, college = "a", inconnues = list(date = did, college = cid))
+  fe <- attr(cv, "feuilles")
+  noyau <- ns$.arbre3(if (length(fe) > 0L) ns$.noeud3("ou", fe) else ns$.constante3(FALSE))
+  o <- enum_g2b(doms, function(g) {
+    dt <- val_g2b(g, "sinistres.date_survenance\r1", d0); ce <- val_g2b(g, "garanties_souscrites.college\r9", "a")
+    Reduce(`|`, lapply(1:ma, function(l) {
+      v <- function(c1) val_g2b(g, paste0("affiliations.", c1, "\r", l), af[[c1]][l])
+      fi <- v("date_fin")
+      val_g2b(g, paste0("affiliations\r", l), TRUE) & v("date_debut") <= dt & (is.na(fi) | dt <= fi) & v("college") == ce
+    }), FALSE)
+  })
+  egal_g2b(noyau, o)
+}, NA))
+verifier_egal("#105, G2c (4), constat de simulation (graine 20261126) : .couverture3(college, inconnues) 300 cas : verdict et cellules pertinentes égaux à l'énumération exhaustive",
+              sum(sim_cvc(300L)), 300L)
+# (5) collège refusé sur l'affiliation (appel interne, contexte simulé : DO1 sur G5, C1 collège cadres ;
+# AF1 de AS1 à C1, collège ensemble, couvre SI1 : D11b vrai) : collège de AF1 inconnu : inconnu,
+# pertinent affiliations.college ; collège de G5 inconnu : inconnu, pertinent garanties_souscrites.college ;
+# nature de C1 inconnue : inconnu, pertinente ; maintien_deces refusé de valeur brute TRUE (AF2 cadres
+# finie avant le décès, arrêt SI2 en cours) : jamais « sous-cas vrai » (inconnu) ; témoins
+base_b_g2c <- function(maintien = FALSE) list(
+  sinistres = data.frame(id_sinistre = c("SI1", "SI2"), id_assure = "AS1", nature_sinistre = c("deces", "arret_travail"),
+                         date_survenance = c(J[12], J[3]), stringsAsFactors = FALSE),
+  dossiers = data.frame(id_dossier = "DO1", id_sinistre = "SI1", id_garantie_souscrite = "G5", stringsAsFactors = FALSE),
+  garanties_souscrites = data.frame(id_garantie_souscrite = "G5", id_contrat = "C1", code_garantie = "deces", college = "cadres",
+                                    date_effet = J[1], date_fin = NA_real_, maintien_deces = maintien, stringsAsFactors = FALSE),
+  contrats = data.frame(id_contrat = "C1", id_assure = NA_character_, nature_contrat = "collectif_obligatoire", date_effet = J[1],
+                        date_fin = NA_real_, date_terme = NA_real_, stringsAsFactors = FALSE),
+  affiliations = data.frame(id_affiliation = c("AF1", "AF2"), id_assure = "AS1", id_contrat = "C1", college = c("ensemble", "cadres"),
+                            date_debut = c(J[10], J[1]), date_fin = c(NA, J[8]), stringsAsFactors = FALSE),
+  evenements = data.frame(id_evenement = character(0), id_sinistre = character(0), type_evenement = character(0), date_effet = numeric(0),
+                          date_saisie = numeric(0), stringsAsFactors = FALSE))
+v11b_g2c <- function(inc, maintien = FALSE) {
+  r <- env_g2c$.verdict_d11b(ctx_g2b(base_b_g2c(maintien), inc), character(0), forcer = TRUE)
+  list(as.vector(r)[1L], as.character(pert_ip(attr(r, "index_pertinent"), 1L)))
+}
+verifier_egal("#105, G2c (5), D11b (appel interne) : témoin vrai ; collège de AF1 refusé : inconnu (affiliations.college 1) ; collège de G5 refusé : inconnu (garanties_souscrites.college 1) ; nature de C1 refusée : inconnu (contrats.nature_contrat 1) ; maintien TRUE : faux (sous-cas vrai) ; maintien refusé de valeur brute TRUE : inconnu",
+              list(v11b_g2c(list()), v11b_g2c(list("affiliations.college" = 1L)), v11b_g2c(list("garanties_souscrites.college" = 1L)),
+                   v11b_g2c(list("contrats.nature_contrat" = 1L)), v11b_g2c(list(), TRUE),
+                   v11b_g2c(list("garanties_souscrites.maintien_deces" = 1L), TRUE)),
+              list(list(TRUE, character(0)), list(NA, "affiliations.college\r1"), list(NA, "garanties_souscrites.college\r1"),
+                   list(NA, "contrats.nature_contrat\r1"), list(FALSE, character(0)), list(NA, "garanties_souscrites.maintien_deces\r1")))
+# de bout en bout : collège de GS5 refusé (D11b positif de C81-4) : DO1 écarté, hors_domaine ; nature de
+# CT1 refusée : écarté (un contrat de nature inconnue peut être individuel, E-13 (b))
+verifier_egal("#105, G2c (5), D11b de bout en bout : collège de la garantie du dossier refusé, nature du contrat refusée : DO1 écarté, (D11b, dossiers, id_garantie_souscrite) hors_domaine ; témoin : DO1 détecté",
+              list(d11_g2c(cadres34(base_ref))[3:4], d11_g2c(within(cadres34(base_ref), garanties_souscrites$college[5L] <- "a b"))[3:4],
+                   d11_g2c(within(cadres34(base_ref), contrats$nature_contrat[1L] <- "zzz"))[3:4]),
+              list(list(rep("dossiers exacte DO1", 2L), character(0)), list(character(0), "dossiers id_garantie_souscrite hors_domaine"),
+                   list(character(0), "dossiers id_garantie_souscrite hors_domaine")))
+# maintien_deces refusé de valeur brute TRUE sur D11a (appel interne, base de (3) sans événement,
+# sous-cas vrai sans refus) : inconnu, jamais vrai ; date de saisie et identifiant d'un événement
+# refusés : verdict identique (E-13 (b))
+base_a_g2c <- list(
+  sinistres = data.frame(id_sinistre = c("SI1", "SI2"), id_assure = "AS1", nature_sinistre = c("deces", "arret_travail"),
+                         date_survenance = c(J[12], J[3]), stringsAsFactors = FALSE),
+  dossiers = data.frame(id_dossier = "DO1", id_sinistre = "SI1", id_garantie_souscrite = "G1", stringsAsFactors = FALSE),
+  garanties_souscrites = data.frame(id_garantie_souscrite = "G1", id_contrat = "C1", code_garantie = "deces", college = "a", date_effet = J[1],
+                                    date_fin = NA_real_, maintien_deces = TRUE, stringsAsFactors = FALSE),
+  affiliations = data.frame(id_affiliation = "AF1", id_assure = "AS1", id_contrat = "C1", college = "a", date_debut = J[1], date_fin = J[8],
+                            stringsAsFactors = FALSE),
+  evenements = data.frame(id_evenement = c("E1", "E2"), id_sinistre = "SI2", type_evenement = c("sortie", "rechute"), date_effet = c(J[4], J[4]),
+                          date_saisie = c(J[5], J[6]), stringsAsFactors = FALSE))
+v11a_g2c <- function(inc) {
+  r <- env_g2c$.verdict_d11(ctx_g2b(base_a_g2c, inc), character(0), forcer = TRUE)
+  list(as.vector(r)[1L], as.character(pert_ip(attr(r, "index_pertinent"), 1L)))
+}
+verifier_egal("#105, G2c (5), D11a (appel interne) : sortie E1 et rechute E2 du même jour (rechute après la sortie, § 4.2) : sous-cas vrai, faux ; maintien refusé de valeur brute TRUE : inconnu ; date de saisie, identifiant de E1 ou de E2 refusés : faux, comme sans refus",
+              list(v11a_g2c(list()), v11a_g2c(list("garanties_souscrites.maintien_deces" = 1L)), v11a_g2c(list("evenements.date_saisie" = 1:2)),
+                   v11a_g2c(list("evenements.id_evenement" = 1:2))),
+              list(list(FALSE, character(0)), list(NA, "garanties_souscrites.maintien_deces\r1"), list(FALSE, character(0)),
+                   list(FALSE, character(0))))
+# --- Reprise de G2c : budget du conditionnement de .arbre3() (erratum E-14, C-E14-1 à C-E14-6) ;
+# réserves R1 à R3 d'`actuary` ; constats m1 à m3 de l'audit ; Q1 (a) en échec attendu (#173) ---
+B_e14 <- ns$.BUDGET_ARBRE3
+journal_e14 <- new.env()
+# copie de .arbre3() de budget `budget` (et `lineaire`) qui note les arbres évalués, les arbres
+# approchés (C sans toutes les cellules partagées, ou feuille au-delà du budget), le plus grand
+# décompte W, le plus grand décompte W avec toutes les cellules partagées (champ interne `w_inf`)
+# et ceux des arbres approchés ; avec_budget_e14() l'installe dans `env` le temps d'évaluer `expr`
+arbre3_budget_e14 <- function(budget, lineaire = TRUE) {
+  f <- ns$.arbre3
+  function(arbre, ordre = "sinistres.date_survenance") {
+    x <- f(arbre, ordre, budget = budget, lineaire = lineaire)
+    journal_e14$n <- journal_e14$n + 1L
+    approche <- !x$exact || any(x$grilles > budget)
+    journal_e14$approche <- journal_e14$approche + approche
+    journal_e14$w <- max(journal_e14$w, x$w)
+    journal_e14$w_inf <- max(journal_e14$w_inf, x$w_inf)
+    if (approche) journal_e14$w_inf_approches <- c(journal_e14$w_inf_approches, x$w_inf)
+    x
+  }
+}
+avec_budget_e14 <- function(budget, expr, lineaire = TRUE, env = env_g2b) {
+  journal_e14$n <- 0L
+  journal_e14$approche <- 0L
+  journal_e14$w <- 0
+  journal_e14$w_inf <- 0
+  journal_e14$w_inf_approches <- numeric(0)
+  ancien <- get(".arbre3", envir = env)
+  assign(".arbre3", arbre3_budget_e14(budget, lineaire), envir = env)
+  on.exit(assign(".arbre3", ancien, envir = env))
+  expr
+}
+etat_e14 <- function() c(n = journal_e14$n, approche = journal_e14$approche)
+# approximation sûre (E-14 (d)) : verdict déterminé égal à l'oracle, cellules pertinentes de
+# l'oracle comprises dans celles du noyau, verdict inconnu à pertinence non vide
+sur_g2b <- function(x, y) (is.na(x$v) || identical(x$v, y$v)) && all(as.character(y$pert) %in% as.character(x$pert)) &&
+  (!is.na(x$v) || length(x$pert) > 0L)
+# (m1, R2) oracle du collège : D11a et D11b (chemin forcé) contre l'énumération exhaustive (graine
+# 20261127) : DO1 de SI1 (décès de AS1) sur G5 (C1, collège tiré, maintien tiré) ; G6 (C1,
+# ensemble, maintien tiré) ; AF1 et AF2 (AS1, C1, collèges, débuts, fins tirés) ; SI2 (arrêt, aucun
+# événement) ; cellules tirées parmi les collèges de AF1, AF2 et G5, la fin de AF1 et la survenance
+# du décès (trois au plus). Collège : colonne obligatoire, domaine ensemble, cadres et deux valeurs
+# neuves, sans l'absence (.feuille_college3(), comme .versions3()). Rend, par cas, l'égalité (ou
+# l'approximation sûre, selon egal_g2b) de D11a et de D11b.
+dom_col_e14 <- c("ensemble", "cadres", "x", "y")
+base_col_e14 <- function(col_aff, col_gs, deb, fin, s1, s2, mt) list(
+  sinistres = data.frame(id_sinistre = c("SI1", "SI2"), id_assure = "AS1", nature_sinistre = c("deces", "arret_travail"),
+                         date_survenance = c(s1, s2), stringsAsFactors = FALSE),
+  dossiers = data.frame(id_dossier = "DO1", id_sinistre = "SI1", id_garantie_souscrite = "G5", stringsAsFactors = FALSE),
+  garanties_souscrites = data.frame(id_garantie_souscrite = c("G5", "G6"), id_contrat = "C1", code_garantie = "deces",
+                                    college = c(col_gs, "ensemble"), date_effet = J[1], date_fin = NA_real_, maintien_deces = mt,
+                                    stringsAsFactors = FALSE),
+  contrats = data.frame(id_contrat = "C1", id_assure = NA_character_, nature_contrat = "collectif_obligatoire", date_effet = J[1],
+                        date_fin = NA_real_, date_terme = NA_real_, stringsAsFactors = FALSE),
+  affiliations = data.frame(id_affiliation = c("AF1", "AF2"), id_assure = "AS1", id_contrat = "C1", college = col_aff, date_debut = deb,
+                            date_fin = fin, stringsAsFactors = FALSE),
+  evenements = data.frame(id_evenement = character(0), id_sinistre = character(0), type_evenement = character(0), date_effet = numeric(0),
+                          date_saisie = numeric(0), stringsAsFactors = FALSE))
+sim_col_e14 <- function(nb) ns$avec_graine(20261127L, lapply(seq_len(nb), function(k) {
+  mt <- runif(2L) < 0.6
+  b <- base_col_e14(sample(c("ensemble", "cadres"), 2L, TRUE), sample(c("ensemble", "cadres"), 1L), sample(J[1:6], 2L, TRUE),
+                    ifelse(runif(2L) < 0.3, NA, sample(J[5:12], 2L, TRUE)), sample(J[8:15], 1L), sample(J[1:10], 1L), mt)
+  cel <- tirer_g2b(c("ac1", "ac2", "gc", "f1", "s1"), 3L)
+  inc <- list(); doms <- list()
+  ajouter <- function(tc, j, dom) { inc[[tc]] <<- c(inc[[tc]], j); doms[[paste0(tc, "\r", j)]] <<- dom }
+  for (z in cel) switch(z, ac1 = ajouter("affiliations.college", 1L, dom_col_e14), ac2 = ajouter("affiliations.college", 2L, dom_col_e14),
+                        gc = ajouter("garanties_souscrites.college", 1L, dom_col_e14), f1 = ajouter("affiliations.date_fin", 1L, c(J, NA)),
+                        s1 = ajouter("sinistres.date_survenance", 1L, J))
+  ctx <- ctx_g2b(b, inc)
+  noyau <- function(r) list(v = as.vector(r)[1L], pert = pert_ip(attr(r, "index_pertinent"), 1L))
+  na <- noyau(env_g2c$.verdict_d11(ctx, character(0), forcer = TRUE))
+  nb_ <- noyau(env_g2c$.verdict_d11b(ctx, character(0), forcer = TRUE))
+  oracle <- function(d11b) enum_g2b(doms, function(g) {
+    v <- function(t, c1, l) val_g2b(g, paste0(t, ".", c1, "\r", l), b[[t]][[c1]][l])
+    s1 <- v("sinistres", "date_survenance", 1L)
+    s2 <- b$sinistres$date_survenance[2L]
+    cg <- v("garanties_souscrites", "college", 1L)
+    aff <- lapply(1:2, function(a) list(col = v("affiliations", "college", a), deb = v("affiliations", "date_debut", a),
+                                        fin = v("affiliations", "date_fin", a)))
+    couvre <- function(x, d) x$deb <= d & (is.na(x$fin) | d <= x$fin)
+    # paire (affiliation, arrêt SI2) du sous-cas : fin antérieure au décès, arrêt survenu pendant
+    # l'affiliation, maintien_deces TRUE d'une version (G5, G6 ; en vigueur) de même collège
+    paire <- function(x) !is.na(x$fin) & x$fin < s1 & couvre(x, s2) & ((cg == x$col & mt[1L]) | ("ensemble" == x$col & mt[2L])) &
+      (if (d11b) x$col == cg else TRUE)
+    sous <- Reduce(`|`, lapply(aff, paire))
+    if (!d11b) return(!Reduce(`|`, lapply(aff, couvre, s1)) & !sous)
+    !Reduce(`|`, lapply(aff, function(x) couvre(x, s1) & x$col == cg)) & Reduce(`|`, lapply(aff, function(x) couvre(x, s1) & x$col != cg)) & !sous
+  })
+  c(d11a = egal_g2b(na, oracle(FALSE)), d11b = egal_g2b(nb_, oracle(TRUE)))
+}))
+x_col_e14 <- do.call(rbind, sim_col_e14(300L))
+verifier_egal("#105, G2c, reprise (m1, R2), constat de simulation (graine 20261127) : D11a et D11b 300 cas, collèges de l'affiliation et de la garantie refusés (colonnes obligatoires, sans l'absence), fin, survenance : verdict et cellules pertinentes égaux à l'énumération exhaustive",
+              colSums(x_col_e14), c(d11a = 300, d11b = 300))
+# C-E14-1 : budget infini (argument interne) : identité avec l'exact sur les oracles D10c, D10d, D14,
+# D11a (sans cellule d'événement) et D11b ; au budget B, aucun arbre de ces oracles n'est approché
+d11a_e14 <- function(nb) {
+  x <- sim_d11a(nb)
+  ex <- vapply(x, `[[`, NA, "exact")
+  c(contraire = sum(vapply(x, function(z) !is.na(z$noyau) && !identical(z$noyau, z$oracle), NA)),
+    egal = sum(vapply(x[ex], `[[`, NA, "egal")), exact = sum(ex))
+}
+e14_1 <- avec_budget_e14(Inf, list(sum(sim_d10c(100L)), sum(sim_d10d(100L)), sum(sim_d14(100L)), d11a_e14(150L),
+                                   colSums(do.call(rbind, sim_col_e14(100L)))))
+e14_1d <- avec_budget_e14(B_e14, { sim_d10c(100L); sim_d10d(100L); sim_d14(100L); sim_d11a(150L); sim_col_e14(100L); etat_e14() })
+verifier_egal("#105, E-14, C-E14-1 : budget infini : D10c, D10d, D14 100 cas chacun, D11a 150 cas (sans cellule d'événement), D11a et D11b 100 cas du collège : égaux à l'énumération exhaustive ; au budget B, aucun arbre approché",
+              list(e14_1[1:3], e14_1[[4]][c("contraire", "egal")] - c(0, e14_1[[4]][["exact"]]), e14_1[[5]], e14_1d[["approche"]]),
+              list(list(100L, 100L, 100L), c(contraire = 0, egal = 0), c(d11a = 100, d11b = 100), 0L))
+# C-E14-2 : budget faible forcé (8, 40 et 200) : aucun verdict déterminé contraire à l'oracle,
+# cellules pertinentes de l'oracle comprises, verdict inconnu à pertinence non vide (sur_g2b) ;
+# nombre d'arbres approchés rapporté, strictement positif à chaque budget
+egal_exact_e14 <- egal_g2b
+egal_g2b <- sur_g2b
+e14_2 <- lapply(c(8, 40, 200), function(bu) avec_budget_e14(bu, list(
+  ok = c(sum(sim_d10c(100L)), sum(sim_d10d(100L)), sum(sim_d14(100L)), d11a_e14(150L)[["contraire"]],
+         colSums(do.call(rbind, sim_col_e14(100L)))),
+  etat = etat_e14())))
+egal_g2b <- egal_exact_e14
+cat("  E-14, C-E14-2 : arbres approchés / évalués aux budgets 8, 40, 200 :",
+    paste(vapply(e14_2, function(z) paste(z$etat[["approche"]], z$etat[["n"]], sep = "/"), ""), collapse = ", "), "\n")
+verifier_egal("#105, E-14, C-E14-2 : budget faible forcé (8, 40, 200) : D10c, D10d, D14 100 cas, D11a 150 cas (aucun verdict contraire), D11a et D11b 100 cas du collège : approximation sûre (verdict déterminé exact, pertinence sur-ensemble, inconnu à pertinence non vide) ; des arbres approchés à chaque budget",
+              lapply(e14_2, function(z) list(z$ok, z$etat[["approche"]] > 0L)),
+              rep(list(list(c(100, 100, 100, 0, d11a = 100, d11b = 100), TRUE)), 3L))
+# C-E14-3 : invariance à l'ordre des lignes en mode approché (budget 40, copie de l'espace de noms) :
+# base de l'audit à 7 refus, base du maintien à sortie refusée, bases D10d et D14 à refus ; bilan
+# identique après inversion et après une permutation tirée (graine 131) ; arbres approchés
+env_e14 <- new.env(parent = ns)
+for (nom in ls(ns, all.names = TRUE)) {
+  g0 <- get(nom, envir = ns)
+  if (is.function(g0) && identical(environment(g0), ns)) environment(g0) <- env_e14
+  assign(nom, g0, envir = env_e14)
+}
+refus7_e14 <- function(k = 7L) {
+  b <- maint34("2024-09-01", maintien = TRUE)
+  etapes <- list(function(b) { b$sinistres$date_survenance[1L] <- D("1850-01-01"); b },
+                 function(b) { b$sinistres$date_survenance[2L] <- D("1850-01-01"); b },
+                 function(b) { b$affiliations$date_fin[1L] <- D("1850-01-01"); b },
+                 function(b) { b$garanties_souscrites$maintien_deces[1L] <- NA; b },
+                 function(b) { b$evenements$type_evenement[3L] <- "zzz"; b },
+                 function(b) { b$evenements$type_evenement[1L] <- "zzz"; b },
+                 function(b) { b$affiliations$date_debut[1L] <- D("1850-01-01"); b })
+  for (q in seq_len(k)) b <- etapes[[q]](b)
+  b
+}
+bases_e14 <- list(refus7_e14(5L), within(mm34("2024-09-01"), evenements$date_effet[3L] <- D("1850-01-01")),
+                  sd_v105(function(b) { b$affiliations$date_debut[1L] <- D("1850-01-01"); b$sinistres$date_survenance[1L] <- D("1850-01-01"); b }),
+                  within(d14_34(), { famille$date_naissance[1L] <- D("1850-01-01"); sinistres$date_survenance[1L] <- D("1850-01-01") }))
+e14_3 <- avec_budget_e14(40, list(lapply(bases_e14, function(b) {
+  f <- function(x) env_e14$controler_base(x, A, s34(1000), cv34)
+  r <- f(b)
+  c(inversion = identical(f(inverser_lignes(b)), r), permutation = identical(f(melanger_lignes(b, 131L)), r))
+}), etat_e14()), env = env_e14)
+verifier_egal("#105, E-14, C-E14-3 : budget 40 : 4 bases à refus (7 refus de l'audit jusqu'au cinquième, sortie refusée, D10d, D14) : bilan identique après inversion des lignes et après une permutation tirée (graine 131) ; des arbres approchés",
+              list(e14_3[[1L]], e14_3[[2L]][["approche"]] > 0L), list(rep(list(c(inversion = TRUE, permutation = TRUE)), 4L), TRUE))
+# C-E14-4 : cas de l'audit (7 refus, de bout en bout), D10d (4 dossiers non déterminés), D14 (2
+# enfants) : nombre d'arbres évalués et approchés, décompte W avec toutes les cellules partagées
+# (champ interne `w_inf` de .arbre3(), sans évaluation, sans chronomètre) des arbres approchés, au-
+# dessus de B, et assertion W ≤ B sur le plus grand décompte W(C) des arbres évalués (sans
+# chronomètre ; W ≤ B n'est vrai par construction que si C est non vide, un groupe qui ferait
+# dépasser B n'étant pas pris ; avec C vide, W = décompte(C) n'est pas comparé au budget dans
+# .arbre3() et peut le dépasser : l'assertion porte sur ce cas ; réserve M-1 de l'audit de G3a) ;
+# verdicts inchangés (valeurs de l'évaluation exacte de 8029af5,
+# mesurées : D11a écarté, manquant_obligatoire ; D10d et D14 inconnus, toutes les cellules
+# pertinentes ; D14 sans parametre_non_defini)
+e14_4a <- avec_budget_e14(B_e14, {
+  r <- env_e14$controler_base(refus7_e14(), A, s34(1000), cv34)
+  list(co34(r, "D11a"), co34(r, "D11b"), ne34(r, "D11a"), ne34(r, "D11b"), etat_e14(), range(journal_e14$w_inf_approches),
+       journal_e14$w_inf, journal_e14$w <= B_e14)
+}, env = env_e14)
+d10d_e14 <- function(m) {
+  gs <- data.frame(id_garantie_souscrite = paste0("G", 1:m), id_contrat = paste0("C", 1:m), code_garantie = "invalidite", college = "a",
+                   date_effet = J[1] + 0:(m - 1), date_fin = NA_real_, stringsAsFactors = FALSE)
+  af <- data.frame(id_affiliation = paste0("AF", 1:m), id_assure = "AS1", id_contrat = paste0("C", 1:m), college = "a",
+                   date_debut = J[2] + 0:(m - 1), date_fin = J[8] + 0:(m - 1), stringsAsFactors = FALSE)
+  dos <- data.frame(id_dossier = paste0("DO", 1:m), id_sinistre = "SI1", id_garantie_souscrite = paste0("G", 1:m), stringsAsFactors = FALSE)
+  base <- list(evenements = data.frame(id_evenement = "EV1", id_sinistre = "SI1", type_evenement = "passage_invalidite", stringsAsFactors = FALSE),
+               sinistres = data.frame(id_sinistre = "SI1", id_assure = "AS1", date_survenance = J[5], stringsAsFactors = FALSE),
+               dossiers = dos, garanties_souscrites = gs, affiliations = af)
+  inc <- list("sinistres.date_survenance" = 1L, "garanties_souscrites.date_effet" = 1:m, "affiliations.date_debut" = 1:m,
+              "affiliations.date_fin" = 1:m, "evenements.type_evenement" = 1L)
+  r <- env_g2b$.verdict_d10d(ctx_g2b(base, inc, list(dossiers = rep(TRUE, m), affiliations = rep(FALSE, m))), character(0))
+  list(as.vector(r), length(pert_ip(attr(r, "index_pertinent"), 1L)))
+}
+d14_e14 <- function(m) {
+  base <- list(sinistres = data.frame(id_sinistre = "SI1", nature_sinistre = "deces", date_survenance = J[5],
+                                      date_instruction = as.numeric(D("2025-02-01")), stringsAsFactors = FALSE),
+               dossiers = data.frame(id_dossier = "DO1", id_sinistre = "SI1", id_garantie_souscrite = "G1", stringsAsFactors = FALSE),
+               garanties_souscrites = data.frame(id_garantie_souscrite = c("G1", "G6"), id_contrat = "C1", code_garantie = c("deces", "double_effet"),
+                                                 college = "a", date_effet = c(min(J), J[3]), date_fin = NA, conjoint_vise = c(NA, "marie"),
+                                                 prolongation_handicap = c(NA, FALSE), stringsAsFactors = FALSE),
+               parametres = data.frame(id_garantie_souscrite = "G6", parametre = "age_limite", valeur = 18, stringsAsFactors = FALSE),
+               famille = data.frame(id_membre = c(paste0("ME", 1:m), "MC"), id_sinistre = "SI1", lien = c(rep("enfant", m), "conjoint"),
+                                    date_naissance = c(J_n[1:m], as.numeric(D("1968-01-01"))), situation = c(rep("scolarise", m), NA),
+                                    date_deces = NA_real_, stringsAsFactors = FALSE))
+  inc <- list("sinistres.date_survenance" = 1L, "famille.date_naissance" = 1:m, "famille.situation" = 1:m, "famille.date_deces" = m + 1L,
+              "garanties_souscrites.date_effet" = 2L, "garanties_souscrites.code_garantie" = 1L)
+  x <- env_g2b$.verdict_d14_3(ctx_g2b(base, inc, list(famille = rep(FALSE, m + 1L))), la_g2b, FALSE)
+  list(x$v, length(x$pert[[1L]]))
+}
+e14_4b <- list(avec_budget_e14(B_e14, list(d10d_e14(4L), etat_e14(), journal_e14$w_inf_approches, journal_e14$w_inf, journal_e14$w <= B_e14)),
+               avec_budget_e14(B_e14, list(d14_e14(2L), etat_e14(), journal_e14$w_inf_approches, journal_e14$w_inf, journal_e14$w <= B_e14)))
+cat("  E-14, C-E14-4 : arbres évalués / approchés (7 refus, D10d, D14) :",
+    paste(vapply(list(e14_4a[[5L]], e14_4b[[1L]][[2L]], e14_4b[[2L]][[2L]]), paste, "", collapse = " / "), collapse = " ; "),
+    "; w_inf des arbres approchés :", paste(vapply(list(e14_4a[[6L]], e14_4b[[1L]][[3L]], e14_4b[[2L]][[3L]]), function(z)
+      paste(format(z, big.mark = " "), collapse = ", "), ""), collapse = " ; "), "; B =", format(B_e14, big.mark = " "), "\n")
+verifier_egal("#105, E-14, C-E14-4 : 7 refus de l'audit (de bout en bout) : 3 arbres approchés sur 21 (D11a et D11b ; depuis G3b, sept arbres de plus, non approchés, des règles D07a, D07b et D10f converties ; depuis G3c, deux de plus, non approchés, de D08), w_inf de 6 350 400 à 7 408 800 (> B), W ≤ B ; D10d à 4 dossiers non déterminés : 1 arbre approché sur 1 (w_inf 316 763 136), W ≤ B ; D14 à 2 enfants : 1 arbre approché sur 6 (w_inf 119 439 360), W ≤ B ; verdicts de l'évaluation exacte (D11a écarté, manquant_obligatoire ; D10d inconnu, 18 cellules pertinentes ; D14 inconnu, 8)",
+              list(e14_4a, e14_4b),
+              list(list(character(0), character(0), "sinistres date_survenance manquant_obligatoire", character(0),
+                        c(n = 21L, approche = 3L), c(6350400, 7408800), 7408800, TRUE),
+                   list(list(list(NA, 18L), c(n = 1L, approche = 1L), 316763136, 316763136, TRUE),
+                        list(list(NA, 8L), c(n = 6L, approche = 1L), 119439360, 119439360, TRUE))))
+# C-E14-5 : feuille de l'arrêt en cours (.arret_feuille3()) évaluée événement par événement contre
+# l'énumération de ses cellules (`lineaire` faux), 200 arbres tirés (graine 20261128) : zéro à six
+# événements facultatifs de SI2 (type, date d'effet ou les deux refusés, ou non déterminé) parmi
+# zéro à deux événements connus ; t connu ou inconnu (fin d'affiliation), strict ou non ; la
+# feuille seule, sa négation, ou avec une feuille de seuil ou une seconde feuille de l'arrêt qui
+# lisent t (conditionné) : verdict et cellules pertinentes identiques. Décompte linéaire : 20
+# événements de type refusé, t connu : grille propre de 41 (une issue par type possible et le
+# verdict de base ; l'énumération en compterait 3^20), inconnu, 20 cellules pertinentes
+sim_arret_e14 <- function(nb) ns$avec_graine(20261128L, vapply(seq_len(nb), function(k) {
+  nf <- sample(0:6, 1L)
+  ne <- nf + sample(0:2, 1L)
+  ev <- data.frame(id_evenement = sprintf("E%d", seq_len(ne)), id_sinistre = rep("SI2", ne),
+                   type_evenement = sample(c("sortie", "rechute", "passage_invalidite"), ne, replace = TRUE),
+                   date_effet = J[sample.int(length(J), ne, replace = TRUE)], date_saisie = max(J) + seq_len(ne), stringsAsFactors = FALSE)
+  base <- list(sinistres = data.frame(id_sinistre = c("SI1", "SI2"), id_assure = "AS1", nature_sinistre = c("deces", "arret_travail"),
+                                      date_survenance = c(J[12], J[2]), stringsAsFactors = FALSE), evenements = ev)
+  inc <- list(); nd <- list(evenements = rep(FALSE, ne))
+  for (e in sample.int(ne, nf)) {
+    z <- sample(c("type", "date", "les_deux", "nd"), 1L)
+    if (z %in% c("type", "les_deux")) inc[["evenements.type_evenement"]] <- c(inc[["evenements.type_evenement"]], e)
+    if (z %in% c("date", "les_deux")) inc[["evenements.date_effet"]] <- c(inc[["evenements.date_effet"]], e)
+    if (z == "nd") nd$evenements[e] <- TRUE
+  }
+  ctx <- ctx_g2b(base, inc, nd)
+  ev3 <- env_g2b$.evenements_d11(ctx)
+  tid <- if (runif(1L) < 0.5) "affiliations.date_fin\r1" else NA_character_
+  strict <- runif(1L) < 0.5
+  fe <- env_g2b$.arret_feuille3(ctx, ev3, 2L, sample(J, 1L), tid, strict, range(J), TRUE, "u", new.env())
+  forme <- if (is.na(tid)) sample(1:2, 1L) else sample(1:4, 1L)
+  seuil <- sample(J, 1L)
+  arbre <- switch(forme, fe, ns$.noeud3("non", list(fe)),
+                  ns$.noeud3(sample(c("et", "ou"), 1L), list(fe, ns$.feuille3(tid, function(sigs) stats::setNames(list(ns$.reps_date3(range(J), TRUE, seuil)), tid),
+                                                                              function(a, n) a[[tid]] <= seuil))),
+                  ns$.noeud3("et", list(fe, env_g2b$.arret_feuille3(ctx, ev3, 2L, NA, tid, !strict, range(J), TRUE, "v", new.env()))))
+  x1 <- ns$.arbre3(arbre)
+  x0 <- ns$.arbre3(arbre, lineaire = FALSE)
+  identical(list(x1$v, sort(x1$pert)), list(x0$v, sort(x0$pert)))
+}, NA))
+ctx20_e14 <- ctx_g2b(list(sinistres = data.frame(id_sinistre = c("SI1", "SI2"), id_assure = "AS1", nature_sinistre = c("deces", "arret_travail"),
+                                                 date_survenance = c(J[12], J[2]), stringsAsFactors = FALSE),
+                          evenements = data.frame(id_evenement = sprintf("E%d", 1:20), id_sinistre = "SI2", type_evenement = "sortie",
+                                                  date_effet = J[3], date_saisie = max(J) + 1:20, stringsAsFactors = FALSE)),
+                     list("evenements.type_evenement" = 1:20))
+x20_e14 <- ns$.arbre3(env_g2b$.arret_feuille3(ctx20_e14, env_g2b$.evenements_d11(ctx20_e14), 2L, J[10], NA_character_, FALSE, range(J), TRUE,
+                                              "u", new.env()))
+verifier_egal("#105, E-14, C-E14-5 : feuille de l'arrêt événement par événement contre l'énumération, 200 arbres (0 à 6 facultatifs) : identiques ; 20 facultatifs : grille propre 41 (linéaire), W = 21 × 41, inconnu, 20 cellules pertinentes",
+              list(sum(sim_arret_e14(200L)), x20_e14$grilles, x20_e14$w, x20_e14$v, length(x20_e14$pert)),
+              list(200L, 41, 21 * 41, NA, 20L))
+# C-E14-6 : la grille n'est jamais matérialisée : 40 cellules partagées booléennes (grille de
+# 2^40 affectations), deux feuilles par cellule, OU des ET : budget infini, inconnu dès la seconde
+# affectation, les 40 cellules pertinentes ; budget B : C vide, cellules lues indépendamment,
+# même verdict et mêmes cellules
+ids_e14 <- paste0("x.c\r", 1:40)
+feuille_e14 <- function(id) ns$.feuille3(id, function(sigs) stats::setNames(list(c(FALSE, TRUE)), id), function(a, n) a[[id]])
+arbre40_e14 <- ns$.noeud3("ou", lapply(ids_e14, function(id) ns$.noeud3("et", list(feuille_e14(id), feuille_e14(id)))))
+x40_e14 <- list(ns$.arbre3(arbre40_e14, budget = Inf), ns$.arbre3(arbre40_e14))
+verifier_egal("#105, E-14, C-E14-6 : grille de 2^40 affectations parcourue sans être construite (budget infini, exact) ; au budget B, approché : inconnu, 40 cellules pertinentes dans les deux cas",
+              lapply(x40_e14, function(x) list(x$v, sort(x$pert), x$exact)),
+              list(list(NA, sort(ids_e14), TRUE), list(NA, sort(ids_e14), FALSE)))
+# (R1, m3) double sortie gardée : C11-9 (date d'effet de evenements de type incompatible, cause de
+# forme : ligne (D11a, sinistres, NA) type_incompatible), puis en plus maintien_deces de GS1
+# manquant (refus de valeur, pertinent pour SI1) : SI1 écarté sous le refus (date_survenance,
+# manquant_obligatoire) et ligne de lecture grossière (type_incompatible) ; témoin sans refus
+dbl_e14 <- function(f) {
+  b <- f(mm34())
+  r <- controler_base(b, A, s34(1000), cv34)
+  list(co34(r, "D11a"), ne34(r, "D11a"))
+}
+forme_e14 <- function(b) { b$evenements$date_effet <- as.character(b$evenements$date_effet); b }
+verifier_egal("#105, G2c, reprise (R1, m3) : evenements.date_effet de type incompatible : (D11a, sinistres, NA) type_incompatible ; et maintien_deces de GS1 manquant : en plus SI1 écarté (date_survenance, manquant_obligatoire) ; témoin : rien",
+              list(dbl_e14(identity), dbl_e14(forme_e14), dbl_e14(function(b) { b <- forme_e14(b); b$garanties_souscrites$maintien_deces[1L] <- NA; b })),
+              list(list(character(0), character(0)), list(character(0), "sinistres NA type_incompatible"),
+                   list(character(0), c("sinistres NA type_incompatible", "sinistres date_survenance manquant_obligatoire"))))
+# (R3) témoin construit de l'approximation E-13 (c) (base de D11c, début de AF2 refusé et fin en
+# 1902, AF2 retirée ; AF1 finie le 2024-06-30 ; maintien TRUE ; sortie EV3 au 2024-04-01, rechute
+# EV7 de date tirée parmi huit, sortie EV8 au 2024-09-01) : SI1 détecté pour les huit dates
+# connues ; date de EV7 refusée (1850-01-01) : SI1 écarté, (D11a, sinistres, date_survenance) D02c
+temoin_e14 <- function(date7) {
+  b <- d11c_v105("1850-01-01", "1902-01-01")
+  b$affiliations <- b$affiliations[b$affiliations$id_affiliation != "AF2", ]
+  b$affiliations$date_fin[b$affiliations$id_affiliation == "AF1"] <- D("2024-06-30")
+  b$garanties_souscrites$maintien_deces[b$garanties_souscrites$id_garantie_souscrite == "GS1"] <- TRUE
+  e <- b$evenements
+  e$date_effet[e$id_evenement == "EV3"] <- D("2024-04-01"); e$date_saisie[e$id_evenement == "EV3"] <- D("2024-04-03")
+  r7 <- e[e$id_evenement == "EV3", ]; r7$id_evenement <- "EV7"; r7$type_evenement <- "rechute"; r7$motif <- NA
+  r7$date_effet <- D(date7); r7$date_saisie <- D("2024-04-05")
+  r8 <- e[e$id_evenement == "EV3", ]; r8$id_evenement <- "EV8"; r8$date_effet <- D("2024-09-01"); r8$date_saisie <- D("2024-09-03")
+  b$evenements <- rbind(e, r7, r8)
+  r <- controler_base(b, A)
+  list(unique(ligne(r$controles, "D11a")$identifiants), ne34(r, "D11a"))
+}
+dates_e14 <- c("2024-05-01", "2024-08-01", "2024-10-01", "2025-03-01", "2024-03-20", "2024-12-01", "2024-06-30", "2024-06-29")
+verifier_egal("#105, G2c, reprise (R3) : témoin de l'approximation E-13 (c) : SI1 détecté pour huit dates connues de la rechute EV7 ; date de EV7 refusée : SI1 écarté, (D11a, sinistres, date_survenance) D02c",
+              list(lapply(dates_e14, temoin_e14), temoin_e14("1850-01-01")),
+              list(rep(list(list("SI1", character(0))), 8L), list(character(0), "sinistres date_survenance D02c")))
+# (m2) .issue_d11() : verdict inconnu sans cellule pertinente ni lecture grossière : erreur
+# interne ; avec une cellule de lecture grossière retirée : faux, écarté
+issue_e14 <- function(pert) tryCatch({
+  x <- ns$.issue_d11(list(v = NA, pert = pert), 1L, 1L, list(), list(), new.env(), function(m) integer(0))
+  list(x$v, x$ecarte)
+}, error = function(e) "erreur interne")
+verifier_egal("#105, G2c, reprise (m2) : .issue_d11() : inconnu sans cellule pertinente : erreur interne ; seule une cellule de lecture grossière : faux, écarté",
+              list(issue_e14(character(0)), issue_e14("grossier\r0\r1")), list("erreur interne", list(FALSE, TRUE)))
+# Q1 (a) d'`actuary` (#173, hors périmètre) : présence d'une ligne non déterminée lue par le cœur et
+# par le sous-cas de D11a. DO1 non déterminé (C1, maintien TRUE, arrêt en cours) et DO2 retenu (C2,
+# aucune affiliation) : DO1 présent, D11a faux ; absent, vrai ; attendu inconnu. AF1 non
+# déterminée (partie de fin connue, finie avant le décès, arrêt survenu pendant elle, maintien
+# TRUE, arrêt en cours) : présente, faux ; absente, vrai ; attendu inconnu
+q1a_e14 <- function(af_nd) {
+  dos <- data.frame(id_dossier = c("DO1", "DO2"), id_sinistre = "SI1", id_garantie_souscrite = c("G1", "G2"), stringsAsFactors = FALSE)
+  if (af_nd) dos <- dos[1L, ]
+  base <- list(sinistres = data.frame(id_sinistre = c("SI1", "SI2"), id_assure = "AS1", nature_sinistre = c("deces", "arret_travail"),
+                                      date_survenance = c(J[12], J[4]), stringsAsFactors = FALSE),
+               dossiers = dos,
+               garanties_souscrites = data.frame(id_garantie_souscrite = c("G1", "G2"), id_contrat = c("C1", "C2"), code_garantie = "deces",
+                                                 college = "a", date_effet = J[1], date_fin = NA_real_, maintien_deces = c(TRUE, FALSE),
+                                                 stringsAsFactors = FALSE),
+               affiliations = data.frame(id_affiliation = "AF1", id_assure = "AS1", id_contrat = "C1", college = "a", date_debut = J[2],
+                                         date_fin = J[8], stringsAsFactors = FALSE),
+               evenements = data.frame(id_evenement = character(0), id_sinistre = character(0), type_evenement = character(0),
+                                       date_effet = numeric(0), date_saisie = numeric(0), stringsAsFactors = FALSE))
+  ctx <- if (af_nd) ctx_g2b(base, list(), list(affiliations = TRUE), list(affiliations = TRUE, sinistres = c(TRUE, TRUE)), arrete = A0) else
+    ctx_g2b(base, list(), list(dossiers = c(TRUE, FALSE), evenements = logical(0)))
+  as.vector(env_g2c$.verdict_d11(ctx, character(0), forcer = TRUE))[1L]
+}
+attendu_echec("#105, G2c, Q1 (a) : DO1 non déterminé (C1, maintien TRUE, arrêt en cours), DO2 retenu (C2 non couvert) : D11a de SI1 inconnu (aujourd'hui : vrai)",
+              "#173", identical(q1a_e14(FALSE), NA))
+attendu_echec("#105, G2c, Q1 (a) : AF1 non déterminée (partie de fin connue, fin avant le décès, arrêt pendant elle, maintien TRUE, arrêt en cours) : D11a de SI1 inconnu (aujourd'hui : vrai)",
+              "#173", identical(q1a_e14(TRUE), NA))
+
+section("donnees : #105, lot V, conversion G3b : D07a, D07b et D10f en logique de Kleene (M808 ; spécification `donnees`, erratum `1.9.7`, E-15 ; D-G3-1, D-G3-2, D-G3-5, D-G3-6)")
+# --- C-G3-2 : oracles par énumération exhaustive (constat de simulation : graine locale 20261127
+# sous le générateur de outils::avec_graine(), état global rétabli ; nombre de cas annoncé par
+# règle). Contexte réduit de la section G2b (ctx_g2b(), accesseurs de env_g2b), plage des dates
+# du 2025-01-01 au 2025-02-28, arrêté a = 2025-02-10, d07b_mois 1 (seuil de la référence :
+# s = 2025-01-10). Cellules tirées (au plus quatre, au plus 4 000 mondes) parmi les valeurs
+# refusées des colonnes de E-15 (b) lues par la règle et les présences des lignes non
+# déterminées ; mondes : produit des domaines (types d'événement, natures, codes, liens, motifs,
+# natures et types de prestation : domaine entier de la colonne, l'absence comprise pour une
+# colonne facultative ; dates : bornes de la plage, a, s et chaque date connue du cas, avec la
+# veille et le lendemain ; présence : vrai, faux ; version valable d'un membre : ses versions
+# possibles, l'absence comprise), verdict du monde par une réécriture directe de la règle
+# (statut de service : classe du dernier événement porteur présent d'effet au plus a, dans l'ordre
+# date d'effet, ordre du type, date de saisie). Verdict de l'oracle : vrai (faux) si tous les
+# mondes le sont, inconnu sinon ; cellule pertinente : deux mondes qui ne diffèrent que par elle
+# donnent deux verdicts. Chemin forcé (`forcer`). Attendu : hors (c) (aucune cellule sur un
+# événement du statut de service lu par la ligne), verdict et index_pertinent identiques (cellule
+# de choix de version : versions non déterminées qu'elle départage) ; sous (c), aucun verdict
+# déterminé contraire, cellules pertinentes de l'oracle comprises dans index_pertinent (une cellule
+# d'un événement non déterminé est couverte par l'événement entier, « evenements », convention de
+# E-13 (c)), tout verdict inconnu à pertinence non vide.
+env_g3b <- new.env(parent = ns)
+for (nom in ls(env_g2b, all.names = TRUE)) {
+  g0 <- get(nom, envir = env_g2b)
+  if (is.function(g0) && identical(environment(g0), env_g2b)) environment(g0) <- env_g3b
+  assign(nom, g0, envir = env_g3b)
+}
+plage_g3b <- as.numeric(D(c("2025-01-01", "2025-02-28")))
+env_g3b$.plage_date3 <- function(ctx, table, colonne) plage_g3b
+a_g3b <- as.numeric(D("2025-02-10"))
+s_g3b <- as.numeric(D("2025-01-10"))
+jours_g3b <- plage_g3b[1L] + c(0, 4, 8, 9, 10, 20, 38, 39, 40, 41, 50)
+te_g3b <- d$types_evenements
+classe_g3b <- function(ty) ifelse(ty %in% c("ouverture_service", "modification_montant", "reprise_service"), "service",
+                                  ifelse(ty %in% "suspension", "suspension",
+                                         ifelse(ty %in% c("fin_service", "sortie", "cloture_dossier"), "extinction", NA_character_)))
+avec_graine_g3b <- function(expr) ns$avec_graine(20261127L, expr)
+# domaines de l'oracle d'une cellule « table.colonne\rligne » (dates : points de rupture du cas)
+dom_g3b <- function(tc, dates) {
+  if (tc %in% c("sinistres.date_survenance", "evenements.date_effet", "prestations.date_reglement")) {
+    p <- sort(unique(c(plage_g3b, a_g3b + -1:1, s_g3b + -1:1, dates + rep(-1:1, each = length(dates)))))
+    return(p[p >= plage_g3b[1L] & p <= plage_g3b[2L]])
+  }
+  m <- strsplit(tc, ".", fixed = TRUE)[[1L]]
+  ns$.domaine3(list(dico = d), m[1L], m[2L])
+}
+# accès aux valeurs d'un monde (grille g) : cellule « table.colonne\rl » ou présence « table\rl »
+monde_g3b <- function(g, base, nd) list(
+  V = function(t, c1, l) val_g2b(g, paste0(t, ".", c1, "\r", l), base[[t]][[c1]][l]),
+  P = function(t, l) if (isTRUE(nd[[t]][l])) val_g2b(g, paste0(t, "\r", l), TRUE) else rep(TRUE, nrow(g)),
+  n = nrow(g))
+# classe du statut de service dans chaque monde : événements `evs` (ordre de saisie croissant),
+# rattachés par l'unité (`porteurs`) ou par le sinistre (`sortie`, vrai : la sortie compte)
+classe_monde_g3b <- function(W, evs, porteurs, sortie, a) {
+  meilleur <- rep(-Inf, W$n)
+  cl <- rep("non_ouvert", W$n)
+  for (q in seq_along(evs)) {
+    k <- evs[q]
+    ty <- W$V("evenements", "type_evenement", k)
+    da <- as.numeric(W$V("evenements", "date_effet", k))
+    ok <- W$P("evenements", k) & (ty %in% porteurs | (sortie[q] & ty %in% "sortie")) & !is.na(da) & da <= a
+    cle <- da * 1e4 + te_g3b$ordre[match(ty, te_g3b$type_evenement)] * 100 + q
+    maj <- ok & cle > meilleur
+    meilleur[maj] <- cle[maj]
+    cl[maj] <- classe_g3b(ty[maj])
+  }
+  cl
+}
+porteurs_rente_g3b <- c("ouverture_service", "modification_montant", "reprise_service", "suspension", "fin_service")
+porteurs_dossier_g3b <- c(porteurs_rente_g3b, "cloture_dossier")
+# tirage des cellules d'un cas : candidates `cand` (nom -> list(tc ou "table", ligne, nd)) ; au plus
+# `max` cellules et 4 000 mondes ; rend inc, nd, doms
+tirer_cel_g3b <- function(cand, base, max = 4L, dates = numeric(0)) {
+  repeat {
+    noms <- tirer_g2b(names(cand), max)
+    inc <- list()
+    nd <- lapply(base, function(x) rep(FALSE, nrow(x)))
+    doms <- list()
+    for (nm in noms) {
+      z <- cand[[nm]]
+      if (identical(z$type, "nd")) {
+        nd[[z$t]][z$l] <- TRUE
+        doms[[paste0(z$t, "\r", z$l)]] <- c(TRUE, FALSE)
+      } else if (identical(z$type, "choix")) {
+        doms[["choix"]] <- z$dom
+        for (l in z$nd) nd[[z$t]][l] <- TRUE
+      } else {
+        inc[[z$tc]] <- c(inc[[z$tc]], z$l)
+        doms[[paste0(z$tc, "\r", z$l)]] <- dom_g3b(z$tc, dates)
+      }
+    }
+    if (prod(as.numeric(lengths(doms))) <= 4000) return(list(noms = noms, inc = inc, nd = nd, doms = doms))
+  }
+}
+# comparaison d'un verdict (chemin forcé) et de l'oracle sur la ligne `l` ; `service` : ligne sous (c)
+# ; `carte` : identifiants de l'oracle -> index_pertinent (cellule de choix de version)
+cmp_g3b <- function(r, l, oracle, service, carte = function(x) x) {
+  noyau <- list(v = as.vector(r)[l], pert = pert_ip(attr(r, "index_pertinent"), l))
+  po <- sort(unique(unlist(lapply(oracle$pert, carte))))
+  couvert <- vapply(po, function(x) x %in% noyau$pert || sub("^evenements\\.[a-z_]+\r", "evenements\r", x) %in% noyau$pert, NA)
+  c(service = service, egal = !service && identical(list(noyau$v, sort(noyau$pert)), list(oracle$v, po)),
+    contraire = !is.na(noyau$v) && !identical(noyau$v, oracle$v), sur = all(couvert), vide = is.na(noyau$v) && length(noyau$pert) == 0L,
+    inconnu = is.na(noyau$v))
+}
+# chemin rapide contre chemin forcé sur chaque contexte des oracles (C-G3-4, reprise de l'audit de
+# G3b, MAJEUR-1) : `f(forcer)` évalué des deux façons ; rend le verdict du chemin forcé et compte,
+# ligne à ligne (toutes les lignes de la table), les écarts de verdict ou de cellules pertinentes ;
+# une erreur du chemin rapide compte chaque ligne
+rapide_g3b <- new.env()
+rapide_g3b$contextes <- 0L
+rapide_g3b$lignes <- 0L
+rapide_g3b$ecarts <- 0L
+rapide_force_g3b <- function(f) {
+  rf <- f(TRUE)
+  rr <- tryCatch(f(FALSE), error = function(e) NULL)
+  n <- length(rf)
+  # erreur du chemin rapide (garde : lecture brute indéterminée hors des lignes complexes) : chaque
+  # ligne compte comme un écart
+  diff <- if (is.null(rr)) rep(TRUE, n) else vapply(seq_len(n), function(l) !identical(list(as.vector(rf)[l], pert_ip(attr(rf, "index_pertinent"), l)),
+                                                    list(as.vector(rr)[l], pert_ip(attr(rr, "index_pertinent"), l))), NA)
+  rapide_g3b$contextes <- rapide_g3b$contextes + 1L
+  rapide_g3b$lignes <- rapide_g3b$lignes + n
+  rapide_g3b$ecarts <- rapide_g3b$ecarts + sum(diff)
+  rf
+}
+bilan_g3b <- function(x) {
+  x <- do.call(rbind, x)
+  c(cas = nrow(x), hors_c = sum(!x[, "service"]), egaux = sum(x[, "egal"]), sous_c = sum(x[, "service"]),
+    contraires = sum(x[, "contraire"]), sur_ensemble = sum(x[, "service"] & x[, "sur"]), vides = sum(x[, "vide"]), inconnus = sum(x[, "inconnu"]))
+}
+evs_g3b <- function(ne, ...) {
+  v <- list(...)
+  data.frame(id_evenement = sprintf("E%02d", seq_len(ne)), id_sinistre = rep_len(v$id_sinistre, ne), id_dossier = rep_len(v$id_dossier, ne),
+             id_rente = rep_len(if (is.null(v$id_rente)) NA_character_ else v$id_rente, ne), type_evenement = rep_len(v$type, ne),
+             date_effet = rep_len(v$date, ne), date_saisie = plage_g3b[2L] + seq_len(ne),
+             motif = rep_len(if (is.null(v$motif)) NA_character_ else v$motif, ne), stringsAsFactors = FALSE)
+}
+types_service_g3b <- c("ouverture_service", "suspension", "fin_service", "reprise_service", "modification_montant", "cloture_dossier",
+                       "sortie", "rechute")
+cand_ev_g3b <- function(ks, cols = c("type_evenement", "date_effet"), nd = TRUE) {
+  x <- list()
+  for (k in ks) {
+    for (c1 in cols) x[[paste0(c1, k)]] <- list(tc = paste0("evenements.", c1), l = k)
+    if (nd) x[[paste0("nde", k)]] <- list(type = "nd", t = "evenements", l = k)
+  }
+  x
+}
+
+# (a) D07a, dossiers : DO1 (SI1, G1) ; un à trois événements de DO1 (rattachés par le dossier et par
+# SI1) ; SI2 et SI3 de AS1 (ou AS2), nature et survenance tirées
+sim_d07a_dos_g3b <- function(nb) avec_graine_g3b(lapply(seq_len(nb), function(k) {
+  ne <- sample(1:3, 1L)
+  base <- list(garanties_souscrites = data.frame(id_garantie_souscrite = "G1", code_garantie = sample(c("incapacite", "incapacite", "deces"), 1L),
+                                                 stringsAsFactors = FALSE),
+               dossiers = data.frame(id_dossier = "DO1", id_sinistre = "SI1", id_garantie_souscrite = "G1", stringsAsFactors = FALSE),
+               sinistres = data.frame(id_sinistre = c("SI1", "SI2", "SI3"), id_assure = c("AS1", "AS1", sample(c("AS1", "AS2"), 1L)),
+                                      nature_sinistre = c("arret_travail", sample(c("deces", "arret_travail"), 2L, TRUE)),
+                                      date_survenance = c(plage_g3b[1L], sample(jours_g3b, 2L, TRUE)), stringsAsFactors = FALSE),
+               evenements = evs_g3b(ne, id_sinistre = "SI1", id_dossier = "DO1", type = sample(types_service_g3b, ne, TRUE),
+                                    date = sample(jours_g3b, ne, TRUE)))
+  cand <- c(list(code = list(tc = "garanties_souscrites.code_garantie", l = 1L)),
+            unlist(lapply(2:3, function(s) list(list(tc = "sinistres.nature_sinistre", l = s), list(tc = "sinistres.date_survenance", l = s),
+                                                 list(type = "nd", t = "sinistres", l = s))), recursive = FALSE),
+            cand_ev_g3b(seq_len(ne)))
+  names(cand)[2:7] <- paste0("s", 1:6)
+  x <- tirer_cel_g3b(cand, base, dates = c(base$evenements$date_effet, base$sinistres$date_survenance))
+  ctx <- ctx_g2b(base, x$inc, x$nd, arrete = a_g3b)
+  r <- rapide_force_g3b(function(forcer) env_g3b$.verdict_d07a(ctx, "dossiers", character(0), forcer = forcer))
+  oracle <- enum_g2b(x$doms, function(g) {
+    W <- monde_g3b(g, base, x$nd)
+    cl <- classe_monde_g3b(W, seq_len(ne), porteurs_dossier_g3b, rep(TRUE, ne), a_g3b)
+    dec <- Reduce(`|`, lapply(1:3, function(s) W$P("sinistres", s) & base$sinistres$id_assure[s] == "AS1" &
+                                W$V("sinistres", "nature_sinistre", s) %in% "deces" & W$V("sinistres", "date_survenance", s) <= a_g3b))
+    W$V("garanties_souscrites", "code_garantie", 1L) %in% "incapacite" & cl %in% c("service", "suspension") & dec
+  })
+  cmp_g3b(r, 1L, oracle, any(grepl("^(type_evenement|date_effet|nde)", x$noms)))
+}))
+
+# (b) D07a, rentes : RE1 (DO2, membre ME1) et RE2 (DO2, ME1) ; DO2 (SI1, G2 : rente_education,
+# rente_conjoint ou invalidite) ; DO5 (sinistre tiré SI1 ou SI9, G5 double_effet) ; SI1 (AS1) et
+# SI2 (AS2, assuré du membre), nature et survenance tirées ; ME1 : une version retenue, ou une ou
+# deux versions non déterminées (cellule de choix : ces versions et l'absence), lien et sinistre
+# rattaché tirés ; événements : un ou deux du service de RE1, un second_deces de DO5, un
+# fin_service deces_beneficiaire de RE2. Sous (c) : cellule sur un événement de RE1.
+sim_d07a_ren_g3b <- function(nb) avec_graine_g3b(lapply(seq_len(nb), function(k) {
+  ns1 <- sample(1:2, 1L)
+  nv <- sample(c("retenue", "nd1", "nd2"), 1L)
+  nf <- if (nv == "nd2") 2L else 1L
+  ev <- rbind(evs_g3b(ns1, id_sinistre = "SI1", id_dossier = "DO2", id_rente = "RE1", type = sample(types_service_g3b[1:5], ns1, TRUE),
+                      date = sample(jours_g3b, ns1, TRUE)),
+              evs_g3b(2L, id_sinistre = c("SI9", "SI1"), id_dossier = c("DO5", "DO2"), id_rente = c(NA, "RE2"),
+                      type = c("second_deces", "fin_service"), date = sample(jours_g3b, 2L, TRUE), motif = c(NA, "deces_beneficiaire")))
+  ev$id_evenement <- sprintf("E%02d", seq_len(nrow(ev)))
+  ev$date_saisie <- plage_g3b[2L] + seq_len(nrow(ev))
+  s5 <- sample(c("SI1", "SI9"), 1L)
+  ev$id_sinistre[ns1 + 1L] <- s5
+  base <- list(garanties_souscrites = data.frame(id_garantie_souscrite = c("G2", "G5"),
+                                                 code_garantie = c(sample(c("rente_education", "rente_conjoint", "invalidite"), 1L), "double_effet"),
+                                                 stringsAsFactors = FALSE),
+               dossiers = data.frame(id_dossier = c("DO2", "DO5"), id_sinistre = c("SI1", s5), id_garantie_souscrite = c("G2", "G5"),
+                                     stringsAsFactors = FALSE),
+               sinistres = data.frame(id_sinistre = c("SI1", "SI2", "SI9"), id_assure = c("AS1", "AS2", "AS9"),
+                                      nature_sinistre = c(sample(c("deces", "arret_travail"), 2L, TRUE), "deces"),
+                                      date_survenance = c(sample(jours_g3b, 2L, TRUE), plage_g3b[1L]), stringsAsFactors = FALSE),
+               famille = data.frame(id_membre = rep("ME1", nf), id_assure_membre = "AS2", id_sinistre = sample(c("SI1", "SI9"), nf, TRUE),
+                                    lien = sample(c("conjoint", "concubin", "enfant"), nf, TRUE), stringsAsFactors = FALSE),
+               rentes = data.frame(id_rente = c("RE1", "RE2"), id_dossier = "DO2", id_membre = "ME1", stringsAsFactors = FALSE),
+               evenements = ev)
+  ne <- nrow(ev)
+  cand <- c(list(c2 = list(tc = "garanties_souscrites.code_garantie", l = 1L), c5 = list(tc = "garanties_souscrites.code_garantie", l = 2L)),
+            stats::setNames(unlist(lapply(1:2, function(s) list(list(tc = "sinistres.nature_sinistre", l = s),
+                                                                 list(tc = "sinistres.date_survenance", l = s))), recursive = FALSE),
+                            paste0("s", 1:4)),
+            list(nd2 = list(type = "nd", t = "sinistres", l = 2L), lien = list(tc = "famille.lien", l = 1L)),
+            cand_ev_g3b(seq_len(ns1)), cand_ev_g3b(ns1 + 1L), cand_ev_g3b(ns1 + 2L, c("type_evenement", "motif", "date_effet")))
+  if (nv == "retenue") cand$nd2 <- cand$nd2 else cand <- cand[setdiff(names(cand), "lien")]
+  x <- tirer_cel_g3b(cand, base, 3L, dates = c(ev$date_effet, base$sinistres$date_survenance))
+  versions <- if (nv == "retenue") 1L else c(seq_len(nf), NA)
+  if (nv != "retenue") {
+    x$nd$famille <- rep(TRUE, nf)
+    x$doms[["choix"]] <- seq_along(versions)
+    if (prod(as.numeric(lengths(x$doms))) > 4000) x$doms <- x$doms[!grepl("^sinistres", names(x$doms))]
+    for (nm in setdiff(names(x$inc), character(0))) NULL
+  }
+  inc <- x$inc
+  nd <- x$nd
+  # cohérence : cellules gardées seulement
+  garde <- names(x$doms)
+  inc <- lapply(stats::setNames(names(inc), names(inc)), function(tc) inc[[tc]][paste0(tc, "\r", inc[[tc]]) %in% garde])
+  inc <- inc[lengths(inc) > 0L]
+  for (t in setdiff(names(nd), "famille")) nd[[t]] <- nd[[t]] & paste0(t, "\r", seq_along(nd[[t]])) %in% garde
+  ctx <- ctx_g2b(base, inc, nd, arrete = a_g3b)
+  r <- rapide_force_g3b(function(forcer) env_g3b$.verdict_d07a(ctx, "rentes", character(0), forcer = forcer))
+  conj <- c("conjoint", "partenaire_pacs", "concubin")
+  oracle <- enum_g2b(x$doms, function(g) {
+    W <- monde_g3b(g, base, nd)
+    code <- function(gs) W$V("garanties_souscrites", "code_garantie", match(gs, base$garanties_souscrites$id_garantie_souscrite))
+    code2 <- code("G2")
+    deces <- function(as) Reduce(`|`, lapply(1:3, function(s) W$P("sinistres", s) & base$sinistres$id_assure[s] %in% as &
+                                               W$V("sinistres", "nature_sinistre", s) %in% "deces" & W$V("sinistres", "date_survenance", s) <= a_g3b))
+    sd <- function(S) Reduce(`|`, lapply(seq_len(ne), function(e) {
+      dos <- match(ev$id_dossier[e], base$dossiers$id_dossier)
+      W$P("evenements", e) & W$V("evenements", "type_evenement", e) %in% "second_deces" & W$V("evenements", "date_effet", e) <= a_g3b &
+        code(base$dossiers$id_garantie_souscrite[dos]) %in% "double_effet" & base$dossiers$id_sinistre[dos] %in% S
+    }))
+    cl <- classe_monde_g3b(W, seq_len(ns1), porteurs_rente_g3b, rep(FALSE, ns1), a_g3b)
+    ch <- if (nv == "retenue") rep(1L, W$n) else val_g2b(g, "choix", 1L)
+    d_m <- rep(FALSE, W$n)
+    for (z in seq_along(versions)) {
+      j <- versions[z]
+      if (is.na(j)) next
+      lien <- W$V("famille", "lien", j)
+      at <- deces(base$famille$id_assure_membre[j]) |
+        (sd(base$famille$id_sinistre[j]) & lien %in% conj & !(code2 %in% "rente_conjoint" & base$famille$id_sinistre[j] == "SI1"))
+      d_m <- d_m | (ch == z & at)
+    }
+    fs <- ns1 + 2L
+    d_iii <- W$P("evenements", fs) & W$V("evenements", "type_evenement", fs) %in% "fin_service" &
+      W$V("evenements", "motif", fs) %in% "deces_beneficiaire" & W$V("evenements", "date_effet", fs) <= a_g3b
+    cl %in% c("service", "suspension") & ((code2 %in% "invalidite" & deces("AS1")) | (!(code2 %in% "invalidite") & d_m) | d_iii)
+  })
+  carte <- function(id) if (id == "choix") paste0("famille\r", seq_len(nf)) else id
+  cmp_g3b(r, 1L, oracle, any(grepl(paste0("^evenements[.a-z_]*\r(", paste(seq_len(ns1), collapse = "|"), ")$"), names(x$doms))), carte)
+}))
+
+# (c) D07b : unité RE1 (rentes) ou DO3 (dossiers, G3 incapacite ou deces) ; un à deux événements de
+# service (ouverture_service le plus souvent), un à trois paiements (nature et type tirés) ; d07b_mois
+# 1. Sous (c) : cellule sur un événement de l'unité.
+sim_d07b_g3b <- function(nb) avec_graine_g3b(lapply(seq_len(nb), function(k) {
+  rentes <- runif(1L) < 0.5
+  ns1 <- sample(1:2, 1L)
+  np <- sample(1:3, 1L)
+  ev <- evs_g3b(ns1, id_sinistre = "SI1", id_dossier = if (rentes) "DO2" else "DO3", id_rente = if (rentes) "RE1" else NA,
+                type = sample(c("ouverture_service", "ouverture_service", "suspension", "fin_service", "reprise_service"), ns1, TRUE),
+                date = sample(jours_g3b, ns1, TRUE))
+  pr <- data.frame(id_prestation = sprintf("P%d", seq_len(np)), id_rente = if (rentes) "RE1" else NA_character_,
+                   id_dossier = if (rentes) "DO2" else "DO3", nature_mouvement = sample(c("paiement", "paiement", "regularisation"), np, TRUE),
+                   type_prestation = if (rentes) "arrerage" else sample(c("indemnite_journaliere", "arrerage"), np, TRUE, prob = c(3, 1)),
+                   date_reglement = sample(jours_g3b, np, TRUE), stringsAsFactors = FALSE)
+  base <- list(garanties_souscrites = data.frame(id_garantie_souscrite = "G3", code_garantie = if (rentes) "rente_education" else
+                                                   sample(c("incapacite", "incapacite", "deces"), 1L), stringsAsFactors = FALSE),
+               dossiers = data.frame(id_dossier = if (rentes) "DO2" else "DO3", id_sinistre = "SI1", id_garantie_souscrite = "G3",
+                                     stringsAsFactors = FALSE),
+               rentes = data.frame(id_rente = if (rentes) "RE1" else character(0), id_dossier = if (rentes) "DO2" else character(0),
+                                   id_membre = if (rentes) "ME1" else character(0), stringsAsFactors = FALSE),
+               evenements = ev, prestations = pr)
+  cand <- c(if (!rentes) list(code = list(tc = "garanties_souscrites.code_garantie", l = 1L)), cand_ev_g3b(seq_len(ns1)),
+            unlist(lapply(seq_len(np), function(q) stats::setNames(c(list(list(type = "nd", t = "prestations", l = q),
+                                                                           list(tc = "prestations.nature_mouvement", l = q),
+                                                                           list(tc = "prestations.date_reglement", l = q)),
+                                                                      if (!rentes) list(list(tc = "prestations.type_prestation", l = q))),
+                                                                    paste0(c("ndp", "nm", "dr", if (!rentes) "tp"), q))), recursive = FALSE))
+  x <- tirer_cel_g3b(cand, base, 4L, dates = c(ev$date_effet, pr$date_reglement))
+  ctx <- ctx_g2b(base, x$inc, x$nd, arrete = a_g3b)
+  t <- if (rentes) "rentes" else "dossiers"
+  r <- rapide_force_g3b(function(forcer) env_g3b$.verdict_d07b(ctx, t, 1L, character(0), forcer = forcer))
+  oracle <- enum_g2b(x$doms, function(g) {
+    W <- monde_g3b(g, base, x$nd)
+    cl <- classe_monde_g3b(W, seq_len(ns1), if (rentes) porteurs_rente_g3b else porteurs_dossier_g3b, rep(!rentes, ns1), a_g3b)
+    detecte <- function(dd) !is.na(dd) & as.numeric(ns$ajouter_mois(ifelse(is.na(dd), 0, dd), 1L)) < a_g3b
+    maxp <- rep(-Inf, W$n)
+    for (q in seq_len(np)) {
+      dr <- W$V("prestations", "date_reglement", q)
+      ok <- W$P("prestations", q) & W$V("prestations", "nature_mouvement", q) %in% "paiement" &
+        (rentes | !(W$V("prestations", "type_prestation", q) %in% "arrerage")) & dr <= a_g3b
+      maxp[ok] <- pmax(maxp[ok], dr[ok])
+    }
+    mino <- rep(Inf, W$n)
+    for (q in seq_len(ns1)) {
+      de <- as.numeric(W$V("evenements", "date_effet", q))
+      ok <- W$P("evenements", q) & W$V("evenements", "type_evenement", q) %in% "ouverture_service" & de <= a_g3b
+      mino[ok] <- pmin(mino[ok], de[ok])
+    }
+    ref <- ifelse(is.finite(maxp), maxp, ifelse(is.finite(mino), mino, NA))
+    unite <- rentes | W$V("garanties_souscrites", "code_garantie", 1L) %in% "incapacite"
+    unite & cl == "service" & detecte(ref)
+  })
+  cmp_g3b(r, 1L, oracle, any(grepl("^(type_evenement|date_effet|nde)", x$noms)))
+}))
+
+# (d) D10f : DO5 (SI1, G6 double_effet), DO6 (sinistre tiré SI1 ou SI3, G7 rente_conjoint), DO7 (SI1,
+# G6), RE3 (DO6) ; événements : E01 second_deces de DO5, E02 fin_service deces_beneficiaire de RE3,
+# un événement de service de RE3, E04 second_deces de DO7 ; verdict de E01 et de E02. Sous (c) :
+# cellule sur un événement de RE3.
+sim_d10f_g3b <- function(nb) avec_graine_g3b(lapply(seq_len(nb), function(k) {
+  s6 <- sample(c("SI1", "SI1", "SI3"), 1L)
+  ev <- evs_g3b(4L, id_sinistre = c("SI1", s6, s6, "SI1"), id_dossier = c("DO5", "DO6", "DO6", "DO7"), id_rente = c(NA, "RE3", "RE3", NA),
+                type = c("second_deces", "fin_service", sample(c("ouverture_service", "suspension", "fin_service"), 1L), "second_deces"),
+                date = sample(jours_g3b, 4L, TRUE), motif = c(NA, "deces_beneficiaire", NA, NA))
+  base <- list(garanties_souscrites = data.frame(id_garantie_souscrite = c("G6", "G7"), code_garantie = c("double_effet", "rente_conjoint"),
+                                                 stringsAsFactors = FALSE),
+               dossiers = data.frame(id_dossier = c("DO5", "DO6", "DO7"), id_sinistre = c("SI1", s6, "SI1"), id_garantie_souscrite = c("G6", "G7", "G6"),
+                                     stringsAsFactors = FALSE),
+               rentes = data.frame(id_rente = "RE3", id_dossier = "DO6", id_membre = "ME2", stringsAsFactors = FALSE),
+               evenements = ev)
+  cand <- c(list(c6 = list(tc = "garanties_souscrites.code_garantie", l = 1L), c7 = list(tc = "garanties_souscrites.code_garantie", l = 2L),
+                 ndr = list(type = "nd", t = "rentes", l = 1L), ndd5 = list(type = "nd", t = "dossiers", l = 1L),
+                 ndd7 = list(type = "nd", t = "dossiers", l = 3L)),
+            cand_ev_g3b(1L, nd = FALSE), cand_ev_g3b(2L, c("type_evenement", "motif", "date_effet"), nd = FALSE), cand_ev_g3b(3:4))
+  x <- tirer_cel_g3b(cand, base, 3L, dates = ev$date_effet)
+  ctx <- ctx_g2b(base, x$inc, x$nd, arrete = a_g3b)
+  r <- rapide_force_g3b(function(forcer) env_g3b$.verdict_d10f(ctx, character(0), forcer = forcer))
+  verdicts <- lapply(1:2, function(l) enum_g2b(x$doms, function(g) {
+    W <- monde_g3b(g, base, x$nd)
+    code_d <- function(q) W$V("garanties_souscrites", "code_garantie", match(base$dossiers$id_garantie_souscrite[q], c("G6", "G7")))
+    dos_e <- function(e) match(ev$id_dossier[e], base$dossiers$id_dossier)
+    ty <- W$V("evenements", "type_evenement", l)
+    da <- W$V("evenements", "date_effet", l)
+    ne_r <- classe_monde_g3b(W, 2:3, porteurs_rente_g3b, c(FALSE, FALSE), a_g3b) %in% c("service", "suspension")
+    sin_e <- base$dossiers$id_sinistre[dos_e(l)]
+    s1 <- ty %in% "second_deces" & da <= a_g3b & code_d(dos_e(l)) %in% "double_effet" &
+      (W$P("rentes", 1L) & s6 == sin_e & code_d(2L) %in% "rente_conjoint" & ne_r)
+    s2 <- if (is.na(ev$id_rente[l])) rep(FALSE, W$n) else {
+      de <- Reduce(`|`, lapply(1:3, function(q) W$P("dossiers", q) & base$dossiers$id_sinistre[q] == s6 & code_d(q) %in% "double_effet"))
+      sd <- Reduce(`|`, lapply(1:4, function(e) W$P("evenements", e) & W$V("evenements", "type_evenement", e) %in% "second_deces" &
+                                  code_d(dos_e(e)) %in% "double_effet" & base$dossiers$id_sinistre[dos_e(e)] == s6 &
+                                  W$V("evenements", "date_effet", e) <= a_g3b))
+      ty %in% "fin_service" & W$V("evenements", "motif", l) %in% "deces_beneficiaire" & da <= a_g3b & code_d(2L) %in% "rente_conjoint" & de & !sd
+    }
+    s1 | s2
+  }))
+  service <- any(grepl("^evenements[.a-z_]*\r(2|3)$", names(x$doms)))
+  rbind(cmp_g3b(r, 1L, verdicts[[1L]], service), cmp_g3b(r, 2L, verdicts[[2L]], service))
+}))
+# événement ajouté à une base (EV11 : identifiant libre dans toutes les bases de la section)
+ev_g3b <- function(b, type, effet, rente = "RE1", dossier = "DO2", sinistre = "SI1", motif = NA, saisie = "2026-02-01", id = "EV11")
+  ev34(b, id_evenement = id, id_sinistre = sinistre, id_dossier = dossier, id_rente = rente, type_evenement = type, date_effet = D(effet),
+       date_saisie = D(saisie), motif = motif)
+x_d07a_dos_g3b <- sim_d07a_dos_g3b(400L)
+x_d07a_ren_g3b <- sim_d07a_ren_g3b(400L)
+x_d07b_g3b <- sim_d07b_g3b(400L)
+x_d10f_g3b <- sim_d10f_g3b(300L)
+cat("  G3b, C-G3-2 : (cas, hors (c), égaux, sous (c), contraires, sur-ensemble, inconnus à pertinence vide, inconnus) : D07a dossiers",
+    bilan_g3b(x_d07a_dos_g3b), "; D07a rentes", bilan_g3b(x_d07a_ren_g3b), "; D07b", bilan_g3b(x_d07b_g3b), "; D10f", bilan_g3b(x_d10f_g3b), "\n")
+verifier_egal("#105, G3b, C-G3-2 : oracles par énumération (graine 20261127), chemin forcé : D07a dossiers 400 cas, D07a rentes 400 cas, D07b 400 cas (rentes et dossiers), D10f 300 cas (deux événements) : hors (c), verdict et index_pertinent identiques ; sous (c), aucun verdict contraire, pertinence sur-ensemble ; aucun verdict inconnu à pertinence vide",
+              lapply(list(x_d07a_dos_g3b, x_d07a_ren_g3b, x_d07b_g3b, x_d10f_g3b), function(x) {
+                b <- bilan_g3b(x)
+                c(b[["egaux"]] == b[["hors_c"]], b[["contraires"]] == 0, b[["sur_ensemble"]] == b[["sous_c"]], b[["vides"]] == 0,
+                  b[["hors_c"]] > 0, b[["sous_c"]] > 0, b[["inconnus"]] > 0)
+              }),
+              rep(list(rep(TRUE, 7L)), 4L))
+
+# --- C-G3-3 : feuille du dernier événement (.dernier_feuille3()), statut de service (E-15 (c)) :
+# évaluée événement par événement (champ `lin`) contre l'énumération de ses cellules (`lineaire`
+# faux), 200 arbres tirés (graine 20261127) : RE1, zéro à deux événements retenus connus et zéro à
+# six facultatifs (type, date d'effet ou les deux refusés, ou non déterminé ; types tirés parmi les
+# porteurs, rechute comprise) ; classes non éteinte ou service ; la feuille seule, sa négation, ou
+# avec une feuille de présence (et, ou) : verdict et cellules pertinentes identiques. Décompte
+# linéaire : 20 facultatifs de type refusé après une ouverture retenue : grille propre de 61 (une
+# issue par classe possible de chaque facultatif et le verdict de base ; l'énumération en compterait
+# 4^20), inconnu, 20 cellules pertinentes. La feuille de l'arrêt en cours reste celle de C-E14-5
+# (même implémentation, test inchangé).
+sim_feuille_g3b <- function(nb) avec_graine_g3b(vapply(seq_len(nb), function(k) {
+  nf <- sample(0:6, 1L)
+  ne <- nf + sample(0:2, 1L)
+  ev <- evs_g3b(ne, id_sinistre = "SI1", id_dossier = "DO2", id_rente = "RE1",
+                type = sample(c("ouverture_service", "suspension", "fin_service", "reprise_service", "rechute"), ne, TRUE),
+                date = sample(jours_g3b, ne, TRUE))
+  base <- list(rentes = data.frame(id_rente = "RE1", id_dossier = "DO2", stringsAsFactors = FALSE), evenements = ev,
+               sinistres = data.frame(id_sinistre = "SI9", stringsAsFactors = FALSE))
+  inc <- list()
+  nd <- list(evenements = rep(FALSE, ne), sinistres = runif(1L) < 0.5)
+  for (e in sample.int(ne, nf)) {
+    z <- sample(c("type", "date", "les_deux", "nd"), 1L)
+    if (z %in% c("type", "les_deux")) inc[["evenements.type_evenement"]] <- c(inc[["evenements.type_evenement"]], e)
+    if (z %in% c("date", "les_deux")) inc[["evenements.date_effet"]] <- c(inc[["evenements.date_effet"]], e)
+    if (z == "nd") nd$evenements[e] <- TRUE
+  }
+  ctx <- ctx_g2b(base, inc, nd, arrete = a_g3b)
+  sk <- env_g3b$.service_k3(ctx, "rentes")
+  fe <- env_g3b$.feuille_service3(ctx, sk, 1L, if (runif(1L) < 0.5) ns$.NON_ETEINT else "service", new.env())
+  pres <- ns$.feuille3("sinistres\r1", function(sigs) list("sinistres\r1" = c(TRUE, FALSE)), function(a, n) a[["sinistres\r1"]])
+  arbre <- switch(sample(1:4, 1L), fe, ns$.noeud3("non", list(fe)), ns$.noeud3("et", list(fe, pres)), ns$.noeud3("ou", list(fe, pres)))
+  x1 <- ns$.arbre3(arbre, ns$.ORDRE_G3B)
+  x0 <- ns$.arbre3(arbre, ns$.ORDRE_G3B, lineaire = FALSE)
+  identical(list(x1$v, sort(x1$pert)), list(x0$v, sort(x0$pert)))
+}, NA))
+ctx20_g3b <- ctx_g2b(list(rentes = data.frame(id_rente = "RE1", stringsAsFactors = FALSE),
+                          evenements = evs_g3b(21L, id_sinistre = "SI1", id_dossier = "DO2", id_rente = "RE1", type = "ouverture_service",
+                                               date = c(jours_g3b[1L], rep(jours_g3b[3L], 20L)))),
+                     list("evenements.type_evenement" = 2:21), arrete = a_g3b)
+x20_g3b <- ns$.arbre3(env_g3b$.feuille_service3(ctx20_g3b, env_g3b$.service_k3(ctx20_g3b, "rentes"), 1L, ns$.NON_ETEINT, new.env()))
+verifier_egal("#105, G3b, C-G3-3 : feuille du statut de service événement par événement contre l'énumération, 200 arbres (0 à 6 facultatifs) : identiques ; 20 facultatifs de type refusé : grille propre 61 (linéaire), W = 21 × 61, inconnu, 20 cellules pertinentes",
+              list(sum(sim_feuille_g3b(200L)), x20_g3b$grilles, x20_g3b$w, x20_g3b$v, length(x20_g3b$pert)),
+              list(200L, 61, 21 * 61, NA, 20L))
+# témoin de la perte connue (E-15 (c)) : la seule ouverture_service de RE1 (EV5), retenue, de date
+# d'effet refusée (1850-01-01, D02c), à l'arrêté égal à l'extraction : base « non ouvert »,
+# l'ouverture facultative ; statut inconnu (sa date, certainement antérieure à l'arrêté, n'est pas
+# lue) : RE1 écartée par D07a (base du décès de l'assuré du membre) et par D07b, cause D02c ; feuille
+# inconnue, EV5 seule pertinente (date d'effet)
+ev5_g3b <- function(b) within(b, evenements$date_effet[5L] <- D("1850-01-01"))
+vue_g3b <- function(b, s = s34(1000), a = A) ns$vue_a_date(b, a, ns$lire_declarations(s, d), ns$.lire_conventions(cv34))
+temoin_g3b <- local({
+  ctx <- vue_g3b(ev5_g3b(membre34))$ctx
+  x <- ns$.arbre3(ns$.feuille_service3(ctx, ns$.service_k3(ctx, "rentes"), 1L, ns$.NON_ETEINT, new.env()))
+  list(x$v, gsub("\r", ":", x$pert), ne34(controler_base(ev5_g3b(membre34), A, s34(1000), cv34), "D07a"),
+       ne34(controler_base(ev5_g3b(base_ref), A, s34(6), cv34), "D07b"))
+})
+verifier_egal("#105, G3b, C-G3-3, témoin : seule ouverture_service de RE1, retenue, de date refusée, A = extraction : statut inconnu (EV5 pertinente, date d'effet) ; RE1 écartée par D07a et par D07b, cause D02c",
+              temoin_g3b, list(NA, "evenements.date_effet:5:sv", "rentes NA D02c", "rentes NA D02c"))
+
+# --- C-G3-4 : chemin rapide contre chemin forcé (copie de l'espace de noms où .verdict_d07a(),
+# .verdict_d07b() et .verdict_d10f() ont `forcer` vrai : toute ligne de la population par
+# .arbre3()) : bilans identiques (controles, controles_non_executes, declarations_requises) sur 48
+# bases tirées (graine 20261127) : base de référence, membre34, inc34, inv34, iii34, de34 (rente sur
+# DO2 et sur DO6), fs34, pr_nd34, chacune avec zéro à deux valeurs refusées tirées parmi les colonnes
+# de E-15 (b) lues par G3b et, une fois sur trois, une date de saisie absente (ligne non déterminée à
+# A0) ; arrêté A ou A0, d07b_mois 6. Témoin de diversité : chaque clé (D07a rentes, D07a dossiers,
+# D07b rentes, D07b dossiers, D10f) a une ligne détectée ou écartée sur au moins une base ; garde :
+# hors des lignes complexes, une lecture brute indéterminée est une erreur interne (copie où le
+# statut de service ne déclare aucune unité complexe, fin_service non déterminé du dossier incapacite
+# DO3 en service à A0, assuré décédé : D07a ; la règle exacte l'écarte, declaration_absente)
+env_force_g3b <- new.env(parent = ns)
+for (nom in ls(ns, all.names = TRUE)) {
+  g0 <- get(nom, envir = ns)
+  if (is.function(g0) && identical(environment(g0), ns)) environment(g0) <- env_force_g3b
+  assign(nom, g0, envir = env_force_g3b)
+}
+for (f in c(".verdict_d07a", ".verdict_d07b", ".verdict_d10f")) {
+  g0 <- get(f, envir = env_force_g3b); formals(g0)$forcer <- TRUE; assign(f, g0, envir = env_force_g3b)
+}
+inj_g3b <- list(c("evenements", "type_evenement", "zzz"), c("evenements", "date_effet", "1850-01-01"), c("evenements", "motif", "zzz"),
+                c("sinistres", "nature_sinistre", "zzz"), c("sinistres", "date_survenance", "1850-01-01"),
+                c("garanties_souscrites", "code_garantie", "zzz"), c("famille", "lien", "zzz"), c("prestations", "date_reglement", "1850-01-01"),
+                c("prestations", "nature_mouvement", "zzz"), c("prestations", "type_prestation", "zzz"))
+saisies_g3b <- list(c("evenements", "date_saisie"), c("sinistres", "date_saisie"), c("prestations", "date_saisie"), c("rentes", "date_saisie"),
+                    c("dossiers", "date_ouverture"))
+bases_g3b <- list(base_ref, membre34, inc34, inv34, iii34, de34("DO2"), de34("DO6"), fs34(sans_sd34(de34("DO6"))), pr_nd34)
+tires_g3b <- avec_graine_g3b(lapply(seq_len(48L), function(k) {
+  b <- bases_g3b[[sample.int(length(bases_g3b), 1L)]]
+  for (q in seq_len(sample(0:2, 1L))) {
+    z <- inj_g3b[[sample.int(length(inj_g3b), 1L)]]
+    x <- b[[z[1L]]][[z[2L]]]; i <- sample.int(length(x), 1L)
+    b[[z[1L]]][[z[2L]]][i] <- if (inherits(x, "Date")) D(z[3L]) else z[3L]
+  }
+  if (runif(1L) < 1 / 3) {
+    z <- saisies_g3b[[sample.int(length(saisies_g3b), 1L)]]
+    b[[z[1L]]][[z[2L]]][sample.int(nrow(b[[z[1L]]]), 1L)] <- D(NA)
+  }
+  list(b = b, arrete = if (runif(1L) < 0.4) A0 else A)
+}))
+bilan_force_g3b <- function(f, x) {
+  r <- tryCatch(f(x$b, x$arrete, s34(6), cv34), error = function(e) conditionMessage(e))
+  if (is.character(r)) r else list(r$controles, r$controles_non_executes, r$declarations_requises)
+}
+rapides_g3b <- lapply(tires_g3b, function(x) bilan_force_g3b(ns$controler_base, x))
+forces_g3b <- lapply(tires_g3b, function(x) bilan_force_g3b(env_force_g3b$controler_base, x))
+touchees_g3b <- vapply(c("D07a rentes", "D07a dossiers", "D07b rentes", "D07b dossiers", "D10f evenements"), function(k) {
+  m <- strsplit(k, " ")[[1L]]
+  sum(vapply(forces_g3b, function(r) is.list(r) && (any(r[[1L]]$code == m[1L] & r[[1L]]$table == m[2L]) ||
+                                                     any(r[[2L]]$code == m[1L] & r[[2L]]$table == m[2L] & r[[2L]]$cause != "declaration_absente")), NA))
+}, 0L)
+garde_g3b <- local({
+  env <- new.env(parent = ns)
+  for (nom in ls(ns, all.names = TRUE)) {
+    g0 <- get(nom, envir = ns)
+    if (is.function(g0) && identical(environment(g0), ns)) environment(g0) <- env
+    assign(nom, g0, envir = env)
+  }
+  sk0 <- env$.service_k3
+  env$.service_k3 <- function(ctx, table) { x <- sk0(ctx, table); x$complexe[] <- FALSE; x }
+  b <- ev_g3b(inc34, "fin_service", "2025-03-01", rente = NA, dossier = "DO3", sinistre = "SI2", motif = "autre", saisie = NA)
+  garde <- function(f) tryCatch({ f(b, A0, s34(1000), cv34); "aucune" },
+                                error = function(e) if (grepl("D07a : lecture brute ind", conditionMessage(e))) "erreur interne" else conditionMessage(e))
+  c(garde(env$controler_base), garde(controler_base), ne34(controler_base(b, A0, s34(1000), cv34), "D07a"))
+})
+cat("  G3b, C-G3-4 : bases où chaque clé a une ligne détectée ou écartée :", paste(names(touchees_g3b), touchees_g3b, collapse = ", "), "\n")
+verifier_egal("#105, G3b, C-G3-4 : chemin rapide et chemin forcé, 48 bases tirées (graine 20261127) : bilans identiques, aucune erreur ; chaque clé de G3b touchée ; garde : statut de service déclaré simple sous un événement non déterminé : erreur interne",
+              list(identical(rapides_g3b, forces_g3b), sum(vapply(rapides_g3b, is.character, NA)), all(touchees_g3b > 0L), garde_g3b),
+              list(TRUE, 0L, TRUE, c("erreur interne", "aucune", "dossiers NA declaration_absente")))
+# (reprise de l'audit de G3b, MAJEUR-1) chemin rapide contre chemin forcé, ligne à ligne (verdict et
+# cellules pertinentes), sur chaque contexte des oracles de C-G3-2 (1 500 contextes, même graine) :
+# un critère de complexité affaibli (lecture brute déterminée mais fausse, hors des lignes complexes)
+# y donne des écarts (mesure de l'audit : mutants m4, m8, m10 de scratchpad/audit19)
+cat("  G3b, C-G3-4 : chemin rapide contre chemin forcé sur les contextes de C-G3-2 :", rapide_g3b$contextes, "contextes,",
+    rapide_g3b$lignes, "lignes,", rapide_g3b$ecarts, "écarts\n")
+verifier_egal("#105, G3b, C-G3-4 (reprise, MAJEUR-1) : chemin rapide et chemin forcé sur les 1 500 contextes des oracles de C-G3-2 : verdict et cellules pertinentes identiques ligne à ligne",
+              list(rapide_g3b$contextes, rapide_g3b$ecarts), list(1500L, 0L))
+
+# --- C-G3-5 : invariance à l'ordre des lignes, en mode exact et au budget faible (40, copie de
+# l'espace de noms env_e14) : bases à refus de chaque règle de G3b (type d'un événement de RE1, date
+# d'un paiement, nature du décès de l'assuré du membre, code de la garantie du dossier de la rente de
+# conjoint, motif du fin_service, événement non déterminé à A0) ; bilan identique après inversion des
+# lignes et après une permutation tirée (graine 131), à A0 et à A
+bases_ordre_g3b <- list(ev_g3b(membre34, "xyz", "2026-01-01"),
+                        within(pr_nd34, prestations$date_reglement[3L] <- D("1850-01-01")),
+                        within(membre34, sinistres$nature_sinistre[3L] <- "xyz"),
+                        within(fs34(sans_sd34(de34("DO6"))), { garanties_souscrites$code_garantie[6L] <- "xyz"; evenements$motif[8L] <- "xyz" }),
+                        ev_g3b(de34("DO6"), "fin_service", "2025-03-01", rente = "RE3", dossier = "DO6", motif = "deces_beneficiaire", saisie = NA))
+ordre_g3b <- function(f) lapply(bases_ordre_g3b, function(b) vapply(list(A0, A), function(a) {
+  g <- function(x) f(x, a, s34(6), cv34)
+  r <- g(b)
+  identical(g(inverser_lignes(b)), r) && identical(g(melanger_lignes(b, 131L)), r)
+}, NA))
+ordre_exact_g3b <- ordre_g3b(controler_base)
+ordre_faible_g3b <- avec_budget_e14(40, list(ordre_g3b(env_e14$controler_base), etat_e14()), env = env_e14)
+verifier_egal("#105, G3b, C-G3-5 : cinq bases à refus de G3b : bilan identique après inversion et après une permutation tirée (graine 131), à A0 et à A, en mode exact et au budget 40 (des arbres approchés)",
+              list(ordre_exact_g3b, ordre_faible_g3b[[1L]], ordre_faible_g3b[[2L]][["approche"]] > 0L),
+              list(rep(list(c(TRUE, TRUE)), 5L), rep(list(c(TRUE, TRUE)), 5L), TRUE))
+cat("  G3b, C-G3-5 : arbres approchés / évalués au budget 40 :", paste(ordre_faible_g3b[[2L]], collapse = " / "), "\n")
+
+# --- C-G3-6 : invariance à la valeur brute, valeurs discriminantes : refus injecté dans
+# ctx$refus_valeur (hors_domaine) sur une cellule lue par G3b, puis deux valeurs brutes, posées dans la
+# base du contexte (vue inchangée), dont la lecture brute donne deux verdicts différents, à A
+# (l'invariance du bilan sous deux valeurs refusées de même motif est le test (14) de G1, piloté par le
+# registre, qui couvre les colonnes de G3b) : verdict et index_pertinent du noyau de Kleene
+# identiques ; la lecture brute (.verdict_d07a_brut(), .verdict_d07b_brut(), .verdict_d10f_brut(),
+# règle du mode bloquee) les distingue (mutant « valeur lue brute » détecté). Cas : type d'un
+# événement de RE1 (fin_service, ouverture_service) et sa date d'effet (avant, après l'arrêté) ;
+# nature du décès de l'assuré du membre (deces, arret_travail) ; lien du conjoint ME2 rattaché au
+# sinistre du second_deces (conjoint, enfant) ; code de la garantie du dossier incapacite DO3
+# (incapacite, deces) ; motif du fin_service de l'autre rente du membre (deces_beneficiaire, autre) ;
+# date du dernier paiement de RE1 (2025-04-01, 2026-12-01 ; d07b_mois 6) ; type du paiement de DO3
+# (indemnite_journaliere, arrerage ; d07b_mois 30) ; type du second_deces EV9 (second_deces, rechute)
+# et code de la garantie de la rente de conjoint (rente_conjoint, rente_education) pour D10f
+noyaux_g3b <- list(
+  d07a_r = function(ctx) list(ns$.verdict_d07a(ctx, "rentes", character(0)), ns$.verdict_d07a_brut(ctx, "rentes")),
+  d07a_d = function(ctx) list(ns$.verdict_d07a(ctx, "dossiers", character(0)), ns$.verdict_d07a_brut(ctx, "dossiers")),
+  d07b_r = function(ctx) list(ns$.verdict_d07b(ctx, "rentes", ctx$declarations$seuils$d07b_mois, character(0)),
+                              ns$.verdict_d07b_brut(ctx, "rentes", ctx$declarations$seuils$d07b_mois)),
+  d07b_d = function(ctx) list(ns$.verdict_d07b(ctx, "dossiers", ctx$declarations$seuils$d07b_mois, character(0)),
+                              ns$.verdict_d07b_brut(ctx, "dossiers", ctx$declarations$seuils$d07b_mois)),
+  d10f = function(ctx) list(ns$.verdict_d10f(ctx, character(0)), ns$.verdict_d10f_brut(ctx)))
+inv_brut_g3b <- function(b, t, c1, l, valeurs, noyau, s = s34(1000)) {
+  ctx <- vue_g3b(b, s)$ctx
+  ctx$refus_valeur[[t]][[c1]] <- c(ctx$refus_valeur[[t]][[c1]], list(list(code = "hors_domaine", lignes = l)))
+  out <- lapply(valeurs, function(x) {
+    # valeur brute changée dans la base du contexte, vue inchangée ; mémoires du statut de service vidées
+    ctx$base[[t]][[c1]][l] <- x
+    for (nm in grep("^service", ls(ctx), value = TRUE)) rm(list = nm, envir = ctx)
+    r <- noyaux_g3b[[noyau]](ctx)
+    list(kleene = list(as.vector(r[[1L]]), attr(r[[1L]], "index_pertinent")), brut = as.vector(r[[2L]]))
+  })
+  c(kleene = identical(out[[1L]]$kleene, out[[2L]]$kleene), brut = !identical(out[[1L]]$brut, out[[2L]]$brut))
+}
+inv_g3b <- list(
+  inv_brut_g3b(ev_g3b(membre34, "fin_service", "2026-01-01"), "evenements", "type_evenement", 7L, list("fin_service", "ouverture_service"), "d07a_r"),
+  inv_brut_g3b(ev_g3b(membre34, "fin_service", "2026-01-01"), "evenements", "date_effet", 7L, list(D("2026-01-01"), D("2028-01-01")), "d07a_r"),
+  inv_brut_g3b(membre34, "sinistres", "nature_sinistre", 3L, list("deces", "arret_travail"), "d07a_r"),
+  inv_brut_g3b(de34("DO2"), "famille", "lien", 2L, list("conjoint", "enfant"), "d07a_r"),
+  inv_brut_g3b(inc34, "garanties_souscrites", "code_garantie", 2L, list("incapacite", "deces"), "d07a_d"),
+  inv_brut_g3b(iii34, "evenements", "motif", 8L, list("deces_beneficiaire", "autre"), "d07a_r"),
+  inv_brut_g3b(base_ref, "prestations", "date_reglement", 3L, list(D("2025-04-01"), D("2026-12-01")), "d07b_r", s34(6)),
+  inv_brut_g3b(inc34, "prestations", "type_prestation", 1L, list("indemnite_journaliere", "arrerage"), "d07b_d", s34(30)),
+  inv_brut_g3b(de34("DO6"), "evenements", "type_evenement", 8L, list("second_deces", "rechute"), "d10f"),
+  inv_brut_g3b(fs34(sans_sd34(de34("DO6"))), "garanties_souscrites", "code_garantie", 6L, list("rente_conjoint", "rente_education"), "d10f"))
+verifier_egal("#105, G3b, C-G3-6 : invariance à la valeur brute, dix cas discriminants (type, date d'effet, nature, lien, code, motif, date de règlement, type de prestation ; D07a, D07b, D10f) : noyau de Kleene identique sous les deux valeurs brutes ; lecture brute différente (mutant détecté)",
+              inv_g3b, rep(list(c(kleene = TRUE, brut = TRUE)), 10L))
+
+# --- C-G3-7 : défaut corrigé (E-15 (c) ; mesure m4 d'actuary) : la règle bloquée lisait brutes la
+# date et le type refusés d'un événement retenu (.statut_service()) : EV11 de RE1 (membre34 : décès de
+# l'assuré du membre, D07a), de type « xyz » (hors_domaine) ou fin_service daté 1850-01-01 (D02c) : la
+# lecture brute rend RE1 non éteinte, détectée (service) ; le noyau de Kleene rend le statut inconnu,
+# EV11 pertinente (type, ou date d'effet), RE1 écartée par D07a, cause du refus. Avant (a29c088, mode
+# bloquee) : D07a et D07b bloquées sur rentes et dossiers, cause du refus, aucune détection
+m4_g3b <- function(b) {
+  ctx <- vue_g3b(b)$ctx
+  v <- ns$.verdict_d07a(ctx, "rentes", character(0))
+  list(as.vector(v)[1L], gsub("\r", ":", pert_ip(attr(v, "index_pertinent"), 1L)), as.vector(ns$.verdict_d07a_brut(ctx, "rentes"))[1L],
+       ne34(controler_base(b, A, s34(1000), cv34), c("D07a", "D07b")), co34(controler_base(b, A, s34(1000), cv34), "D07a"))
+}
+verifier_egal("#105, G3b, C-G3-7 : EV11 de RE1 de type refusé (xyz) ou fin_service daté 1850 : statut inconnu, EV11 pertinente, lecture brute vraie (défaut corrigé) ; RE1 écartée par D07a (hors_domaine ; D02c), aucune détection ; témoin sans EV11 : RE1 détectée",
+              list(m4_g3b(ev_g3b(membre34, "xyz", "2026-01-01")), m4_g3b(ev_g3b(membre34, "fin_service", "1850-01-01", motif = "autre")),
+                   co34(controler_base(membre34, A, s34(1000), cv34), "D07a")),
+              list(list(NA, "evenements.type_evenement:7", TRUE, "rentes NA hors_domaine", character(0)),
+                   list(NA, "evenements.date_effet:7", TRUE, "rentes NA D02c", character(0)), "rentes exacte RE1"))
+
+# --- C-G3-8 (f) : D07b sans d07b_mois, lecture existentielle (E-15 (f)) : une valeur refusée rend
+# l'unité possiblement en service, « colonne illisible » réduit aux causes de forme ou de portée
+# table. EV11 de RE1 de type refusé (RE1 en service par EV5) : exigence d07b_mois, (D07b, rentes)
+# declaration_absente seule (avant, a29c088 : en plus hors_domaine sur rentes et dossiers, exigence) ;
+# RE1 éteinte (eteinte34) et type refusé de EV1 (entree_incapacite de SI2, sortie possible de DO3, qui
+# ne peut suivre la sortie EV3) : aucune unité possiblement en service, ni exigence ni ligne (avant :
+# exigence, hors_domaine) ; type refusé de la fin EV6 de RE1 : RE1 possiblement en service, exigence
+d07b_f_g3b <- function(b) {
+  r <- controler_base(b, A, conventions = cv34)
+  list(ne34(r, "D07b"), rq34(r, "D07b"))
+}
+verifier_egal("#105, G3b, C-G3-8 (f) : D07b sans seuil : type refusé d'un événement de RE1 en service : declaration_absente seule et exigence ; RE1 éteinte, type refusé de EV1 qui ne peut suivre la sortie de DO3 : ni ligne ni exigence ; type refusé de la fin de RE1 : exigence",
+              list(d07b_f_g3b(ev_g3b(base_ref, "xyz", "2026-01-01")), d07b_f_g3b(within(eteinte34, evenements$type_evenement[1L] <- "xyz")),
+                   d07b_f_g3b(within(eteinte34, evenements$type_evenement[6L] <- "xyz"))),
+              list(list("rentes NA declaration_absente", "seuils d07b_mois NA NA"), list(character(0), character(0)),
+                   list("rentes NA declaration_absente", "seuils d07b_mois NA NA")))
+
+# --- Charge (E-14) : RE1 à 200 événements (ouverture puis 199 modifications de montant), six
+# cellules refusées (trois types « xyz », dont le dernier événement, trois dates 1850-01-01), base
+# membre34 (D07a, D07b) : statut inconnu (le dernier peut être une fin), RE1 écartée ; unité D07b de
+# 120 paiements de RE1 (de 2017-01-01 à 2021-11-21), quatre dates de règlement refusées
+# (1850-01-01) : la référence peut être postérieure au seuil, RE1 écartée ; au budget B : nombre
+# d'arbres évalués et approchés, plus grand W (≤ B) et w_inf, verdicts ; temps à titre d'information
+charge_g3b <- function(b) {
+  t0 <- proc.time()[["elapsed"]]
+  x <- avec_budget_e14(B_e14, {
+    r <- env_e14$controler_base(b, A, s34(6), cv34)
+    list(ne34(r, c("D07a", "D07b")), co34(r, c("D07a", "D07b")), etat_e14(), journal_e14$w <= B_e14, journal_e14$w, journal_e14$w_inf)
+  }, env = env_e14)
+  c(x, temps = round(proc.time()[["elapsed"]] - t0, 1))
+}
+b200_g3b <- local({
+  b <- membre34
+  e <- b$evenements[b$evenements$id_rente %in% "RE1", ]
+  b$evenements <- b$evenements[!(b$evenements$id_rente %in% "RE1"), ]
+  n <- tab("evenements", id_evenement = sprintf("EM%03d", 1:199), id_sinistre = "SI1", id_dossier = "DO2", id_rente = "RE1",
+           type_evenement = "modification_montant", date_effet = D("2025-02-01") + 1:199, date_saisie = D("2025-02-01") + 1:199, montant = 3000)
+  n$type_evenement[c(50L, 120L, 199L)] <- "xyz"
+  n$date_effet[c(80L, 150L, 190L)] <- D("1850-01-01")
+  b$evenements <- rbind(b$evenements, e, n)
+  b
+})
+b120_g3b <- local({
+  b <- base_ref
+  p <- b$prestations[3L, ][rep(1L, 120L), ]
+  p$id_prestation <- sprintf("PM%03d", 1:120)
+  p$date_reglement <- D("2017-01-01") + 15 * (0:119)
+  p$date_saisie <- p$date_reglement
+  p$date_reglement[c(10L, 50L, 90L, 120L)] <- D("1850-01-01")
+  b$prestations <- rbind(b$prestations[-3L, ], p)
+  b
+})
+charge_200_g3b <- charge_g3b(b200_g3b)
+charge_120_g3b <- charge_g3b(b120_g3b)
+cat("  G3b, charge : RE1 à 200 événements, 6 cellules refusées : arbres", paste(charge_200_g3b[[3L]], collapse = " / "), ", W", charge_200_g3b[[5L]],
+    ", w_inf", charge_200_g3b[[6L]], ",", charge_200_g3b$temps, "s ; 120 paiements, 4 dates refusées : arbres",
+    paste(charge_120_g3b[[3L]], collapse = " / "), ", W", charge_120_g3b[[5L]], ", w_inf", charge_120_g3b[[6L]], ",", charge_120_g3b$temps, "s\n")
+verifier_egal("#105, G3b, charge (E-14) : RE1 à 200 événements, 6 cellules refusées : RE1 écartée par D07a et D07b (hors_domaine), 20 arbres (depuis G3c, deux de D07c), aucun approché, W = w_inf = 300 ≤ B ; 120 paiements, 4 dates refusées : RE1 écartée par D07b (D02c), 2 arbres, aucun approché, W = w_inf = 116 640 ≤ B",
+              list(unname(charge_200_g3b[1:6]), unname(charge_120_g3b[1:6])),
+              list(list(c("rentes NA hors_domaine", "rentes NA hors_domaine"), character(0), c(n = 20L, approche = 0L), TRUE, 300, 300),
+                   list("rentes NA D02c", character(0), c(n = 2L, approche = 0L), TRUE, 116640, 116640)))
+
+# --- Reprise de l'audit de G3b : témoins des mineurs MINEUR-1 à MINEUR-3 (contexte réduit de
+# C-G3-2, plage du 2025-01-01 au 2025-02-28, arrêté 2025-02-10)
+# (MINEUR-1) feuille constante évaluée à la construction (.constante_forcee3()) : RE1 sur DO2
+# (rente_conjoint, SI1), ME1 en deux versions non déterminées rattachées à SI1 puis à SI9 (cellule de
+# choix), second_deces de DO5 (double_effet, SI1), aucun décès de l'assuré du membre : la version
+# rattachée à SI1 est hors de la configuration de D10f exclue de D07a (rente de conjoint du même
+# sinistre), l'autre sans second_deces : D07a faux, sans cellule pertinente, dans les deux ordres des
+# versions (une promesse lue après la boucle des versions rendait « même sinistre » faux et le verdict
+# inconnu ; mesure de l'audit, mutant m1)
+promesse_g3b <- function(fs) {
+  base <- list(garanties_souscrites = data.frame(id_garantie_souscrite = c("G2", "G5"), code_garantie = c("rente_conjoint", "double_effet"),
+                                                 stringsAsFactors = FALSE),
+               dossiers = data.frame(id_dossier = c("DO2", "DO5"), id_sinistre = "SI1", id_garantie_souscrite = c("G2", "G5"), stringsAsFactors = FALSE),
+               sinistres = data.frame(id_sinistre = c("SI1", "SI2"), id_assure = c("AS1", "AS2"), nature_sinistre = "arret_travail",
+                                      date_survenance = plage_g3b[1L] + 5, stringsAsFactors = FALSE),
+               famille = data.frame(id_membre = c("ME1", "ME1"), id_assure_membre = "AS2", id_sinistre = fs, lien = "conjoint", stringsAsFactors = FALSE),
+               rentes = data.frame(id_rente = "RE1", id_dossier = "DO2", id_membre = "ME1", stringsAsFactors = FALSE),
+               evenements = evs_g3b(2L, id_sinistre = "SI1", id_dossier = c("DO2", "DO5"), id_rente = c("RE1", NA),
+                                    type = c("ouverture_service", "second_deces"), date = plage_g3b[1L] + c(2, 10)))
+  r <- env_g3b$.verdict_d07a(ctx_g2b(base, list(), list(famille = c(TRUE, TRUE)), arrete = a_g3b), "rentes", character(0), forcer = TRUE)
+  list(as.vector(r)[1L], pert_ip(attr(r, "index_pertinent"), 1L))
+}
+# (MINEUR-2) branche des ouvertures de D07b : RE1 sans paiement, ouverture EV0 retenue au 2025-01-25 et
+# événement E01 de type refusé au 2025-01-20, entre le seuil (s = 2025-01-10, d07b_mois 1) et l'arrêté,
+# antérieur à EV0 (il ne peut suivre la base du statut de service) : la première ouverture possible est
+# postérieure au seuil, non détectée, D07b faux sans cellule pertinente (une ouverture lue sans le seuil
+# rendait le verdict inconnu ; mutant m2) ; témoin, E01 au 2025-01-05, avant le seuil : inconnu, E01
+# pertinente (type)
+ouverture_g3b <- function(d1) {
+  ev <- evs_g3b(2L, id_sinistre = "SI1", id_dossier = "DO2", id_rente = "RE1", type = "ouverture_service",
+                date = as.numeric(D(c(d1, "2025-01-25"))))
+  base <- list(rentes = data.frame(id_rente = "RE1", id_dossier = "DO2", id_membre = "ME1", stringsAsFactors = FALSE), evenements = ev,
+               dossiers = data.frame(id_dossier = "DO2", id_sinistre = "SI1", id_garantie_souscrite = "G3", stringsAsFactors = FALSE),
+               garanties_souscrites = data.frame(id_garantie_souscrite = "G3", code_garantie = "rente_education", stringsAsFactors = FALSE),
+               prestations = data.frame(id_prestation = character(0), id_rente = character(0), id_dossier = character(0),
+                                        nature_mouvement = character(0), type_prestation = character(0), date_reglement = numeric(0),
+                                        stringsAsFactors = FALSE))
+  r <- env_g3b$.verdict_d07b(ctx_g2b(base, list("evenements.type_evenement" = 1L), arrete = a_g3b), "rentes", 1L, character(0))
+  list(as.vector(r)[1L], gsub("\r", ":", pert_ip(attr(r, "index_pertinent"), 1L)))
+}
+# (MINEUR-3) cellule de choix sans version non déterminée à inscrire (deux versions retenues de ME1,
+# état hors de la vue réelle, où la clé de famille est unique) : le verdict inconnu n'a aucune
+# cellule pertinente à inscrire, .issue3() s'arrête (erreur interne) au lieu de rendre une pertinence
+# « famille » vide (constat de l'audit, s10.R)
+doublon_g3b <- local({
+  base <- list(garanties_souscrites = data.frame(id_garantie_souscrite = "G2", code_garantie = "rente_education", stringsAsFactors = FALSE),
+               dossiers = data.frame(id_dossier = "DO2", id_sinistre = "SI1", id_garantie_souscrite = "G2", stringsAsFactors = FALSE),
+               sinistres = data.frame(id_sinistre = c("SI1", "SI2"), id_assure = c("AS1", "AS2"), nature_sinistre = c("arret_travail", "deces"),
+                                      date_survenance = plage_g3b[1L] + 5, stringsAsFactors = FALSE),
+               famille = data.frame(id_membre = c("ME1", "ME1"), id_assure_membre = c("AS2", "AS9"), id_sinistre = "SI1", lien = "enfant",
+                                    stringsAsFactors = FALSE),
+               rentes = data.frame(id_rente = "RE1", id_dossier = "DO2", id_membre = "ME1", stringsAsFactors = FALSE),
+               evenements = evs_g3b(1L, id_sinistre = "SI1", id_dossier = "DO2", id_rente = "RE1", type = "ouverture_service", date = plage_g3b[1L] + 2))
+  tryCatch({ env_g3b$.verdict_d07a(ctx_g2b(base, arrete = a_g3b), "rentes", character(0), forcer = TRUE); "aucune" },
+           error = function(e) if (grepl("verdict inconnu sans cellule pertinente", conditionMessage(e))) "erreur interne" else conditionMessage(e))
+})
+verifier_egal("#105, G3b, reprise de l'audit (MINEUR-1 à MINEUR-3) : D07a, ME1 en deux versions non déterminées (SI1, SI9) : faux, aucune cellule pertinente, dans les deux ordres ; D07b sans paiement, ouverture de type refusé entre le seuil et l'arrêté : faux ; avant le seuil : inconnu, E01 pertinente ; choix de version sans version non déterminée : erreur interne",
+              list(promesse_g3b(c("SI1", "SI9")), promesse_g3b(c("SI9", "SI1")), ouverture_g3b("2025-01-20"), ouverture_g3b("2025-01-05"), doublon_g3b),
+              list(list(FALSE, NULL), list(FALSE, NULL), list(FALSE, character(0)),
+                   list(NA, "evenements.type_evenement:1"), "erreur interne"))
+
+section("donnees : #105, lot V, conversion G3c : D07c et D08 en logique de Kleene (M808 ; spécification `donnees`, erratum `1.9.7`, E-15 ; D-G3-1, D-G3-2, D-G3-4 à D-G3-6)")
+# --- C-G3-2 : oracles par énumération exhaustive (constat de simulation : graine locale 20261128
+# sous le générateur de outils::avec_graine(), état global rétabli ; nombre de cas annoncé par
+# règle). Contexte réduit de la section G3b (ctx_g2b(), accesseurs de env_g3b, copiés dans env_g3c) ;
+# D07c : arrêté a = 2025-02-10, plage des dates d'événement et de décès du 2025-01-01 au 2025-02-28,
+# naissances du 1999-02-04 au 1999-02-16 (26e anniversaire, convention revolu, autour de l'arrêté),
+# limites d'âge connues de 24 à 28 ; D08 : plage des survenances et des dates d'effet du 2025-01-01 au
+# 2025-01-31, arrêté a = 2025-01-25, délais connus de 4 à 10 jours. Cellules tirées (au plus quatre,
+# au plus 4 000 mondes) parmi les valeurs refusées des colonnes de E-15 (b) lues par la règle et les
+# présences des lignes non déterminées ; mondes : produit des domaines (colonnes énumérées : domaine
+# entier, l'absence comprise pour une colonne facultative ; dates : chaque jour de la plage de la
+# naissance et, pour D08, de la survenance et de l'effet ; dates d'événement et de décès de D07c :
+# bornes, a et chaque date connue du cas, avec la veille et le lendemain, et l'absence d'une date de
+# décès ; valeur d'un paramètre : de 0 à 30 pour une limite d'âge, de 0 à 12 pour un délai ;
+# présence : vrai, faux ; version valable d'un membre : ses versions possibles, l'absence comprise),
+# verdict du monde par une réécriture directe de la règle (limite : valeur commune des lignes du
+# paramètre, NA si elles diffèrent ; statut de service comme en G3b ; délai de S1 : lignes des
+# dossiers retenus de S1 de code incapacite dans le monde). Verdict de l'oracle et cellules
+# pertinentes : comme en G3b. Chemin forcé (`forcer`), comparé ligne à ligne au chemin rapide
+# (rapide_force_g3c(), dès cette section : C-G3-4 sur les contextes des oracles). Attendu : hors (c)
+# (D07c dossiers, D08, D07c rentes sans cellule sur un événement de la rente), verdict et
+# index_pertinent identiques (cellule de choix de version : toutes les versions non déterminées du
+# membre, E-15 (d)) ; sous (c), aucun verdict déterminé contraire, pertinence sur-ensemble ; tout
+# verdict inconnu à pertinence non vide.
+env_g3c <- new.env(parent = ns)
+for (nom in ls(env_g3b, all.names = TRUE)) {
+  g0 <- get(nom, envir = env_g3b)
+  if (is.function(g0) && identical(environment(g0), env_g3b)) environment(g0) <- env_g3c
+  assign(nom, g0, envir = env_g3c)
+}
+plages_g3c <- new.env()
+plages_g3c$p <- list("famille.date_naissance" = as.numeric(D(c("1999-02-04", "1999-02-16"))))
+env_g3c$.plage_date3 <- function(ctx, table, colonne) {
+  p <- plages_g3c$p[[paste(table, colonne, sep = ".")]]
+  if (is.null(p)) plage_g3b else p
+}
+# visibilité de famille du contexte réduit (lue par la lecture brute de D07c sur dossiers) : aucune
+# candidate, membre par identifiant, version non déterminée de statut NA
+env_g3c$.visibilite_a <- function(ctx, mode = "vue") {
+  f <- ctx$base$famille
+  nd <- env_g3c$.nd_vue(ctx, "famille")
+  list(parties = ctx$parties, candidate = rep(FALSE, NROW(f)), membre = as.character(f$id_membre),
+       statut = list(famille = ifelse(nd, NA, TRUE)))
+}
+avec_graine_g3c <- function(expr, graine = 20261128L) ns$avec_graine(graine, expr)
+nais_g3c <- seq(plages_g3c$p[["famille.date_naissance"]][1L], plages_g3c$p[["famille.date_naissance"]][2L])
+dates_g3c <- function(dates) {
+  p <- sort(unique(c(plage_g3b, a_g3b + -1:1, dates + rep(-1:1, each = length(dates)))))
+  p[p >= plage_g3b[1L] & p <= plage_g3b[2L]]
+}
+# domaines de l'oracle de D07c
+dom_g3c <- function(tc, dates) {
+  if (tc == "famille.date_naissance") return(nais_g3c)
+  if (tc == "famille.date_deces") return(c(dates_g3c(dates), NA))
+  if (tc == "evenements.date_effet") return(dates_g3c(dates))
+  if (tc == "parametres.valeur") return(0:30)
+  m <- strsplit(tc, ".", fixed = TRUE)[[1L]]
+  ns$.domaine3(list(dico = d), m[1L], m[2L])
+}
+tirer_cel_g3c <- function(cand, base, max = 4L, dates = numeric(0), dom = dom_g3c, plafond = 4000) {
+  repeat {
+    noms <- tirer_g2b(names(cand), max)
+    inc <- list()
+    nd <- lapply(base, function(x) rep(FALSE, nrow(x)))
+    doms <- list()
+    for (nm in noms) {
+      z <- cand[[nm]]
+      if (identical(z$type, "nd")) {
+        nd[[z$t]][z$l] <- TRUE
+        doms[[paste0(z$t, "\r", z$l)]] <- c(TRUE, FALSE)
+      } else {
+        inc[[z$tc]] <- c(inc[[z$tc]], z$l)
+        doms[[paste0(z$tc, "\r", z$l)]] <- dom(z$tc, dates)
+      }
+    }
+    if (prod(as.numeric(lengths(doms))) <= plafond) return(list(noms = noms, inc = inc, nd = nd, doms = doms))
+  }
+}
+# tirage des cas de #125 (E-17, `p125`) : une ou deux présences tirées d'abord parmi les éléments
+# porteurs de lignes de P (`pres`, candidates de type "nd" : dossiers, garanties souscrites), puis au
+# plus `max` autres cellules par tirer_cel_g3c() ; les lignes de parametres d'une garantie souscrite
+# non déterminée sont non déterminées (parente_non_determinee, sans cellule propre). Hors `p125` :
+# tirer_cel_g3c(), inchangé
+tirer_p125_g3c <- function(p125, cand, pres, base, max, dates = numeric(0), dom = dom_g3c, plafond = 4000) {
+  if (!p125) return(tirer_cel_g3c(cand, base, max, dates = dates, dom = dom, plafond = plafond))
+  repeat {
+    np <- names(pres)[sample.int(length(pres))][seq_len(sample(seq_len(min(2L, length(pres))), 1L))]
+    x <- tirer_cel_g3c(cand, base, max, dates = dates, dom = dom, plafond = plafond / 2^length(np))
+    for (nm in np) {
+      z <- pres[[nm]]
+      x$nd[[z$t]][z$l] <- TRUE
+      x$doms[[paste0(z$t, "\r", z$l)]] <- c(TRUE, FALSE)
+    }
+    x$noms <- c(x$noms, np)
+    g <- base$garanties_souscrites$id_garantie_souscrite[x$nd$garanties_souscrites]
+    x$nd$parametres <- base$parametres$id_garantie_souscrite %in% g
+    if (prod(as.numeric(lengths(x$doms))) <= plafond) return(x)
+  }
+}
+# chemin rapide contre chemin forcé, ligne à ligne (comme rapide_force_g3b(), compteurs propres)
+rapide_g3c <- new.env()
+rapide_g3c$contextes <- 0L
+rapide_g3c$lignes <- 0L
+rapide_g3c$ecarts <- 0L
+rapide_force_g3c <- function(f) {
+  rf <- f(TRUE)
+  rr <- tryCatch(f(FALSE), error = function(e) NULL)
+  n <- length(rf)
+  diff <- if (is.null(rr)) rep(TRUE, n) else vapply(seq_len(n), function(l) !identical(list(as.vector(rf)[l], pert_ip(attr(rf, "index_pertinent"), l)),
+                                                    list(as.vector(rr)[l], pert_ip(attr(rr, "index_pertinent"), l))), NA)
+  rapide_g3c$contextes <- rapide_g3c$contextes + 1L
+  rapide_g3c$lignes <- rapide_g3c$lignes + n
+  rapide_g3c$ecarts <- rapide_g3c$ecarts + sum(diff)
+  rf
+}
+# valeur d'un paramètre dans chaque monde : valeur commune des lignes `ks`, NA si elles diffèrent ;
+# `pres` (#125, E-17 (b)) : présence de la garantie souscrite qui porte les lignes (absente : aucune
+# ligne, valeur NA, non ambiguë)
+param_monde_g3c <- function(W, ks, pres = rep(TRUE, W$n)) {
+  if (length(ks) == 0L) return(list(v = rep(NA_real_, W$n), amb = rep(FALSE, W$n)))
+  m <- matrix(vapply(ks, function(k) as.numeric(W$V("parametres", "valeur", k)), numeric(W$n)), nrow = W$n)
+  eg <- apply(m, 1L, function(r) length(unique(r)) == 1L)
+  list(v = ifelse(eg & pres, m[, 1L], NA_real_), amb = !eg & pres)
+}
+# version `j` de famille à charge et éteinte (`eteint`) ou à charge et non éteinte, sous la
+# garantie de ligne `w` (paramètres de la base de clé `cle`), dans chaque monde
+enfant_monde_g3c <- function(W, base, j, w, cle, la, eteint) {
+  lien <- W$V("famille", "lien", j)
+  dd <- as.numeric(W$V("famille", "date_deces", j))
+  nai <- as.numeric(W$V("famille", "date_naissance", j))
+  st <- W$V("famille", "situation", j)
+  ph <- W$V("garanties_souscrites", "prolongation_handicap", w)
+  p <- base$parametres
+  pres <- W$P("garanties_souscrites", w)
+  l1 <- param_monde_g3c(W, which(p$id_garantie_souscrite == cle & p$parametre == "age_limite"), pres)
+  l2 <- param_monde_g3c(W, which(p$id_garantie_souscrite == cle & p$parametre == "age_limite_etudes"), pres)
+  etudes <- st %in% c("scolarise", "apprenti")
+  lim <- ifelse(etudes & !is.na(l2$v), l2$v, l1$v)
+  lim[etudes & l2$amb] <- NA
+  lim <- lim + (la$regle == "depassement")
+  age <- ns$calculer_age(structure(nai, class = "Date"), rep(structure(a_g3b, class = "Date"), W$n), la$age)
+  hand <- ph %in% TRUE & st %in% "handicape"
+  e <- !is.na(age) & !hand & !is.na(lim) & age >= lim
+  lien %in% "enfant" & (is.na(dd) | dd > a_g3b) & (if (eteint) e else !e)
+}
+fam_g3c <- function(nf, id_assure = "AS1") {
+  data.frame(id_membre = rep("ME1", nf), id_assure = id_assure, lien = sample(c("enfant", "enfant", "enfant", "conjoint"), nf, TRUE),
+             date_naissance = D(sample(nais_g3c, nf, TRUE)), situation = sample(c("autre", "autre", "scolarise", "handicape", NA), nf, TRUE),
+             date_deces = D(ifelse(runif(nf) < 0.8, NA, sample(c(plage_g3b[1L] + 20, plage_g3b[1L] + 50), nf, TRUE))),
+             id_sinistre = "SI1", stringsAsFactors = FALSE)
+}
+par_g3c <- function(gs) {
+  n1 <- sample(0:2, 1L, prob = c(1, 4, 2))
+  n2 <- sample(0:1, 1L)
+  data.frame(id_garantie_souscrite = rep(gs, n1 + n2), parametre = c(rep("age_limite", n1), rep("age_limite_etudes", n2)),
+             valeur = c(sample(24:27, n1, TRUE), sample(26:28, n2, TRUE)), stringsAsFactors = FALSE)
+}
+cand_fam_g3c <- function(j, nom = "f") {
+  x <- lapply(c("lien", "date_naissance", "situation", "date_deces"), function(c1) list(tc = paste0("famille.", c1), l = j))
+  stats::setNames(x, paste0(nom, j, c("li", "na", "si", "dd")))
+}
+cand_par_g3c <- function(par, decal = 0L) {
+  if (nrow(par) == 0L) return(list())
+  stats::setNames(lapply(seq_len(nrow(par)) + decal, function(k) list(tc = "parametres.valeur", l = k)), paste0("pv", seq_len(nrow(par)) + decal))
+}
+
+# (a) D07c, rentes : RE1 (DO2, membre ME1) ; DO2 (SI1, G2 : rente_education le plus souvent) ; G2 de
+# prolongation_handicap tirée, de zéro à deux lignes age_limite et zéro ou une age_limite_etudes ; ME1 :
+# une version retenue, ou une ou deux versions non déterminées (cellule de choix : ces versions et
+# l'absence), lien, naissance, situation et décès tirés ; un ou deux événements du service de RE1.
+# Sous (c) : cellule sur un événement de RE1.
+sim_d07c_ren_g3c <- function(nb, p125 = FALSE, graine = 20261128L) avec_graine_g3c(graine = graine, lapply(seq_len(nb), function(k) {
+  ns1 <- sample(1:2, 1L)
+  nv <- sample(c("retenue", "retenue", "nd1", "nd2"), 1L)
+  nf <- if (nv == "nd2") 2L else 1L
+  la <- list(regle = sample(c("atteinte", "depassement"), 1L), age = "revolu")
+  ev <- evs_g3b(ns1, id_sinistre = "SI1", id_dossier = "DO2", id_rente = "RE1", type = sample(types_service_g3b[1:5], ns1, TRUE),
+                date = sample(jours_g3b, ns1, TRUE))
+  par <- par_g3c("G2")
+  fam <- fam_g3c(nf)
+  base <- list(garanties_souscrites = data.frame(id_garantie_souscrite = "G2", code_garantie = sample(c("rente_education", "rente_education",
+                                                                                                         "rente_conjoint"), 1L),
+                                                 prolongation_handicap = sample(c(TRUE, FALSE), 1L), stringsAsFactors = FALSE),
+               dossiers = data.frame(id_dossier = "DO2", id_sinistre = "SI1", id_garantie_souscrite = "G2", stringsAsFactors = FALSE),
+               famille = fam, rentes = data.frame(id_rente = "RE1", id_dossier = "DO2", id_membre = "ME1", stringsAsFactors = FALSE),
+               parametres = par, evenements = ev)
+  cand <- c(list(code = list(tc = "garanties_souscrites.code_garantie", l = 1L), ph = list(tc = "garanties_souscrites.prolongation_handicap", l = 1L)),
+            cand_par_g3c(par), cand_fam_g3c(1L), cand_ev_g3b(seq_len(ns1)))
+  x <- tirer_p125_g3c(p125, cand, list(gs = list(type = "nd", t = "garanties_souscrites", l = 1L)), base, if (p125) 3L else 4L,
+                      dates = c(ev$date_effet, as.numeric(fam$date_deces[!is.na(fam$date_deces)])))
+  versions <- if (nv == "retenue") 1L else c(seq_len(nf), NA)
+  if (nv != "retenue") {
+    x$nd$famille <- rep(TRUE, nf)
+    x$doms[["choix"]] <- seq_along(versions)
+    if (prod(as.numeric(lengths(x$doms))) > 8000) x$doms <- x$doms[!grepl("^famille.date_naissance", names(x$doms))]
+  }
+  garde <- names(x$doms)
+  inc <- lapply(stats::setNames(names(x$inc), names(x$inc)), function(tc) x$inc[[tc]][paste0(tc, "\r", x$inc[[tc]]) %in% garde])
+  inc <- inc[lengths(inc) > 0L]
+  ctx <- ctx_g2b(base, inc, x$nd, arrete = D(a_g3b))
+  r <- rapide_force_g3c(function(forcer) env_g3c$.verdict_d07c(ctx, "rentes", la, character(0), forcer = forcer))
+  oracle <- enum_g2b(x$doms, function(g) {
+    W <- monde_g3b(g, base, x$nd)
+    cl <- classe_monde_g3b(W, seq_len(ns1), porteurs_rente_g3b, rep(FALSE, ns1), a_g3b)
+    ch <- if (nv == "retenue") rep(1L, W$n) else val_g2b(g, "choix", 1L)
+    enf <- rep(FALSE, W$n)
+    for (z in seq_along(versions)) if (!is.na(versions[z])) enf <- enf | (ch == z & enfant_monde_g3c(W, base, versions[z], 1L, "G2", la, TRUE))
+    W$V("garanties_souscrites", "code_garantie", 1L) %in% "rente_education" & cl %in% c("service", "suspension") & enf
+  })
+  carte <- function(id) if (id == "choix") paste0("famille\r", seq_len(nf)) else id
+  cmp_g3b(r, 1L, oracle, any(grepl("^evenements", names(x$doms))), carte)
+}))
+
+# (b) D07c, dossiers : DO4 (SI1 de AS1, G5 : double_effet le plus souvent) ; G5 de
+# prolongation_handicap et de paramètres tirés ; ME1 (une version retenue, ou deux versions non
+# déterminées, cellule de choix) et ME2 (une version retenue, ou non déterminée, cellule de choix
+# avec l'absence), l'une rattachée parfois à un autre assuré (AS9 : hors charge) ; zéro à deux
+# événements de DO4 (cloture_dossier, second_deces ou rechute, date tirée).
+sim_d07c_dos_g3c <- function(nb, p125 = FALSE, graine = 20261128L) avec_graine_g3c(graine = graine, lapply(seq_len(nb), function(k) {
+  la <- list(regle = sample(c("atteinte", "depassement"), 1L), age = "revolu")
+  v1 <- sample(c("retenue", "retenue", "nd2"), 1L)
+  v2 <- sample(c("retenue", "nd"), 1L)
+  n1 <- if (v1 == "nd2") 2L else 1L
+  fam <- rbind(fam_g3c(n1), transform(fam_g3c(1L), id_membre = "ME2"))
+  if (runif(1L) < 0.2) fam$id_assure[sample.int(nrow(fam), 1L)] <- "AS9"
+  ne <- sample(0:2, 1L)
+  ev <- evs_g3b(ne, id_sinistre = "SI1", id_dossier = "DO4", type = sample(c("cloture_dossier", "second_deces", "rechute"), ne, TRUE),
+                date = sample(jours_g3b, ne, TRUE))
+  par <- par_g3c("G5")
+  base <- list(garanties_souscrites = data.frame(id_garantie_souscrite = "G5", code_garantie = sample(c("double_effet", "double_effet", "deces"), 1L),
+                                                 prolongation_handicap = sample(c(TRUE, FALSE), 1L), stringsAsFactors = FALSE),
+               dossiers = data.frame(id_dossier = "DO4", id_sinistre = "SI1", id_garantie_souscrite = "G5", stringsAsFactors = FALSE),
+               sinistres = data.frame(id_sinistre = "SI1", id_assure = "AS1", stringsAsFactors = FALSE),
+               famille = fam, parametres = par, evenements = ev)
+  cand <- c(list(code = list(tc = "garanties_souscrites.code_garantie", l = 1L), ph = list(tc = "garanties_souscrites.prolongation_handicap", l = 1L)),
+            cand_par_g3c(par), cand_fam_g3c(1L), cand_fam_g3c(n1 + 1L), cand_ev_g3b(seq_len(ne)))
+  x <- tirer_p125_g3c(p125, cand, list(gs = list(type = "nd", t = "garanties_souscrites", l = 1L)), base, if (p125) 3L else 4L,
+                      dates = c(ev$date_effet, as.numeric(fam$date_deces[!is.na(fam$date_deces)])), plafond = 2000)
+  ver <- list(if (v1 == "retenue") 1L else c(1L, 2L, NA), if (v2 == "retenue") n1 + 1L else c(n1 + 1L, NA))
+  x$nd$famille <- c(rep(v1 != "retenue", n1), v2 != "retenue")
+  if (v1 != "retenue") x$doms[["choix1"]] <- seq_along(ver[[1L]])
+  if (v2 != "retenue") x$doms[["choix2"]] <- seq_along(ver[[2L]])
+  ctx <- ctx_g2b(base, x$inc, x$nd, arrete = D(a_g3b))
+  r <- rapide_force_g3c(function(forcer) env_g3c$.verdict_d07c(ctx, "dossiers", la, character(0), forcer = forcer))
+  oracle <- enum_g2b(x$doms, function(g) {
+    W <- monde_g3b(g, base, x$nd)
+    clos <- Reduce(`|`, lapply(seq_len(ne), function(e) W$P("evenements", e) & W$V("evenements", "type_evenement", e) %in% c("cloture_dossier", "second_deces") &
+                                 W$V("evenements", "date_effet", e) <= a_g3b), rep(FALSE, W$n))
+    ok <- rep(TRUE, W$n)
+    un <- rep(FALSE, W$n)
+    for (m in 1:2) {
+      ch <- if (length(ver[[m]]) == 1L) rep(1L, W$n) else val_g2b(g, paste0("choix", m), 1L)
+      for (z in seq_along(ver[[m]])) {
+        j <- ver[[m]][z]
+        if (is.na(j) || fam$id_assure[j] != "AS1") next
+        ok <- ok & !(ch == z & enfant_monde_g3c(W, base, j, 1L, "G5", la, FALSE))
+        un <- un | (ch == z & enfant_monde_g3c(W, base, j, 1L, "G5", la, TRUE))
+      }
+    }
+    W$V("garanties_souscrites", "code_garantie", 1L) %in% "double_effet" & !clos & ok & un
+  })
+  carte <- function(id) if (id == "choix1") paste0("famille\r", 1:2) else if (id == "choix2") paste0("famille\r", n1 + 1L) else id
+  cmp_g3b(r, 1L, oracle, FALSE, carte)
+}))
+
+# (c) D08 : SI3 (AS1), nouveau sinistre ; SI2 (AS1) et SI5 (AS2) ; dossiers retenus DO2 et DO3 de SI2
+# (G2, G3 : incapacite le plus souvent) ; un ou deux délais pour G2, zéro ou un pour G3 (un, trois fois
+# sur quatre) ; événements :
+# un ou deux de SI2 (sortie ou rechute, reprise_travail ou fin_droits), un de SI5 (sortie
+# reprise_travail, autre assuré), un de SI3 (le même sinistre) ; survenance de SI3 de deux jours avant
+# à onze jours après l'effet du premier événement de SI2 ; verdict de SI3.
+plage_d08_g3c <- as.numeric(D(c("2025-01-01", "2025-01-31")))
+a_d08_g3c <- as.numeric(D("2025-01-25"))
+jours_d08_g3c <- seq(plage_d08_g3c[1L], plage_d08_g3c[2L])
+dom_d08_g3c <- function(tc, dates) {
+  if (tc %in% c("sinistres.date_survenance", "evenements.date_effet")) return(jours_d08_g3c)
+  if (tc == "parametres.valeur") return(0:12)
+  m <- strsplit(tc, ".", fixed = TRUE)[[1L]]
+  ns$.domaine3(list(dico = d), m[1L], m[2L])
+}
+sim_d08_g3c <- function(nb, p125 = FALSE, graine = 20261128L) avec_graine_g3c(graine = graine, lapply(seq_len(nb), function(k) {
+  n2 <- sample(1:2, 1L)
+  ev <- data.frame(id_evenement = sprintf("E%02d", seq_len(n2 + 2L)), id_sinistre = c(rep("SI2", n2), "SI5", "SI3"),
+                   type_evenement = c(sample(c("sortie", "sortie", "rechute"), n2, TRUE), "sortie", "sortie"),
+                   motif = c(sample(c("reprise_travail", "reprise_travail", "fin_droits"), n2, TRUE), "reprise_travail", "reprise_travail"),
+                   date_effet = sample(jours_d08_g3c[1:20], n2 + 2L, TRUE), stringsAsFactors = FALSE)
+  gp <- c(rep("G2", sample(1:2, 1L)), rep("G3", sample(0:1, 1L, prob = c(1, 3))))
+  par <- data.frame(id_garantie_souscrite = gp, parametre = rep("delai_rechute_jours", length(gp)), stringsAsFactors = FALSE)
+  par$valeur <- sample(4:10, nrow(par), TRUE)
+  base <- list(sinistres = data.frame(id_sinistre = c("SI3", "SI2", "SI5"), id_assure = c("AS1", "AS1", "AS2"),
+                                      nature_sinistre = c(sample(c("arret_travail", "arret_travail", "deces"), 2L, TRUE), "arret_travail"),
+                                      date_survenance = c(ev$date_effet[1L] + sample(-2:11, 1L), sample(jours_d08_g3c, 2L, TRUE)),
+                                      stringsAsFactors = FALSE),
+               dossiers = data.frame(id_dossier = c("DO2", "DO3"), id_sinistre = "SI2", id_garantie_souscrite = c("G2", "G3"), stringsAsFactors = FALSE),
+               garanties_souscrites = data.frame(id_garantie_souscrite = c("G2", "G3"), code_garantie = c(sample(c("incapacite", "incapacite", "deces"), 1L),
+                                                                                                         sample(c("incapacite", "invalidite"), 1L)),
+                                                 stringsAsFactors = FALSE),
+               parametres = par, evenements = ev)
+  cand <- c(list(n3 = list(tc = "sinistres.nature_sinistre", l = 1L), s3 = list(tc = "sinistres.date_survenance", l = 1L),
+                 n2 = list(tc = "sinistres.nature_sinistre", l = 2L), c2 = list(tc = "garanties_souscrites.code_garantie", l = 1L),
+                 c3 = list(tc = "garanties_souscrites.code_garantie", l = 2L)),
+            cand_par_g3c(par), cand_ev_g3b(seq_len(n2 + 1L), c("type_evenement", "motif", "date_effet")))
+  pres <- list(d2 = list(type = "nd", t = "dossiers", l = 1L), d3 = list(type = "nd", t = "dossiers", l = 2L),
+               g2 = list(type = "nd", t = "garanties_souscrites", l = 1L), g3 = list(type = "nd", t = "garanties_souscrites", l = 2L))
+  x <- tirer_p125_g3c(p125, cand, pres, base, if (p125) 2L else 3L, dom = dom_d08_g3c)
+  ctx <- ctx_g2b(base, x$inc, x$nd, arrete = D(a_d08_g3c))
+  r <- rapide_force_g3c(function(forcer) env_g3c$.verdict_d08(ctx, character(0), forcer = forcer))
+  oracle <- enum_g2b(x$doms, function(g) {
+    W <- monde_g3b(g, base, x$nd)
+    code <- function(q) W$V("garanties_souscrites", "code_garantie", q)
+    dossiers <- which(base$dossiers$id_sinistre == "SI2")
+    # délai de SI2 : lignes des garanties des dossiers de code incapacite, valeur commune ; (#125,
+    # E-17 (b)) dossier et garantie présents
+    m <- matrix(vapply(seq_len(nrow(par)), function(q) as.numeric(W$V("parametres", "valeur", q)), numeric(W$n)), nrow = W$n)
+    actif <- matrix(vapply(seq_len(nrow(par)), function(q) {
+      Reduce(`|`, lapply(dossiers, function(dq) code(match(base$dossiers$id_garantie_souscrite[dq], c("G2", "G3"))) %in% "incapacite" &
+                           base$dossiers$id_garantie_souscrite[dq] == par$id_garantie_souscrite[q] & W$P("dossiers", dq)), rep(FALSE, W$n)) &
+        W$P("garanties_souscrites", match(par$id_garantie_souscrite[q], c("G2", "G3")))
+    }, logical(W$n)), nrow = W$n)
+    delai <- vapply(seq_len(W$n), function(i) { y <- m[i, actif[i, ]]; if (length(y) && length(unique(y)) == 1L) y[1L] else NA_real_ }, 0)
+    sv <- as.numeric(W$V("sinistres", "date_survenance", 1L))
+    t <- rep(FALSE, W$n)
+    for (e in seq_len(n2)) {
+      ef <- as.numeric(W$V("evenements", "date_effet", e))
+      ec <- sv - ef
+      t <- t | (W$P("evenements", e) & W$V("evenements", "type_evenement", e) %in% "sortie" & W$V("evenements", "motif", e) %in% "reprise_travail" &
+                  W$V("sinistres", "nature_sinistre", 2L) %in% "arret_travail" & (!x$nd$evenements[e] | (ef <= a_d08_g3c) %in% TRUE) &
+                  (ec >= 0) %in% TRUE & (ec < delai) %in% TRUE)
+    }
+    W$V("sinistres", "nature_sinistre", 1L) %in% "arret_travail" & t
+  })
+  cmp_g3b(r, 1L, oracle, FALSE)
+}))
+x_d07c_ren_g3c <- sim_d07c_ren_g3c(400L)
+x_d07c_dos_g3c <- sim_d07c_dos_g3c(400L)
+plages_g3c$p <- list("sinistres.date_survenance" = plage_d08_g3c, "evenements.date_effet" = plage_d08_g3c)
+x_d08_g3c <- sim_d08_g3c(400L)
+plages_g3c$p <- list("famille.date_naissance" = as.numeric(D(c("1999-02-04", "1999-02-16"))))
+cat("  G3c, C-G3-2 : (cas, hors (c), égaux, sous (c), contraires, sur-ensemble, inconnus à pertinence vide, inconnus) : D07c rentes",
+    bilan_g3b(x_d07c_ren_g3c), "; D07c dossiers", bilan_g3b(x_d07c_dos_g3c), "; D08", bilan_g3b(x_d08_g3c), "\n")
+verifier_egal("#105, G3c, C-G3-2 : oracles par énumération (graine 20261128), chemin forcé : D07c rentes 400 cas, D07c dossiers 400 cas, D08 400 cas : hors (c), verdict et index_pertinent identiques ; sous (c) (D07c rentes), aucun verdict contraire, pertinence sur-ensemble ; aucun verdict inconnu à pertinence vide",
+              lapply(list(x_d07c_ren_g3c, x_d07c_dos_g3c, x_d08_g3c), function(x) {
+                b <- bilan_g3b(x)
+                c(b[["egaux"]] == b[["hors_c"]], b[["contraires"]] == 0, b[["sur_ensemble"]] == b[["sous_c"]], b[["vides"]] == 0,
+                  b[["hors_c"]] > 0, b[["inconnus"]] > 0)
+              }),
+              rep(list(rep(TRUE, 6L)), 3L))
+# (reprise de l'audit de G3c, m-1) deux contextes de plus pour la comparaison ligne à ligne : code de la
+# garantie refusé (lu brut : rente_education, double_effet), seule inconnue, enfant ME1 de 26 ans révolus
+# (limite 25) : l'arbre rend NA (code inconnu) ; un critère de complexité qui ignore le code inconnu
+# rendrait le verdict brut vrai (écart)
+code_g3c <- function(t) {
+  par <- data.frame(id_garantie_souscrite = "G2", parametre = "age_limite", valeur = 25, stringsAsFactors = FALSE)
+  fam <- data.frame(id_membre = "ME1", id_assure = "AS1", lien = "enfant", date_naissance = D("1999-02-04"), situation = "autre",
+                    date_deces = D(NA), id_sinistre = "SI1", stringsAsFactors = FALSE)
+  base <- list(garanties_souscrites = data.frame(id_garantie_souscrite = "G2", code_garantie = if (t == "rentes") "rente_education" else "double_effet",
+                                                 prolongation_handicap = FALSE, stringsAsFactors = FALSE),
+               dossiers = data.frame(id_dossier = "DO2", id_sinistre = "SI1", id_garantie_souscrite = "G2", stringsAsFactors = FALSE),
+               sinistres = data.frame(id_sinistre = "SI1", id_assure = "AS1", stringsAsFactors = FALSE), famille = fam, parametres = par,
+               rentes = data.frame(id_rente = "RE1", id_dossier = "DO2", id_membre = "ME1", stringsAsFactors = FALSE),
+               evenements = evs_g3b(if (t == "rentes") 1L else 0L, id_sinistre = "SI1", id_dossier = "DO2", id_rente = "RE1",
+                                    type = "ouverture_service", date = plage_g3b[1L]))
+  if (t == "dossiers") base$rentes <- base$rentes[0L, ]
+  ctx <- ctx_g2b(base, list("garanties_souscrites.code_garantie" = 1L), arrete = D(a_g3b))
+  as.vector(rapide_force_g3c(function(forcer) env_g3c$.verdict_d07c(ctx, t, list(regle = "atteinte", age = "revolu"), character(0),
+                                                                     forcer = forcer)))[1L]
+}
+code_contextes_g3c <- c(rentes = code_g3c("rentes"), dossiers = code_g3c("dossiers"))
+verifier_egal("#105, G3c, C-G3-4 (reprise, m-1) : code de la garantie refusé, seule inconnue : D07c rentes et dossiers inconnus (chemin forcé)",
+              code_contextes_g3c, c(rentes = NA, dossiers = NA))
+cat("  G3c, C-G3-4 : chemin rapide contre chemin forcé sur les contextes de C-G3-2 :", rapide_g3c$contextes, "contextes,",
+    rapide_g3c$lignes, "lignes,", rapide_g3c$ecarts, "écarts\n")
+verifier_egal("#105, G3c, C-G3-4 : chemin rapide et chemin forcé sur les 1 200 contextes des oracles de C-G3-2 et les deux contextes du code refusé : verdict et cellules pertinentes identiques ligne à ligne",
+              list(rapide_g3c$contextes, rapide_g3c$ecarts), list(1202L, 0L))
+
+# (E-15 (d), exclusivité des versions) RE1, ME1 en deux versions candidates (la seconde sans date de
+# saisie, non déterminée à A0) de même verdict (nées en 1990, éteintes) : vrai déterminé, RE1
+# détectée ; versions de verdicts différents (la seconde née en 2015) : inconnu, version non
+# déterminée pertinente, RE1 écartée (declaration_absente, D03g). Une valeur comparée de la cellule de
+# choix lue après la boucle des versions (promesse non forcée de .feuille_choix3()) rendrait le premier
+# cas inconnu (mutant détecté)
+candidates_g3c <- function(n2) {
+  b <- nais("1990-03-01")
+  f <- b$famille[c(1L, 1L), ]
+  f$date_saisie[2L] <- D(NA)
+  f$date_naissance[2L] <- D(n2)
+  b$famille <- f
+  ctx <- vue_g3b(b, s07, A0)$ctx
+  v <- ns$.verdict_d07c(ctx, "rentes", ctx$conventions$limite_age, character(0))
+  r <- controler_base(b, A0, s07, cv34)
+  list(as.vector(v), gsub("\r", ":", pert_ip(attr(v, "index_pertinent"), 1L)), co34(r, "D07c"), ne34(r, "D07c"))
+}
+verifier_egal("#105, G3c, E-15 (d) : ME1 en deux versions candidates de même verdict : vrai déterminé, RE1 détectée ; de verdicts différents : inconnu, version non déterminée pertinente, RE1 écartée (declaration_absente)",
+              list(candidates_g3c("1990-03-01"), candidates_g3c("2015-03-01")),
+              list(list(TRUE, character(0), "rentes exacte RE1", character(0)), list(NA, "famille:2", character(0), "rentes NA declaration_absente")))
+
+# --- C-G3-4 : chemin rapide contre chemin forcé (copie de l'espace de noms où .verdict_d07c() et
+# .verdict_d08() ont `forcer` vrai) : bilans identiques (controles, controles_non_executes,
+# declarations_requises) sur 48 bases tirées (graine 20261128) : base de référence (ME1 né en 1990,
+# éteint), double effet DO4 à un enfant (de()) et à deux enfants (deux_enfants_do4()), rechute
+# (d08_34(), délai 60, et sans délai), chacune avec zéro à deux valeurs refusées tirées parmi les
+# colonnes de E-15 (b) lues par G3c et, une fois sur trois, une date de saisie absente (ligne non
+# déterminée à A0) ; arrêté A ou A0. Témoin de diversité : chaque clé (D07c rentes, D07c dossiers,
+# D08) a une ligne détectée ou écartée sur au moins une base ; garde : hors des lignes complexes, une
+# lecture brute indéterminée est une erreur interne (copie où le critère de complexité de D08 ne
+# retient aucune ligne : sortie EV3 non déterminée à A0, lecture brute inconnue)
+env_force_g3c <- new.env(parent = ns)
+for (nom in ls(ns, all.names = TRUE)) {
+  g0 <- get(nom, envir = ns)
+  if (is.function(g0) && identical(environment(g0), ns)) environment(g0) <- env_force_g3c
+  assign(nom, g0, envir = env_force_g3c)
+}
+for (f in c(".verdict_d07c", ".verdict_d08")) {
+  g0 <- get(f, envir = env_force_g3c); formals(g0)$forcer <- TRUE; assign(f, g0, envir = env_force_g3c)
+}
+inj_g3c <- list(c("famille", "lien", "zzz"), c("famille", "date_naissance", "1850-01-01"), c("famille", "situation", "zzz"),
+                c("famille", "date_deces", "2090-01-01"), c("garanties_souscrites", "code_garantie", "zzz"), c("parametres", "valeur", "-1"),
+                c("evenements", "type_evenement", "zzz"), c("evenements", "date_effet", "1850-01-01"), c("evenements", "motif", "zzz"),
+                c("sinistres", "nature_sinistre", "zzz"), c("sinistres", "date_survenance", "1850-01-01"))
+saisies_g3c <- list(c("evenements", "date_saisie"), c("sinistres", "date_saisie"), c("famille", "date_saisie"), c("rentes", "date_saisie"),
+                    c("dossiers", "date_ouverture"))
+bases_g3c <- list(nais("1990-03-01"), de("1999-03-01"), de("2010-03-01", clos = TRUE), deux_enfants_do4("1999-03-01"), d08_34(),
+                  d08_34(delai = NA), d08_34(delai = 45))
+tires_g3c <- avec_graine_g3c(lapply(seq_len(48L), function(k) {
+  b <- bases_g3c[[sample.int(length(bases_g3c), 1L)]]
+  for (q in seq_len(sample(0:2, 1L))) {
+    z <- inj_g3c[[sample.int(length(inj_g3c), 1L)]]
+    x <- b[[z[1L]]][[z[2L]]]; i <- sample.int(length(x), 1L)
+    b[[z[1L]]][[z[2L]]][i] <- if (inherits(x, "Date")) D(z[3L]) else if (is.numeric(x)) as.numeric(z[3L]) else z[3L]
+  }
+  if (runif(1L) < 1 / 3) {
+    z <- saisies_g3c[[sample.int(length(saisies_g3c), 1L)]]
+    b[[z[1L]]][[z[2L]]][sample.int(nrow(b[[z[1L]]]), 1L)] <- D(NA)
+  }
+  list(b = b, arrete = if (runif(1L) < 0.4) A0 else A)
+}))
+bilan_force_g3c <- function(f, x) {
+  r <- tryCatch(f(x$b, x$arrete, s07, cv("atteinte")), error = function(e) conditionMessage(e))
+  if (is.character(r)) r else list(r$controles, r$controles_non_executes, r$declarations_requises)
+}
+rapides_g3c <- lapply(tires_g3c, function(x) bilan_force_g3c(ns$controler_base, x))
+forces_g3c <- lapply(tires_g3c, function(x) bilan_force_g3c(env_force_g3c$controler_base, x))
+touchees_g3c <- vapply(c("D07c rentes", "D07c dossiers", "D08 sinistres"), function(k) {
+  m <- strsplit(k, " ")[[1L]]
+  sum(vapply(forces_g3c, function(r) is.list(r) && (any(r[[1L]]$code == m[1L] & r[[1L]]$table == m[2L]) ||
+                                                     any(r[[2L]]$code == m[1L] & r[[2L]]$table == m[2L] &
+                                                           !(r[[2L]]$cause %in% c("declaration_absente", "parametre_non_defini")))), NA))
+}, 0L)
+garde_g3c <- local({
+  env <- new.env(parent = ns)
+  for (nom in ls(ns, all.names = TRUE)) {
+    g0 <- get(nom, envir = ns)
+    if (is.function(g0) && identical(environment(g0), ns)) environment(g0) <- env
+    assign(nom, g0, envir = env)
+  }
+  g0 <- env$.verdict_d08
+  body(g0) <- parse(text = sub("complexe <- ctx$retenu$sinistres & (forcer | complexe)", "complexe <- ctx$retenu$sinistres & forcer",
+                               paste(deparse(body(g0), width.cutoff = 500L), collapse = "\n"), fixed = TRUE))[[1L]]
+  env$.verdict_d08 <- g0
+  b <- within(d08_34(), evenements$date_saisie[3L] <- D(NA))
+  garde <- function(f) tryCatch({ f(b, A0, s07, cv("atteinte")); "aucune" },
+                                error = function(e) if (grepl("D08 : lecture brute ind", conditionMessage(e))) "erreur interne" else conditionMessage(e))
+  c(garde(env$controler_base), garde(controler_base), ne34(controler_base(b, A0, s07, cv("atteinte")), "D08"))
+})
+# (reprise de l'audit de G3c, m-2) garde de D07c, symétrique : critère de complexité neutralisé, DO4 (double
+# effet) dont l'enfant ME1 est non déterminé à A0 (sans date de saisie) : lecture brute inconnue, erreur
+# interne ; la règle exacte écarte DO4 (declaration_absente)
+garde_d07c_g3c <- local({
+  env <- new.env(parent = ns)
+  for (nom in ls(ns, all.names = TRUE)) {
+    g0 <- get(nom, envir = ns)
+    if (is.function(g0) && identical(environment(g0), ns)) environment(g0) <- env
+    assign(nom, g0, envir = env)
+  }
+  g0 <- env$.verdict_d07c
+  body(g0) <- parse(text = sub("complexe <- ctx$retenu[[t]] & (forcer | complexe)", "complexe <- ctx$retenu[[t]] & forcer",
+                               paste(deparse(body(g0), width.cutoff = 500L), collapse = "\n"), fixed = TRUE))[[1L]]
+  env$.verdict_d07c <- g0
+  b <- within(de("1999-03-01"), famille$date_saisie[1L] <- D(NA))
+  garde <- function(f) tryCatch({ f(b, A0, s07, cv("atteinte")); "aucune" },
+                                error = function(e) if (grepl("D07c : lecture brute ind", conditionMessage(e))) "erreur interne" else conditionMessage(e))
+  c(garde(env$controler_base), garde(controler_base), ne34(controler_base(b, A0, s07, cv("atteinte")), "D07c"))
+})
+verifier_egal("#105, G3c, C-G3-4 (reprise, m-2) : garde de D07c : critère de complexité neutralisé sous un enfant non déterminé : erreur interne ; règle exacte : DO4 écarté",
+              garde_d07c_g3c, c("erreur interne", "aucune", "dossiers NA declaration_absente"))
+cat("  G3c, C-G3-4 : bases où chaque clé a une ligne détectée ou écartée :", paste(names(touchees_g3c), touchees_g3c, collapse = ", "), "\n")
+verifier_egal("#105, G3c, C-G3-4 : chemin rapide et chemin forcé, 48 bases tirées (graine 20261128) : bilans identiques, aucune erreur ; chaque clé de G3c touchée ; garde : critère de complexité de D08 neutralisé sous une sortie non déterminée : erreur interne",
+              list(identical(rapides_g3c, forces_g3c), sum(vapply(rapides_g3c, is.character, NA)), all(touchees_g3c > 0L), garde_g3c),
+              list(TRUE, 0L, TRUE, c("erreur interne", "aucune", "sinistres NA declaration_absente")))
+
+# --- C-G3-5 : invariance à l'ordre des lignes, en mode exact et au budget faible (40, copie de
+# l'espace de noms env_e14) : limite age_limite de GS3 refusée (ME1 né en 1990), naissance de ME1
+# refusée sur DO4 à deux enfants, date d'effet de la sortie EV3 refusée, code de GS2 refusé (rechute),
+# type refusé d'une clôture de DO4 à A0 ; bilan identique après inversion des lignes et après une
+# permutation tirée (graine 131), à A0 et à A
+bases_ordre_g3c <- list(within(nais("1990-03-01"), parametres$valeur[6L] <- -1),
+                        within(deux_enfants_do4("1999-03-01"), famille$date_naissance[1L] <- D("1850-01-01")),
+                        within(d08_34(), evenements$date_effet[3L] <- D("1850-01-01")),
+                        within(d08_34(), garanties_souscrites$code_garantie[2L] <- "zzz"),
+                        within(de("1999-03-01", clos = TRUE), evenements$type_evenement[7L] <- "zzz"))
+ordre_g3c <- function(f) lapply(bases_ordre_g3c, function(b) vapply(list(A0, A), function(a) {
+  g <- function(x) f(x, a, s07, cv("atteinte"))
+  r <- g(b)
+  identical(g(inverser_lignes(b)), r) && identical(g(melanger_lignes(b, 131L)), r)
+}, NA))
+ordre_exact_g3c <- ordre_g3c(controler_base)
+ordre_faible_g3c <- avec_budget_e14(40, list(ordre_g3c(env_e14$controler_base), etat_e14()), env = env_e14)
+verifier_egal("#105, G3c, C-G3-5 : cinq bases à refus de G3c : bilan identique après inversion et après une permutation tirée (graine 131), à A0 et à A, en mode exact et au budget 40 (des arbres approchés)",
+              list(ordre_exact_g3c, ordre_faible_g3c[[1L]], ordre_faible_g3c[[2L]][["approche"]] > 0L),
+              list(rep(list(c(TRUE, TRUE)), 5L), rep(list(c(TRUE, TRUE)), 5L), TRUE))
+cat("  G3c, C-G3-5 : arbres évalués / approchés au budget 40 :", paste(ordre_faible_g3c[[2L]], collapse = " / "), "\n")
+
+# --- C-G3-6 : invariance à la valeur brute, valeurs discriminantes (comme en G3b) : refus injecté
+# dans ctx$refus_valeur (hors_domaine) sur une cellule lue par G3c, puis deux valeurs brutes dont la
+# lecture brute (.verdict_d07c_brut(), .verdict_d08_brut()) donne deux verdicts différents, à A :
+# verdict et index_pertinent du noyau de Kleene identiques (mutant « valeur lue brute » détecté).
+# Cas : naissance de ME1 (1990, 2015), limite age_limite de GS3 (26, 40), lien (enfant, conjoint),
+# situation de ME1 sous age_limite_etudes 40 (autre, scolarise), décès de ME1 (absent, 2020),
+# prolongation_handicap de GS3 sous la situation handicape (FALSE, TRUE) ; code de GS5 du double effet
+# (double_effet, deces), type de la clôture EV9 (cloture_dossier, rechute) ; délai de GS2 (60, 30),
+# motif de la sortie EV3 (reprise_travail, fin_droits), nature de SI2 (arret_travail, deces),
+# survenance de SI3 (2024-10-15, 2024-08-15), code de GS2 (incapacite, deces)
+noyaux_g3c <- list(
+  d07c_r = function(ctx) list(ns$.verdict_d07c(ctx, "rentes", ctx$conventions$limite_age, character(0)),
+                              ns$.verdict_d07c_brut(ctx, "rentes", ctx$conventions$limite_age)),
+  d07c_d = function(ctx) list(ns$.verdict_d07c(ctx, "dossiers", ctx$conventions$limite_age, character(0)),
+                              ns$.verdict_d07c_brut(ctx, "dossiers", ctx$conventions$limite_age)),
+  d08 = function(ctx) list(ns$.verdict_d08(ctx, character(0)), ns$.verdict_d08_brut(ctx)))
+inv_brut_g3c <- function(b, t, c1, l, valeurs, noyau, s = s34(1000)) {
+  ctx <- vue_g3b(b, s)$ctx
+  ctx$refus_valeur[[t]][[c1]] <- c(ctx$refus_valeur[[t]][[c1]], list(list(code = "hors_domaine", lignes = l)))
+  out <- lapply(valeurs, function(x) {
+    ctx$base[[t]][[c1]][l] <- x
+    for (nm in grep("^(service|parametre_garantie)", ls(ctx), value = TRUE)) rm(list = nm, envir = ctx)
+    r <- noyaux_g3c[[noyau]](ctx)
+    list(kleene = list(as.vector(r[[1L]]), attr(r[[1L]], "index_pertinent")), brut = as.vector(r[[2L]]))
+  })
+  c(kleene = identical(out[[1L]]$kleene, out[[2L]]$kleene), brut = !identical(out[[1L]]$brut, out[[2L]]$brut))
+}
+etudes_re1_g3c <- within(nais("1990-03-01"), parametres <- rbind(parametres, tab("parametres", id_garantie_souscrite = "GS3",
+                                                                                   parametre = "age_limite_etudes", valeur = 40)))
+inv_g3c <- list(
+  inv_brut_g3c(nais("1990-03-01"), "famille", "date_naissance", 1L, list(D("1990-03-01"), D("2015-03-01")), "d07c_r"),
+  inv_brut_g3c(nais("1990-03-01"), "parametres", "valeur", 6L, list(26, 40), "d07c_r"),
+  inv_brut_g3c(nais("1990-03-01"), "famille", "lien", 1L, list("enfant", "conjoint"), "d07c_r"),
+  inv_brut_g3c(etudes_re1_g3c, "famille", "situation", 1L, list("autre", "scolarise"), "d07c_r"),
+  inv_brut_g3c(nais("1990-03-01"), "famille", "date_deces", 1L, list(D(NA), D("2020-01-01")), "d07c_r"),
+  inv_brut_g3c(within(nais("1990-03-01"), famille$situation <- "handicape"), "garanties_souscrites", "prolongation_handicap", 3L,
+               list(FALSE, TRUE), "d07c_r"),
+  inv_brut_g3c(de("1999-03-01"), "garanties_souscrites", "code_garantie", 5L, list("double_effet", "deces"), "d07c_d"),
+  inv_brut_g3c(de("1999-03-01", clos = TRUE), "evenements", "type_evenement", 7L, list("cloture_dossier", "rechute"), "d07c_d"),
+  inv_brut_g3c(d08_34(), "parametres", "valeur", 9L, list(60, 30), "d08"),
+  inv_brut_g3c(d08_34(), "evenements", "motif", 3L, list("reprise_travail", "fin_droits"), "d08"),
+  inv_brut_g3c(d08_34(), "sinistres", "nature_sinistre", 2L, list("arret_travail", "deces"), "d08"),
+  inv_brut_g3c(d08_34(), "sinistres", "date_survenance", 3L, list(D("2024-10-15"), D("2024-08-15")), "d08"),
+  inv_brut_g3c(d08_34(), "garanties_souscrites", "code_garantie", 2L, list("incapacite", "deces"), "d08"))
+verifier_egal("#105, G3c, C-G3-6 : invariance à la valeur brute, treize cas discriminants (naissance, limite, lien, situation, décès, prolongation_handicap, code, type ; délai, motif, nature, survenance, code ; D07c, D08) : noyau de Kleene identique sous les deux valeurs brutes ; lecture brute différente (mutant détecté)",
+              inv_g3c, rep(list(c(kleene = TRUE, brut = TRUE)), 13L))
+
+# --- C-G3-7 : défaut corrigé (E-15 (c)) : la lecture brute de D07c sur rentes lisait brut le type
+# refusé d'un événement retenu (.statut_service()) : EV11 de RE1 de type « xyz » (hors_domaine), ME1
+# né en 1990 (éteint) : la lecture brute rend RE1 non éteinte, détectée ; le noyau de Kleene rend le
+# statut inconnu, EV11 pertinente (type), RE1 écartée par D07c, cause hors_domaine. Avant (45f1ec0,
+# mode bloquee) : D07c bloquée sur rentes et dossiers, cause hors_domaine, aucune détection ; témoin
+# sans EV11 : RE1 détectée
+m_g3c <- function(b) {
+  ctx <- vue_g3b(b)$ctx
+  v <- ns$.verdict_d07c(ctx, "rentes", ctx$conventions$limite_age, character(0))
+  r <- controler_base(b, A, s07, cv34)
+  list(as.vector(v)[1L], gsub("\r", ":", pert_ip(attr(v, "index_pertinent"), 1L)),
+       as.vector(ns$.verdict_d07c_brut(ctx, "rentes", ctx$conventions$limite_age))[1L], ne34(r, "D07c"), co34(r, "D07c"))
+}
+verifier_egal("#105, G3c, C-G3-7 : EV11 de RE1 de type refusé (xyz), ME1 éteint : statut inconnu, EV11 pertinente, lecture brute vraie (défaut corrigé) ; RE1 écartée par D07c (hors_domaine), aucune détection ; témoin sans EV11 : RE1 détectée",
+              list(m_g3c(ev_g3b(nais("1990-03-01"), "xyz", "2026-01-01")), co34(controler_base(nais("1990-03-01"), A, s07, cv34), "D07c")),
+              list(list(NA, "evenements.type_evenement:7", TRUE, "rentes NA hors_domaine", character(0)), "rentes exacte RE1"))
+
+# --- C-G3-8 (e) : paramètre non déterminable sous un refus de valeur (E-6 étendu, E-15 (e)). D07c,
+# RE1 (ME1 né en 1990, 36 ans) : age_limite de GS3 refusée (-1, D09) seule (K = {u}) : limite
+# indéterminée, RE1 écartée (D09), aucune ligne parametre_non_defini ; K = {26, u} (paliers 0-17 et
+# 18-120) : de même ; K = {25, 26, u} (trois paliers) : deux valeurs connues distinctes, limite non
+# définie : parametre_non_defini, RE1 non détectée, non écartée ; ME1 né en 2015 (11 ans) sous K = {26,
+# u} : non éteinte quelle que soit u (u = 26 : sous la limite ; sinon non définie), ni écartée ni
+# ligne. D08, SI3 (écart 44) : délai de GS2 refusé seul (-5, D09) : SI3 écarté (D09), aucune ligne ;
+# K = {44, 60, u} (trois paliers) : parametre_non_defini, SI3 non détecté ; code de GS2 refusé (zzz) :
+# SI3 écarté (hors_domaine ; le délai 60 détecte la paire sous le code incapacite, K est vide sous un
+# autre code), une ligne par clé (hors_domaine, rang 3, avant parametre_non_defini) ; même refus, SI3
+# survenu 70 jours après la sortie : non détecté sous tout code, mais K possiblement vide (lecture
+# existentielle de « peut décider ») : parametre_non_defini. Avant (45f1ec0, mode bloquee) : règle
+# bloquée dans chaque cas, D09 (D07c : sur rentes et dossiers) ou hors_domaine
+paliers_g3c <- function(b, gs, nom, valeurs) {
+  b$parametres <- b$parametres[!(b$parametres$id_garantie_souscrite == gs & b$parametres$parametre == nom), ]
+  bornes <- list(c(0L, 17L), c(18L, 50L), c(51L, 120L))[seq_along(valeurs)]
+  if (length(valeurs) == 2L) bornes <- list(c(0L, 17L), c(18L, 120L))
+  b$parametres <- rbind(b$parametres, tab("parametres", id_garantie_souscrite = gs, parametre = nom, age_min = vapply(bornes, `[`, 0L, 1L),
+                                          age_max = vapply(bornes, `[`, 0L, 2L), valeur = valeurs))
+  b
+}
+e_g3c <- function(b, code) {
+  r <- controler_base(b, A, s07, cv34)
+  list(co34(r, code), ne34(r, code))
+}
+verifier_egal("#105, G3c, C-G3-8 (e) : D07c, age_limite refusée seule, avec 26, avec 25 et 26 (paliers), enfant jeune sous {26, u} ; D08, délai refusé seul, avec 44 et 60, code de la garantie refusé (écart 44, puis 70) : écartée (D09) sans ligne ; écartée sans ligne ; parametre_non_defini ; rien ; écarté (D09) ; parametre_non_defini ; écarté (hors_domaine) ; parametre_non_defini",
+              list(e_g3c(paliers_g3c(nais("1990-03-01"), "GS3", "age_limite", -1), "D07c"),
+                   e_g3c(paliers_g3c(nais("1990-03-01"), "GS3", "age_limite", c(26, -1)), "D07c"),
+                   e_g3c(paliers_g3c(nais("1990-03-01"), "GS3", "age_limite", c(25, 26, -1)), "D07c"),
+                   e_g3c(paliers_g3c(nais("2015-03-01"), "GS3", "age_limite", c(26, -1)), "D07c"),
+                   e_g3c(paliers_g3c(d08_34(), "GS2", "delai_rechute_jours", -5), "D08"),
+                   e_g3c(paliers_g3c(d08_34(), "GS2", "delai_rechute_jours", c(44, 60, -5)), "D08"),
+                   e_g3c(within(d08_34(), garanties_souscrites$code_garantie[2L] <- "zzz"), "D08"),
+                   e_g3c(within(d08_34("2024-11-10"), garanties_souscrites$code_garantie[2L] <- "zzz"), "D08")),
+              list(list(character(0), "rentes NA D09"), list(character(0), "rentes NA D09"),
+                   list(character(0), "rentes NA parametre_non_defini"), list(character(0), character(0)),
+                   list(character(0), "sinistres NA D09"), list(character(0), "sinistres NA parametre_non_defini"),
+                   list(character(0), "sinistres NA hors_domaine"), list(character(0), "sinistres NA parametre_non_defini")))
+
+# --- C-G3-8 (e), lignes non déterminées sans refus (reprise de l'audit de G3c, M-1 ; avis d'actuary :
+# « peut décider » se lit de façon existentielle sur la présence des lignes non déterminées, E-15 (b) et
+# (e)), à A0 : D08, délai absent, sortie EV3 sans date de saisie (seule ligne non déterminée) : SI3 de
+# verdict faux (aucun délai défini dans aucun monde, index_pertinent vide), parametre_non_defini (avant,
+# 45f1ec0 : SI3 écarté, declaration_absente) ; D07c dossiers, age_limite absente de GS5 : ME1 seul membre,
+# sans date de saisie (membre non déterminé), ou ME1 retenu conjoint et une seconde version, enfant, non
+# déterminée : parametre_non_defini (avant : rien) ; D07c rentes, age_limite absente de GS3, événements de
+# RE1 sans date de saisie (RE1 retenue, statut de service possiblement non éteint) : parametre_non_defini
+# (avant : rien) ; RE1 elle-même non déterminée : rien (population des rentes : lignes retenues seulement,
+# réserve D1 d'actuary)
+nd_g3c <- function(b, code) {
+  r <- controler_base(b, A0, s07, cv("atteinte"))
+  x <- r$controles_non_executes
+  x <- x[x$code == code & x$table != "evenements", , drop = FALSE]
+  list(co34(r, code), paste(x$table, x$cause))
+}
+b_d08_nd_g3c <- within(d08_34(delai = NA), evenements$date_saisie[3L] <- D(NA))
+v_d08_nd_g3c <- local({
+  ctx <- vue_g3b(b_d08_nd_g3c, s34(1000), A0)$ctx
+  x <- ns$.verdict_d08(ctx, character(0))
+  list(as.vector(x)[3L], attr(x, "index_pertinent"))
+})
+de_conj_g3c <- de("1999-03-01", limites = c(age_limite_conjoint = 65))
+verifier_egal("#105, G3c, C-G3-8 (e), lignes non déterminées sans refus, à A0 : D08, sortie non déterminée, délai absent : SI3 faux, index_pertinent vide, parametre_non_defini ; D07c dossiers, membre non déterminé, puis version non déterminée : parametre_non_defini ; D07c rentes, événements de RE1 non déterminés : parametre_non_defini ; RE1 non déterminée : rien",
+              list(v_d08_nd_g3c, nd_g3c(b_d08_nd_g3c, "D08"),
+                   nd_g3c(within(de_conj_g3c, famille$date_saisie[1L] <- D(NA)), "D07c"),
+                   nd_g3c(within(de_conj_g3c, { famille$lien[1L] <- "conjoint"; famille$situation[1L] <- NA
+                     famille <- rbind(famille, transform(famille[1L, ], lien = "enfant", date_saisie = D(NA))) }), "D07c"),
+                   nd_g3c(within(sans_limite_re1, evenements$date_saisie[evenements$id_rente %in% "RE1"] <- D(NA)), "D07c"),
+                   nd_g3c(within(sans_limite_re1, rentes$date_saisie[1L] <- D(NA)), "D07c")),
+              list(list(FALSE, list()), list(character(0), "sinistres parametre_non_defini"),
+                   list(character(0), "dossiers parametre_non_defini"),
+                   list(character(0), c("dossiers parametre_non_defini", "rentes declaration_absente")),
+                   list(character(0), "rentes parametre_non_defini"), list(character(0), character(0))))
+
+# --- C-G3-8 (f) : D07c sans conventions$limite_age, ligne candidate lue de façon existentielle (E-15
+# (f)) : code de GS3 (garantie de RE1) refusé : RE1 candidate possible, declaration_absente seule sur
+# rentes et dossiers, exigences (avant, 45f1ec0 : cause hors_domaine sur les deux tables) ; sans
+# candidat (GS3 rente_conjoint), code de GS4 (garantie décès de CT2, d'aucune rente ni d'aucun
+# dossier) refusé : aucune ligne candidate, ni ligne ni exigence (avant : toute ligne candidate,
+# exigences, hors_domaine) ; lien de ME1 refusé (colonne de la branche déclarée, valeur) : seule
+# declaration_absente (avant : hors_domaine)
+f_g3c <- function(b) {
+  r <- controler_base(b, A, s07)
+  list(sort(ne34(r, "D07c")[!grepl("^evenements", ne34(r, "D07c"))]), rq34(r, "D07c"))
+}
+exige_g3c <- c("conventions limite_age$age revolu;millesime NA", "conventions limite_age$regle atteinte;depassement NA")
+verifier_egal("#105, G3c, C-G3-8 (f) : D07c sans limite_age : code de GS3 refusé : declaration_absente seule et exigences ; sans candidat, code de GS4 refusé : ni ligne ni exigence ; lien de ME1 refusé : declaration_absente seule",
+              list(f_g3c(within(base_ref, garanties_souscrites$code_garantie[3L] <- "zzz")),
+                   f_g3c(within(sans_candidat, garanties_souscrites$code_garantie[4L] <- "zzz")),
+                   f_g3c(within(base_ref, famille$lien[1L] <- "zzz"))),
+              list(list(c("dossiers NA declaration_absente", "rentes NA declaration_absente"), exige_g3c), list(character(0), character(0)),
+                   list(c("dossiers NA declaration_absente", "rentes NA declaration_absente"), exige_g3c)))
+
+# --- Charge (E-14) : DO4 (double effet) à dix enfants de AS1 nés de 1990 à 1999 (situation autre), dont
+# quatre de naissance refusée (1850-01-01, D02c), age_limite de GS5 refusée (-1) : un arbre, verdict
+# inconnu, DO4 écarté ; rechute : SI3 face à 120 sorties reprise_travail retenues de SI2 (EV3 de motif
+# fin_droits), d'effet du 2024-07-01 au 2024-07-30 (écart de 77 à 106 jours), dont quatre de date
+# d'effet refusée, délai 60 : un arbre, SI3 écarté ; au budget B : nombre d'arbres évalués et approchés,
+# plus grand W (≤ B) et w_inf, verdicts ; temps à titre d'information
+charge_g3c <- function(b, code) {
+  t0 <- proc.time()[["elapsed"]]
+  x <- avec_budget_e14(B_e14, {
+    r <- env_e14$controler_base(b, A, s07, cv("atteinte"))
+    list(ne34(r, code), co34(r, code), etat_e14(), journal_e14$w <= B_e14, journal_e14$w, journal_e14$w_inf)
+  }, env = env_e14)
+  c(x, temps = round(proc.time()[["elapsed"]] - t0, 1))
+}
+b10_g3c <- local({
+  b <- de("1999-03-01", sit = "autre")
+  f <- b$famille[rep(1L, 10L), ]
+  f$id_membre <- sprintf("ME%02d", 1:10)
+  f$date_naissance <- D(sprintf("%d-03-01", 1990:1999))
+  f$date_naissance[c(2L, 4L, 6L, 8L)] <- D("1850-01-01")
+  b$famille <- f
+  b$parametres$valeur[b$parametres$id_garantie_souscrite == "GS5" & b$parametres$parametre == "age_limite"] <- -1
+  b
+})
+b120_g3c <- local({
+  b <- d08_34()
+  e <- b$evenements[rep(3L, 120L), ]
+  b$evenements$motif[3L] <- "fin_droits"
+  e$id_evenement <- sprintf("EM%03d", 1:120)
+  e$date_effet <- D("2024-07-01") + (0:119) %% 30
+  e$date_effet[c(10L, 50L, 90L, 120L)] <- D("1850-01-01")
+  b$evenements <- rbind(b$evenements, e)
+  b
+})
+charge_10_g3c <- charge_g3c(b10_g3c, "D07c")
+charge_120_g3c <- charge_g3c(b120_g3c, "D08")
+cat("  G3c, charge : DO4 à 10 enfants, 5 cellules refusées : arbres", paste(charge_10_g3c[[3L]], collapse = " / "), ", W", charge_10_g3c[[5L]],
+    ", w_inf", charge_10_g3c[[6L]], ",", charge_10_g3c$temps, "s ; 120 sorties, 4 dates refusées : arbres",
+    paste(charge_120_g3c[[3L]], collapse = " / "), ", W", charge_120_g3c[[5L]], ", w_inf", charge_120_g3c[[6L]], ",", charge_120_g3c$temps, "s\n")
+verifier_egal("#105, G3c, charge (E-14) : DO4 à dix enfants, 5 cellules refusées : DO4 écarté par D07c (D02c), 16 arbres, aucun approché, W = w_inf = 2 280 960 ≤ B ; 120 sorties, 4 dates refusées : SI3 écarté par D08 (D02c), 10 arbres, aucun approché, W = w_inf = 765 ≤ B",
+              list(unname(charge_10_g3c[1:6]), unname(charge_120_g3c[1:6])),
+              list(list("dossiers NA D02c", character(0), c(n = 16L, approche = 0L), TRUE, 2280960, 2280960),
+                   list("sinistres NA D02c", character(0), c(n = 10L, approche = 0L), TRUE, 765, 765)))
+
+section("donnees : lignes de visibilité non déterminée du paramètre (P), D07c et D08 (#125, M814, M829 ; spécification donnees, erratum 1.9.7, E-17)")
+# Témoins d'actuary (spécification de #125, § 1 ; lecture (A) de « sinistre écarté », M829). D08 :
+# SI3 (arret_travail de AS1) survenu 44 jours après la sortie reprise_travail EV3 de SI2 (sauf
+# mention), délai 60 de GS2 (incapacite, dossier DO3 de SI2) ; DO5 (SI2, GS6 incapacite, collège
+# cadres, délai d5) ajouté par avec_do5_125() ; dossier non déterminé : sans date d'ouverture (D03g
+# non déclarée) ; garantie non déterminée : sans date d'effet sous D03i conserver (cons_125). D07c :
+# age_limite 26 de GS3 (RE1, ME1) et de GS5 (DO4, de()) ; arrêté A0.
+cons_125 <- c(s34(1000), list(exclusions = data.frame(motif = "D03i", famille = ns$FAMILLES_CALCUL, action = "conserver",
+                                                      stringsAsFactors = FALSE)))
+avec_do5_125 <- function(b, d5, o5 = D("2024-03-08")) {
+  g <- b$garanties_souscrites[2L, ]; g$id_garantie_souscrite <- "GS6"; g$college <- "cadres"
+  b$garanties_souscrites <- rbind(b$garanties_souscrites, g)
+  b$parametres <- rbind(b$parametres, tab("parametres", id_garantie_souscrite = "GS6", parametre = c("franchise_jours", "delai_rechute_jours"),
+                                          valeur = c(90, d5)))
+  b$dossiers <- rbind(b$dossiers, tab("dossiers", id_dossier = "DO5", id_sinistre = "SI2", id_garantie_souscrite = "GS6", date_ouverture = o5))
+  a2 <- b$affiliations[1L, ]; a2$id_affiliation <- "AF2"; a2$college <- "cadres"; b$affiliations <- rbind(b$affiliations, a2)
+  b
+}
+nd_do3_125 <- function(b) within(b, dossiers$date_ouverture[3L] <- D(NA))
+nd_gs_125 <- function(b, w) { b$garanties_souscrites$date_effet[w] <- D(NA); b }
+# constats, lignes non exécutées, verdict du noyau et index_pertinent (« table:ligne ») d'un témoin
+pr_125 <- function(b, code, s = s34(1000), t = if (code == "D08") "sinistres" else "rentes", a = A0) {
+  r <- controler_base(b, a, s, cv34)
+  ctx <- vue_g3b(b, s, a)$ctx
+  v <- if (code == "D08") ns$.verdict_d08(ctx, character(0)) else ns$.verdict_d07c(ctx, t, ctx$conventions$limite_age, character(0))
+  ip <- attr(v, "index_pertinent")
+  x <- r$controles_non_executes
+  list(co34(r, code), paste(x$table, x$colonne, x$cause)[x$code == code & x$table == t], as.vector(v),
+       gsub("\r", ":", unlist(lapply(seq_along(v), function(l) pert_ip(ip, l)))))
+}
+# --- C125-1 (D08, problème 1) : DO3 seul dossier incapacite de SI2, non déterminé (T1) : SI3 de verdict
+# inconnu (DO3 présent : délai 60, écart 44, paire détectée ; absent : aucune ligne, délai non défini,
+# verdict faux), écarté, cause (γ) de DO3 (declaration_absente, D03g), index_pertinent {dossiers : 3} ;
+# une seule rangée D08, aucune détection (avant, 011c892 : parametre_non_defini, verdict faux)
+verifier_egal("#125, C125-1 : D08, DO3 non déterminé seul (T1) : SI3 inconnu, écarté (declaration_absente), index_pertinent dossiers:3, aucune détection",
+              pr_125(nd_do3_125(d08_34()), "D08"),
+              list(character(0), "sinistres NA declaration_absente", c(FALSE, FALSE, NA), "dossiers:3"))
+# --- C125-2 (D08, garantie non déterminée) : DO3 retenu, GS2 sans date d'effet sous D03i conserver
+# (C3) : écarté, cause D03i, index_pertinent {garanties_souscrites : 2} (une cellule par garantie,
+# non par ligne de parametres)
+verifier_egal("#125, C125-2 : D08, GS2 non déterminée (C3, D03i conserver) : SI3 écarté (D03i), index_pertinent garanties_souscrites:2",
+              pr_125(nd_gs_125(d08_34(), 2L), "D08", cons_125),
+              list(character(0), "sinistres NA D03i", c(FALSE, FALSE, NA), "garanties_souscrites:2"))
+# --- C125-3 (D08, problème 2) : K = {60} (DO3 retenu), P = {30} (DO5 non déterminé), écart 44 (T2) ;
+# K = {30} (DO5 retenu), P = {60} (DO3 non déterminé), écart 20 (T2d) : délai non défini quand
+# l'élément non déterminé est présent, détecté sinon : écarté (declaration_absente), aucune détection
+# (avant : détecté)
+verifier_egal("#125, C125-3 : D08, K = {60} et P = {30}, écart 44 (T2) ; K = {30} et P = {60}, écart 20 (T2d) : SI3 écarté (declaration_absente), index_pertinent dossiers, aucune détection",
+              list(pr_125(avec_do5_125(d08_34(), 30, D(NA)), "D08"), pr_125(nd_do3_125(avec_do5_125(d08_34("2024-09-21"), 30)), "D08")),
+              list(list(character(0), "sinistres NA declaration_absente", c(FALSE, FALSE, NA), "dossiers:4"),
+                   list(character(0), "sinistres NA declaration_absente", c(FALSE, FALSE, NA), "dossiers:3")))
+# --- C125-4 (P ⊆ {d}) : K = {60} (DO3), P = {60} (DO5 non déterminé), écart 44 (T2c) : délai 60 dans
+# toute affectation, SI3 détecté, aucune rangée D08
+verifier_egal("#125, C125-4 : D08, K = {60} et P = {60} (T2c) : SI3 détecté, aucune rangée D08",
+              pr_125(avec_do5_125(d08_34(), 60, D(NA)), "D08"),
+              list("sinistres presomptive SI3", character(0), c(FALSE, FALSE, TRUE), character(0)))
+# --- C125-5 (avis, lecture (A), E-17 (c)) : K et P vides (T1c, sans délai) et K = {60, 30} (T2e, DO3 et
+# DO5 retenus) : parametre_non_defini ; K vide et P = {60}, écart 70 (T1b) et K = {30} retenu, P = {60},
+# écart 44 (T2b) : verdict faux dans toute affectation, ni rangée ni détection (avant : T1b
+# parametre_non_defini)
+verifier_egal("#125, C125-5 : D08, avis : K et P vides (T1c), K = {60, 30} (T2e) : parametre_non_defini ; K vide et P = {60}, écart 70 (T1b), K = {30} et P = {60}, écart 44 (T2b) : ni rangée ni détection",
+              lapply(list(nd_do3_125(d08_34(delai = NA)), avec_do5_125(d08_34(), 30), nd_do3_125(d08_34("2024-11-10")),
+                          nd_do3_125(avec_do5_125(d08_34(), 30))), function(b) pr_125(b, "D08")[1:2]),
+              list(list(character(0), "sinistres NA parametre_non_defini"), list(character(0), "sinistres NA parametre_non_defini"),
+                   list(character(0), character(0)), list(character(0), character(0))))
+# --- C125-6 (D07c rentes) : GS3 non déterminée (D03i conserver), age_limite 26, ME1 né en 1990 (T3) :
+# limite définie si GS3 présente (RE1 éteinte), non définie sinon : RE1 inconnue, écartée (D03i),
+# index_pertinent {garanties_souscrites : 3} ; ME1 né en 2015 (T3b) : non éteinte dans toute
+# affectation, ni rangée ; age_limite {26, 30} en paliers (T5) : les deux lignes présentes ensemble
+# (cellule partagée), limite ambiguë ou absente, ni rangée (avant : parametre_non_defini dans les
+# trois cas)
+verifier_egal("#125, C125-6 : D07c rentes, GS3 non déterminée : ME1 de 35 ans (T3) : RE1 écartée (D03i), index_pertinent garanties_souscrites:3 ; ME1 de 10 ans (T3b), paliers {26, 30} (T5) : ni rangée",
+              list(pr_125(nd_gs_125(nais("1990-03-01"), 3L), "D07c", cons_125),
+                   pr_125(nd_gs_125(nais("2015-03-01"), 3L), "D07c", cons_125)[1:2],
+                   pr_125(nd_gs_125(paliers_g3c(nais("1990-03-01"), "GS3", "age_limite", c(26, 30)), 3L), "D07c", cons_125)[1:2]),
+              list(list(character(0), "rentes NA D03i", NA, "garanties_souscrites:3"), list(character(0), character(0)),
+                   list(character(0), character(0))))
+# --- C125-7 (D07c dossiers) : GS5 (double_effet de DO4) non déterminée, ME1 né en 1999 (T4) : DO4
+# écarté (D03i) ; RE1 reste détectée sur rentes
+verifier_egal("#125, C125-7 : D07c dossiers, GS5 non déterminée (T4) : DO4 écarté (D03i), RE1 détectée",
+              local({ x <- pr_125(nd_gs_125(de("1999-03-01"), 5L), "D07c", cons_125, "dossiers"); x[[3L]] <- x[[3L]][4L]; x }),
+              list("rentes exacte RE1", "dossiers NA D03i", NA, "garanties_souscrites:5"))
+# --- C125-8 (lignes invisibles de façon déterminée, E-17 (e), inchangé) : GS3 d'effet 2026-01-01 (C1,
+# D07c rentes), GS2 d'effet 2025-12-01 (C2) et DO3 ouvert le 2025-08-01 (C4) (D08) : K et P vides,
+# parametre_non_defini
+verifier_egal("#125, C125-8 : garantie ou dossier invisibles de façon déterminée (C1, C2, C4) : parametre_non_defini, inchangé",
+              list(pr_125(within(nais("1990-03-01"), garanties_souscrites$date_effet[3L] <- D("2026-01-01")), "D07c", cons_125)[1:2],
+                   pr_125(within(d08_34(), garanties_souscrites$date_effet[2L] <- D("2025-12-01")), "D08")[1:2],
+                   pr_125(within(d08_34(), dossiers$date_ouverture[3L] <- D("2025-08-01")), "D08")[1:2]),
+              list(list(character(0), "rentes NA parametre_non_defini"), list(character(0), "sinistres NA parametre_non_defini"),
+                   list(character(0), "sinistres NA parametre_non_defini")))
+# --- Réserve R1 d'actuary (sonde) : une ligne de parametres non déterminée sous une garantie souscrite
+# retenue est une erreur interne de .verdict_d08() et de .lectures_d07c3(), levée à sa lecture
+# (parametres n'a pas de visibilité propre ; son seul lien de la règle 1 est sa garantie souscrite).
+# Témoins de la sonde, à A0 : refus de valeur sur la ligne delai_rechute_jours de GS2 (D08 : valeur
+# -5, D09 ; parametre zzz, hors_domaine ; categorie_invalidite zzz ; bornes d'âge 50 et 20 ; garantie
+# GS9 orpheline, D04b) et sur la ligne age_limite de GS3 (D07c : valeur -1, D09) : aucune ligne de
+# parametres non déterminée, aucune erreur ; témoin, GS2 sans date d'effet (D03i) : lignes 3 et 9 non
+# déterminées sous leur garantie non déterminée (parente_non_determinee)
+sonde_r1_125 <- function(b, s = s34(1000)) {
+  ctx <- vue_g3b(b, s, A0)$ctx
+  r <- tryCatch({ controler_base(b, A0, s, cv34); "aucune erreur" }, error = function(e) conditionMessage(e))
+  list(which(ns$.nd_vue(ctx, "parametres") & !ctx$retenu$parametres), r)
+}
+k_drj_125 <- function(b) which(b$parametres$parametre == "delai_rechute_jours")
+b_r1_125 <- d08_34()
+k_r1_125 <- k_drj_125(b_r1_125)
+verifier_egal("#125, réserve R1 (sonde) : refus de valeur sur une ligne de parametres sous une garantie retenue (valeur, parametre, categorie_invalidite, bornes d'âge, garantie orpheline ; D08 et D07c) : aucune ligne non déterminée, aucune erreur ; GS2 non déterminée : lignes 3 et 9 non déterminées",
+              list(sonde_r1_125(within(b_r1_125, parametres$valeur[k_r1_125] <- -5)),
+                   sonde_r1_125(within(b_r1_125, parametres$parametre[k_r1_125] <- "zzz")),
+                   sonde_r1_125(within(b_r1_125, parametres$categorie_invalidite[k_r1_125] <- "zzz")),
+                   sonde_r1_125(within(b_r1_125, { parametres$age_min[k_r1_125] <- 50L; parametres$age_max[k_r1_125] <- 20L })),
+                   sonde_r1_125(within(b_r1_125, parametres$id_garantie_souscrite[k_r1_125] <- "GS9")),
+                   sonde_r1_125(within(nais("1990-03-01"), parametres$valeur[parametres$parametre == "age_limite"] <- -1)),
+                   sonde_r1_125(nd_gs_125(b_r1_125, 2L))),
+              c(rep(list(list(integer(0), "aucune erreur")), 6L), list(list(c(3L, 9L), "aucune erreur"))))
+# --- .valeur_parametre3(), argument `actif` (E-17 (b), une seule implémentation) : toutes les lignes
+# actives = sans `actif` (D14) ; lignes {60, 30, u} sur trois affectations (u = 30) : actives {60},
+# {30, u}, aucune : 60, 30, NA ; ambiguë seulement là où deux lignes actives diffèrent
+vp_125 <- local({
+  a <- list("parametres.valeur\r3" = c(30, 30, 30))
+  val <- c(60, 30, NA)
+  u <- c(FALSE, FALSE, TRUE)
+  act <- matrix(c(TRUE, FALSE, FALSE, FALSE, TRUE, FALSE, FALSE, TRUE, FALSE), nrow = 3L)
+  list(identical(ns$.valeur_parametre3(a, 1:3, val, u, 3L), ns$.valeur_parametre3(a, 1:3, val, u, 3L, matrix(TRUE, 3L, 3L))),
+       ns$.valeur_parametre3(a, 1:3, val, u, 3L, act),
+       ns$.valeur_parametre3(a, 1:3, val, u, 3L, cbind(c(TRUE, TRUE, FALSE), act[, 2:3])))
+})
+verifier_egal("#125, .valeur_parametre3(), argument actif : toutes actives = sans actif ; actives {60}, {30, u = 30}, aucune : 60, 30, NA, jamais ambiguë ; {60, 30} active en deuxième affectation : ambiguë",
+              vp_125, list(TRUE, list(val = c(60, 30, NA), ambigu = c(FALSE, FALSE, FALSE)),
+                           list(val = c(60, NA, NA), ambigu = c(FALSE, TRUE, FALSE))))
+# --- C125-9 : oracles de C-G3-2 étendus aux lignes de P (constat de simulation : graine locale
+# 20261129, nombre de cas annoncé par règle) : mêmes contextes réduits et mêmes tirages, avec une ou
+# deux présences tirées d'abord parmi les éléments porteurs de lignes de P (D07c : la garantie G2 de
+# RE1 ou G5 de DO4 ; D08 : DO2, DO3, G2, G3), puis au plus trois (D07c) ou deux (D08) autres cellules ;
+# lignes de parametres d'une garantie non déterminée non déterminées (tirer_p125_g3c()) ; monde : une
+# ligne de P n'est active que si son dossier et sa garantie sont présents (param_monde_g3c(), délai
+# de l'oracle de D08). Le contexte réduit n'a pas de lien d'ascendance : les présences y sont
+# indépendantes, l'approximation d'E-17 (f) n'y joue pas, toute comparaison est exacte. Attendu :
+# verdict et index_pertinent identiques à l'oracle (sous (c), pour D07c rentes : aucun verdict
+# contraire, pertinence sur-ensemble) ; tout verdict inconnu à pertinence non vide ; des verdicts
+# inconnus dont la pertinence porte une présence de dossier ou de garantie
+avant_125 <- c(contextes = rapide_g3c$contextes, lignes = rapide_g3c$lignes, ecarts = rapide_g3c$ecarts)
+x_d07c_ren_125 <- sim_d07c_ren_g3c(200L, p125 = TRUE, graine = 20261129L)
+x_d07c_dos_125 <- sim_d07c_dos_g3c(200L, p125 = TRUE, graine = 20261129L)
+plages_g3c$p <- list("sinistres.date_survenance" = plage_d08_g3c, "evenements.date_effet" = plage_d08_g3c)
+x_d08_125 <- sim_d08_g3c(300L, p125 = TRUE, graine = 20261129L)
+plages_g3c$p <- list("famille.date_naissance" = as.numeric(D(c("1999-02-04", "1999-02-16"))))
+cat("  #125, C125-9 : (cas, hors (c), égaux, sous (c), contraires, sur-ensemble, inconnus à pertinence vide, inconnus) : D07c rentes",
+    bilan_g3b(x_d07c_ren_125), "; D07c dossiers", bilan_g3b(x_d07c_dos_125), "; D08", bilan_g3b(x_d08_125), "\n")
+verifier_egal("#125, C125-9 : oracles de C-G3-2 étendus aux lignes de P (graine 20261129), chemin forcé : D07c rentes 200 cas, D07c dossiers 200 cas, D08 300 cas : hors (c), verdict et index_pertinent identiques ; sous (c), aucun verdict contraire, pertinence sur-ensemble ; aucun verdict inconnu à pertinence vide",
+              lapply(list(x_d07c_ren_125, x_d07c_dos_125, x_d08_125), function(x) {
+                b <- bilan_g3b(x)
+                c(b[["egaux"]] == b[["hors_c"]], b[["contraires"]] == 0, b[["sur_ensemble"]] == b[["sous_c"]], b[["vides"]] == 0,
+                  b[["hors_c"]] > 0, b[["inconnus"]] > 0)
+              }),
+              rep(list(rep(TRUE, 6L)), 3L))
+# --- C125-10 (C-G3-4 étendu) : chemin rapide contre chemin forcé, ligne à ligne, sur les 700 contextes de
+# C125-9 ; puis bilans identiques (controles, controles_non_executes, declarations_requises) entre
+# controler_base() et la copie à `forcer` vrai (env_force_g3c) sur 36 bases tirées (graine 20261129) :
+# témoins de #125 (T1, T2, T2b, T2c, C3, T3, T4, T5), avec zéro à deux valeurs refusées tirées parmi les
+# colonnes de E-15 (b) lues par G3c (inj_g3c), à A0 (sept fois sur huit) ou à A, sous D03i conserver.
+# Témoin de diversité : D08 et D07c (rentes, dossiers) ont chacun une ligne écartée d'une cause (γ) de
+# dossier ou de garantie non déterminés (declaration_absente ou D03i)
+rapide_125 <- c(contextes = rapide_g3c$contextes, lignes = rapide_g3c$lignes, ecarts = rapide_g3c$ecarts) - avant_125
+bases_125 <- list(nd_do3_125(d08_34()), avec_do5_125(d08_34(), 30, D(NA)), nd_do3_125(avec_do5_125(d08_34(), 30)),
+                  avec_do5_125(d08_34(), 60, D(NA)), nd_gs_125(d08_34(), 2L), nd_gs_125(nais("1990-03-01"), 3L),
+                  nd_gs_125(de("1999-03-01"), 5L), nd_gs_125(paliers_g3c(nais("1990-03-01"), "GS3", "age_limite", c(26, 30)), 3L))
+tires_125 <- avec_graine_g3c(graine = 20261129L, lapply(seq_len(36L), function(k) {
+  b <- bases_125[[sample.int(length(bases_125), 1L)]]
+  for (q in seq_len(sample(0:2, 1L))) {
+    z <- inj_g3c[[sample.int(length(inj_g3c), 1L)]]
+    x <- b[[z[1L]]][[z[2L]]]; i <- sample.int(length(x), 1L)
+    b[[z[1L]]][[z[2L]]][i] <- if (inherits(x, "Date")) D(z[3L]) else if (is.numeric(x)) as.numeric(z[3L]) else z[3L]
+  }
+  list(b = b, arrete = if (runif(1L) < 0.125) A else A0)
+}))
+bilan_force_125 <- function(f, x) {
+  r <- tryCatch(f(x$b, x$arrete, cons_125, cv34), error = function(e) conditionMessage(e))
+  if (is.character(r)) r else list(r$controles, r$controles_non_executes, r$declarations_requises)
+}
+rapides_125 <- lapply(tires_125, function(x) bilan_force_125(ns$controler_base, x))
+forces_125 <- lapply(tires_125, function(x) bilan_force_125(env_force_g3c$controler_base, x))
+touchees_125 <- vapply(c("D07c rentes", "D07c dossiers", "D08 sinistres"), function(k) {
+  m <- strsplit(k, " ")[[1L]]
+  sum(vapply(forces_125, function(r) is.list(r) && any(r[[2L]]$code == m[1L] & r[[2L]]$table == m[2L] &
+                                                         r[[2L]]$cause %in% c("declaration_absente", "D03i")), NA))
+}, 0L)
+cat("  #125, C125-10 : contextes de C125-9 :", rapide_125[["contextes"]], "contextes,", rapide_125[["lignes"]], "lignes,", rapide_125[["ecarts"]],
+    "écarts ; bases où chaque clé a une ligne écartée (declaration_absente ou D03i) :", paste(names(touchees_125), touchees_125, collapse = ", "), "\n")
+verifier_egal("#125, C125-10 : chemin rapide et chemin forcé sur les 700 contextes de C125-9 (verdict et cellules pertinentes ligne à ligne) et sur 36 bases tirées à lignes de P (graine 20261129) : aucun écart, bilans identiques, aucune erreur ; chaque clé de G3c écartée sur une base",
+              list(rapide_125[["contextes"]], rapide_125[["ecarts"]], identical(rapides_125, forces_125), sum(vapply(rapides_125, is.character, NA)),
+                   all(touchees_125 > 0L)),
+              list(700L, 0L, TRUE, 0L, TRUE))
+# --- C125-11 (C-G3-5 étendu) : témoins de #125 à lignes de P (T1, T2, C3, T3, T4, T5) : bilan identique
+# après inversion des lignes et après une permutation tirée (graine 131), à A0 et à A, en mode exact et
+# au budget 40 (copie de l'espace de noms env_e14), sous D03i conserver
+bases_ordre_125 <- bases_125[c(1L, 2L, 5L, 6L, 7L, 8L)]
+ordre_125 <- function(f) lapply(bases_ordre_125, function(b) vapply(list(A0, A), function(a) {
+  g <- function(x) f(x, a, cons_125, cv34)
+  r <- g(b)
+  identical(g(inverser_lignes(b)), r) && identical(g(melanger_lignes(b, 131L)), r)
+}, NA))
+ordre_exact_125 <- ordre_125(controler_base)
+ordre_faible_125 <- avec_budget_e14(40, list(ordre_125(env_e14$controler_base), etat_e14()), env = env_e14)
+cat("  #125, C125-11 : arbres évalués / approchés au budget 40 :", paste(ordre_faible_125[[2L]], collapse = " / "), "\n")
+verifier_egal("#125, C125-11 : six témoins à lignes de P : bilan identique après inversion et après une permutation tirée (graine 131), à A0 et à A, en mode exact et au budget 40",
+              list(ordre_exact_125, ordre_faible_125[[1L]]), list(rep(list(c(TRUE, TRUE)), 6L), rep(list(c(TRUE, TRUE)), 6L)))
+# (reprise de l'audit, constat mineur 1) ordre du conditionnement des cellules de présence : un arbre à
+# lignes de P approché au budget 60 (copie env_e14). SI2 à deux sorties reprise_travail (EV3 et une
+# seconde, d'effet 2024-09-20), délai de GS2 refusé (-5, D09), à A0 : DO3 non déterminé, ou GS2 non
+# déterminée (D03i conserver ; cause D03i au départage) ; la présence (2 représentants) est conditionnée avant
+# parametres.valeur (.ORDRE_D08), qui dépasse le budget : deux arbres à présence approchés, W = 42.
+# Sans "dossiers" ni "garanties_souscrites" dans l'ordre, la présence passe après parametres.valeur
+# et rien n'est conditionné (W = 39 ; mutant a5, mesuré). Bilan invariant à l'ordre des lignes
+journal_125 <- new.env()
+arbre3_125 <- function(budget) {
+  f <- ns$.arbre3
+  function(arbre, ordre = "sinistres.date_survenance") {
+    x <- f(arbre, ordre, budget = budget)
+    if (any(grepl("^(dossiers|garanties_souscrites)\r", ns$.cellules3(arbre)))) {
+      journal_125$x <- rbind(journal_125$x, c(approche = !x$exact || any(x$grilles > budget), w = x$w))
+    }
+    x
+  }
+}
+budget_125 <- function(b, budget = 60) {
+  ancien <- env_e14$.arbre3
+  env_e14$.arbre3 <- arbre3_125(budget)
+  on.exit(env_e14$.arbre3 <- ancien)
+  journal_125$x <- NULL
+  g <- function(x) env_e14$controler_base(x, A0, cons_125, cv34)
+  r <- g(b)
+  j <- journal_125$x
+  # aucun arbre à présence (mutant) : 0 approché, W NA
+  list(ne34(r, "D08"), if (is.null(j)) 0 else sum(j[, "approche"]), if (is.null(j)) NA_real_ else max(j[, "w"]), identical(g(inverser_lignes(b)), r) && identical(g(melanger_lignes(b, 131L)), r))
+}
+sorties_125 <- function(b, effets) {
+  e <- b$evenements[rep(3L, length(effets)), ]
+  e$id_evenement <- sprintf("EX%02d", seq_along(effets)); e$date_effet <- D(effets); e$date_saisie <- D(effets) + 1
+  b$evenements <- rbind(b$evenements, e)
+  b$parametres$valeur[b$parametres$parametre == "delai_rechute_jours"] <- -5
+  b
+}
+budget_p_125 <- list(budget_125(nd_do3_125(sorties_125(d08_34(), "2024-09-20"))), budget_125(nd_gs_125(sorties_125(d08_34(), "2024-09-20"), 2L)))
+cat("  #125, C125-11 (ordre des présences) : (cause, arbres à présence approchés, W, invariance) :",
+    vapply(budget_p_125, function(x) paste(unlist(x), collapse = " "), ""), "\n")
+verifier_egal("#125, C125-11 (reprise, constat mineur 1) : arbres à lignes de P au budget 60, DO3 ou GS2 non déterminés, délai refusé, deux sorties : SI3 écarté (D09 ; D03i sous GS2 non déterminée), deux arbres à présence approchés, présence conditionnée avant parametres.valeur (W = 42), bilan invariant à l'ordre des lignes",
+              budget_p_125, list(list("sinistres NA D09", 2, 42, TRUE), list("sinistres NA D03i", 2, 42, TRUE)))
+
+# --- #191 : espaces non ASCII admis (option (a), M830) ------------------------------------
+# Décision M830, option (a) ; erratum du dictionnaire 1.6, § 1.6 et § 9 : U+00A0, U+202F et les
+# autres espaces non ASCII sont admis et lus comme des caractères ; seuls les blancs ASCII de
+# `.BLANCS` (" \t\n\v\f\r") comptent (chaîne vide, domaine du collège, forme des listes par clé).
+# Toutes les chaînes non ASCII sont écrites par échappements \u (le fichier reste ASCII pour ces
+# caractères). Mutants rejoués hors du dépôt, sur une copie de la bibliothèque : μ1, détection des
+# espaces Unicode dans .contient_blanc() ; μ2, U+00A0 ajouté à .BLANCS : chacun fait échouer au
+# moins un test de cette section. μ3, [[:space:]] : sous sa forme Perl (perl = TRUE), la classe ne
+# reconnaît aucun de ces espaces (R 4.3.3, mesuré sous les locales C et C.utf8) : mutant équivalent
+# sur les chaînes UTF-8 valides, aucun test ne le tue ; sous sa forme par défaut (TRE), elle ne reconnaît U+3000 et U+2003 que sous
+# une locale UTF-8 (C.utf8) : le mutant survit sous la locale C et n'est tué que sous C.utf8.
+section("donnees : #191, espaces non ASCII admis (option (a), M830 ; dictionnaire 1.6, § 1.6 et § 9)")
+espaces_191 <- c(u00a0 = "\u00a0", u202f = "\u202f", u3000 = "\u3000", u2003 = "\u2003", ufeff = "\ufeff")
+
+# C191-1 : collège de GS2 (garanties_souscrites), domaine du collège (M656) : un refus de domaine
+# ne vient que d'un blanc ASCII. Les cinq valeurs donnent aussi un constat D11b (le collège de GS2
+# diffère de celui de AF1, dont DO3 dépend) : constat de couverture, sans rapport avec le domaine.
+college_gs2_191 <- function(x) { b <- base_ref; b$garanties_souscrites$college[2L] <- x; b }
+bilan_college_191 <- function(x) {
+  r <- controler_base(college_gs2_191(x), A)
+  k <- r$controles$table == "garanties_souscrites" & r$controles$colonne %in% "college"
+  list(refus = paste(r$refus_tables$motif, r$refus_tables$table, r$refus_tables$colonne),
+       controles = paste(r$controles$code[k]))
+}
+for (nom in names(espaces_191)) {
+  verifier_egal(paste0("#191, C191-1 : collège de GS2 « A<", sub("^U", "U+", toupper(nom)), ">B » (espace non ASCII) : aucun refus, aucun constat sur college"),
+                bilan_college_191(paste0("A", espaces_191[[nom]], "B")), list(refus = character(0), controles = character(0)))
+}
+# chaque cas positif a les mêmes contrôles et les mêmes refus que le témoin « AB » (sans espace)
+resume_college_191 <- function(x) { r <- controler_base(college_gs2_191(x), A); list(r$controles, r$refus_tables) }
+verifier_egal("#191, C191-1 : collège de GS2 avec espace non ASCII : mêmes contrôles et mêmes refus que le témoin « AB » (sans espace), pour chacun des cinq espaces",
+              lapply(espaces_191, function(e) identical(resume_college_191(paste0("A", e, "B")), resume_college_191("AB"))),
+              lapply(espaces_191, function(e) TRUE))
+for (cas in list(list("U+0020", "A B"), list("U+0009", "A\tB"))) {
+  verifier_egal(paste0("#191, C191-1 : contre-témoin, collège de GS2 « A<", cas[[1L]], ">B » (blanc ASCII) : refus hors_domaine de college (règle du domaine du collège)"),
+                bilan_college_191(cas[[2L]]),
+                list(refus = "hors_domaine garanties_souscrites college", controles = "hors_domaine"))
+}
+verifier_egal("#191, C191-1 : .contient_blanc() ne retient que les blancs ASCII ; .BLANCS est la classe fermée \" \\t\\n\\v\\f\\r\"",
+              list(ns$.contient_blanc(paste0("A", c(espaces_191, "\u00e9", ""), "B")),
+                   ns$.contient_blanc(c("A B", "A\tB", "A\nB", "A\vB", "A\fB", "A\rB")), ns$.BLANCS),
+              list(rep(FALSE, 7L), rep(TRUE, 6L), " \t\n\v\f\r"))
+
+# C191-2 : forme des hypothèses D03c (.forme_hypothese_admise(motif, valeur) ; montant de forme
+# .FORME_MONTANT_D03C, « [0-9]+(\.[0-9]+)? ») : un espace non ASCII fait partie du collège, jamais
+# du montant.
+verifier_egal("#191, C191-2 : D03c, collège avec espace non ASCII (U+00A0, U+202F, U+3000, U+2003, U+FEFF) : forme admise",
+              vapply(paste0("A", espaces_191, "B=100"), function(v) ns$.forme_hypothese_admise("D03c", v), NA, USE.NAMES = FALSE),
+              rep(TRUE, 5L))
+verifier_egal("#191, C191-2 : D03c, collège avec blanc ASCII, ou blanc (ASCII ou non ASCII) dans le montant : forme refusée",
+              vapply(c("A B=100", "A\tB=100", "ensemble=30 000", "ensemble= 30000", "ensemble=30\u00a0000", "ensemble=\u00a030000",
+                       "ensemble=30000\u202f"), function(v) ns$.forme_hypothese_admise("D03c", v), NA, USE.NAMES = FALSE),
+              rep(FALSE, 7L))
+
+# C191-3 : de bout en bout. Collège « non<U+00A0>cadres » dans GS1 à GS3 et AF1 (salaire manquant :
+# D03c), hypothèse D03c déclarée pour les deux référentiels. Écrite avec le même collège : aucun
+# refus, la déclaration couvre le constat ; écrite avec U+0020 : plan_invalide (blanc ASCII dans le
+# collège de la déclaration, forme refusée par lire_declarations()).
+college_nbsp_191 <- "non\u00a0cadres"
+base_d03c_191 <- local({
+  b <- base_ref
+  b$garanties_souscrites$college[1:3] <- college_nbsp_191
+  b$affiliations$college <- college_nbsp_191
+  b$affiliations$salaire_reference <- NA_real_
+  b
+})
+decl_d03c_191 <- function(valeur) list(hypotheses = hyp2("D03c", valeur = valeur))
+bilan_d03c_191 <- function(valeur) {
+  r <- controler_base(base_d03c_191, A, declarations = decl_d03c_191(valeur))
+  list(nrow(r$refus_tables), paste(r$hypotheses_defaut$motif, r$hypotheses_defaut$referentiel, r$hypotheses_defaut$nombre),
+       any(r$declarations_requises$motif == "D03c"))
+}
+verifier_egal("#191, C191-3 : collège « non<U+00A0>cadres », déclaration D03c du même collège : aucun refus, D03c en hypotheses_defaut sous comptes_sociaux (1) et solvabilite_2 (1), aucune déclaration D03c attendue",
+              bilan_d03c_191("non\u00a0cadres=30000"),
+              list(0L, paste("D03c", c("comptes_sociaux", "solvabilite_2"), 1L), FALSE))
+verifier_egal("#191, C191-3 : même déclaration D03c écrite avec U+0020 (« non cadres=30000 ») : plan_invalide",
+              motif_de(bilan_d03c_191("non cadres=30000")), "plan_invalide")
+# Contre-témoin « autre=30000 » : controler_base() ne lit pas le collège des clés (le bilan est le même
+# que pour « non<U+00A0>cadres=30000 », aucun refus) ; seul .salaire_d03c() distingue le collège et ne
+# trouve aucun salaire pour « non<U+00A0>cadres » sous la clé « autre ».
+verifier_egal("#191, C191-3 : contre-témoin, déclaration D03c « autre=30000 » : même bilan que pour le collège « non<U+00A0>cadres » (aucun refus, D03c en hypotheses_defaut)",
+              bilan_d03c_191("autre=30000"), bilan_d03c_191("non\u00a0cadres=30000"))
+verifier_egal("#191, C191-3 : .salaire_d03c() : 30000 pour la clé « non<U+00A0>cadres » du collège « non<U+00A0>cadres », NA pour la clé « non cadres » (U+0020) et pour la clé « autre »",
+              c(ns$.salaire_d03c("non\u00a0cadres=30000", college_nbsp_191, "tous", FALSE),
+                ns$.salaire_d03c("non cadres=30000", college_nbsp_191, "tous", FALSE),
+                ns$.salaire_d03c("autre=30000", college_nbsp_191, "tous", FALSE)),
+              c(30000, NA_real_, NA_real_))
+
+# C191-4 : clés. Un espace non ASCII est un caractère de la clé : renseignée, non vide ; une clé
+# faite seulement de U+0020 est une chaîne vide (chaine_vide, sans appariement).
+verifier_egal("#191, C191-4 : cle_renseignee() : VRAI pour U+00A0 seul, FAUX pour U+0020 seul et pour la chaîne vide",
+              ns$cle_renseignee(c("\u00a0", " ", "")), c(TRUE, FALSE, FALSE))
+id_dossier_ev2_191 <- function(x) {
+  b <- base_ref; b$evenements$id_dossier[2L] <- x
+  r <- controler_base(b, A)
+  list(paste(r$controles$code, r$controles$table, r$controles$colonne, r$controles$identifiants), paste(r$refus_tables$motif, r$refus_tables$table, r$refus_tables$colonne))
+}
+verifier_egal("#191, C191-4 : id_dossier de EV2 = U+00A0 : D04b (référence orpheline) sur EV2, aucun chaine_vide, aucun refus",
+              id_dossier_ev2_191("\u00a0"), list("D04b evenements id_dossier EV2", character(0)))
+verifier_egal("#191, C191-4 : contre-témoin, id_dossier de EV2 = U+0020 : chaine_vide sur EV2, pas de D04b",
+              id_dossier_ev2_191(" "), list("chaine_vide evenements id_dossier EV2", "chaine_vide evenements id_dossier"))
+base_do3_191 <- local({
+  b <- base_ref
+  for (t in names(b)) for (cn in names(b[[t]])) {
+    if (is.character(b[[t]][[cn]])) b[[t]][[cn]][b[[t]][[cn]] %in% "DO3"] <- "DO\u00a03"
+  }
+  b
+})
+# Le renommage est cohérent : le résultat entier de controler_base() (11 composants) est identique à celui
+# de base_ref, y compris sous U+0020 (une clé peut contenir un U+0020) ; la non-vacuité de la comparaison se
+# lit sur un renommage partiel (dossiers seulement), qui crée des références orphelines et change le résultat.
+bilan_do3_191 <- function() {
+  r <- controler_base(base_do3_191, A)
+  list(sum(unlist(lapply(base_do3_191, function(x) unlist(lapply(x, function(y) y %in% "DO\u00a03"))))), nrow(r$refus_tables),
+       nrow(r$controles), identical(r, controler_base(base_ref, A)))
+}
+verifier_egal("#191, C191-4 : dossier DO3 renommé « DO<U+00A0>3 » partout (dossiers, evenements, prestations, evaluations_gestion) : aucun refus, aucun constat, résultat de controler_base() identique à celui de base_ref",
+              bilan_do3_191(), list(4L, 0L, 0L, TRUE))
+verifier("#191, C191-4 : témoin de non-vacuité, DO3 renommé « DO<U+00A0>3 » dans dossiers seulement : résultat de controler_base() différent de celui de base_ref",
+         { b <- base_ref; b$dossiers$id_dossier[b$dossiers$id_dossier == "DO3"] <- "DO\u00a03"
+           !identical(controler_base(b, A), controler_base(base_ref, A)) })

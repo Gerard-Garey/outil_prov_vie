@@ -113,16 +113,16 @@ empreintes/fichiers	null
 empreintes/tables/mortalite_fictive_b2	character	f369ecb1265f41af1a1f0a073c49f85a
 empreintes/tables/tme_fictive_b2	character	ea69e98196b4c00655e931bbaefbdbc6
 empreintes/resultat	character	aa4cb0d191794e2ef9903768420e0c97
-empreintes/code	character	9a4bbda00aceedeb97bb562684ad3754
+empreintes/code	character	c24b2fcd762867a5cb52d0d4e10f4cdf
 empreintes/representation	character	provie-resultat-1
 versions/r	character	4.3.3
-versions/provie	character	0.15.0
+versions/provie	character	0.19.0
 versions/fiche	integer	1
 versions/dictionnaire	character	1.6
 plateforme/r	character	R version 4.3.3 (2024-02-29)
 plateforme/plateforme	character	x86_64-pc-linux-gnu
 plateforme/systeme	character	Linux
-plateforme/version_systeme	character	7.0.0-1017-azure
+plateforme/version_systeme	character	7.0.0-1014-aws
 plateforme/machine	character	x86_64
 plateforme/boutisme	character	little
 plateforme/blas	character	/usr/lib/x86_64-linux-gnu/openblas-pthread/libblas.so.3

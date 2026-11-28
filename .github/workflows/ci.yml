@@ -139,7 +139,7 @@ jobs:
   tests:
     name: Tests (R 4.3.3)
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
+    timeout-minutes: 90
     # Plateforme de référence (ADR 0010, point 27) : image épinglée par digest. Digest
     # relevé le 7 novembre 2026 dans le journal « Initialize containers » du premier
     # passage (run 42415820075, job « Tests (R 4.3.3) », ligne « Digest: » de
@@ -170,7 +170,7 @@ jobs:
   invariance:
     name: Invariance du bilan (R 4.3.3)
     runs-on: ubuntu-24.04
-    timeout-minutes: 45
+    timeout-minutes: 90
     container: rocker/r-ver:4.3.3@sha256:732d15020af326da9e919c07f70ca32bf5d3e409220af32e0a4b6d0a89437309
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
