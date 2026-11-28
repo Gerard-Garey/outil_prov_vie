@@ -45,6 +45,7 @@
 > - *`1.9.5` : 23 novembre 2026, erratum de la version `1.9`, en texte seul, versé avec `1.9.4` ; rédigé par l'agent actuary-approfondi (IA) à l'étape 0b-2, sur `deb7455` ; visé en bloc par le mainteneur le 23/11/2026 (visa 0d unique de Bdr-b4, M780). § 9.4, bloc « Erratum `1.9.5` » : garde du point 1 de #112 étendue à toute lecture de S2 (#112 point 2, #171), égalité des deux constantes de motifs (M722), constat sur D10b (#211).*
 > - *`1.9.6` : 24 novembre 2026, erratum de la version `1.9`, en texte seul (branche `claude/lignes-lues-unite`, Bdr-b4, PR #207, #175) ; rédigé par l'agent actuary-approfondi (IA) sur l'état de travail de #175 (tête `a3219d4`) ; (i) et (ii) accordés par le mainteneur le 24/11/2026 (M783) ; (iii) visé par le mainteneur le 24/11/2026 (M784). § 9.2, bloc « Erratum `1.9.6` » : ligne exclue et état non déterminé ; rattachement sous la garde des garanties invisibles ; ligne refusée de visibilité non déterminée ; grain du cas (b) pour P3.*
 > - *`1.9.7` : 25 novembre 2026, erratum de la version `1.9`, en texte seul, versé avant le code (branche `claude/regles-v-trois-valeurs`, Bdr-b5, PR #220, rang 0) ; rédigé par l'agent actuary-approfondi (IA) à l'étape 0b-1, sur `64f6370` ; visé par le mainteneur le 25/11/2026 (visa 0d-1, M808 à M815). § 9.2, bloc « Erratum `1.9.7` » : M169 levée pour les règles V (#105, point 1) ; auto-lecture et chaîne vide (#147) ; D08 et D07 (c) (#125) ; D12 sans plafond (#129) ; M613, M626 et M659 rouvertes.*
+> - *`1.9.7`, point E-19 : 28 novembre 2026, ajouté à l'erratum `1.9.7`, en texte seul, versé avant le code (branche `claude/restitution-segments`, Bdr-r, PR #237, rang 0) ; rédigé par l'agent actuary-approfondi (IA) à l'étape 0b-1, sur `f43c63d` ; visé par le mainteneur le 28/11/2026 (visa 0d-1, M846 à M849). § 9.2, E-19, renvoi au § 4.5 : cause `montant_non_fini` d'une rangée de l'enjeu de somme non finie (#190) ; spécification de B2, version `1.0.26`.*
 >
 > *Les points du dictionnaire `1.6` relevés avec les errata (P6 à P17) ne sont pas intégrés (§ 7). ; version `1.9` : intégrés au § 9, selon le projet de dictionnaire `1.6` et son erratum visés.*
 
@@ -936,6 +937,8 @@ Colonnes (M151 ; ADR 0010, sixième série, (c) 1, :307) :
 | `nombre_valeurs` | dossiers ou lignes qui portent une valeur de la composante |
 | `cause` | `NA`, ou motif du refus qui empêche la composante, `D01a` ou `visibilite_non_determinee` (§ 4.2) ; `montant` vaut alors `NA` |
 
+*(Erratum `1.9.7`, E-19, § 9.2 : cause `montant_non_fini`, somme de montants connus non finie ; `montant` et `nombre_valeurs` NA ; #190, visa 0d-1, M846 à M849.)*
+
 **Agrégation.**
 1. **Niveau élémentaire** (motif, famille, action, dossier ou ligne) : interne à `donnees`, dans une seule fonction non exportée (ADR 0010, :307).
 2. **Rangées** : par motif × famille × action × garantie, et par garantie `ensemble`. La jointure se fait avec `exclusions` par (`motif`, `famille`, `action`) et avec `refus_tables` par (`table`, `colonne`, `motif`).
@@ -1457,6 +1460,12 @@ Spécification `donnees` v1.6, visée par le mainteneur le 13 novembre 2026 (M33
       - Contrôle (i) : 47 sites de `.regle_vue()`, dont 39 à table et colonne littérales (37 clés). Les 8 autres sites relèvent du seul relevé par la trace : D01b, D02a sur `fin_periode`, D03b sur `sexe`, D02c (deux sites), D07b (deux sites) et D07c. Une clé de ces sites que `base_ref` n'atteint pas échappe au contrôle.
       - Les quatre clés D02c sur `date_naissance` (`assures`, `ayants_droit_sante`, `designations`, `famille`) n'apparaissent que sous les déclarations.
     - (e) *Statuts.* (a) et (c) : constats mesurés, (c) étant de plus un résultat exact sur le code. (b) : jugement d'expert, en attente de décision. (d) : précision de portée, sans décompte changé (31 sur 52, 27 sans déclarations, 7 de type `character`).
+  - **E-19, § 4.5 : cause `montant_non_fini` d'une rangée de l'enjeu** (#190 ; M844 ; *ajouté le 28/11/2026 au rang 0 de Bdr-r (branche `claude/restitution-segments`, PR #237) ; rédigé par l'agent actuary-approfondi (IA) à l'étape 0b-1, sur `f43c63d` (mesures sur le code de `cd94adc`, identique) ; option S4 (a) visée par le mainteneur le 28/11/2026, visa 0d-1, M846 à M849 ; versé par la session avant le code*). Complète le § 4.5 sans le modifier ; spécification de B2, version `1.0.26` (#190).
+    - (a) *Constat.* Les valeurs de la base sont finies : un réel non fini est hors domaine (`R/donnees.R:2725`). Leur somme peut pourtant déborder : `sum(sort(c(1.7e308, 1.7e308), method = "radix"))` vaut `Inf` (`m12.R`). Le montant d'une rangée de l'enjeu (`R/donnees.R:12575`) appelle la même fonction de somme que les cellules de provision, sans être une cellule de provision.
+    - (b) *Règle* (option S4 (a)). La rangée prend `montant` NA, `nombre_valeurs` NA et `cause = "montant_non_fini"`, dans la colonne `cause` qui existe déjà (aucune colonne ajoutée, F1). Au § 4.5 : « la cause `montant_non_fini` s'ajoute aux causes d'une composante non chiffrée : somme de montants connus non finie ; elle n'est pas un code du dictionnaire et n'entre pas dans le départage de `.cause_retenue()` ».
+    - (c) *Statut.* Jugement d'expert. Alternative écartée (S4 (b)) : laisser l'enjeu hors de #190 et ouvrir une issue.
+    - (d) *Critère.* C190-10 (spécification de B2, § 7.7) : enjeu, rangée de somme non finie : `montant` NA, `cause = "montant_non_fini"` (avant : `Inf`).
+    - (e) *Effet.* Aucun sur les dix couples : enjeu non fini, 0 sur chacun (mesuré sur `couples.rds`).
 
 ### 9.3 #83 : D10b à l'arrêté, `parente_posterieure`, D02b sur `prestations` (commit de #83)
 
